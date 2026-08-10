@@ -1,0 +1,24 @@
+{
+  "name": "@sensorsphere/ingestion-service",
+"version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@sensorsphere/core": "workspace:*",
+    "@iot/shared-types": "workspace:*",
+    "mqtt": "^5",
+    "pg": "^8",
+    "pino": "^9"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/pg": "^8",
+    "typescript": "^5",
+    "vitest": "^3"
+  }
+}

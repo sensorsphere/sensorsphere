@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.env
+*.log
+.DS_Store
+
+infrastructure/mosquitto/data/*
+infrastructure/mosquitto/log/*
+infrastructure/timescaledb/data/*
+!infrastructure/mosquitto/data/.gitkeep
+!infrastructure/mosquitto/log/.gitkeep
