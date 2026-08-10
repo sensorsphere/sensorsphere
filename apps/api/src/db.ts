@@ -2,10 +2,22 @@ import pg from "pg";
 
 const { Pool } = pg;
 
-export const pool = new Pool({
-  host: process.env.DB_HOST ?? "timescaledb",
-  port: Number(process.env.DB_PORT ?? 5432),
-  database: process.env.DB_NAME ?? "iot",
-  user: process.env.DB_USER ?? "iot_app",
-  password: process.env.DB_PASSWORD
-});
+export interface DatabaseConfig {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+}
+
+export function createPool(
+  config: DatabaseConfig
+) {
+  return new Pool({
+    host: config.host,
+    port: config.port,
+    database: config.database,
+    user: config.user,
+    password: config.password
+  });
+}

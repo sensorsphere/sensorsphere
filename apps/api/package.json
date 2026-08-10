@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@sensorsphere/shared-types": "workspace:*",
+    "@sensorsphere/shared-config": "workspace:*",
     "fastify": "^5.5.0",
     "pg": "^8.16.3",
     "pino": "^9.9.4"

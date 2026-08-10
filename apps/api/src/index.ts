@@ -1,9 +1,28 @@
 import Fastify from "fastify";
-import { pool } from "./db.js";
+
+import {
+  loadApiConfig
+} from "@sensorsphere/shared-config";
+
+import {
+  createPool
+} from "./db.js";
+
+const config =
+  loadApiConfig();
+
+const pool =
+  createPool({
+    host: config.DB_HOST,
+    port: config.DB_PORT,
+    database: config.DB_NAME,
+    user: config.DB_USER,
+    password: config.DB_PASSWORD
+  });
 
 const app = Fastify({
   logger: {
-    level: process.env.LOG_LEVEL ?? "info"
+    level: config.LOG_LEVEL ?? "info"
   }
 });
 
@@ -91,7 +110,7 @@ app.get("/measurements/history", async (request, reply) => {
 });
 
 
-const port = Number(process.env.PORT ?? 3000);
+const port = Number(config.PORT ?? 3000);
 
 await app.listen({
   host: "0.0.0.0",

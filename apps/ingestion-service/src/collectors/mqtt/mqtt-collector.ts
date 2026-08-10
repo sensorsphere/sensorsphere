@@ -19,20 +19,17 @@ implements Collector {
   private client?: MqttClient;
 
   constructor(
-    private readonly logger: Logger
+    private readonly logger: Logger,
+    private readonly mqttUrl: string,
+    private readonly mqttTopic: string
   ) {}
 
   async start(
     handler: MessageHandler
   ): Promise<void> {
 
-    const url =
-      process.env.MQTT_URL ??
-      "mqtt://mosquitto:1883";
-
-    const topic =
-      process.env.MQTT_TOPIC ??
-      "sensors/#";
+    const url = this.mqttUrl;
+    const topic = this.mqttTopic;
 
     this.client =
       mqtt.connect(

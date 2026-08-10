@@ -11,6 +11,7 @@
   "dependencies": {
     "@sensorsphere/core": "workspace:*",
     "@sensorsphere/shared-types": "workspace:*",
+    "@sensorsphere/shared-config": "workspace:*",
     "mqtt": "^5",
     "pg": "^8",
     "pino": "^9"

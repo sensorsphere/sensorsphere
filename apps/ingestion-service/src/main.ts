@@ -1,6 +1,10 @@
 import pino from "pino";
 
 import {
+  loadIngestionConfig
+} from "@sensorsphere/shared-config";
+
+import {
   SensorCache
 } from "./cache.js";
 
@@ -24,10 +28,13 @@ import {
   startScheduler
 } from "./scheduler.js";
 
+const config =
+  loadIngestionConfig();
+
 const logger =
   pino({
     level:
-      process.env.LOG_LEVEL ??
+      config.LOG_LEVEL ??
       "info"
   });
 
@@ -39,7 +46,13 @@ Promise<void> {
   );
 
   const repository =
-    new PostgresMeasurementRepository();
+    new PostgresMeasurementRepository({
+      host: config.DB_HOST,
+      port: config.DB_PORT,
+      database: config.DB_NAME,
+      user: config.DB_USER,
+      password: config.DB_PASSWORD
+    });
 
   await repository
     .testConnection();
@@ -58,7 +71,9 @@ Promise<void> {
 
   const collector =
     new MqttCollector(
-      logger
+      logger,
+      config.MQTT_URL,
+      config.MQTT_TOPIC
     );
 
   await collector.start(
