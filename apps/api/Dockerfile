@@ -12,8 +12,8 @@ RUN pnpm install --no-frozen-lockfile
 COPY packages/shared-types packages/shared-types
 COPY apps/api apps/api
 
-RUN pnpm --filter @iot/shared-types build
-RUN pnpm --filter @iot/api build
+RUN pnpm --filter @sensorsphere/shared-types build
+RUN pnpm --filter @sensorsphere/api build
 
 FROM node:22-alpine
 
@@ -21,4 +21,4 @@ RUN corepack enable
 WORKDIR /app
 COPY --from=build /app /app
 
-CMD ["pnpm", "--filter", "@iot/api", "start"]
+CMD ["pnpm", "--filter", "@sensorsphere/api", "start"]

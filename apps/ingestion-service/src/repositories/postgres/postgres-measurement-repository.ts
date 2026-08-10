@@ -6,7 +6,7 @@ import type {
 
 import type {
   SensorState
-} from "@iot/shared-types";
+} from "@sensorsphere/shared-types";
 
 import type {
   MeasurementRepository

@@ -2,7 +2,7 @@ services:
 
   mosquitto:
     image: eclipse-mosquitto:2
-    container_name: iot-mosquitto
+    container_name: sensorsphere-mosquitto
     restart: unless-stopped
     ports:
       - "100.64.0.8:${MQTT_PORT:-1883}:1883"
@@ -15,7 +15,7 @@ services:
 
   timescaledb:
     image: timescale/timescaledb:2.21.3-pg17
-    container_name: iot-timescaledb
+    container_name: sensorsphere-timescaledb
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -68,7 +68,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    container_name: iot-api
+    container_name: sensorsphere-api
     restart: unless-stopped
     environment:
       PORT: 3000
@@ -89,14 +89,14 @@ services:
     build:
       context: .
       dockerfile: apps/frontend/Dockerfile
-    container_name: iot-frontend
+    container_name: sensorsphere-frontend
     restart: unless-stopped
     networks:
       - frontend
 
   nginx:
     image: nginx:1.28-alpine
-    container_name: iot-nginx
+    container_name: sensorsphere-nginx
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-8080}:80"
@@ -111,5 +111,8 @@ services:
 
 networks:
   frontend:
+    name: sensorsphere-frontend
   backend:
+    name: sensorsphere-backend
   database:
+    name: sensorsphere-database

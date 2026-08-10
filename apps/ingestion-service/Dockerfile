@@ -15,7 +15,7 @@ COPY packages/shared-types packages/shared-types
 COPY apps/ingestion-service apps/ingestion-service
 
 RUN pnpm --filter @sensorsphere/core build
-RUN pnpm --filter @iot/shared-types build
+RUN pnpm --filter @sensorsphere/shared-types build
 RUN pnpm --filter @sensorsphere/ingestion-service build
 
 FROM node:22-alpine
