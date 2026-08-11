@@ -34,4 +34,9 @@ export async function registerLocationRoutes(
     "/locations/:id",
     options.controller.getLocationById
   );
+
+  app.patch(
+    "/locations/:id/move",
+    options.controller.moveLocation
+  );
 }

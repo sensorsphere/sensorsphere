@@ -28,3 +28,20 @@ export interface CreateLocationInput {
   description?: string | null;
   metadata?: Record<string, unknown>;
 }
+
+export interface MoveLocationInput {
+  parentId: string | null;
+}
+
+export type MoveLocationResult =
+  | {
+      status: "ok";
+      location: LocationDto;
+    }
+  | {
+      status:
+        | "location_not_found"
+        | "parent_not_found"
+        | "self_parent"
+        | "cycle";
+    };

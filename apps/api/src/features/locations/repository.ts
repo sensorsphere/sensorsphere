@@ -25,6 +25,10 @@ export interface LocationRepository {
   create(
     location: CreateLocationRecord
   ): Promise<LocationRecord>;
+  updateParent(
+    id: string,
+    parentId: string | null
+  ): Promise<LocationRecord | null>;
 }
 
 const LOCATION_SELECT = `
@@ -111,5 +115,37 @@ implements LocationRepository {
       );
 
     return result.rows[0]!;
+  }
+
+  async updateParent(
+    id: string,
+    parentId: string | null
+  ): Promise<LocationRecord | null> {
+
+    const result =
+      await this.pool.query<LocationRecord>(
+        `
+        UPDATE locations
+        SET
+          parent_id = $2,
+          updated_at = NOW()
+        WHERE id = $1
+        RETURNING
+          id,
+          parent_id,
+          type,
+          name,
+          description,
+          metadata,
+          created_at,
+          updated_at
+        `,
+        [
+          id,
+          parentId
+        ]
+      );
+
+    return result.rows[0] ?? null;
   }
 }

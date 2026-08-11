@@ -1,7 +1,9 @@
 import type {
   CreateLocationInput,
   LocationDto,
-  LocationTreeDto
+  LocationTreeDto,
+  MoveLocationInput,
+  MoveLocationResult
 } from "./dto.js";
 
 import type {
@@ -81,6 +83,99 @@ export class LocationService {
     return mapLocationToDto(
       location
     );
+  }
+
+  async moveLocation(
+    id: string,
+    input: MoveLocationInput
+  ): Promise<MoveLocationResult> {
+
+    const location =
+      await this.repository.findById(id);
+
+    if (!location) {
+      return {
+        status: "location_not_found"
+      };
+    }
+
+    if (input.parentId === id) {
+      return {
+        status: "self_parent"
+      };
+    }
+
+    if (input.parentId) {
+      const parent =
+        await this.repository.findById(
+          input.parentId
+        );
+
+      if (!parent) {
+        return {
+          status: "parent_not_found"
+        };
+      }
+
+      const locations =
+        await this.repository.findAll();
+
+      const parentById =
+        new Map(
+          locations.map(
+            item => [
+              item.id,
+              item.parent_id
+            ] as const
+          )
+        );
+
+      let currentId: string | null =
+        input.parentId;
+
+      const visited =
+        new Set<string>();
+
+      while (currentId) {
+        if (currentId === id) {
+          return {
+            status: "cycle"
+          };
+        }
+
+        if (visited.has(currentId)) {
+          return {
+            status: "cycle"
+          };
+        }
+
+        visited.add(currentId);
+
+        currentId =
+          parentById.get(currentId)
+          ?? null;
+      }
+    }
+
+    const updated =
+      await this.repository.updateParent(
+        id,
+        input.parentId
+      );
+
+    if (!updated) {
+      return {
+        status: "location_not_found"
+      };
+    }
+
+    return {
+      status: "ok",
+      location:
+        mapLocationToDto(
+          updated
+        )
+    };
   }
 
   async listLocationTree():

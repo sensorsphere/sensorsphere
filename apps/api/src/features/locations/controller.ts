@@ -41,6 +41,13 @@ const createLocationSchema =
   })
   .strict();
 
+const moveLocationSchema =
+  z.object({
+    parentId:
+      z.string().uuid().nullable()
+  })
+  .strict();
+
 export class LocationController {
 
   constructor(
@@ -126,6 +133,76 @@ export class LocationController {
       await reply
         .code(201)
         .send(location);
+    };
+
+  moveLocation =
+    async (
+      request: FastifyRequest<{
+        Params: {
+          id: string;
+        };
+        Body: unknown;
+      }>,
+      reply: FastifyReply
+    ): Promise<void> => {
+
+      const parsedBody =
+        moveLocationSchema.safeParse(
+          request.body
+        );
+
+      if (!parsedBody.success) {
+        await badRequest(
+          reply,
+          parsedBody.error.issues[0]?.message
+            ?? "Invalid move payload"
+        );
+        return;
+      }
+
+      const result =
+        await this.service.moveLocation(
+          request.params.id,
+          parsedBody.data
+        );
+
+      switch (result.status) {
+        case "ok":
+          await ok(
+            reply,
+            result.location
+          );
+          return;
+
+        case "location_not_found":
+          await reply
+            .code(404)
+            .send({
+              error: "Location not found"
+            });
+          return;
+
+        case "parent_not_found":
+          await badRequest(
+            reply,
+            "Parent location not found"
+          );
+          return;
+
+        case "self_parent":
+          await badRequest(
+            reply,
+            "A location cannot be its own parent"
+          );
+          return;
+
+        case "cycle":
+          await badRequest(
+            reply,
+            "Moving the location would create a cycle"
+          );
+          return;
+      }
     };
 
   listLocationTree =
