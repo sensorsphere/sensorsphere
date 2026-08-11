@@ -11,9 +11,20 @@ export interface LocationRecord {
   updated_at: Date;
 }
 
+export interface CreateLocationRecord {
+  parent_id: string | null;
+  type: string;
+  name: string;
+  description: string | null;
+  metadata: Record<string, unknown>;
+}
+
 export interface LocationRepository {
   findAll(): Promise<LocationRecord[]>;
   findById(id: string): Promise<LocationRecord | null>;
+  create(
+    location: CreateLocationRecord
+  ): Promise<LocationRecord>;
 }
 
 const LOCATION_SELECT = `
@@ -63,5 +74,42 @@ implements LocationRepository {
       );
 
     return result.rows[0] ?? null;
+  }
+
+  async create(
+    location: CreateLocationRecord
+  ): Promise<LocationRecord> {
+
+    const result =
+      await this.pool.query<LocationRecord>(
+        `
+        INSERT INTO locations (
+          parent_id,
+          type,
+          name,
+          description,
+          metadata
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING
+          id,
+          parent_id,
+          type,
+          name,
+          description,
+          metadata,
+          created_at,
+          updated_at
+        `,
+        [
+          location.parent_id,
+          location.type,
+          location.name,
+          location.description,
+          location.metadata
+        ]
+      );
+
+    return result.rows[0]!;
   }
 }

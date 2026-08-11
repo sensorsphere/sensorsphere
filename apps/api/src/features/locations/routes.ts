@@ -20,6 +20,11 @@ export async function registerLocationRoutes(
     options.controller.listLocations
   );
 
+  app.post(
+    "/locations",
+    options.controller.createLocation
+  );
+
   app.get(
     "/locations/tree",
     options.controller.listLocationTree

@@ -1,4 +1,5 @@
 import type {
+  CreateLocationInput,
   LocationDto,
   LocationTreeDto
 } from "./dto.js";
@@ -42,6 +43,40 @@ export class LocationService {
     if (!location) {
       return null;
     }
+
+    return mapLocationToDto(
+      location
+    );
+  }
+
+  async createLocation(
+    input: CreateLocationInput
+  ): Promise<LocationDto | null> {
+
+    const parentId =
+      input.parentId ?? null;
+
+    if (parentId) {
+      const parent =
+        await this.repository.findById(
+          parentId
+        );
+
+      if (!parent) {
+        return null;
+      }
+    }
+
+    const location =
+      await this.repository.create({
+        parent_id: parentId,
+        type: input.type,
+        name: input.name,
+        description:
+          input.description ?? null,
+        metadata:
+          input.metadata ?? {}
+      });
 
     return mapLocationToDto(
       location
