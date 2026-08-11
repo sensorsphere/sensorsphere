@@ -15,8 +15,6 @@ Status: Completed
 
 ## v0.2 — Inventory
 
-- Product foundation ✅
-
 Status: In Progress
 
 - Platform foundation
@@ -53,5 +51,3 @@ Status: In Progress
 - Production deployment guide
 - Automated backup and restore
 - Documented upgrade path
-
-- Asset Domain Model ✅

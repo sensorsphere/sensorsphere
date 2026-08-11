@@ -1,0 +1,10 @@
+{
+  "number": 15,
+  "slug": "product-foundation",
+  "title": "Product Foundation",
+  "project": "SensorSphere",
+  "revision": 1,
+  "requiresDatabaseMigration": false,
+  "requiresRebuild": [],
+  "risk": "low"
+}

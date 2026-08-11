@@ -56,8 +56,7 @@ psql_query() {
     -f "${ROOT_DIR}/docker-compose.yml" \
     exec -T "${SERVICE}" \
     sh -lc 'psql -v ON_ERROR_STOP=1 -At -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "$1"' \
-    -- "${sql}" \
-    </dev/null
+    -- "${sql}"
 }
 
 ensure_schema_table() {

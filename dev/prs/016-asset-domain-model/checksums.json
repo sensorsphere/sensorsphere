@@ -1,0 +1,13 @@
+{
+  "payload/apps/api/src/features/assets/controller.ts": "0f25baac56f69db3eaf152a614adbd502543ddbae57dff23ebda8506b9f9cda9",
+  "payload/apps/api/src/features/assets/dto.ts": "4ff18685608aa76a65c2a44b4f27523caf53ff82c677b6726e9c53e96b62f299",
+  "payload/apps/api/src/features/assets/index.ts": "39e2da6fda8c66c29304bcba8d72f6dcd38f1a723854f637b05e0a7d816baf16",
+  "payload/apps/api/src/features/assets/mapper.ts": "36c08a519043ad2990547db3ab7416350db47f763dbfc7bc173e05cfd21e869b",
+  "payload/apps/api/src/features/assets/repository.ts": "02e4ae08902ecba0d96258138312b35814ac82c709525d505b1bd4d05c6bdf4b",
+  "payload/apps/api/src/features/assets/routes.ts": "dca6bec137c8d060064eb8a8fa18f85ed9adeba991337406356d994f3441d92b",
+  "payload/apps/api/src/features/assets/service.ts": "cf3c69739d373af6c5d3c13abe7ca5c72241160b626021b41d8bf1557952f5bf",
+  "payload/docs/rfc/RFC-0001-device-domain-implementation.md": "d2dd1b086be80362caa656d85ef1bb20ebd6f257bfd8fd5b3724fa6ea9baab5c",
+  "payload/infrastructure/timescaledb/migrations/003-assets-metrics.sql": "7e0fc876334fccd4cfd3ada23ddb0b5b224e5f2292aab47abffbbc2b345d6c86",
+  "payload/packages/core/src/inventory/asset-metric.ts": "1cfab02ee9e40513dbe5dd6607ff50d9e38ec4cee387fee025ca0dc7ffb28843",
+  "payload/packages/core/src/inventory/asset.ts": "0203cfa28d48a5fdf42210c8332ace81e32a6ac95c658d749d6882a8ade2a6f2"
+}

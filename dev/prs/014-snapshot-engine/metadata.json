@@ -1,0 +1,10 @@
+{
+  "number": 14,
+  "slug": "snapshot-engine",
+  "title": "Snapshot Engine",
+  "project": "SensorSphere",
+  "revision": 1,
+  "requiresDatabaseMigration": false,
+  "requiresRebuild": [],
+  "risk": "low"
+}

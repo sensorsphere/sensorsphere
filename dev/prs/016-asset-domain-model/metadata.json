@@ -1,0 +1,12 @@
+{
+  "number": 16,
+  "slug": "asset-domain-model",
+  "title": "Asset Domain Model",
+  "project": "SensorSphere",
+  "revision": 1,
+  "requiresDatabaseMigration": true,
+  "requiresRebuild": [
+    "api"
+  ],
+  "risk": "medium"
+}

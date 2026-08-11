@@ -6,8 +6,6 @@ All notable changes to SensorSphere are documented here.
 
 ### Added
 
-- Asset and Asset Metric domain model.
-
 - Product constitution and v1.0 master plan.
 
 - Snapshot creation and inspection.

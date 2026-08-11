@@ -12,3 +12,5 @@ infrastructure/mosquitto/log/*
 infrastructure/timescaledb/data/*
 !infrastructure/mosquitto/data/.gitkeep
 !infrastructure/mosquitto/log/.gitkeep
+
+/*.zip

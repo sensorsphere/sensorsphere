@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 2,
+  "number": 14,
+  "slug": "snapshot-engine",
+  "title": "Snapshot Engine",
+  "project": "SensorSphere",
+  "revision": 1,
+  "epic": "Platform Foundation",
+  "requires": {
+    "previousPr": 13,
+    "minimumVersion": "0.1.0"
+  },
+  "changes": {
+    "create": [
+      "docs/development/snapshots.md"
+    ],
+    "modify": [
+      "tools/cli/main.go",
+      "CHANGELOG.md",
+      "docs/roadmap.md"
+    ],
+    "delete": []
+  },
+  "services": [],
+  "requiresDatabaseMigration": false,
+  "requiresRebuild": [],
+  "risk": "low",
+  "summary": "Add safe repository snapshot creation and inspection to the SensorSphere CLI."
+}

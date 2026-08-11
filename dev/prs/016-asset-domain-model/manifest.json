@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 2,
+  "number": 16,
+  "slug": "asset-domain-model",
+  "title": "Asset Domain Model",
+  "project": "SensorSphere",
+  "revision": 1,
+  "epic": "Inventory",
+  "requires": {
+    "previousPr": 15,
+    "minimumVersion": "0.1.0"
+  },
+  "changes": {
+    "create": [
+      "infrastructure/timescaledb/migrations/003-assets-metrics.sql",
+      "packages/core/src/inventory/asset.ts",
+      "packages/core/src/inventory/asset-metric.ts",
+      "apps/api/src/features/assets/*",
+      "docs/rfc/RFC-0001-device-domain-implementation.md"
+    ],
+    "modify": [
+      "packages/core/src/index.ts",
+      "apps/api/src/index.ts",
+      "CHANGELOG.md",
+      "docs/roadmap.md"
+    ],
+    "delete": []
+  },
+  "services": [
+    "timescaledb",
+    "api"
+  ],
+  "requiresDatabaseMigration": true,
+  "requiresRebuild": [
+    "api"
+  ],
+  "risk": "medium"
+}

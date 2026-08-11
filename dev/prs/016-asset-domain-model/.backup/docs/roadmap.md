@@ -53,5 +53,3 @@ Status: In Progress
 - Production deployment guide
 - Automated backup and restore
 - Documented upgrade path
-
-- Asset Domain Model ✅

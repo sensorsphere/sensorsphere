@@ -9,11 +9,6 @@ import {
 } from "./features/sensors/index.js";
 
 import {
-  registerAssetFeature
-} from "./features/assets/index.js";
-
-
-import {
   loadApiConfig
 } from "@sensorsphere/shared-config";
 
@@ -130,13 +125,6 @@ app.get("/api/measurements/history", async (request, reply) => {
 
 
 const port = Number(config.PORT ?? 3000);
-
-await registerAssetFeature(
-  app,
-  {
-    pool
-  }
-);
 
 await registerSensorFeature(
   app,

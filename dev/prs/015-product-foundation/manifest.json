@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 2,
+  "number": 15,
+  "slug": "product-foundation",
+  "title": "Product Foundation",
+  "project": "SensorSphere",
+  "revision": 1,
+  "epic": "Product Foundation",
+  "requires": {
+    "previousPr": 14,
+    "minimumVersion": "0.1.0"
+  },
+  "changes": {
+    "create": [
+      "docs/project/constitution.md",
+      "docs/roadmap/master-plan-v1.0.md",
+      "docs/adr/ADR-0001-project-principles.md",
+      "docs/rfc/RFC-0001-device-domain.md",
+      "docs/development/contribution-conventions.md"
+    ],
+    "modify": [
+      "CHANGELOG.md",
+      "docs/roadmap.md"
+    ],
+    "delete": []
+  },
+  "services": [],
+  "requiresDatabaseMigration": false,
+  "requiresRebuild": [],
+  "risk": "low",
+  "summary": "Define SensorSphere project constitution, v1.0 master plan, architecture principles, device domain RFC and contribution conventions."
+}

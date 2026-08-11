@@ -15,14 +15,12 @@ Status: Completed
 
 ## v0.2 — Inventory
 
-- Product foundation ✅
-
 Status: In Progress
 
 - Platform foundation
 - Database migration engine ✅
 - SensorSphere CLI ✅
-- Project snapshots ✅
+- Project snapshots
 - Rooms
 - Buildings
 - Gateway catalog
@@ -53,5 +51,3 @@ Status: In Progress
 - Production deployment guide
 - Automated backup and restore
 - Documented upgrade path
-
-- Asset Domain Model ✅
