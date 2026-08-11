@@ -32,6 +32,22 @@ export class LocationService {
     );
   }
 
+  async getLocationById(
+    id: string
+  ): Promise<LocationDto | null> {
+
+    const location =
+      await this.repository.findById(id);
+
+    if (!location) {
+      return null;
+    }
+
+    return mapLocationToDto(
+      location
+    );
+  }
+
   async listLocationTree():
   Promise<LocationTreeDto[]> {
 

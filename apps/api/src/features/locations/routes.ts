@@ -24,4 +24,9 @@ export async function registerLocationRoutes(
     "/locations/tree",
     options.controller.listLocationTree
   );
+
+  app.get(
+    "/locations/:id",
+    options.controller.getLocationById
+  );
 }

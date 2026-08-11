@@ -30,6 +30,34 @@ export class LocationController {
       await ok(reply, locations);
     };
 
+  getLocationById =
+    async (
+      request: FastifyRequest<{
+        Params: {
+          id: string;
+        };
+      }>,
+      reply: FastifyReply
+    ): Promise<void> => {
+
+      const location =
+        await this.service.getLocationById(
+          request.params.id
+        );
+
+      if (!location) {
+        await reply
+          .code(404)
+          .send({
+            error: "Location not found"
+          });
+
+        return;
+      }
+
+      await ok(reply, location);
+    };
+
   listLocationTree =
     async (
       _request: FastifyRequest,
