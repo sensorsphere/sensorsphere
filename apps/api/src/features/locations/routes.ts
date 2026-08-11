@@ -19,4 +19,9 @@ export async function registerLocationRoutes(
     "/locations",
     options.controller.listLocations
   );
+
+  app.get(
+    "/locations/tree",
+    options.controller.listLocationTree
+  );
 }

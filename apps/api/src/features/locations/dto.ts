@@ -8,3 +8,8 @@ export interface LocationDto {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface LocationTreeDto
+extends LocationDto {
+  children: LocationTreeDto[];
+}

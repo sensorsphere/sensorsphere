@@ -29,4 +29,16 @@ export class LocationController {
 
       await ok(reply, locations);
     };
+
+  listLocationTree =
+    async (
+      _request: FastifyRequest,
+      reply: FastifyReply
+    ): Promise<void> => {
+
+      const locations =
+        await this.service.listLocationTree();
+
+      await ok(reply, locations);
+    };
 }
