@@ -38,6 +38,9 @@ export interface LocationRepository {
       metadata: Record<string, unknown>;
     }>
   ): Promise<LocationRecord | null>;
+  hasChildren(id: string): Promise<boolean>;
+  hasAssignedAssets(id: string): Promise<boolean>;
+  delete(id: string): Promise<boolean>;
 }
 
 const LOCATION_SELECT = `
@@ -208,5 +211,63 @@ implements LocationRepository {
       );
 
     return result.rows[0] ?? null;
+  }
+
+  async hasChildren(
+    id: string
+  ): Promise<boolean> {
+
+    const result =
+      await this.pool.query<{
+        exists: boolean;
+      }>(
+        `
+        SELECT EXISTS (
+          SELECT 1
+          FROM locations
+          WHERE parent_id = $1
+        ) AS exists
+        `,
+        [id]
+      );
+
+    return result.rows[0]?.exists ?? false;
+  }
+
+  async hasAssignedAssets(
+    id: string
+  ): Promise<boolean> {
+
+    const result =
+      await this.pool.query<{
+        exists: boolean;
+      }>(
+        `
+        SELECT EXISTS (
+          SELECT 1
+          FROM assets
+          WHERE room_id = $1
+        ) AS exists
+        `,
+        [id]
+      );
+
+    return result.rows[0]?.exists ?? false;
+  }
+
+  async delete(
+    id: string
+  ): Promise<boolean> {
+
+    const result =
+      await this.pool.query(
+        `
+        DELETE FROM locations
+        WHERE id = $1
+        `,
+        [id]
+      );
+
+    return (result.rowCount ?? 0) > 0;
   }
 }

@@ -44,4 +44,9 @@ export async function registerLocationRoutes(
     "/locations/:id/move",
     options.controller.moveLocation
   );
+
+  app.delete(
+    "/locations/:id",
+    options.controller.deleteLocation
+  );
 }

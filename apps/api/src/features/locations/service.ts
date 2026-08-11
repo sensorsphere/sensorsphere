@@ -15,6 +15,17 @@ import {
   mapLocationToDto
 } from "./mapper.js";
 
+export type DeleteLocationResult =
+  | {
+      status: "deleted";
+    }
+  | {
+      status:
+        | "location_not_found"
+        | "has_children"
+        | "has_assets";
+    };
+
 export class LocationService {
 
   constructor(
@@ -197,6 +208,49 @@ export class LocationService {
     return mapLocationToDto(
       updated
     );
+  }
+
+  async deleteLocation(
+    id: string
+  ): Promise<DeleteLocationResult> {
+
+    const location =
+      await this.repository.findById(id);
+
+    if (!location) {
+      return {
+        status: "location_not_found"
+      };
+    }
+
+    if (
+      await this.repository.hasChildren(id)
+    ) {
+      return {
+        status: "has_children"
+      };
+    }
+
+    if (
+      await this.repository.hasAssignedAssets(id)
+    ) {
+      return {
+        status: "has_assets"
+      };
+    }
+
+    const deleted =
+      await this.repository.delete(id);
+
+    if (!deleted) {
+      return {
+        status: "location_not_found"
+      };
+    }
+
+    return {
+      status: "deleted"
+    };
   }
 
   async listLocationTree():

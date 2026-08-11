@@ -283,6 +283,56 @@ export class LocationController {
       );
     };
 
+  deleteLocation =
+    async (
+      request: FastifyRequest<{
+        Params: {
+          id: string;
+        };
+      }>,
+      reply: FastifyReply
+    ): Promise<void> => {
+
+      const result =
+        await this.service.deleteLocation(
+          request.params.id
+        );
+
+      switch (result.status) {
+        case "deleted":
+          await reply
+            .code(204)
+            .send();
+          return;
+
+        case "location_not_found":
+          await reply
+            .code(404)
+            .send({
+              error: "Location not found"
+            });
+          return;
+
+        case "has_children":
+          await reply
+            .code(409)
+            .send({
+              error:
+                "Location contains child locations"
+            });
+          return;
+
+        case "has_assets":
+          await reply
+            .code(409)
+            .send({
+              error:
+                "Location contains assigned assets"
+            });
+          return;
+      }
+    };
+
   listLocationTree =
     async (
       _request: FastifyRequest,
