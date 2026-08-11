@@ -1,0 +1,142 @@
+substitutions:
+  device_name: "ble-gateway-mqtt"
+  device_friendly_name: "BLE Gateway MQTT"
+
+esphome:
+  name: "${device_name}"
+  friendly_name: "${device_friendly_name}"
+  name_add_mac_suffix: true
+
+esp32:
+  board: esp32-c6-devkitm-1
+  variant: esp32c6
+  framework:
+    type: esp-idf
+
+logger:
+  level: INFO
+
+wifi:
+  ssid: !secret wifi_homefcsiot_ssid
+  password: !secret wifi_homefcsiot_password
+
+  ap:
+    ssid: "BLE-Gateway"
+    password: !secret wifi_ap_password
+    
+captive_portal:
+
+ota:
+  - platform: esphome
+
+web_server:
+  port: 80
+
+mqtt:
+  broker: 7.0.90.22
+  port: 1883
+
+  topic_prefix: sensors/ble_gateway
+
+  birth_message:
+    topic: sensors/ble_gateway/status
+    payload: online
+
+  will_message:
+    topic: sensors/ble_gateway/status
+    payload: offline
+  
+esp32_ble_tracker:
+
+
+time:
+  - platform: sntp
+
+#
+# ESP32 network information
+#
+text_sensor:
+  - platform: template
+    name: "Boot Time"
+
+  - platform: version
+    name: "ESPHome Version"
+
+  - platform: template
+    name: "Device Name"
+    lambda: |-
+      return {"${device_name}"};
+
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+      id: esp_ip_address
+    
+    dns_address:
+      name: "DNS Server"
+      
+    mac_address:
+      name: "MAC Address"
+      id: esp_mac_address
+
+    ssid:
+      name: "WiFi SSID"
+
+    bssid:
+      name: "WiFi BSSID"
+
+sensor:
+  - platform: uptime
+    name: "Uptime Human"
+    
+  - platform: wifi_signal
+    name: "WiFi RSSI"
+    update_interval: 30s
+
+  - platform: wifi_signal
+    id: wifi_signal_db
+    internal: true
+    update_interval: 30s
+
+  - platform: copy
+    source_id: wifi_signal_db
+    name: "WiFi Quality"
+    unit_of_measurement: "%"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    
+  - platform: atc_mithermometer
+    mac_address: "A4:C1:38:C8:AC:73"
+
+    temperature:
+      name: "Temperature C8:AC:73"
+
+    humidity:
+      name: "Humidity C8:AC:73"
+
+    battery_level:
+      name: "Battery Level C8:AC:73"
+
+    battery_voltage:
+      name: "Battery Voltage C8:AC:73"
+
+    signal_strength:
+      name: "RSSI C8:AC:73"
+
+  - platform: atc_mithermometer
+    mac_address: "A4:C1:38:D0:CA:52"
+
+    temperature:
+      name: "Temperature D0:CA:52"
+
+    humidity:
+      name: "Humidity D0:CA:52"
+
+    battery_level:
+      name: "Battery Level D0:CA:52"
+
+    battery_voltage:
+      name: "Battery Voltage D0:CA:52"
+
+    signal_strength:
+      name: "RSSI D0:CA:52"

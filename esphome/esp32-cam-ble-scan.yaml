@@ -1,0 +1,35 @@
+esphome:
+  name: esp32-cam-ble
+  friendly_name: ESP32 CAM BLE
+
+esp32:
+  board: esp32cam
+  framework:
+    type: esp-idf
+
+logger:
+  level: VERBOSE
+
+wifi:
+  ssid: !secret wifi_homefcsiot_ssid
+  password: !secret wifi_homefcsiot_password
+
+  ap:
+    ssid: "BLE-Gateway"
+    password: !secret wifi_ap_password
+
+captive_portal:
+
+ota:
+  - platform: esphome
+
+esp32_ble_tracker:
+  scan_parameters:
+    interval: 320ms
+    window: 300ms
+    active: true
+
+text_sensor:
+  - platform: ble_scanner
+    name: "BLE Scanner"
+

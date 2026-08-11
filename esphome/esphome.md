@@ -25,3 +25,15 @@ alias
 docker rm -f ${CONTAINER_NAME}
 
 ```
+
+## ESPHome Dashboard
+
+```sh
+IP_VPN=$(ip a | grep tailscale0 | grep scope | sed -E 's/.*inet ([0-9.]+)\/.*/\1/')
+echo "------------------------"
+echo ""
+echo "Dashboard URL: http://${IP_VPN}:16052/"
+echo ""
+echo "------------------------"
+
+```

@@ -12,6 +12,10 @@ import {
   registerAssetFeature
 } from "./features/assets/index.js";
 
+import {
+  registerLocationFeature
+} from "./features/locations/index.js";
+
 
 import {
   loadApiConfig
@@ -130,6 +134,13 @@ app.get("/api/measurements/history", async (request, reply) => {
 
 
 const port = Number(config.PORT ?? 3000);
+
+await registerLocationFeature(
+  app,
+  {
+    pool
+  }
+);
 
 await registerAssetFeature(
   app,
