@@ -1,0 +1,12 @@
+substitutions:
+  device_name: "ble-gateway-esp32-c6"
+  friendly_name: "BLE Gateway ESP32-C6"
+
+packages:
+  hardware: !include packages/hardware/esp32-c6-devkitm-1.yaml
+  base: !include packages/base.yaml
+  network: !include packages/network.yaml
+  mqtt: !include packages/mqtt.yaml
+  ble_tracker: !include packages/ble/tracker.yaml
+  ble_sensors: !include packages/ble/atc-sensors.yaml
+  diagnostics: !include packages/diagnostics.yaml

@@ -1,0 +1,15 @@
+esphome:
+  name: "${device_name}"
+  friendly_name: "${friendly_name}"
+  name_add_mac_suffix: true
+
+logger:
+  level: INFO
+
+ota:
+  - platform: esphome
+
+web_server:
+  port: 80
+
+captive_portal:

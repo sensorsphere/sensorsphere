@@ -1,0 +1,38 @@
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+
+    mac_address:
+      name: "MAC Address"
+
+    ssid:
+      name: "WiFi SSID"
+
+    bssid:
+      name: "WiFi BSSID"
+
+    dns_address:
+      name: "DNS Server"
+
+  - platform: version
+    name: "ESPHome Version"
+
+sensor:
+  - platform: wifi_signal
+    name: "WiFi RSSI"
+    id: wifi_rssi
+    update_interval: 30s
+
+  - platform: copy
+    source_id: wifi_rssi
+    name: "WiFi Quality"
+    unit_of_measurement: "%"
+    entity_category: diagnostic
+    filters:
+      - lambda: |-
+          return min(max(2.0f * (x + 100.0f), 0.0f), 100.0f);
+
+  - platform: uptime
+    name: "Uptime"
+    update_interval: 60s

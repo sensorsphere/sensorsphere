@@ -1,0 +1,11 @@
+mqtt:
+  broker: ${mqtt_broker}
+  port: ${mqtt_port}
+
+  birth_message:
+    topic: "${device_name}/status"
+    payload: "online"
+
+  will_message:
+    topic: "${device_name}/status"
+    payload: "offline"

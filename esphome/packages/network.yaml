@@ -1,0 +1,7 @@
+wifi:
+  ssid: !secret wifi_homefcsiot_ssid
+  password: !secret wifi_homefcsiot_password
+
+  ap:
+    ssid: "${friendly_name} Fallback"
+    password: !secret wifi_ap_password

@@ -1,0 +1,4 @@
+esp32:
+  board: esp32cam
+  framework:
+    type: esp-idf

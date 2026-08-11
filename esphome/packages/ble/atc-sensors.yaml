@@ -1,0 +1,36 @@
+sensor:
+  - platform: atc_mithermometer
+    mac_address: "A4:C1:38:C8:AC:73"
+
+    temperature:
+      name: "Temperature C8:AC:73"
+
+    humidity:
+      name: "Humidity C8:AC:73"
+
+    battery_level:
+      name: "Battery Level C8:AC:73"
+
+    battery_voltage:
+      name: "Battery Voltage C8:AC:73"
+
+    signal_strength:
+      name: "RSSI C8:AC:73"
+
+  - platform: atc_mithermometer
+    mac_address: "A4:C1:38:D0:CA:52"
+
+    temperature:
+      name: "Temperature D0:CA:52"
+
+    humidity:
+      name: "Humidity D0:CA:52"
+
+    battery_level:
+      name: "Battery Level D0:CA:52"
+
+    battery_voltage:
+      name: "Battery Voltage D0:CA:52"
+
+    signal_strength:
+      name: "RSSI D0:CA:52"
