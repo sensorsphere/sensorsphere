@@ -45,3 +45,17 @@ export type MoveLocationResult =
         | "self_parent"
         | "cycle";
     };
+
+export interface UpdateLocationInput {
+  type?:
+    | "SITE"
+    | "BUILDING"
+    | "FLOOR"
+    | "ROOM"
+    | "ZONE"
+    | "AREA"
+    | "OTHER";
+  name?: string;
+  description?: string | null;
+  metadata?: Record<string, unknown>;
+}

@@ -29,6 +29,15 @@ export interface LocationRepository {
     id: string,
     parentId: string | null
   ): Promise<LocationRecord | null>;
+  updateDetails(
+    id: string,
+    location: Partial<{
+      type: string;
+      name: string;
+      description: string | null;
+      metadata: Record<string, unknown>;
+    }>
+  ): Promise<LocationRecord | null>;
 }
 
 const LOCATION_SELECT = `
@@ -143,6 +152,58 @@ implements LocationRepository {
         [
           id,
           parentId
+        ]
+      );
+
+    return result.rows[0] ?? null;
+  }
+
+  async updateDetails(
+    id: string,
+    location: Partial<{
+      type: string;
+      name: string;
+      description: string | null;
+      metadata: Record<string, unknown>;
+    }>
+  ): Promise<LocationRecord | null> {
+
+    const current =
+      await this.findById(id);
+
+    if (!current) {
+      return null;
+    }
+
+    const result =
+      await this.pool.query<LocationRecord>(
+        `
+        UPDATE locations
+        SET
+          type = $2,
+          name = $3,
+          description = $4,
+          metadata = $5,
+          updated_at = NOW()
+        WHERE id = $1
+        RETURNING
+          id,
+          parent_id,
+          type,
+          name,
+          description,
+          metadata,
+          created_at,
+          updated_at
+        `,
+        [
+          id,
+          location.type ?? current.type,
+          location.name ?? current.name,
+          location.description !== undefined
+            ? location.description
+            : current.description,
+          location.metadata ?? current.metadata
         ]
       );
 

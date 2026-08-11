@@ -36,6 +36,11 @@ export async function registerLocationRoutes(
   );
 
   app.patch(
+    "/locations/:id",
+    options.controller.updateLocation
+  );
+
+  app.patch(
     "/locations/:id/move",
     options.controller.moveLocation
   );

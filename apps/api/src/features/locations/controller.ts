@@ -48,6 +48,38 @@ const moveLocationSchema =
   })
   .strict();
 
+const updateLocationSchema =
+  z.object({
+    type:
+      z.enum([
+        "SITE",
+        "BUILDING",
+        "FLOOR",
+        "ROOM",
+        "ZONE",
+        "AREA",
+        "OTHER"
+      ])
+      .optional(),
+
+    name:
+      z.string().trim().min(1).max(200).optional(),
+
+    description:
+      z.string().trim().max(2000).nullable().optional(),
+
+    metadata:
+      z.record(z.string(), z.unknown()).optional()
+  })
+  .strict()
+  .refine(
+    value =>
+      Object.keys(value).length > 0,
+    {
+      message: "At least one field must be provided"
+    }
+  );
+
 export class LocationController {
 
   constructor(
@@ -203,6 +235,52 @@ export class LocationController {
           );
           return;
       }
+    };
+
+  updateLocation =
+    async (
+      request: FastifyRequest<{
+        Params: {
+          id: string;
+        };
+        Body: unknown;
+      }>,
+      reply: FastifyReply
+    ): Promise<void> => {
+
+      const parsedBody =
+        updateLocationSchema.safeParse(
+          request.body
+        );
+
+      if (!parsedBody.success) {
+        await badRequest(
+          reply,
+          parsedBody.error.issues[0]?.message
+            ?? "Invalid update payload"
+        );
+        return;
+      }
+
+      const location =
+        await this.service.updateLocation(
+          request.params.id,
+          parsedBody.data
+        );
+
+      if (!location) {
+        await reply
+          .code(404)
+          .send({
+            error: "Location not found"
+          });
+        return;
+      }
+
+      await ok(
+        reply,
+        location
+      );
     };
 
   listLocationTree =

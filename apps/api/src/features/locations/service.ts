@@ -3,7 +3,8 @@ import type {
   LocationDto,
   LocationTreeDto,
   MoveLocationInput,
-  MoveLocationResult
+  MoveLocationResult,
+  UpdateLocationInput
 } from "./dto.js";
 
 import type {
@@ -176,6 +177,26 @@ export class LocationService {
           updated
         )
     };
+  }
+
+  async updateLocation(
+    id: string,
+    input: UpdateLocationInput
+  ): Promise<LocationDto | null> {
+
+    const updated =
+      await this.repository.updateDetails(
+        id,
+        input
+      );
+
+    if (!updated) {
+      return null;
+    }
+
+    return mapLocationToDto(
+      updated
+    );
   }
 
   async listLocationTree():
