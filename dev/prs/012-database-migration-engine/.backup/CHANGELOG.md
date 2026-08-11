@@ -1,0 +1,23 @@
+# SensorSphere Changelog
+
+All notable changes to SensorSphere are documented here.
+
+## Unreleased
+
+### Added
+
+- Platform foundation documentation.
+- PR manifest schema v2.
+- PR payload integrity verification.
+- Enriched PR inspection.
+
+## 0.1.0
+
+### Added
+
+- MQTT ingestion.
+- TimescaleDB storage.
+- REST API.
+- React dashboard.
+- Sensor inventory API.
+- Sensor catalog frontend.

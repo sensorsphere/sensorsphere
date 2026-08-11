@@ -1,0 +1,302 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+MIGRATIONS_DIR="${ROOT_DIR}/infrastructure/timescaledb/migrations"
+SERVICE="${SENSORSPHERE_DB_SERVICE:-timescaledb}"
+
+usage() {
+cat <<'USAGE'
+SensorSphere Database Migration Tool
+
+Usage:
+  ./dev/tools/db status
+  ./dev/tools/db migrate
+  ./dev/tools/db history
+
+Environment:
+  SENSORSPHERE_DB_SERVICE   Docker Compose service name (default: timescaledb)
+USAGE
+}
+
+require_tools() {
+  command -v docker >/dev/null 2>&1 || {
+    echo "ERROR: docker is required." >&2
+    exit 1
+  }
+
+  command -v sha256sum >/dev/null 2>&1 || {
+    echo "ERROR: sha256sum is required." >&2
+    exit 1
+  }
+
+  [[ -d "${MIGRATIONS_DIR}" ]] || {
+    echo "ERROR: Migration directory not found: ${MIGRATIONS_DIR}" >&2
+    exit 1
+  }
+
+  docker compose -f "${ROOT_DIR}/docker-compose.yml" ps "${SERVICE}" >/dev/null 2>&1 || {
+    echo "ERROR: Docker Compose service '${SERVICE}' is unavailable." >&2
+    exit 1
+  }
+}
+
+psql_cmd() {
+  docker compose \
+    -f "${ROOT_DIR}/docker-compose.yml" \
+    exec -T "${SERVICE}" \
+    sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" "$@"' \
+    -- "$@"
+}
+
+psql_query() {
+  local sql="$1"
+
+  docker compose \
+    -f "${ROOT_DIR}/docker-compose.yml" \
+    exec -T "${SERVICE}" \
+    sh -lc 'psql -v ON_ERROR_STOP=1 -At -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "$1"' \
+    -- "${sql}"
+}
+
+ensure_schema_table() {
+  psql_query "
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    filename TEXT NOT NULL UNIQUE,
+    checksum TEXT NOT NULL,
+    executed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    execution_time_ms BIGINT NOT NULL
+);
+" >/dev/null
+}
+
+migration_files() {
+  find "${MIGRATIONS_DIR}" \
+    -maxdepth 1 \
+    -type f \
+    -name '[0-9][0-9][0-9]-*.sql' \
+    -printf '%f\n' \
+    | sort
+}
+
+parse_version() {
+  local filename="$1"
+  local prefix="${filename%%-*}"
+
+  if [[ ! "${prefix}" =~ ^[0-9]{3}$ ]]; then
+    echo "ERROR: Invalid migration filename: ${filename}" >&2
+    exit 1
+  fi
+
+  printf "%d" "$((10#${prefix}))"
+}
+
+migration_checksum() {
+  local filename="$1"
+  sha256sum "${MIGRATIONS_DIR}/${filename}" | awk '{print $1}'
+}
+
+get_applied_row() {
+  local version="$1"
+
+  psql_query "
+SELECT
+  version || '|' ||
+  filename || '|' ||
+  checksum
+FROM schema_migrations
+WHERE version = ${version};
+"
+}
+
+validate_applied_migration() {
+  local version="$1"
+  local filename="$2"
+  local checksum="$3"
+  local row="$4"
+
+  local applied_version applied_filename applied_checksum
+
+  IFS='|' read -r \
+    applied_version \
+    applied_filename \
+    applied_checksum \
+    <<< "${row}"
+
+  if [[ "${applied_filename}" != "${filename}" ]]; then
+    echo "ERROR: Migration version ${version} filename mismatch." >&2
+    echo "Recorded: ${applied_filename}" >&2
+    echo "Current : ${filename}" >&2
+    exit 1
+  fi
+
+  if [[ "${applied_checksum}" != "${checksum}" ]]; then
+    echo "ERROR: Applied migration has been modified: ${filename}" >&2
+    echo "Recorded checksum: ${applied_checksum}" >&2
+    echo "Current checksum : ${checksum}" >&2
+    exit 1
+  fi
+}
+
+status_command() {
+  ensure_schema_table
+
+  printf "%-8s %-42s %-12s\n" "VERSION" "MIGRATION" "STATUS"
+  printf "%-8s %-42s %-12s\n" "-------" "---------" "------"
+
+  local found=0
+
+  while IFS= read -r filename
+  do
+    [[ -n "${filename}" ]] || continue
+    found=1
+
+    local version checksum row
+    version="$(parse_version "${filename}")"
+    checksum="$(migration_checksum "${filename}")"
+    row="$(get_applied_row "${version}")"
+
+    if [[ -z "${row}" ]]; then
+      printf "%-8s %-42s %-12s\n" \
+        "$(printf '%03d' "${version}")" \
+        "${filename}" \
+        "PENDING"
+    else
+      validate_applied_migration \
+        "${version}" \
+        "${filename}" \
+        "${checksum}" \
+        "${row}"
+
+      printf "%-8s %-42s %-12s\n" \
+        "$(printf '%03d' "${version}")" \
+        "${filename}" \
+        "APPLIED"
+    fi
+  done < <(migration_files)
+
+  if [[ "${found}" -eq 0 ]]; then
+    echo "No migration files found."
+  fi
+}
+
+apply_migration() {
+  local version="$1"
+  local filename="$2"
+  local checksum="$3"
+
+  local path="${MIGRATIONS_DIR}/${filename}"
+
+  echo "Applying ${filename}..."
+
+  local started_ns ended_ns elapsed_ms
+  started_ns="$(date +%s%N)"
+
+  {
+    echo '\set ON_ERROR_STOP on'
+    echo 'BEGIN;'
+    cat "${path}"
+    printf "\nINSERT INTO schema_migrations(version, filename, checksum, execution_time_ms)\n"
+    printf "VALUES (%d, '%s', '%s', 0);\n" \
+      "${version}" \
+      "${filename//\'/\'\'}" \
+      "${checksum}"
+    echo 'COMMIT;'
+  } | docker compose \
+        -f "${ROOT_DIR}/docker-compose.yml" \
+        exec -T "${SERVICE}" \
+        sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+        >/dev/null
+
+  ended_ns="$(date +%s%N)"
+  elapsed_ms="$(( (ended_ns - started_ns) / 1000000 ))"
+
+  psql_query "
+UPDATE schema_migrations
+SET execution_time_ms = ${elapsed_ms}
+WHERE version = ${version};
+" >/dev/null
+
+  echo "Applied ${filename} (${elapsed_ms} ms)"
+}
+
+migrate_command() {
+  ensure_schema_table
+
+  local applied=0
+
+  while IFS= read -r filename
+  do
+    [[ -n "${filename}" ]] || continue
+
+    local version checksum row
+    version="$(parse_version "${filename}")"
+    checksum="$(migration_checksum "${filename}")"
+    row="$(get_applied_row "${version}")"
+
+    if [[ -n "${row}" ]]; then
+      validate_applied_migration \
+        "${version}" \
+        "${filename}" \
+        "${checksum}" \
+        "${row}"
+      continue
+    fi
+
+    apply_migration \
+      "${version}" \
+      "${filename}" \
+      "${checksum}"
+
+    applied="$((applied + 1))"
+  done < <(migration_files)
+
+  if [[ "${applied}" -eq 0 ]]; then
+    echo "Database is already up to date."
+  else
+    echo "${applied} migration(s) applied."
+  fi
+}
+
+history_command() {
+  ensure_schema_table
+
+  docker compose \
+    -f "${ROOT_DIR}/docker-compose.yml" \
+    exec -T "${SERVICE}" \
+    sh -lc '
+psql -v ON_ERROR_STOP=1 \
+  -U "$POSTGRES_USER" \
+  -d "$POSTGRES_DB" \
+  -P pager=off \
+  -c "
+SELECT
+  LPAD(version::text, 3, '\''0'\'') AS version,
+  filename,
+  LEFT(checksum, 12) AS checksum,
+  executed_at,
+  execution_time_ms
+FROM schema_migrations
+ORDER BY version;
+"
+'
+}
+
+require_tools
+
+case "${1:-}" in
+  status)
+    status_command
+    ;;
+  migrate)
+    migrate_command
+    ;;
+  history)
+    history_command
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac

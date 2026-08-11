@@ -1,0 +1,10 @@
+{
+  "number": 12,
+  "slug": "database-migration-engine",
+  "title": "Database Migration Engine",
+  "project": "SensorSphere",
+  "revision": 1,
+  "requiresDatabaseMigration": false,
+  "requiresRebuild": [],
+  "risk": "medium"
+}

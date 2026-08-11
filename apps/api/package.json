@@ -12,7 +12,8 @@
     "@sensorsphere/shared-config": "workspace:*",
     "fastify": "^5.5.0",
     "pg": "^8.16.3",
-    "pino": "^9.9.4"
+    "pino": "^9.9.4",
+    "zod": "^4"
   },
   "devDependencies": {
     "@types/node": "^22.18.0",

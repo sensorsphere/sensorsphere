@@ -1,0 +1,5 @@
+{
+  "payload/docs/development/cli.md": "98956a6cb8f9ce7cda58153c22e43863c5680084c2fd6e571bd7a71788c8ec09",
+  "payload/tools/cli/go.mod": "cb2153e11ed967929a3299ab85f2f334117f73e016c5c9afa21e52f1e78381d8",
+  "payload/tools/cli/main.go": "62e52016294c13c655e76531cdba503a1ce0759aa0fe1c9f3df156e90ae4b8c0"
+}

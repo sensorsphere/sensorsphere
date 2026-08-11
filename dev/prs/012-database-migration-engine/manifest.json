@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 2,
+  "number": 12,
+  "slug": "database-migration-engine",
+  "title": "Database Migration Engine",
+  "project": "SensorSphere",
+  "revision": 1,
+  "epic": "Platform Foundation",
+  "requires": {
+    "previousPr": 11,
+    "minimumVersion": "0.1.0"
+  },
+  "changes": {
+    "create": [
+      "dev/tools/db",
+      "docs/database/migrations.md"
+    ],
+    "modify": [
+      "CHANGELOG.md",
+      "docs/roadmap.md"
+    ],
+    "delete": []
+  },
+  "services": [
+    "timescaledb"
+  ],
+  "requiresDatabaseMigration": false,
+  "requiresRebuild": [],
+  "risk": "medium",
+  "summary": "Introduce deterministic SQL migration tracking with checksums, status, migrate and history commands."
+}

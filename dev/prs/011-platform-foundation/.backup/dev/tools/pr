@@ -1,0 +1,252 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PR_ROOT="${ROOT_DIR}/dev/prs"
+
+usage() {
+    cat <<USAGE
+SensorSphere PR Tool
+
+Usage:
+  ./dev/tools/pr list
+  ./dev/tools/pr extract <archive.tar.gz>
+  ./dev/tools/pr info <number>
+  ./dev/tools/pr apply <number>
+  ./dev/tools/pr verify <number>
+  ./dev/tools/pr rollback <number>
+
+Examples:
+  ./dev/tools/pr extract /tmp/PR-009-sensor-catalog.tar.gz
+  ./dev/tools/pr info 009
+  ./dev/tools/pr apply 009
+  ./dev/tools/pr verify 009
+  ./dev/tools/pr rollback 009
+USAGE
+}
+
+normalize_pr_number() {
+    printf "%03d" "$((10#$1))"
+}
+
+find_pr_directory() {
+    local number
+    number="$(normalize_pr_number "$1")"
+
+    local match
+    match="$(
+        find "${PR_ROOT}" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            -name "${number}-*" \
+            | head -n 1
+    )"
+
+    if [[ -z "${match}" ]]; then
+        echo "ERROR: PR ${number} not found." >&2
+        exit 1
+    fi
+
+    printf "%s" "${match}"
+}
+
+extract_pr() {
+    local archive="$1"
+
+    if [[ ! -f "${archive}" ]]; then
+        echo "ERROR: Archive not found: ${archive}" >&2
+        exit 1
+    fi
+
+    case "${archive}" in
+        *.tar.gz|*.tgz)
+            ;;
+        *)
+            echo "ERROR: Expected a .tar.gz or .tgz archive." >&2
+            exit 1
+            ;;
+    esac
+
+    mkdir -p "${PR_ROOT}"
+
+    local temp_dir
+    temp_dir="$(mktemp -d)"
+
+    trap 'rm -rf "${temp_dir}"' RETURN
+
+    echo "Inspecting archive..."
+
+    tar -tzf "${archive}" >/dev/null
+
+    tar -xzf "${archive}" \
+        -C "${temp_dir}"
+
+    local directories
+    mapfile -t directories < <(
+        find "${temp_dir}" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d
+    )
+
+    if [[ "${#directories[@]}" -ne 1 ]]; then
+        echo "ERROR: PR archive must contain exactly one top-level directory." >&2
+        exit 1
+    fi
+
+    local source_dir
+    source_dir="${directories[0]}"
+
+    local pr_name
+    pr_name="$(basename "${source_dir}")"
+
+    if [[ ! "${pr_name}" =~ ^[0-9]{3}-[a-z0-9][a-z0-9-]*$ ]]; then
+        echo "ERROR: Invalid PR directory name: ${pr_name}" >&2
+        echo "Expected format: 009-sensor-catalog" >&2
+        exit 1
+    fi
+
+    for required_file in README.md apply.sh verify.sh rollback.sh metadata.json
+    do
+        if [[ ! -f "${source_dir}/${required_file}" ]]; then
+            echo "ERROR: Missing ${required_file} in archive." >&2
+            exit 1
+        fi
+    done
+
+    local destination
+    destination="${PR_ROOT}/${pr_name}"
+
+    if [[ -e "${destination}" ]]; then
+        echo "ERROR: ${destination} already exists." >&2
+        echo "Remove it first if you really want to replace this PR." >&2
+        exit 1
+    fi
+
+    mv "${source_dir}" "${destination}"
+
+    chmod +x \
+        "${destination}/apply.sh" \
+        "${destination}/verify.sh" \
+        "${destination}/rollback.sh"
+
+    echo
+    echo "PR extracted successfully:"
+    echo "  ${destination}"
+    echo
+    echo "Next:"
+    echo "  ./dev/tools/pr info ${pr_name:0:3}"
+    echo "  ./dev/tools/pr apply ${pr_name:0:3}"
+}
+
+show_info() {
+    local pr_dir
+    pr_dir="$(find_pr_directory "$1")"
+
+    echo "========================================"
+    echo " SensorSphere PR"
+    echo "========================================"
+    echo
+
+    if [[ -f "${pr_dir}/metadata.json" ]]; then
+        cat "${pr_dir}/metadata.json"
+        echo
+    fi
+
+    echo
+    echo "Directory:"
+    echo "  ${pr_dir}"
+    echo
+    echo "README:"
+    echo "  ${pr_dir}/README.md"
+}
+
+run_pr_script() {
+    local action="$1"
+    local requested_number="$2"
+
+    local pr_dir
+    pr_dir="$(find_pr_directory "${requested_number}")"
+
+    local script
+    script="${pr_dir}/${action}.sh"
+
+    if [[ ! -f "${script}" ]]; then
+        echo "ERROR: Missing ${action}.sh in ${pr_dir}" >&2
+        exit 1
+    fi
+
+    chmod +x "${script}"
+
+    echo "========================================"
+    echo " SensorSphere PR"
+    echo "========================================"
+    echo "PR     : $(basename "${pr_dir}")"
+    echo "Action : ${action}"
+    echo "========================================"
+    echo
+
+    cd "${ROOT_DIR}"
+
+    "${script}"
+}
+
+list_prs() {
+    mkdir -p "${PR_ROOT}"
+
+    echo "SensorSphere PRs"
+    echo
+
+    find "${PR_ROOT}" \
+        -mindepth 1 \
+        -maxdepth 1 \
+        -type d \
+        -printf "%f\n" \
+        | sort
+}
+
+COMMAND="${1:-}"
+
+case "${COMMAND}" in
+
+    list)
+        list_prs
+        ;;
+
+    extract)
+        if [[ $# -ne 2 ]]; then
+            usage
+            exit 1
+        fi
+
+        extract_pr "$2"
+        ;;
+
+    info)
+        if [[ $# -ne 2 ]]; then
+            usage
+            exit 1
+        fi
+
+        show_info "$2"
+        ;;
+
+    apply|verify|rollback)
+        if [[ $# -ne 2 ]]; then
+            usage
+            exit 1
+        fi
+
+        run_pr_script \
+            "${COMMAND}" \
+            "$2"
+        ;;
+
+    *)
+        usage
+        exit 1
+        ;;
+
+esac

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 2,
+  "number": 13,
+  "slug": "sensorsphere-cli",
+  "title": "SensorSphere CLI",
+  "project": "SensorSphere",
+  "revision": 2,
+  "epic": "Platform Foundation",
+  "requires": {
+    "previousPr": 12,
+    "minimumVersion": "0.1.0"
+  },
+  "changes": {
+    "create": [
+      "tools/cli/go.mod",
+      "tools/cli/main.go",
+      "dev/bin/sensorsphere",
+      "docs/development/cli.md"
+    ],
+    "modify": [
+      "CHANGELOG.md",
+      "docs/roadmap.md"
+    ],
+    "delete": []
+  },
+  "services": [],
+  "requiresDatabaseMigration": false,
+  "requiresRebuild": [],
+  "risk": "low",
+  "summary": "Introduce Go-based SensorSphere CLI. Revision 2 builds with host UID/GID to prevent root-owned repository files."
+}

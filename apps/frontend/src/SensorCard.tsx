@@ -24,7 +24,7 @@ export function SensorCard({
     >
 
       <Title order={3}>
-        {measurement.sensor_uid}
+        {measurement.sensorUid}
       </Title>
 
       <Text

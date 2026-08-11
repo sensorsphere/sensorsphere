@@ -1,0 +1,251 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PR_ROOT="${ROOT_DIR}/dev/prs"
+
+usage() {
+cat <<USAGE
+SensorSphere PR Tool
+
+Usage:
+  ./dev/tools/pr list
+  ./dev/tools/pr extract <archive.tar.gz>
+  ./dev/tools/pr info <number>
+  ./dev/tools/pr apply <number>
+  ./dev/tools/pr verify <number>
+  ./dev/tools/pr rollback <number>
+USAGE
+}
+
+normalize_pr_number() {
+  printf "%03d" "$((10#$1))"
+}
+
+find_pr_directory() {
+  local number
+  number="$(normalize_pr_number "$1")"
+
+  local match
+  match="$(find "${PR_ROOT}" -mindepth 1 -maxdepth 1 -type d -name "${number}-*" | head -n1)"
+
+  [[ -n "${match}" ]] || {
+    echo "ERROR: PR ${number} not found." >&2
+    exit 1
+  }
+
+  printf "%s" "${match}"
+}
+
+verify_payload_checksums() {
+  local pr_dir="$1"
+
+  python3 - "${pr_dir}" <<'PY'
+import hashlib, json, sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+check_file = root / "checksums.json"
+
+if not check_file.is_file():
+    raise SystemExit("ERROR: Missing checksums.json")
+
+checks = json.loads(check_file.read_text())
+
+for rel, expected in checks.items():
+    path = root / rel
+
+    if not path.is_file():
+        raise SystemExit(f"ERROR: Missing payload file: {rel}")
+
+    actual = hashlib.sha256(path.read_bytes()).hexdigest()
+
+    if actual != expected:
+        raise SystemExit(f"ERROR: Checksum mismatch: {rel}")
+
+print(f"Payload integrity OK ({len(checks)} files).")
+PY
+}
+
+verify_manifest_compatibility() {
+  local pr_dir="$1"
+
+  python3 - "${pr_dir}" <<'PY'
+import json, sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+manifest = json.loads((root / "manifest.json").read_text())
+
+if manifest.get("schemaVersion") != 2:
+    raise SystemExit("ERROR: Unsupported manifest schema version.")
+
+number = int(manifest["number"])
+slug = manifest["slug"]
+expected = f"{number:03d}-{slug}"
+
+if root.name != expected:
+    raise SystemExit(
+        f"ERROR: Directory {root.name} does not match manifest {expected}."
+    )
+
+metadata_path = root / "metadata.json"
+if metadata_path.exists():
+    metadata = json.loads(metadata_path.read_text())
+
+    if int(metadata.get("number")) != number:
+        raise SystemExit("ERROR: metadata.json and manifest.json PR numbers differ.")
+
+    if metadata.get("slug") != slug:
+        raise SystemExit("ERROR: metadata.json and manifest.json slugs differ.")
+
+print("Manifest compatibility OK.")
+PY
+}
+
+extract_pr() {
+  local archive="$1"
+
+  [[ -f "${archive}" ]] || {
+    echo "ERROR: Archive not found: ${archive}" >&2
+    exit 1
+  }
+
+  case "${archive}" in
+    *.tar.gz|*.tgz) ;;
+    *)
+      echo "ERROR: Expected .tar.gz or .tgz archive." >&2
+      exit 1
+      ;;
+  esac
+
+  mkdir -p "${PR_ROOT}"
+
+  local tmp
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "${tmp}"' RETURN
+
+  tar -tzf "${archive}" >/dev/null
+  tar -xzf "${archive}" -C "${tmp}"
+
+  mapfile -t dirs < <(
+    find "${tmp}" -mindepth 1 -maxdepth 1 -type d
+  )
+
+  [[ "${#dirs[@]}" -eq 1 ]] || {
+    echo "ERROR: Archive must contain one top-level directory." >&2
+    exit 1
+  }
+
+  local src="${dirs[0]}"
+  local name
+  name="$(basename "${src}")"
+
+  for f in \
+    README.md \
+    CHANGELOG.md \
+    manifest.json \
+    checksums.json \
+    apply.sh \
+    verify.sh \
+    rollback.sh
+  do
+    [[ -f "${src}/${f}" ]] || {
+      echo "ERROR: Missing ${f}" >&2
+      exit 1
+    }
+  done
+
+  verify_manifest_compatibility "${src}"
+  verify_payload_checksums "${src}"
+
+  local dst="${PR_ROOT}/${name}"
+
+  [[ ! -e "${dst}" ]] || {
+    echo "ERROR: ${dst} already exists." >&2
+    exit 1
+  }
+
+  mv "${src}" "${dst}"
+
+  chmod +x \
+    "${dst}/apply.sh" \
+    "${dst}/verify.sh" \
+    "${dst}/rollback.sh"
+
+  echo "PR extracted successfully: ${dst}"
+}
+
+show_info() {
+  local dir
+  dir="$(find_pr_directory "$1")"
+
+  verify_manifest_compatibility "${dir}"
+  verify_payload_checksums "${dir}"
+
+  python3 - "${dir}/manifest.json" <<'PY'
+import json, sys
+
+m = json.load(open(sys.argv[1]))
+c = m.get("changes", {})
+
+print("========================================")
+print(" SensorSphere PR")
+print("========================================")
+print(f"PR       : {m.get('number'):03d}")
+print(f"Title    : {m.get('title')}")
+print(f"Revision : {m.get('revision', 1)}")
+print(f"Schema   : {m.get('schemaVersion', 1)}")
+print(f"Epic     : {m.get('epic', '-')}")
+print(f"Risk     : {m.get('risk', '-')}")
+print()
+print("Requirements")
+print(f"  Previous PR     : {m.get('requires', {}).get('previousPr', '-')}")
+print(f"  Minimum version : {m.get('requires', {}).get('minimumVersion', '-')}")
+print()
+print("Changes")
+print(f"  Create : {len(c.get('create', []))}")
+print(f"  Modify : {len(c.get('modify', []))}")
+print(f"  Delete : {len(c.get('delete', []))}")
+print()
+print("Database migration")
+print("  " + ("Yes" if m.get("requiresDatabaseMigration") else "No"))
+PY
+}
+
+run_action() {
+  local action="$1"
+  local dir
+  dir="$(find_pr_directory "$2")"
+
+  verify_manifest_compatibility "${dir}"
+  verify_payload_checksums "${dir}"
+
+  chmod +x "${dir}/${action}.sh"
+
+  cd "${ROOT_DIR}"
+  "${dir}/${action}.sh"
+}
+
+case "${1:-}" in
+  list)
+    mkdir -p "${PR_ROOT}"
+    find "${PR_ROOT}" -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | sort
+    ;;
+  extract)
+    [[ $# -eq 2 ]] || { usage; exit 1; }
+    extract_pr "$2"
+    ;;
+  info)
+    [[ $# -eq 2 ]] || { usage; exit 1; }
+    show_info "$2"
+    ;;
+  apply|verify|rollback)
+    [[ $# -eq 2 ]] || { usage; exit 1; }
+    run_action "$1" "$2"
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac

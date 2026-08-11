@@ -1,0 +1,22 @@
+{
+  "name": "@sensorsphere/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@sensorsphere/shared-types": "workspace:*",
+    "@sensorsphere/shared-config": "workspace:*",
+    "fastify": "^5.5.0",
+    "pg": "^8.16.3",
+    "pino": "^9.9.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "@types/pg": "^8.15.5",
+    "typescript": "^5.9.2"
+  }
+}

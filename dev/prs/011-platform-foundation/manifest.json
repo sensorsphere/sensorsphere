@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 2,
+  "number": 11,
+  "slug": "platform-foundation",
+  "title": "Platform Foundation",
+  "project": "SensorSphere",
+  "revision": 2,
+  "epic": "Platform Foundation",
+  "requires": {
+    "previousPr": 10,
+    "minimumVersion": "0.1.0"
+  },
+  "changes": {
+    "create": [
+      "CHANGELOG.md",
+      "docs/roadmap.md",
+      "docs/architecture/vision.md",
+      "docs/architecture/dev-workflow.md",
+      "docs/architecture/api-guidelines.md"
+    ],
+    "modify": [
+      "dev/tools/pr"
+    ],
+    "delete": []
+  },
+  "services": [],
+  "requiresDatabaseMigration": false,
+  "requiresRebuild": [],
+  "risk": "low",
+  "summary": "Transition PR adding manifest v2, payload checksums, enriched PR tooling, roadmap and architecture documentation."
+}

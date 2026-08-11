@@ -1,0 +1,10 @@
+{
+  "number": 11,
+  "slug": "platform-foundation",
+  "title": "Platform Foundation",
+  "project": "SensorSphere",
+  "revision": 2,
+  "requiresDatabaseMigration": false,
+  "requiresRebuild": [],
+  "risk": "low"
+}

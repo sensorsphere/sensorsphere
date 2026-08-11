@@ -1,0 +1,13 @@
+{
+  "number": 9,
+  "slug": "sensor-catalog-api",
+  "title": "Sensor Catalog API",
+  "project": "SensorSphere",
+  "revision": 2,
+  "requiresDatabaseMigration": false,
+  "requiresRebuild": [
+    "api"
+  ],
+  "risk": "low",
+  "summary": "Add sensor metadata update support through PATCH /api/v1/sensors/:id."
+}

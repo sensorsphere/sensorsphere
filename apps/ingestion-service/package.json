@@ -12,6 +12,7 @@
     "@sensorsphere/core": "workspace:*",
     "@sensorsphere/shared-types": "workspace:*",
     "@sensorsphere/shared-config": "workspace:*",
+    "@sensorsphere/shared-logger": "workspace:*",
     "mqtt": "^5",
     "pg": "^8",
     "pino": "^9"

@@ -1,4 +1,6 @@
-import pino from "pino";
+import {
+    createLogger
+} from "@sensorsphere/shared-logger";
 
 import {
   loadIngestionConfig
@@ -31,12 +33,12 @@ import {
 const config =
   loadIngestionConfig();
 
-const logger =
-  pino({
-    level:
-      config.LOG_LEVEL ??
-      "info"
-  });
+const logger = createLogger({
+
+        service:
+            "ingestion-service"
+
+    });
 
 async function main():
 Promise<void> {

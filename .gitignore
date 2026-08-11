@@ -1,9 +1,11 @@
 node_modules/
 dist/
 coverage/
+.pnpm-store/
 .env
 *.log
 .DS_Store
+dev/bin/
 
 infrastructure/mosquitto/data/*
 infrastructure/mosquitto/log/*

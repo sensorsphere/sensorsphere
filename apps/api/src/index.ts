@@ -1,6 +1,14 @@
 import Fastify from "fastify";
 
 import {
+  registerTelemetryFeature
+} from "./features/telemetry/index.js";
+
+import {
+  registerSensorFeature
+} from "./features/sensors/index.js";
+
+import {
   loadApiConfig
 } from "@sensorsphere/shared-config";
 
@@ -26,10 +34,16 @@ const app = Fastify({
   }
 });
 
-app.get("/health", async () => {
+const healthHandler = async () => {
   await pool.query("SELECT 1");
-  return { status: "ok" };
-});
+
+  return {
+    status: "ok"
+  };
+};
+
+app.get("/health", healthHandler);
+app.get("/api/health", healthHandler);
 
 app.get("/sensors", async () => {
   const result = await pool.query(
@@ -43,7 +57,7 @@ app.get("/sensors", async () => {
   return result.rows;
 });
 
-app.get("/measurements/latest", async () => {
+app.get("/api/measurements/latest", async () => {
   const result = await pool.query(
     `
     SELECT DISTINCT ON (sensor_uid)
@@ -62,7 +76,7 @@ app.get("/measurements/latest", async () => {
   return result.rows;
 });
 
-app.get("/measurements/history", async (request, reply) => {
+app.get("/api/measurements/history", async (request, reply) => {
   const query = request.query as {
     sensor_uid?: string;
     from?: string;
@@ -111,6 +125,20 @@ app.get("/measurements/history", async (request, reply) => {
 
 
 const port = Number(config.PORT ?? 3000);
+
+await registerSensorFeature(
+  app,
+  {
+    pool
+  }
+);
+
+await registerTelemetryFeature(
+  app,
+  {
+    pool
+  }
+);
 
 await app.listen({
   host: "0.0.0.0",

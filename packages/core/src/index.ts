@@ -1,2 +1,6 @@
-export * from "./metric.js";
-export * from "./sensor-snapshot.js";
+export * from "./inventory/gateway.js";
+export * from "./inventory/room.js";
+export * from "./inventory/sensor.js";
+
+export * from "./timeseries/metric.js";
+export * from "./timeseries/sensor-snapshot.js";

@@ -1,0 +1,13 @@
+{
+  "number": 10,
+  "slug": "sensor-catalog-frontend",
+  "title": "Sensor Catalog Frontend",
+  "project": "SensorSphere",
+  "revision": 1,
+  "requiresDatabaseMigration": false,
+  "requiresRebuild": [
+    "frontend"
+  ],
+  "risk": "low",
+  "summary": "Add visible sensor catalog and sensor metadata editing to the React frontend."
+}

@@ -1,0 +1,10 @@
+{
+  "number": 13,
+  "slug": "sensorsphere-cli",
+  "title": "SensorSphere CLI",
+  "project": "SensorSphere",
+  "revision": 2,
+  "requiresDatabaseMigration": false,
+  "requiresRebuild": [],
+  "risk": "low"
+}
