@@ -246,7 +246,7 @@ implements LocationRepository {
         SELECT EXISTS (
           SELECT 1
           FROM assets
-          WHERE room_id = $1
+          WHERE location_id = $1
         ) AS exists
         `,
         [id]

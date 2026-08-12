@@ -11,6 +11,10 @@ import {
 } from "./repository.js";
 
 import {
+  PostgresObservationRepository
+} from "./observation-repository.js";
+
+import {
   TelemetryService
 } from "./service.js";
 
@@ -36,9 +40,15 @@ export async function registerTelemetryFeature(
       options.pool
     );
 
+  const observationRepository =
+    new PostgresObservationRepository(
+      options.pool
+    );
+
   const service =
     new TelemetryService(
-      repository
+      repository,
+      observationRepository
     );
 
   const controller =

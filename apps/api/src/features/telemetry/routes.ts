@@ -24,4 +24,19 @@ export async function registerTelemetryRoutes(
     "/measurements/history",
     options.controller.getHistory
   );
+
+  app.get(
+    "/observations/latest",
+    options.controller.getLatestObservations
+  );
+
+  app.get(
+    "/observations/history",
+    options.controller.getObservationHistory
+  );
+
+  app.get(
+    "/observations/aggregate",
+    options.controller.getObservationAggregates
+  );
 }

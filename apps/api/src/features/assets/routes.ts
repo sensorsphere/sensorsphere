@@ -20,8 +20,28 @@ export async function registerAssetRoutes(
     options.controller.listAssets
   );
 
+  app.post(
+    "/assets",
+    options.controller.createAsset
+  );
+
   app.get(
     "/assets/:id",
     options.controller.getAsset
+  );
+
+  app.patch(
+    "/assets/:id",
+    options.controller.updateAsset
+  );
+
+  app.patch(
+    "/assets/:id/location",
+    options.controller.assignAssetLocation
+  );
+
+  app.delete(
+    "/assets/:id",
+    options.controller.deleteAsset
   );
 }

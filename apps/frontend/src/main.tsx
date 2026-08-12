@@ -2,7 +2,10 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 
 import {
+  Alert,
   AppShell,
+  Badge,
+  Card,
   Container,
   Group,
   Loader,
@@ -23,18 +26,24 @@ import {
 } from "@tanstack/react-query";
 
 import {
-  getHistory,
-  getLatestMeasurements,
+  getAssets,
+  getLatestObservations,
+  getObservationAggregates,
+  getObservationHistory,
   getSensors
 } from "./api";
 
 import {
-  SensorCard
-} from "./SensorCard";
+  AssetLatestCard
+} from "./AssetLatestCard";
 
 import {
   SensorCatalog
 } from "./SensorCatalog";
+
+import {
+  InventoryPanel
+} from "./InventoryPanel";
 
 import {
   SensorChart
@@ -44,6 +53,48 @@ import "./styles.css";
 
 const queryClient =
   new QueryClient();
+
+function formatAge(
+  ageSeconds: number | null
+): string {
+
+  if (ageSeconds === null) {
+    return "Never";
+  }
+
+  if (ageSeconds < 60) {
+    return `${ageSeconds} sec ago`;
+  }
+
+  const minutes =
+    Math.floor(
+      ageSeconds / 60
+    );
+
+  if (minutes < 60) {
+    return `${minutes} min ago`;
+  }
+
+  const hours =
+    Math.floor(
+      minutes / 60
+    );
+
+  if (hours < 24) {
+    return `${hours} h ago`;
+  }
+
+  const days =
+    Math.floor(
+      hours / 24
+    );
+
+  return `${days} day${
+    days > 1
+      ? "s"
+      : ""
+  } ago`;
+}
 
 function Dashboard() {
 
@@ -71,13 +122,25 @@ function Dashboard() {
         30_000
     });
 
-  const latestQuery =
+  const assetsQuery =
     useQuery({
       queryKey:
-        ["latest"],
+        ["assets"],
 
       queryFn:
-        getLatestMeasurements,
+        getAssets,
+
+      refetchInterval:
+        30_000
+    });
+
+  const observationsQuery =
+    useQuery({
+      queryKey:
+        ["latest-observations"],
+
+      queryFn:
+        getLatestObservations,
 
       refetchInterval:
         30_000
@@ -100,32 +163,142 @@ function Dashboard() {
     selectedSensor
   ]);
 
-  const historyQuery =
+  const selectedAsset =
+    assetsQuery.data?.find(
+      asset =>
+        asset.sensor?.uid ===
+        selectedSensor
+    );
+
+  const temperatureMetric =
+    selectedAsset?.metrics.find(
+      metric =>
+        metric.key ===
+        "temperature"
+    );
+
+  const humidityMetric =
+    selectedAsset?.metrics.find(
+      metric =>
+        metric.key ===
+        "humidity"
+    );
+
+  const useAggregates =
+    hours > 24;
+
+  const aggregateBucket =
+    hours <= 168
+      ? "15 minutes" as const
+      : "1 hour" as const;
+
+  const temperatureHistoryQuery =
     useQuery({
       queryKey: [
-        "history",
-        selectedSensor,
+        "observation-history",
+        temperatureMetric?.id,
         hours
       ],
 
       queryFn:
         () =>
-          getHistory(
-            selectedSensor,
+          getObservationHistory(
+            temperatureMetric!.id,
             hours
           ),
 
       enabled:
         Boolean(
-          selectedSensor
-        ),
+          temperatureMetric?.id
+        ) &&
+        !useAggregates,
+
+      refetchInterval:
+        60_000
+    });
+
+  const humidityHistoryQuery =
+    useQuery({
+      queryKey: [
+        "observation-history",
+        humidityMetric?.id,
+        hours
+      ],
+
+      queryFn:
+        () =>
+          getObservationHistory(
+            humidityMetric!.id,
+            hours
+          ),
+
+      enabled:
+        Boolean(
+          humidityMetric?.id
+        ) &&
+        !useAggregates,
+
+      refetchInterval:
+        60_000
+    });
+
+  const temperatureAggregateQuery =
+    useQuery({
+      queryKey: [
+        "observation-aggregate",
+        temperatureMetric?.id,
+        hours,
+        aggregateBucket
+      ],
+
+      queryFn:
+        () =>
+          getObservationAggregates(
+            temperatureMetric!.id,
+            hours,
+            aggregateBucket
+          ),
+
+      enabled:
+        Boolean(
+          temperatureMetric?.id
+        ) &&
+        useAggregates,
+
+      refetchInterval:
+        60_000
+    });
+
+  const humidityAggregateQuery =
+    useQuery({
+      queryKey: [
+        "observation-aggregate",
+        humidityMetric?.id,
+        hours,
+        aggregateBucket
+      ],
+
+      queryFn:
+        () =>
+          getObservationAggregates(
+            humidityMetric!.id,
+            hours,
+            aggregateBucket
+          ),
+
+      enabled:
+        Boolean(
+          humidityMetric?.id
+        ) &&
+        useAggregates,
 
       refetchInterval:
         60_000
     });
 
   if (
-    latestQuery.isLoading ||
+    assetsQuery.isLoading ||
+    observationsQuery.isLoading ||
     sensorsQuery.isLoading
   ) {
     return (
@@ -136,7 +309,8 @@ function Dashboard() {
   }
 
   if (
-    latestQuery.isError ||
+    assetsQuery.isError ||
+    observationsQuery.isError ||
     sensorsQuery.isError
   ) {
     return (
@@ -148,11 +322,204 @@ function Dashboard() {
     );
   }
 
-  const latest =
-    latestQuery.data ?? [];
+  const assets =
+    assetsQuery.data ?? [];
+
+  const observations =
+    observationsQuery.data ?? [];
+
+  const observationsByAsset =
+    new Map<
+      string,
+      typeof observations
+    >();
+
+  for (
+    const observation
+    of observations
+  ) {
+
+    const current =
+      observationsByAsset.get(
+        observation.assetId
+      ) ?? [];
+
+    current.push(
+      observation
+    );
+
+    observationsByAsset.set(
+      observation.assetId,
+      current
+    );
+  }
 
   const sensors =
     sensorsQuery.data ?? [];
+
+  const enabledAssets =
+    assets.filter(
+      asset =>
+        asset.enabled
+    ).length;
+
+  const onlineAssets =
+    assets.filter(
+      asset =>
+        asset.health.status ===
+        "online"
+    );
+
+  const warningAssets =
+    assets.filter(
+      asset =>
+        asset.health.status ===
+        "warning"
+    );
+
+  const offlineAssets =
+    assets.filter(
+      asset =>
+        asset.health.status ===
+        "offline"
+    );
+
+  const healthPriority = {
+    offline: 0,
+    warning: 1,
+    online: 2
+  } as const;
+
+  const sortedAssets =
+    [...assets]
+      .sort(
+        (left, right) => {
+
+          const healthDifference =
+            healthPriority[
+              left.health.status
+            ] -
+            healthPriority[
+              right.health.status
+            ];
+
+          if (
+            healthDifference !== 0
+          ) {
+            return healthDifference;
+          }
+
+          const leftName =
+            left.sensor?.name
+            ?? left.name
+            ?? left.externalId;
+
+          const rightName =
+            right.sensor?.name
+            ?? right.name
+            ?? right.externalId;
+
+          return leftName.localeCompare(
+            rightName
+          );
+        }
+      );
+
+  const unassignedAssets =
+    assets.filter(
+      asset =>
+        asset.location === null
+    );
+
+  const assignedLocations =
+    new Set(
+      assets
+        .map(
+          asset =>
+            asset.location?.id
+        )
+        .filter(
+          (
+            locationId
+          ): locationId is string =>
+            Boolean(locationId)
+        )
+    ).size;
+
+  const numericTemperatureValues =
+    observations
+      .filter(
+        observation =>
+          observation.metricKey ===
+          "temperature" &&
+          typeof observation.value ===
+          "number"
+      )
+      .map(
+        observation =>
+          observation.value as number
+      );
+
+  const numericHumidityValues =
+    observations
+      .filter(
+        observation =>
+          observation.metricKey ===
+          "humidity" &&
+          typeof observation.value ===
+          "number"
+      )
+      .map(
+        observation =>
+          observation.value as number
+      );
+
+  const average =
+    (
+      values: number[]
+    ): number | null =>
+      values.length > 0
+        ? values.reduce(
+            (
+              sum,
+              value
+            ) =>
+              sum + value,
+            0
+          ) /
+          values.length
+        : null;
+
+  const averageTemperature =
+    average(
+      numericTemperatureValues
+    );
+
+  const averageHumidity =
+    average(
+      numericHumidityValues
+    );
+
+  const latestActivity =
+    observations.length > 0
+      ? observations
+          .map(
+            observation =>
+              new Date(
+                observation.time
+              ).getTime()
+          )
+          .reduce(
+            (
+              latest,
+              current
+            ) =>
+              Math.max(
+                latest,
+                current
+              )
+          )
+      : null;
 
   return (
     <AppShell
@@ -198,11 +565,326 @@ function Dashboard() {
 
             <div>
 
+              <Group
+                justify="space-between"
+                mb="md"
+              >
+                <div>
+                  <Title order={2}>
+                    Overview
+                  </Title>
+
+                  <Text c="dimmed">
+                    Current SensorSphere status
+                  </Text>
+                </div>
+
+                <Group gap="xs">
+                  <Badge
+                    variant="light"
+                    color="green"
+                  >
+                    {onlineAssets.length} Online
+                  </Badge>
+
+                  <Badge
+                    variant="light"
+                    color="yellow"
+                  >
+                    {warningAssets.length} Warning
+                  </Badge>
+
+                  <Badge
+                    variant="light"
+                    color="red"
+                  >
+                    {offlineAssets.length} Offline
+                  </Badge>
+                </Group>
+              </Group>
+
+              <SimpleGrid
+                cols={{
+                  base: 1,
+                  xs: 2,
+                  md: 4
+                }}
+              >
+
+                <Card
+                  withBorder
+                  radius="md"
+                  padding="lg"
+                >
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                  >
+                    Assets
+                  </Text>
+
+                  <Text
+                    size="xl"
+                    fw={700}
+                  >
+                    {assets.length}
+                  </Text>
+
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                  >
+                    {enabledAssets} enabled
+                  </Text>
+                </Card>
+
+                <Card
+                  withBorder
+                  radius="md"
+                  padding="lg"
+                >
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                  >
+                    Locations
+                  </Text>
+
+                  <Text
+                    size="xl"
+                    fw={700}
+                  >
+                    {assignedLocations}
+                  </Text>
+
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                  >
+                    With assigned assets
+                  </Text>
+                </Card>
+
+                <Card
+                  withBorder
+                  radius="md"
+                  padding="lg"
+                >
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                  >
+                    Average temperature
+                  </Text>
+
+                  <Text
+                    size="xl"
+                    fw={700}
+                  >
+                    {
+                      averageTemperature !==
+                      null
+                        ? `${averageTemperature.toFixed(1)} °C`
+                        : "—"
+                    }
+                  </Text>
+
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                  >
+                    Latest values
+                  </Text>
+                </Card>
+
+                <Card
+                  withBorder
+                  radius="md"
+                  padding="lg"
+                >
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                  >
+                    Average humidity
+                  </Text>
+
+                  <Text
+                    size="xl"
+                    fw={700}
+                  >
+                    {
+                      averageHumidity !==
+                      null
+                        ? `${averageHumidity.toFixed(1)} %`
+                        : "—"
+                    }
+                  </Text>
+
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                  >
+                    Latest values
+                  </Text>
+                </Card>
+
+              </SimpleGrid>
+
+              <Text
+                size="xs"
+                c="dimmed"
+                mt="sm"
+              >
+                Last activity:{" "}
+                {
+                  latestActivity
+                    ? new Date(
+                        latestActivity
+                      ).toLocaleString()
+                    : "No observations"
+                }
+              </Text>
+
+            </div>
+
+            {
+              (
+                offlineAssets.length > 0 ||
+                warningAssets.length > 0 ||
+                unassignedAssets.length > 0
+              ) && (
+                <div>
+
+                  <Title
+                    order={2}
+                    mb="md"
+                  >
+                    Attention
+                  </Title>
+
+                  <SimpleGrid
+                    cols={{
+                      base: 1,
+                      md: 2
+                    }}
+                  >
+
+                    {offlineAssets.length > 0 && (
+                      <Alert
+                        color="red"
+                        title={
+                          `${offlineAssets.length} asset${
+                            offlineAssets.length > 1
+                              ? "s"
+                              : ""
+                          } offline`
+                        }
+                      >
+                        <Stack gap="xs">
+                          {offlineAssets.map(
+                            asset => (
+                              <Text
+                                key={asset.id}
+                                size="sm"
+                              >
+                                {
+                                  asset.sensor?.name
+                                  ?? asset.name
+                                  ?? asset.externalId
+                                }
+                                {" · "}
+                                {
+                                  formatAge(
+                                    asset.health.ageSeconds
+                                  )
+                                }
+                              </Text>
+                            )
+                          )}
+                        </Stack>
+                      </Alert>
+                    )}
+
+                    {warningAssets.length > 0 && (
+                      <Alert
+                        color="yellow"
+                        title={
+                          `${warningAssets.length} asset${
+                            warningAssets.length > 1
+                              ? "s"
+                              : ""
+                          } in warning state`
+                        }
+                      >
+                        <Stack gap="xs">
+                          {warningAssets.map(
+                            asset => (
+                              <Text
+                                key={asset.id}
+                                size="sm"
+                              >
+                                {
+                                  asset.sensor?.name
+                                  ?? asset.name
+                                  ?? asset.externalId
+                                }
+                                {" · "}
+                                {
+                                  formatAge(
+                                    asset.health.ageSeconds
+                                  )
+                                }
+                              </Text>
+                            )
+                          )}
+                        </Stack>
+                      </Alert>
+                    )}
+
+                    {unassignedAssets.length > 0 && (
+                      <Alert
+                        color="yellow"
+                        title={
+                          `${unassignedAssets.length} unassigned asset${
+                            unassignedAssets.length > 1
+                              ? "s"
+                              : ""
+                          }`
+                        }
+                      >
+                        <Stack gap="xs">
+                          {unassignedAssets.map(
+                            asset => (
+                              <Text
+                                key={asset.id}
+                                size="sm"
+                              >
+                                {
+                                  asset.sensor?.name
+                                  ?? asset.name
+                                  ?? asset.externalId
+                                }
+                              </Text>
+                            )
+                          )}
+                        </Stack>
+                      </Alert>
+                    )}
+
+                  </SimpleGrid>
+
+                </div>
+              )
+            }
+
+            <div>
+
               <Title
                 order={2}
                 mb="md"
               >
-                Latest measurements
+                Latest asset observations
               </Title>
 
               <SimpleGrid
@@ -212,15 +894,16 @@ function Dashboard() {
                 }}
               >
 
-                {latest.map(
-                  measurement => (
+                {sortedAssets.map(
+                  asset => (
 
-                    <SensorCard
-                      key={
-                        measurement.sensorUid
-                      }
-                      measurement={
-                        measurement
+                    <AssetLatestCard
+                      key={asset.id}
+                      asset={asset}
+                      observations={
+                        observationsByAsset.get(
+                          asset.id
+                        ) ?? []
                       }
                     />
 
@@ -255,6 +938,26 @@ function Dashboard() {
                   }
 
                   data={[
+                    {
+                      label: "1 h",
+                      value: "1"
+                    },
+                    {
+                      label: "2 h",
+                      value: "2"
+                    },
+                    {
+                      label: "3 h",
+                      value: "3"
+                    },
+                    {
+                      label: "6 h",
+                      value: "6"
+                    },
+                    {
+                      label: "12 h",
+                      value: "12"
+                    },
                     {
                       label: "24 h",
                       value: "24"
@@ -301,19 +1004,49 @@ function Dashboard() {
 
               )}
 
-              {historyQuery.isLoading
-                ? <Loader />
+              {
+                (
+                  !useAggregates &&
+                  (
+                    temperatureHistoryQuery.isLoading ||
+                    humidityHistoryQuery.isLoading
+                  )
+                ) ||
+                (
+                  useAggregates &&
+                  (
+                    temperatureAggregateQuery.isLoading ||
+                    humidityAggregateQuery.isLoading
+                  )
+                )
+                  ? <Loader />
 
-                : (
-                  <SensorChart
-                    measurements={
-                      historyQuery.data
-                      ?? []
-                    }
-                  />
-                )}
+                  : (
+                    <SensorChart
+                      hours={hours}
+                      temperature={
+                        temperatureHistoryQuery.data
+                        ?? []
+                      }
+                      humidity={
+                        humidityHistoryQuery.data
+                        ?? []
+                      }
+                      temperatureAggregates={
+                        temperatureAggregateQuery.data
+                        ?? []
+                      }
+                      humidityAggregates={
+                        humidityAggregateQuery.data
+                        ?? []
+                      }
+                    />
+                  )
+              }
 
             </div>
+
+            <InventoryPanel />
 
             <SensorCatalog />
 

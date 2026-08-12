@@ -8,3 +8,48 @@ export interface MeasurementDto {
   voltage: number | null;
   rssi: number | null;
 }
+
+export interface LatestObservationDto {
+  assetId: string;
+  assetExternalId: string;
+  assetName: string | null;
+  metricId: string;
+  metricKey: string;
+  displayName: string;
+  unit: string | null;
+  valueType: string;
+  time: string;
+  value:
+    | number
+    | string
+    | boolean
+    | Record<string, unknown>;
+  source: string | null;
+  sourceRef: string | null;
+  quality: Record<string, unknown>;
+}
+
+export interface ObservationHistoryDto {
+  metricId: string;
+  metricKey: string;
+  displayName: string;
+  unit: string | null;
+  valueType: string;
+  time: string;
+  value:
+    | number
+    | string
+    | boolean
+    | Record<string, unknown>;
+  source: string | null;
+  sourceRef: string | null;
+  quality: Record<string, unknown>;
+}
+
+export interface ObservationAggregateDto {
+  bucketStart: string;
+  min: number | null;
+  max: number | null;
+  avg: number | null;
+  count: number;
+}

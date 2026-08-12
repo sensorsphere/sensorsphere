@@ -22,11 +22,13 @@ import {
 } from "@tanstack/react-query";
 
 import {
+  getAssets,
   getSensors,
   updateSensor
 } from "./api";
 
 import type {
+  Asset,
   Sensor,
   UpdateSensor
 } from "./types";
@@ -104,6 +106,18 @@ export function SensorCatalog() {
         30_000
     });
 
+  const assetsQuery =
+    useQuery({
+      queryKey:
+        ["assets"],
+
+      queryFn:
+        getAssets,
+
+      refetchInterval:
+        30_000
+    });
+
   const updateMutation =
     useMutation({
       mutationFn:
@@ -120,22 +134,41 @@ export function SensorCatalog() {
           ),
 
       onSuccess:
-        async () => {
+        async updatedSensor => {
 
-          await queryClient
-            .invalidateQueries({
-              queryKey:
-                ["sensors"]
-            });
+    queryClient.setQueryData<Asset[]>(
+      ["assets"],
+      currentAssets =>
+        currentAssets?.map(
+          asset =>
+            asset.sensor?.uid ===
+            updatedSensor.uid
+              ? {
+                  ...asset,
+                  sensor: {
+                    ...asset.sensor,
+                    name:
+                      updatedSensor.name
+                  }
+                }
+              : asset
+        )
+    );
 
-          setSelectedSensor(
-            null
-          );
+    await queryClient
+      .invalidateQueries({
+        queryKey:
+          ["sensors"]
+      });
 
-          setForm(
-            null
-          );
-        }
+    setSelectedSensor(
+      null
+    );
+
+    setForm(
+      null
+    );
+  }
     });
 
   const openEditor =
@@ -199,7 +232,8 @@ export function SensorCatalog() {
     };
 
   if (
-    sensorsQuery.isLoading
+    sensorsQuery.isLoading ||
+    assetsQuery.isLoading
   ) {
     return (
       <Text>
@@ -209,7 +243,8 @@ export function SensorCatalog() {
   }
 
   if (
-    sensorsQuery.isError
+    sensorsQuery.isError ||
+    assetsQuery.isError
   ) {
     return (
       <Text c="red">
@@ -220,6 +255,9 @@ export function SensorCatalog() {
 
   const sensors =
     sensorsQuery.data ?? [];
+
+  const assets =
+    assetsQuery.data ?? [];
 
   return (
     <>
@@ -253,8 +291,16 @@ export function SensorCatalog() {
         >
 
           {sensors.map(
-            sensor => (
+            sensor => {
 
+              const asset =
+                assets.find(
+                  currentAsset =>
+                    currentAsset.sensor?.uid ===
+                    sensor.uid
+                );
+
+              return (
               <Card
                 key={sensor.id}
                 withBorder
@@ -290,15 +336,23 @@ export function SensorCatalog() {
 
                     <Badge
                       color={
-                        sensor.online
+                        asset?.health.status ===
+                        "online"
                           ? "green"
-                          : "gray"
+                          : asset?.health.status ===
+                            "warning"
+                            ? "yellow"
+                            : "red"
                       }
                     >
                       {
-                        sensor.online
+                        asset?.health.status ===
+                        "online"
                           ? "Online"
-                          : "Offline"
+                          : asset?.health.status ===
+                            "warning"
+                            ? "Warning"
+                            : "Offline"
                       }
                     </Badge>
 
@@ -346,12 +400,16 @@ export function SensorCatalog() {
                         size="xs"
                         c="dimmed"
                       >
-                        Room
+                        Location
                       </Text>
 
                       <Text size="sm">
                         {
-                          sensor.room?.name
+                          assets.find(
+                            asset =>
+                              asset.sensor?.uid ===
+                              sensor.uid
+                          )?.location?.name
                           ?? "—"
                         }
                       </Text>
@@ -427,7 +485,8 @@ export function SensorCatalog() {
 
               </Card>
 
-            )
+              );
+            }
           )}
 
         </SimpleGrid>

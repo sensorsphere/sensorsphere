@@ -1,7 +1,7 @@
 import type {
   Location,
   LocationType,
-} from "./location";
+} from "./location.js";
 
 export interface LocationRepository {
 

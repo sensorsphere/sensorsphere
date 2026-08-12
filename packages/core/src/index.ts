@@ -7,4 +7,4 @@ export * from "./inventory/location.js";
 
 export * from "./timeseries/metric.js";
 export * from "./timeseries/sensor-snapshot.js";
-export * as Inventory from "./inventory";
+export * as Inventory from "./inventory/index.js";

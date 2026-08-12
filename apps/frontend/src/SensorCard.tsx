@@ -24,15 +24,25 @@ export function SensorCard({
     >
 
       <Title order={3}>
-        {measurement.sensorUid}
+        {measurement.sensorName ??
+          measurement.sensorUid}
       </Title>
+
+      {measurement.sensorName && (
+        <Text
+          size="xs"
+          c="dimmed"
+        >
+          Sensor UID: {measurement.sensorUid}
+        </Text>
+      )}
 
       <Text
         size="xs"
         c="dimmed"
         mb="md"
       >
-        Dernière mesure :
+        Last measurement:
         {" "}
         {new Date(
           measurement.time
@@ -43,7 +53,7 @@ export function SensorCard({
 
         <div>
           <Text c="dimmed" size="sm">
-            Température
+            Temperature
           </Text>
 
           <Text size="xl" fw={600}>
@@ -53,7 +63,7 @@ export function SensorCard({
 
         <div>
           <Text c="dimmed" size="sm">
-            Humidité
+            Humidity
           </Text>
 
           <Text size="xl" fw={600}>
@@ -63,7 +73,7 @@ export function SensorCard({
 
         <div>
           <Text c="dimmed" size="sm">
-            Batterie
+            Battery
           </Text>
 
           <Text size="lg">

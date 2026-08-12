@@ -3,18 +3,29 @@ import type {
 } from "./repository.js";
 
 import type {
-  MeasurementDto
+  ObservationRepository
+} from "./observation-repository.js";
+
+import type {
+  LatestObservationDto,
+  MeasurementDto,
+  ObservationAggregateDto,
+  ObservationHistoryDto
 } from "./dto.js";
 
 import {
-  mapMeasurementToDto
+  mapLatestObservationToDto,
+  mapMeasurementToDto,
+  mapObservationHistoryToDto
 } from "./mapper.js";
 
 export class TelemetryService {
 
   constructor(
     private readonly repository:
-      TelemetryRepository
+      TelemetryRepository,
+    private readonly observationRepository:
+      ObservationRepository
   ) {}
 
   async getLatest():
@@ -26,6 +37,73 @@ export class TelemetryService {
 
     return records.map(
       mapMeasurementToDto
+    );
+  }
+
+
+  async getLatestObservations(
+    assetId?: string
+  ): Promise<LatestObservationDto[]> {
+
+    const records =
+      await this.observationRepository
+        .findLatest(assetId);
+
+    return records.map(
+      mapLatestObservationToDto
+    );
+  }
+
+
+  async getObservationHistory(
+    metricId: string,
+    from: Date,
+    to: Date
+  ): Promise<ObservationHistoryDto[]> {
+
+    const records =
+      await this.observationRepository
+        .findHistory({
+          metricId,
+          from,
+          to
+        });
+
+    return records.map(
+      mapObservationHistoryToDto
+    );
+  }
+
+
+  async getObservationAggregates(
+    metricId: string,
+    from: Date,
+    to: Date,
+    bucket: string
+  ): Promise<ObservationAggregateDto[]> {
+
+    const records =
+      await this.observationRepository
+        .aggregate({
+          metricId,
+          from,
+          to,
+          bucket
+        });
+
+    return records.map(
+      record => ({
+        bucketStart:
+          record.bucket_start.toISOString(),
+        min:
+          record.min_value,
+        max:
+          record.max_value,
+        avg:
+          record.avg_value,
+        count:
+          Number(record.sample_count)
+      })
     );
   }
 

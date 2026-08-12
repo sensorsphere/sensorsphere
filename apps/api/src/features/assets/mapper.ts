@@ -21,11 +21,49 @@ export function mapAssetToDto(
     protocol: asset.protocol,
     enabled: asset.enabled,
 
+    health: {
+      status:
+        asset.health_status,
+
+      lastSeenAt:
+        asset.last_measurement_at
+          ? asset.last_measurement_at.toISOString()
+          : null,
+
+      ageSeconds:
+        asset.age_seconds,
+
+      warningAfterSeconds:
+        asset.warning_after_seconds,
+
+      offlineAfterSeconds:
+        asset.offline_after_seconds
+    },
+
     gateway:
       asset.gateway_id && asset.gateway_name
         ? {
             id: asset.gateway_id,
             name: asset.gateway_name
+          }
+        : null,
+
+    sensor:
+      asset.source_sensor_uid
+        ? {
+            uid: asset.source_sensor_uid,
+            name: asset.source_sensor_name
+          }
+        : null,
+
+    location:
+      asset.location_id &&
+      asset.location_name &&
+      asset.location_type
+        ? {
+            id: asset.location_id,
+            name: asset.location_name,
+            type: asset.location_type
           }
         : null,
 

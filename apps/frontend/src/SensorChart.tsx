@@ -1,16 +1,96 @@
 import ReactECharts from "echarts-for-react";
 
 import type {
-  Measurement
+  ObservationAggregatePoint,
+  ObservationHistoryPoint
 } from "./types";
 
 interface Props {
-  measurements: Measurement[];
+  hours: number;
+
+  temperature:
+    ObservationHistoryPoint[];
+  humidity:
+    ObservationHistoryPoint[];
+
+  temperatureAggregates?:
+    ObservationAggregatePoint[];
+
+  humidityAggregates?:
+    ObservationAggregatePoint[];
+}
+
+function rawSeries(
+  observations:
+    ObservationHistoryPoint[]
+) {
+
+  return observations
+    .filter(
+      observation =>
+        typeof observation.value ===
+        "number"
+    )
+    .map(
+      observation => [
+        observation.time,
+        observation.value
+      ]
+    );
+}
+
+function aggregateSeries(
+  observations:
+    ObservationAggregatePoint[]
+) {
+
+  return observations
+    .filter(
+      observation =>
+        observation.avg !== null
+    )
+    .map(
+      observation => [
+        observation.bucketStart,
+        observation.avg
+      ]
+    );
 }
 
 export function SensorChart({
-  measurements
+  hours,
+  temperature,
+  humidity,
+  temperatureAggregates = [],
+  humidityAggregates = []
 }: Props) {
+
+  const temperatureData =
+    temperatureAggregates.length > 0
+      ? aggregateSeries(
+          temperatureAggregates
+        )
+      : rawSeries(
+          temperature
+        );
+
+  const humidityData =
+    humidityAggregates.length > 0
+      ? aggregateSeries(
+          humidityAggregates
+        )
+      : rawSeries(
+          humidity
+        );
+
+  const to =
+    new Date();
+
+  const from =
+    new Date(
+      to.getTime() -
+      hours * 60 * 60 * 1000
+    );
 
   const option = {
 
@@ -20,13 +100,17 @@ export function SensorChart({
 
     legend: {
       data: [
-        "Température",
-        "Humidité"
+        "Temperature",
+        "Humidity"
       ]
     },
 
     xAxis: {
-      type: "time"
+      type: "time",
+      min:
+        from.getTime(),
+      max:
+        to.getTime()
     },
 
     yAxis: [
@@ -43,44 +127,22 @@ export function SensorChart({
 
     series: [
       {
-        name: "Température",
+        name: "Temperature",
         type: "line",
         smooth: true,
         showSymbol: false,
-
         data:
-          measurements
-            .filter(
-              m =>
-                m.temperature !== null
-            )
-            .map(
-              m => [
-                m.time,
-                m.temperature
-              ]
-            )
+          temperatureData
       },
 
       {
-        name: "Humidité",
+        name: "Humidity",
         type: "line",
         smooth: true,
         showSymbol: false,
         yAxisIndex: 1,
-
         data:
-          measurements
-            .filter(
-              m =>
-                m.humidity !== null
-            )
-            .map(
-              m => [
-                m.time,
-                m.humidity
-              ]
-            )
+          humidityData
       }
     ]
   };

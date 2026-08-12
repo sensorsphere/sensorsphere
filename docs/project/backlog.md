@@ -13,13 +13,13 @@
 - [x] INV-003 — Get location by ID
 - [x] INV-004 — Create location
 - [x] INV-005 — Move location
-- [ ] INV-006 — Update location
-- [ ] INV-007 — Delete location
+- [x] INV-006 — Update location
+- [x] INV-007 — Delete location
 
 ## Inventory — Assets
 
-- [ ] AST-001 — List assets
-- [ ] AST-002 — Get asset by ID
+- [x] AST-001 — List assets
+- [x] AST-002 — Get asset by ID
 - [ ] AST-003 — Create asset
 - [ ] AST-004 — Update asset
 - [ ] AST-005 — Assign asset to location
@@ -59,9 +59,9 @@
 
 ## Platform
 
-- [ ] SYS-001 — Automated API integration tests
+- [x] SYS-001 — Automated API integration tests
 - [ ] SYS-002 — Patch validation workflow
-- [ ] SYS-003 — Development seed command
+- [x] SYS-003 — Development seed command
 - [ ] SYS-004 — Benchmark data generator
 - [ ] SYS-005 — CI pipeline
 

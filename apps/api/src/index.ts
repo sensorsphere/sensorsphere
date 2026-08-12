@@ -16,6 +16,10 @@ import {
   registerLocationFeature
 } from "./features/locations/index.js";
 
+import {
+  registerAlertFeature
+} from "./features/alerts/index.js";
+
 
 import {
   loadApiConfig
@@ -149,6 +153,13 @@ await registerAssetFeature(
   }
 );
 
+await registerAlertFeature(
+  app,
+  {
+    pool
+  }
+);
+
 await registerSensorFeature(
   app,
   {
@@ -167,3 +178,4 @@ await app.listen({
   host: "0.0.0.0",
   port
 });
+

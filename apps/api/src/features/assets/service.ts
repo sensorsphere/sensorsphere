@@ -1,4 +1,8 @@
-import type { AssetDto } from "./dto.js";
+import type {
+  AssetDto,
+  CreateAssetInput,
+  UpdateAssetInput
+} from "./dto.js";
 import type { AssetRepository } from "./repository.js";
 import { mapAssetToDto } from "./mapper.js";
 
@@ -30,6 +34,268 @@ export class AssetService {
     );
   }
 
+  async createAsset(
+    input: CreateAssetInput
+  ): Promise<{
+    status: "created";
+    asset: AssetDto;
+  } | {
+    status: "external_id_conflict";
+  }> {
+
+    const existing =
+      await this.repository.findByExternalId(
+        input.externalId
+      );
+
+    if (existing) {
+      return {
+        status: "external_id_conflict"
+      };
+    }
+
+    const asset =
+      await this.repository.create({
+        external_id: input.externalId,
+        name: input.name ?? null,
+        description: input.description ?? null,
+        manufacturer: input.manufacturer ?? null,
+        model: input.model ?? null,
+        firmware_version:
+          input.firmwareVersion ?? null,
+        asset_type: input.assetType,
+        protocol: input.protocol ?? null,
+        enabled: input.enabled ?? true
+      });
+
+    return {
+      status: "created",
+      asset:
+        mapAssetToDto(
+          asset,
+          []
+        )
+    };
+  }
+
+  async updateAsset(
+    id: string,
+    input: UpdateAssetInput
+  ): Promise<{
+    status: "updated";
+    asset: AssetDto;
+  } | {
+    status:
+      | "asset_not_found"
+      | "external_id_conflict"
+      | "invalid_health_thresholds";
+  }> {
+
+    const current =
+      await this.repository.findById(id);
+
+    if (!current) {
+      return {
+        status: "asset_not_found"
+      };
+    }
+
+    const warningAfterSeconds =
+      input.warningAfterSeconds
+      ?? current.warning_after_seconds;
+
+    const offlineAfterSeconds =
+      input.offlineAfterSeconds
+      ?? current.offline_after_seconds;
+
+    if (
+      warningAfterSeconds >=
+      offlineAfterSeconds
+    ) {
+      return {
+        status:
+          "invalid_health_thresholds"
+      };
+    }
+
+    if (
+      input.externalId &&
+      input.externalId !== current.external_id
+    ) {
+      const existing =
+        await this.repository.findByExternalId(
+          input.externalId
+        );
+
+      if (existing) {
+        return {
+          status: "external_id_conflict"
+        };
+      }
+    }
+
+    const updated =
+      await this.repository.updateDetails(
+        id,
+        {
+          external_id: input.externalId,
+          name: input.name,
+          description: input.description,
+          manufacturer: input.manufacturer,
+          model: input.model,
+          firmware_version:
+            input.firmwareVersion,
+          asset_type: input.assetType,
+          protocol: input.protocol,
+          enabled: input.enabled
+        }
+      );
+
+    if (!updated) {
+      return {
+        status: "asset_not_found"
+      };
+    }
+
+    const thresholdsUpdated =
+      await this.repository
+        .updateHealthThresholds(
+          id,
+          warningAfterSeconds,
+          offlineAfterSeconds
+        );
+
+    if (!thresholdsUpdated) {
+      return {
+        status: "asset_not_found"
+      };
+    }
+
+    const refreshed =
+      await this.repository.findById(
+        id
+      );
+
+    if (!refreshed) {
+      return {
+        status: "asset_not_found"
+      };
+    }
+
+    const metrics =
+      await this.repository.findMetrics(
+        [id]
+      );
+
+    return {
+      status: "updated",
+      asset:
+        mapAssetToDto(
+          refreshed,
+          metrics
+        )
+    };
+  }
+
+
+  async assignAssetLocation(
+    id: string,
+    locationId: string | null
+  ): Promise<{
+    status: "updated";
+    asset: AssetDto;
+  } | {
+    status:
+      | "asset_not_found"
+      | "location_not_found";
+  }> {
+
+    const current =
+      await this.repository.findById(id);
+
+    if (!current) {
+      return {
+        status: "asset_not_found"
+      };
+    }
+
+    if (locationId) {
+      const exists =
+        await this.repository.locationExists(
+          locationId
+        );
+
+      if (!exists) {
+        return {
+          status: "location_not_found"
+        };
+      }
+    }
+
+    const updated =
+      await this.repository.updateLocation(
+        id,
+        locationId
+      );
+
+    if (!updated) {
+      return {
+        status: "asset_not_found"
+      };
+    }
+
+    return {
+      status: "updated",
+      asset:
+        mapAssetToDto(
+          updated,
+          []
+        )
+    };
+  }
+
+
+  async deleteAsset(
+    id: string
+  ): Promise<{
+    status: "deleted";
+  } | {
+    status:
+      | "asset_not_found"
+      | "has_metrics";
+  }> {
+
+    const asset =
+      await this.repository.findById(id);
+
+    if (!asset) {
+      return {
+        status: "asset_not_found"
+      };
+    }
+
+    if (
+      await this.repository.hasMetrics(id)
+    ) {
+      return {
+        status: "has_metrics"
+      };
+    }
+
+    const deleted =
+      await this.repository.delete(id);
+
+    if (!deleted) {
+      return {
+        status: "asset_not_found"
+      };
+    }
+
+    return {
+      status: "deleted"
+    };
+  }
+
   async getAsset(
     id: string
   ): Promise<AssetDto | null> {
@@ -52,3 +318,4 @@ export class AssetService {
     );
   }
 }
+

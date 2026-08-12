@@ -1,11 +1,11 @@
 import type {
   Location,
   LocationNode,
-} from "./location";
+} from "./location.js";
 
 import type {
   LocationRepository,
-} from "./location-repository";
+} from "./location-repository.js";
 
 export class LocationService {
 
