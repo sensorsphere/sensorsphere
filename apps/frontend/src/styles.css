@@ -6,4 +6,66 @@ body,
 
 body {
   margin: 0;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+:root[data-mantine-color-scheme="light"] {
+  --ss-page-bg: #f5f8fd;
+  --ss-shell-bg: rgba(255, 255, 255, 0.94);
+  --ss-card-bg: #ffffff;
+  --ss-border: #e3eaf4;
+  --ss-accent: #1677e8;
+  --ss-active-bg: #e9f2ff;
+  --ss-active-text: #1267cf;
+  --ss-shadow: 0 8px 24px rgba(31, 75, 125, 0.06);
+}
+
+:root[data-mantine-color-scheme="dark"] {
+  --ss-page-bg: #101214;
+  --ss-shell-bg: #17191c;
+  --ss-card-bg: #1d2024;
+  --ss-border: #2b2f35;
+  --ss-accent: #ff7043;
+  --ss-active-bg: rgba(255, 112, 67, 0.12);
+  --ss-active-text: #ff8a65;
+  --ss-shadow: 0 10px 30px rgba(0, 0, 0, 0.24);
+}
+
+body { background: var(--ss-page-bg); }
+.mantine-AppShell-main { background: var(--ss-page-bg); }
+.mantine-AppShell-header,
+.mantine-AppShell-navbar {
+  background: var(--ss-shell-bg);
+  border-color: var(--ss-border);
+}
+.mantine-AppShell-header { box-shadow: 0 1px 0 var(--ss-border); }
+.mantine-NavLink-root { border-radius: 8px; margin-bottom: 2px; }
+.mantine-NavLink-root[data-active] {
+  background: var(--ss-active-bg);
+  color: var(--ss-active-text);
+  font-weight: 600;
+}
+.mantine-Card-root {
+  background: var(--ss-card-bg);
+  border-color: var(--ss-border);
+  box-shadow: var(--ss-shadow);
+}
+.mantine-Modal-content,
+.mantine-Modal-header,
+.mantine-Menu-dropdown {
+  background: var(--ss-card-bg);
+  border-color: var(--ss-border);
+}
+:root[data-mantine-color-scheme="light"] .mantine-AppShell-header {
+  background: linear-gradient(90deg, #ffffff, #f4f9ff);
+}
+:root[data-mantine-color-scheme="dark"] .mantine-AppShell-header {
+  background: linear-gradient(90deg, #17191c, #121416);
+}
+:root[data-mantine-color-scheme="dark"] .mantine-Card-root {
+  background: linear-gradient(145deg, #202328, #1a1d20);
+}
+:root[data-mantine-color-scheme="dark"] .mantine-Input-input {
+  background: #17191c;
+  border-color: var(--ss-border);
 }

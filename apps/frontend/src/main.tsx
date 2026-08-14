@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 
 import {
+  ActionIcon,
   Alert,
   AppShell,
   Badge,
@@ -12,6 +13,7 @@ import {
   Group,
   Loader,
   MantineProvider,
+  Menu,
   NavLink,
   SegmentedControl,
   Select,
@@ -19,7 +21,8 @@ import {
   Stack,
   Text,
   TextInput,
-  Title
+  Title,
+  useMantineColorScheme
 } from "@mantine/core";
 
 import "@mantine/core/styles.css";
@@ -166,6 +169,50 @@ function NavigationIcon({
         </svg>
       );
   }
+}
+
+function ThemeSelector() {
+  const {
+    colorScheme,
+    setColorScheme
+  } = useMantineColorScheme();
+
+  const icon =
+    colorScheme === "dark"
+      ? "☾"
+      : colorScheme === "light"
+        ? "☀"
+        : "◐";
+
+  return (
+    <Menu position="bottom-end" shadow="md" width={150}>
+      <Menu.Target>
+        <ActionIcon
+          variant="subtle"
+          size="lg"
+          aria-label="Select theme"
+          title={`Theme: ${colorScheme}`}
+        >
+          <span style={{ fontSize: 19, lineHeight: 1 }}>
+            {icon}
+          </span>
+        </ActionIcon>
+      </Menu.Target>
+
+      <Menu.Dropdown>
+        <Menu.Label>Appearance</Menu.Label>
+        <Menu.Item onClick={() => setColorScheme("light")}>
+          ☀ Light
+        </Menu.Item>
+        <Menu.Item onClick={() => setColorScheme("dark")}>
+          ☾ Dark
+        </Menu.Item>
+        <Menu.Item onClick={() => setColorScheme("auto")}>
+          ◐ System
+        </Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
+  );
 }
 
 const PAGE_LABELS:
@@ -1160,12 +1207,16 @@ function Dashboard() {
 
             </Group>
 
-            <Text
-              c="dimmed"
-              visibleFrom="sm"
-            >
-              Environmental monitoring
-            </Text>
+            <Group gap="sm">
+              <Text
+                c="dimmed"
+                visibleFrom="sm"
+              >
+                Environmental monitoring
+              </Text>
+
+              <ThemeSelector />
+            </Group>
 
           </Group>
 
@@ -2842,7 +2893,9 @@ ReactDOM
   .render(
     <React.StrictMode>
 
-      <MantineProvider>
+      <MantineProvider
+        defaultColorScheme="auto"
+      >
 
         <QueryClientProvider
           client={queryClient}

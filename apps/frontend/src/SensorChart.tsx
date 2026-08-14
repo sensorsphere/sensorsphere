@@ -1,5 +1,9 @@
 import ReactECharts from "echarts-for-react";
 
+import {
+  useComputedColorScheme
+} from "@mantine/core";
+
 import type {
   ObservationAggregatePoint,
   ObservationHistoryPoint
@@ -65,6 +69,12 @@ export function SensorChart({
   humidityAggregates = []
 }: Props) {
 
+  const colorScheme =
+    useComputedColorScheme("light");
+
+  const dark =
+    colorScheme === "dark";
+
   const temperatureData =
     temperatureAggregates.length > 0
       ? aggregateSeries(
@@ -95,14 +105,22 @@ export function SensorChart({
   const option = {
 
     tooltip: {
-      trigger: "axis"
+      trigger: "axis",
+      backgroundColor: dark ? "#202328" : "#ffffff",
+      borderColor: dark ? "#343940" : "#e3eaf4",
+      textStyle: {
+        color: dark ? "#f1f3f5" : "#202124"
+      }
     },
 
     legend: {
       data: [
         "Temperature",
         "Humidity"
-      ]
+      ],
+      textStyle: {
+        color: dark ? "#c9cdd2" : "#495057"
+      }
     },
 
     xAxis: {
@@ -110,18 +128,34 @@ export function SensorChart({
       min:
         from.getTime(),
       max:
-        to.getTime()
+        to.getTime(),
+      axisLabel: {
+        color: dark ? "#aeb4bc" : "#6b7280"
+      },
+      splitLine: {
+        lineStyle: {
+          color: dark ? "#292d32" : "#edf1f6"
+        }
+      }
     },
 
     yAxis: [
       {
         type: "value",
-        name: "°C"
+        name: "°C",
+        axisLabel: { color: dark ? "#aeb4bc" : "#6b7280" },
+        nameTextStyle: { color: dark ? "#aeb4bc" : "#6b7280" },
+        splitLine: {
+          lineStyle: { color: dark ? "#292d32" : "#edf1f6" }
+        }
       },
       {
         type: "value",
         name: "%",
-        position: "right"
+        position: "right",
+        axisLabel: { color: dark ? "#aeb4bc" : "#6b7280" },
+        nameTextStyle: { color: dark ? "#aeb4bc" : "#6b7280" },
+        splitLine: { show: false }
       }
     ],
 
@@ -149,6 +183,7 @@ export function SensorChart({
 
   return (
     <ReactECharts
+      key={colorScheme}
       option={option}
       style={{
         height: 420
