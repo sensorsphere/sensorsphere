@@ -36,8 +36,6 @@ import {
 import {
   getAssets,
   getLatestObservations,
-  getObservationAggregates,
-  getObservationHistory,
   getSensors
 } from "./api";
 
@@ -58,8 +56,8 @@ import {
 } from "./AlertPanel";
 
 import {
-  SensorChart
-} from "./SensorChart";
+  HistoryPanel
+} from "./HistoryPanel";
 
 import {
   getActiveAlerts
@@ -278,25 +276,6 @@ function isAssetView(
   );
 }
 
-function isHistoryHours(
-  value: unknown
-): value is number {
-
-  return (
-    typeof value === "number" &&
-    [
-      1,
-      2,
-      3,
-      6,
-      12,
-      24,
-      168,
-      720
-    ].includes(value)
-  );
-}
-
 function formatAge(
   ageSeconds: number | null
 ): string {
@@ -415,30 +394,6 @@ function Dashboard() {
         false
       );
     };
-
-  const [
-    selectedSensor,
-    setSelectedSensor
-  ] =
-    usePersistentState<string>(
-      "history.sensorUid",
-      "",
-      (
-        value
-      ): value is string =>
-        typeof value ===
-        "string"
-    );
-
-  const [
-    hours,
-    setHours
-  ] =
-    usePersistentState<number>(
-      "history.hours",
-      24,
-      isHistoryHours
-    );
 
   const [
     assetSearch,
@@ -561,37 +516,6 @@ function Dashboard() {
         30_000
     });
 
-  React.useEffect(() => {
-
-    const sensors =
-      sensorsQuery.data
-      ?? [];
-
-    if (
-      sensors.length === 0
-    ) {
-      return;
-    }
-
-    const selectedExists =
-      sensors.some(
-        sensor =>
-          sensor.uid ===
-          selectedSensor
-      );
-
-    if (!selectedExists) {
-      setSelectedSensor(
-        sensors[0].uid
-      );
-    }
-
-  }, [
-    sensorsQuery.data,
-    selectedSensor,
-    setSelectedSensor
-  ]);
-
   React.useEffect(
     () => {
 
@@ -632,139 +556,6 @@ function Dashboard() {
       setAssetLocationFilter
     ]
   );
-
-  const selectedAsset =
-    assetsQuery.data?.find(
-      asset =>
-        asset.sensor?.uid ===
-        selectedSensor
-    );
-
-  const temperatureMetric =
-    selectedAsset?.metrics.find(
-      metric =>
-        metric.key ===
-        "temperature"
-    );
-
-  const humidityMetric =
-    selectedAsset?.metrics.find(
-      metric =>
-        metric.key ===
-        "humidity"
-    );
-
-  const useAggregates =
-    hours > 24;
-
-  const aggregateBucket =
-    hours <= 168
-      ? "15 minutes" as const
-      : "1 hour" as const;
-
-  const temperatureHistoryQuery =
-    useQuery({
-      queryKey: [
-        "observation-history",
-        temperatureMetric?.id,
-        hours
-      ],
-
-      queryFn:
-        () =>
-          getObservationHistory(
-            temperatureMetric!.id,
-            hours
-          ),
-
-      enabled:
-        Boolean(
-          temperatureMetric?.id
-        ) &&
-        !useAggregates,
-
-      refetchInterval:
-        60_000
-    });
-
-  const humidityHistoryQuery =
-    useQuery({
-      queryKey: [
-        "observation-history",
-        humidityMetric?.id,
-        hours
-      ],
-
-      queryFn:
-        () =>
-          getObservationHistory(
-            humidityMetric!.id,
-            hours
-          ),
-
-      enabled:
-        Boolean(
-          humidityMetric?.id
-        ) &&
-        !useAggregates,
-
-      refetchInterval:
-        60_000
-    });
-
-  const temperatureAggregateQuery =
-    useQuery({
-      queryKey: [
-        "observation-aggregate",
-        temperatureMetric?.id,
-        hours,
-        aggregateBucket
-      ],
-
-      queryFn:
-        () =>
-          getObservationAggregates(
-            temperatureMetric!.id,
-            hours,
-            aggregateBucket
-          ),
-
-      enabled:
-        Boolean(
-          temperatureMetric?.id
-        ) &&
-        useAggregates,
-
-      refetchInterval:
-        60_000
-    });
-
-  const humidityAggregateQuery =
-    useQuery({
-      queryKey: [
-        "observation-aggregate",
-        humidityMetric?.id,
-        hours,
-        aggregateBucket
-      ],
-
-      queryFn:
-        () =>
-          getObservationAggregates(
-            humidityMetric!.id,
-            hours,
-            aggregateBucket
-          ),
-
-      enabled:
-        Boolean(
-          humidityMetric?.id
-        ) &&
-        useAggregates,
-
-      refetchInterval:
-        60_000
-    });
 
   if (
     assetsQuery.isLoading ||
@@ -2019,6 +1810,12 @@ function Dashboard() {
                               "humidity"
                             );
 
+                          const rssi =
+                            latestMetricValue(
+                              assetObservations,
+                              "rssi"
+                            );
+
                           const healthColor =
                             asset.health.status ===
                               "online"
@@ -2304,6 +2101,26 @@ function Dashboard() {
                                       }
                                     </Text>
                                   </div>
+
+                                  {
+                                    rssi !== null && (
+                                      <div>
+                                        <Text
+                                          size="xs"
+                                          c="dimmed"
+                                        >
+                                          RSSI
+                                        </Text>
+
+                                        <Text
+                                          fw={600}
+                                          size="lg"
+                                        >
+                                          {`${rssi} dBm`}
+                                        </Text>
+                                      </div>
+                                    )
+                                  }
 
                                 </Group>
 
@@ -2676,182 +2493,11 @@ function Dashboard() {
             }
 
 {
-  activePage ===
-    "history" && (
-    <div>
-
-      <Title
-        order={2}
-        mb="md"
-      >
-        History
-      </Title>
-
-      <Group
-        mb="lg"
-        align="flex-end"
-        justify="space-between"
-        wrap="wrap"
-      >
-
-        {sensors.length > 0 && (
-
-          <Select
-            label="Sensor"
-            placeholder="Select a sensor"
-            searchable
-            value={
-              selectedSensor
+              activePage ===
+                "history" && (
+                <HistoryPanel />
+              )
             }
-            onChange={
-              value => {
-                if (value) {
-                  setSelectedSensor(
-                    value
-                  );
-                }
-              }
-            }
-            data={
-              sensors
-                .map(
-                  sensor => ({
-                    value:
-                      sensor.uid,
-
-                    label:
-                      sensor.name
-                        ? `${sensor.name} · ${sensor.uid}`
-                        : sensor.uid
-                  })
-                )
-                .sort(
-                  (left, right) =>
-                    left.label.localeCompare(
-                      right.label
-                    )
-                )
-            }
-            nothingFoundMessage="No sensor found"
-            checkIconPosition="right"
-            styles={{
-              root: {
-                flex:
-                  "1 1 320px",
-
-                maxWidth:
-                  480
-              }
-            }}
-          />
-
-        )}
-
-        <div>
-
-          <Text
-            size="sm"
-            fw={500}
-            mb={3}
-          >
-            Period
-          </Text>
-
-          <SegmentedControl
-            value={
-              String(hours)
-            }
-
-            onChange={
-              value =>
-                setHours(
-                  Number(value)
-                )
-            }
-
-            data={[
-              {
-                label: "1 h",
-                value: "1"
-              },
-              {
-                label: "2 h",
-                value: "2"
-              },
-              {
-                label: "3 h",
-                value: "3"
-              },
-              {
-                label: "6 h",
-                value: "6"
-              },
-              {
-                label: "12 h",
-                value: "12"
-              },
-              {
-                label: "24 h",
-                value: "24"
-              },
-              {
-                label: "7 days",
-                value: "168"
-              },
-              {
-                label: "30 days",
-                value: "720"
-              }
-            ]}
-          />
-
-        </div>
-
-      </Group>
-
-      {
-        (
-          !useAggregates &&
-          (
-            temperatureHistoryQuery.isLoading ||
-            humidityHistoryQuery.isLoading
-          )
-        ) ||
-        (
-          useAggregates &&
-          (
-            temperatureAggregateQuery.isLoading ||
-            humidityAggregateQuery.isLoading
-          )
-        )
-          ? <Loader />
-
-          : (
-            <SensorChart
-              hours={hours}
-              temperature={
-                temperatureHistoryQuery.data
-                ?? []
-              }
-              humidity={
-                humidityHistoryQuery.data
-                ?? []
-              }
-              temperatureAggregates={
-                temperatureAggregateQuery.data
-                ?? []
-              }
-              humidityAggregates={
-                humidityAggregateQuery.data
-                ?? []
-              }
-            />
-          )
-      }
-
-    </div>
-  )
-}
 
             {
               activePage ===

@@ -36,6 +36,10 @@ import type {
   UpdateSensor
 } from "./types";
 
+import {
+  usePersistentState
+} from "./preferences/usePersistentState";
+
 interface SensorFormState {
   name: string;
   description: string;
@@ -100,6 +104,75 @@ export function SensorCatalog() {
   const [form, setForm] =
     React.useState<SensorFormState | null>(
       null
+    );
+
+  const [manufacturerFilter, setManufacturerFilter] =
+    usePersistentState<string | null>(
+      "sensors.manufacturer",
+      null,
+      value =>
+        value === null ||
+        typeof value === "string"
+    );
+
+  const [modelFilter, setModelFilter] =
+    usePersistentState<string | null>(
+      "sensors.model",
+      null,
+      value =>
+        value === null ||
+        typeof value === "string"
+    );
+
+  const [locationFilter, setLocationFilter] =
+    usePersistentState<string | null>(
+      "sensors.location",
+      null,
+      value =>
+        value === null ||
+        typeof value === "string"
+    );
+
+  const [gatewayFilter, setGatewayFilter] =
+    usePersistentState<string | null>(
+      "sensors.gateway",
+      null,
+      value =>
+        value === null ||
+        typeof value === "string"
+    );
+
+  const [enabledFilter, setEnabledFilter] =
+    usePersistentState<
+      "all" | "enabled" | "disabled"
+    >(
+      "sensors.enabled",
+      "all",
+      value =>
+        value === "all" ||
+        value === "enabled" ||
+        value === "disabled"
+    );
+
+  const [statusFilter, setStatusFilter] =
+    usePersistentState<
+      "all" | "online" | "warning" | "offline"
+    >(
+      "sensors.status",
+      "all",
+      value =>
+        value === "all" ||
+        value === "online" ||
+        value === "warning" ||
+        value === "offline"
+    );
+
+  const [nameSearch, setNameSearch] =
+    usePersistentState<string>(
+      "sensors.nameSearch",
+      "",
+      value =>
+        typeof value === "string"
     );
 
   const sensorsQuery =
@@ -345,6 +418,169 @@ export function SensorCatalog() {
         })
       );
 
+  const manufacturerOptions =
+    Array.from(
+      new Set(
+        sensors
+          .map(sensor => sensor.manufacturer)
+          .filter(
+            (value): value is string =>
+              Boolean(value)
+          )
+      )
+    )
+      .sort((a, b) =>
+        a.localeCompare(
+          b,
+          undefined,
+          { sensitivity: "base" }
+        )
+      );
+
+  const modelOptions =
+    Array.from(
+      new Set(
+        sensors
+          .map(sensor => sensor.model)
+          .filter(
+            (value): value is string =>
+              Boolean(value)
+          )
+      )
+    )
+      .sort((a, b) =>
+        a.localeCompare(
+          b,
+          undefined,
+          { sensitivity: "base" }
+        )
+      );
+
+  const gatewayOptions =
+    Array.from(
+      new Set(
+        sensors
+          .map(sensor => sensor.gateway?.name ?? null)
+          .filter(
+            (value): value is string =>
+              Boolean(value)
+          )
+      )
+    )
+      .sort((a, b) =>
+        a.localeCompare(
+          b,
+          undefined,
+          { sensitivity: "base" }
+        )
+      );
+
+  const assetsBySensorUid =
+    new Map(
+      assets
+        .filter(asset => asset.sensor?.uid)
+        .map(asset => [
+          asset.sensor!.uid,
+          asset
+        ])
+    );
+
+  const normalizedNameSearch =
+    nameSearch
+      .trim()
+      .toLowerCase();
+
+  const filteredSensors =
+    [...sensors]
+      .filter(sensor => {
+
+        const asset =
+          assetsBySensorUid.get(
+            sensor.uid
+          );
+
+        const status =
+          asset?.health.status
+          ?? "offline";
+
+        const matchesName =
+          normalizedNameSearch.length === 0 ||
+          (
+            sensor.name
+            ?? sensor.uid
+          )
+            .toLowerCase()
+            .includes(
+              normalizedNameSearch
+            ) ||
+          sensor.uid
+            .toLowerCase()
+            .includes(
+              normalizedNameSearch
+            );
+
+        return (
+          matchesName &&
+          (
+            manufacturerFilter === null ||
+            sensor.manufacturer === manufacturerFilter
+          ) &&
+          (
+            modelFilter === null ||
+            sensor.model === modelFilter
+          ) &&
+          (
+            locationFilter === null ||
+            asset?.location?.id === locationFilter
+          ) &&
+          (
+            gatewayFilter === null ||
+            sensor.gateway?.name === gatewayFilter
+          ) &&
+          (
+            enabledFilter === "all" ||
+            (
+              enabledFilter === "enabled"
+                ? sensor.enabled
+                : !sensor.enabled
+            )
+          ) &&
+          (
+            statusFilter === "all" ||
+            status === statusFilter
+          )
+        );
+      })
+      .sort(
+        (a, b) =>
+          (a.name ?? a.uid)
+            .localeCompare(
+              b.name ?? b.uid,
+              undefined,
+              { sensitivity: "base" }
+            )
+      );
+
+  const filtersActive =
+    nameSearch.trim().length > 0 ||
+    manufacturerFilter !== null ||
+    modelFilter !== null ||
+    locationFilter !== null ||
+    gatewayFilter !== null ||
+    enabledFilter !== "all" ||
+    statusFilter !== "all";
+
+  const clearFilters =
+    (): void => {
+      setNameSearch("");
+      setManufacturerFilter(null);
+      setModelFilter(null);
+      setLocationFilter(null);
+      setGatewayFilter(null);
+      setEnabledFilter("all");
+      setStatusFilter("all");
+    };
+
   return (
     <>
       <Stack gap="md">
@@ -362,12 +598,121 @@ export function SensorCatalog() {
             </Text>
           </div>
 
-          <Badge
-            variant="light"
-          >
-            {sensors.length} sensors
-          </Badge>
+          <Group gap="xs">
+            <Badge
+              variant="light"
+            >
+              {filteredSensors.length} / {sensors.length} sensors
+            </Badge>
+
+            {filtersActive && (
+              <Button
+                size="xs"
+                variant="subtle"
+                onClick={clearFilters}
+              >
+                Clear filters
+              </Button>
+            )}
+          </Group>
         </Group>
+
+        <SimpleGrid
+          cols={{
+            base: 1,
+            xs: 2,
+            md: 4,
+            lg: 7
+          }}
+          spacing="sm"
+        >
+          <TextInput
+            label="Search by name"
+            placeholder="Name or UID"
+            value={nameSearch}
+            onChange={
+              event =>
+                setNameSearch(
+                  event.currentTarget.value
+                )
+            }
+          />
+
+          <Select
+            label="Manufacturer"
+            clearable
+            searchable
+            placeholder="All"
+            value={manufacturerFilter}
+            onChange={setManufacturerFilter}
+            data={manufacturerOptions}
+          />
+
+          <Select
+            label="Model"
+            clearable
+            searchable
+            placeholder="All"
+            value={modelFilter}
+            onChange={setModelFilter}
+            data={modelOptions}
+          />
+
+          <Select
+            label="Location"
+            clearable
+            searchable
+            placeholder="All"
+            value={locationFilter}
+            onChange={setLocationFilter}
+            data={locationOptions}
+          />
+
+          <Select
+            label="Gateway"
+            clearable
+            searchable
+            placeholder="All"
+            value={gatewayFilter}
+            onChange={setGatewayFilter}
+            data={gatewayOptions}
+          />
+
+          <Select
+            label="Enabled"
+            value={enabledFilter}
+            onChange={value =>
+              value &&
+              setEnabledFilter(
+                value as
+                  "all" | "enabled" | "disabled"
+              )
+            }
+            data={[
+              { value: "all", label: "All" },
+              { value: "enabled", label: "Enabled" },
+              { value: "disabled", label: "Disabled" }
+            ]}
+          />
+
+          <Select
+            label="Status"
+            value={statusFilter}
+            onChange={value =>
+              value &&
+              setStatusFilter(
+                value as
+                  "all" | "online" | "warning" | "offline"
+              )
+            }
+            data={[
+              { value: "all", label: "All" },
+              { value: "online", label: "Online" },
+              { value: "warning", label: "Warning" },
+              { value: "offline", label: "Offline" }
+            ]}
+          />
+        </SimpleGrid>
 
         <SimpleGrid
           cols={{
@@ -376,14 +721,12 @@ export function SensorCatalog() {
           }}
         >
 
-          {sensors.map(
+          {filteredSensors.map(
             sensor => {
 
               const asset =
-                assets.find(
-                  currentAsset =>
-                    currentAsset.sensor?.uid ===
-                    sensor.uid
+                assetsBySensorUid.get(
+                  sensor.uid
                 );
 
               return (
