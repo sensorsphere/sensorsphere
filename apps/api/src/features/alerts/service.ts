@@ -41,6 +41,57 @@ export interface AlertRuleEvaluationResult {
     AlertEventDto | null;
 }
 
+function elapsedSeconds(
+  from: Date,
+  to: Date
+): number {
+
+  return Math.max(
+    0,
+    Math.floor(
+      (
+        to.getTime() -
+        from.getTime()
+      ) /
+      1000
+    )
+  );
+}
+
+function latestDate(
+  left: Date | null,
+  right: Date | null
+): Date | null {
+
+  if (!left) {
+    return right;
+  }
+
+  if (!right) {
+    return left;
+  }
+
+  return left.getTime() >=
+    right.getTime()
+      ? left
+      : right;
+}
+
+function resetsConditionTimer(
+  input: UpdateAlertRuleInput
+): boolean {
+
+  return (
+    input.enabled !== undefined ||
+    input.conditionType !== undefined ||
+    input.assetId !== undefined ||
+    input.assetMetricId !== undefined ||
+    input.thresholdMin !== undefined ||
+    input.thresholdMax !== undefined ||
+    input.durationSeconds !== undefined
+  );
+}
+
 export class AlertService {
 
   constructor(
@@ -104,6 +155,18 @@ export class AlertService {
           input
         );
 
+    if (
+      updated &&
+      resetsConditionTimer(
+        input
+      )
+    ) {
+      await this.repository
+        .clearConditionStarted(
+          id
+        );
+    }
+
     return updated
       ? mapAlertRuleToDto(
           updated
@@ -133,6 +196,26 @@ export class AlertService {
     );
   }
 
+  async listAlertHistory(
+    limit: number,
+    status?:
+      "ACTIVE"
+      | "ACKNOWLEDGED"
+      | "RESOLVED"
+  ): Promise<AlertEventDto[]> {
+
+    const events =
+      await this.repository
+        .findEvents(
+          limit,
+          status
+        );
+
+    return events.map(
+      mapAlertEventToDto
+    );
+  }
+
   async acknowledgeAlert(
     id: string,
     input: AcknowledgeAlertInput
@@ -157,6 +240,16 @@ export class AlertService {
     currentValue?: number | null
   ): Promise<AlertEventDto | null> {
 
+    const current =
+      await this.repository
+        .findEventById(
+          id
+        );
+
+    if (!current) {
+      return null;
+    }
+
     const event =
       await this.repository
         .resolveEvent(
@@ -164,11 +257,20 @@ export class AlertService {
           currentValue
         );
 
-    return event
-      ? mapAlertEventToDto(
-          event
-        )
-      : null;
+    if (!event) {
+      return null;
+    }
+
+    await this.repository
+      .markRuleResolved(
+        current.rule_id,
+        event.resolved_at
+        ?? new Date()
+      );
+
+    return mapAlertEventToDto(
+      event
+    );
   }
 
   async evaluateRule(
@@ -177,6 +279,12 @@ export class AlertService {
   ): Promise<AlertRuleEvaluationResult> {
 
     if (!rule.enabled) {
+
+      await this.repository
+        .clearConditionStarted(
+          rule.id
+        );
+
       return {
         status:
           "unchanged",
@@ -190,6 +298,9 @@ export class AlertService {
         `Alert rule ${rule.id} has no asset_id`
       );
     }
+
+    const now =
+      new Date();
 
     const evaluation =
       evaluateAlertCondition({
@@ -219,56 +330,57 @@ export class AlertService {
           rule.asset_id
         );
 
-    if (
-      evaluation.triggered &&
-      !openEvent
-    ) {
+    if (!evaluation.triggered) {
 
-      const created =
+      await this.repository
+        .clearConditionStarted(
+          rule.id
+        );
+
+      if (!openEvent) {
+        return {
+          status:
+            "unchanged",
+          event:
+            null
+        };
+      }
+
+      const resolved =
         await this.repository
-          .createEvent({
-            ruleId:
-              rule.id,
+          .resolveEvent(
+            openEvent.id,
+            evaluation.currentValue
+          );
 
-            assetId:
-              rule.asset_id,
+      if (!resolved) {
+        return {
+          status:
+            "unchanged",
+          event:
+            null
+        };
+      }
 
-            assetMetricId:
-              rule.asset_metric_id,
-
-            severity:
-              rule.severity,
-
-            currentValue:
-              evaluation.currentValue,
-
-            triggerValue:
-              evaluation.triggerValue,
-
-            message:
-              `${rule.name}: ${evaluation.reason}`,
-
-            metadata: {
-              conditionType:
-                rule.condition_type
-            }
-          });
+      await this.repository
+        .markRuleResolved(
+          rule.id,
+          resolved.resolved_at
+          ?? now
+        );
 
       return {
         status:
-          "opened",
+          "resolved",
 
         event:
           mapAlertEventToDto(
-            created
+            resolved
           )
       };
     }
 
-    if (
-      evaluation.triggered &&
-      openEvent
-    ) {
+    if (openEvent) {
 
       const updated =
         await this.repository
@@ -292,39 +404,146 @@ export class AlertService {
       };
     }
 
+    let state =
+      await this.repository
+        .findRuleState(
+          rule.id
+        );
+
+    const availabilityCondition =
+      rule.condition_type ===
+        "OFFLINE" ||
+      rule.condition_type ===
+        "NO_DATA";
+
+    const needsConditionTimer =
+      !availabilityCondition ||
+      context.ageSeconds ===
+        null;
+
+    if (needsConditionTimer) {
+
+      if (
+        !state?.condition_started_at
+      ) {
+
+        state =
+          await this.repository
+            .setConditionStarted(
+              rule.id,
+              now
+            );
+
+        if (
+          rule.duration_seconds >
+          0
+        ) {
+          return {
+            status:
+              "unchanged",
+            event:
+              null
+          };
+        }
+      }
+
+      const startedAt =
+        state.condition_started_at
+        ?? now;
+
+      if (
+        elapsedSeconds(
+          startedAt,
+          now
+        ) <
+        rule.duration_seconds
+      ) {
+        return {
+          status:
+            "unchanged",
+          event:
+            null
+        };
+      }
+    }
+
+    const cooldownReference =
+      latestDate(
+        state?.last_resolved_at
+        ?? null,
+        state?.last_triggered_at
+        ?? null
+      );
+
     if (
-      !evaluation.triggered &&
-      openEvent
+      cooldownReference &&
+      rule.cooldown_seconds >
+        0 &&
+      elapsedSeconds(
+        cooldownReference,
+        now
+      ) <
+      rule.cooldown_seconds
     ) {
-
-      const resolved =
-        await this.repository
-          .resolveEvent(
-            openEvent.id,
-            evaluation.currentValue
-          );
-
       return {
         status:
-          resolved
-            ? "resolved"
-            : "unchanged",
-
+          "unchanged",
         event:
-          resolved
-            ? mapAlertEventToDto(
-                resolved
-              )
-            : null
+          null
       };
     }
 
+    const created =
+      await this.repository
+        .createEvent({
+          ruleId:
+            rule.id,
+
+          assetId:
+            rule.asset_id,
+
+          assetMetricId:
+            rule.asset_metric_id,
+
+          severity:
+            rule.severity,
+
+          currentValue:
+            evaluation.currentValue,
+
+          triggerValue:
+            evaluation.triggerValue,
+
+          message:
+            `${rule.name}: ${evaluation.reason}`,
+
+          metadata: {
+            conditionType:
+              rule.condition_type,
+
+            durationSeconds:
+              rule.duration_seconds,
+
+            cooldownSeconds:
+              rule.cooldown_seconds
+          }
+        });
+
+    await this.repository
+      .markRuleTriggered(
+        rule.id,
+        created.opened_at
+        ?? now
+      );
+
     return {
       status:
-        "unchanged",
+        "opened",
 
       event:
-        null
+        mapAlertEventToDto(
+          created
+        )
     };
   }
 }

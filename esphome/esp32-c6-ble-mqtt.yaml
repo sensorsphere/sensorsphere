@@ -212,3 +212,57 @@ sensor:
 
     signal_strength:
       name: "RSSI 26:F8:18"
+
+  - platform: atc_mithermometer
+    mac_address: "A4:C1:38:CB:CB:18"
+
+    temperature:
+      name: "Temperature CB:CB:18"
+
+    humidity:
+      name: "Humidity CB:CB:18"
+
+    battery_level:
+      name: "Battery Level CB:CB:18"
+
+    battery_voltage:
+      name: "Battery Voltage CB:CB:18"
+
+    signal_strength:
+      name: "RSSI CB:CB:18"
+
+  - platform: atc_mithermometer
+    mac_address: "A4:C1:38:5F:AD:48"
+
+    temperature:
+      name: "Temperature 5F:AD:48"
+
+    humidity:
+      name: "Humidity 5F:AD:48"
+
+    battery_level:
+      name: "Battery Level 5F:AD:48"
+
+    battery_voltage:
+      name: "Battery Voltage 5F:AD:48"
+
+    signal_strength:
+      name: "RSSI 5F:AD:48"
+
+  - platform: atc_mithermometer
+    mac_address: "A4:C1:38:7F:52:D1"
+
+    temperature:
+      name: "Temperature 7F:52:D1"
+
+    humidity:
+      name: "Humidity 7F:52:D1"
+
+    battery_level:
+      name: "Battery Level 7F:52:D1"
+
+    battery_voltage:
+      name: "Battery Voltage 7F:52:D1"
+
+    signal_strength:
+      name: "RSSI 7F:52:D1"

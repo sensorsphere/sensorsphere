@@ -5,15 +5,20 @@ import {
   Alert,
   AppShell,
   Badge,
+  Burger,
+  Button,
   Card,
   Container,
   Group,
   Loader,
   MantineProvider,
+  NavLink,
   SegmentedControl,
+  Select,
   SimpleGrid,
   Stack,
   Text,
+  TextInput,
   Title
 } from "@mantine/core";
 
@@ -46,13 +51,204 @@ import {
 } from "./InventoryPanel";
 
 import {
+  AlertPanel
+} from "./AlertPanel";
+
+import {
   SensorChart
 } from "./SensorChart";
+
+import {
+  getActiveAlerts
+} from "./alerts-api";
+
+import {
+  usePersistentState
+} from "./preferences/usePersistentState";
 
 import "./styles.css";
 
 const queryClient =
   new QueryClient();
+
+const favicon =
+  document.querySelector<HTMLLinkElement>(
+    'link[rel="icon"]'
+  ) ?? document.createElement("link");
+
+favicon.rel = "icon";
+favicon.type = "image/svg+xml";
+favicon.href = "/sensorsphere-app.svg?v=26";
+document.head.appendChild(favicon);
+
+type PageKey =
+  | "dashboard"
+  | "assets"
+  | "history"
+  | "alerts"
+  | "inventory"
+  | "sensors";
+
+
+function NavigationIcon({
+  page
+}: {
+  page: PageKey;
+}) {
+
+  const common = {
+    width: 19,
+    height: 19,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap:
+      "round" as const,
+    strokeLinejoin:
+      "round" as const
+  };
+
+  switch (page) {
+    case "dashboard":
+      return (
+        <svg {...common}>
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+      );
+
+    case "assets":
+      return (
+        <svg {...common}>
+          <path d="M4 7h16v13H4z" />
+          <path d="M8 7V4h8v3" />
+          <path d="M9 12h6" />
+        </svg>
+      );
+
+    case "history":
+      return (
+        <svg {...common}>
+          <path d="M3 12a9 9 0 1 0 3-6.7" />
+          <path d="M3 4v5h5" />
+          <path d="M12 7v5l3 2" />
+        </svg>
+      );
+
+    case "alerts":
+      return (
+        <svg {...common}>
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+          <path d="M10 21h4" />
+        </svg>
+      );
+
+    case "inventory":
+      return (
+        <svg {...common}>
+          <path d="M4 5h16v4H4z" />
+          <path d="M5 9v11h14V9" />
+          <path d="M9 13h6" />
+        </svg>
+      );
+
+    case "sensors":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="2" />
+          <path d="M7.8 7.8a6 6 0 0 0 0 8.4" />
+          <path d="M16.2 7.8a6 6 0 0 1 0 8.4" />
+          <path d="M4.9 4.9a10 10 0 0 0 0 14.2" />
+          <path d="M19.1 4.9a10 10 0 0 1 0 14.2" />
+        </svg>
+      );
+  }
+}
+
+const PAGE_LABELS:
+Record<PageKey, string> = {
+  dashboard:
+    "Dashboard",
+
+  assets:
+    "Assets",
+
+  history:
+    "History",
+
+  alerts:
+    "Alerts",
+
+  inventory:
+    "Inventory",
+
+  sensors:
+    "Sensors"
+};
+
+function isPageKey(
+  value: unknown
+): value is PageKey {
+
+  return (
+    value === "dashboard" ||
+    value === "assets" ||
+    value === "history" ||
+    value === "alerts" ||
+    value === "inventory" ||
+    value === "sensors"
+  );
+}
+
+function isAssetHealthFilter(
+  value: unknown
+): value is
+  | "all"
+  | "online"
+  | "warning"
+  | "offline" {
+
+  return (
+    value === "all" ||
+    value === "online" ||
+    value === "warning" ||
+    value === "offline"
+  );
+}
+
+function isAssetView(
+  value: unknown
+): value is
+  | "cards"
+  | "compact" {
+
+  return (
+    value === "cards" ||
+    value === "compact"
+  );
+}
+
+function isHistoryHours(
+  value: unknown
+): value is number {
+
+  return (
+    typeof value === "number" &&
+    [
+      1,
+      2,
+      3,
+      6,
+      12,
+      24,
+      168,
+      720
+    ].includes(value)
+  );
+}
 
 function formatAge(
   ageSeconds: number | null
@@ -96,19 +292,179 @@ function formatAge(
   } ago`;
 }
 
+function latestMetricValue(
+  observations: Array<{
+    metricKey: string;
+    value: unknown;
+  }>,
+  metricKey: string
+): number | string | null {
+
+  const observation =
+    observations.find(
+      current =>
+        current.metricKey ===
+        metricKey
+    );
+
+  if (!observation) {
+    return null;
+  }
+
+  if (
+    typeof observation.value ===
+      "number" ||
+    typeof observation.value ===
+      "string"
+  ) {
+    return observation.value;
+  }
+
+  return null;
+}
+
 function Dashboard() {
+
+  const [
+    activePage,
+    setActivePage
+  ] =
+    usePersistentState<PageKey>(
+      "navigation.page",
+      "dashboard",
+      isPageKey
+    );
+
+  const [
+    navbarOpened,
+    setNavbarOpened
+  ] =
+    React.useState(false);
+
+  const [
+    navbarCollapsed,
+    setNavbarCollapsed
+  ] =
+    usePersistentState<boolean>(
+      "navigation.navbarCollapsed",
+      false,
+      (
+        value
+      ): value is boolean =>
+        typeof value ===
+        "boolean"
+    );
+
+  const navigateTo =
+    (
+      page: PageKey
+    ): void => {
+
+      setActivePage(
+        page
+      );
+
+      setNavbarOpened(
+        false
+      );
+    };
 
   const [
     selectedSensor,
     setSelectedSensor
   ] =
-    React.useState<string>("");
+    usePersistentState<string>(
+      "history.sensorUid",
+      "",
+      (
+        value
+      ): value is string =>
+        typeof value ===
+        "string"
+    );
 
   const [
     hours,
     setHours
   ] =
-    React.useState(24);
+    usePersistentState<number>(
+      "history.hours",
+      24,
+      isHistoryHours
+    );
+
+  const [
+    assetSearch,
+    setAssetSearch
+  ] =
+    usePersistentState<string>(
+      "assets.search",
+      "",
+      (
+        value
+      ): value is string =>
+        typeof value ===
+        "string"
+    );
+
+  const [
+    assetHealthFilter,
+    setAssetHealthFilter
+  ] =
+    usePersistentState<
+      "all"
+      | "online"
+      | "warning"
+      | "offline"
+    >(
+      "assets.health",
+      "all",
+      isAssetHealthFilter
+    );
+
+  const [
+    assetLocationFilter,
+    setAssetLocationFilter
+  ] =
+    usePersistentState<
+      string | null
+    >(
+      "assets.locationId",
+      null,
+      (
+        value
+      ): value is string | null =>
+        value === null ||
+        typeof value ===
+          "string"
+    );
+
+  const [
+    assetView,
+    setAssetView
+  ] =
+    usePersistentState<
+      "cards"
+      | "compact"
+    >(
+      "assets.view",
+      "cards",
+      isAssetView
+    );
+
+  const [
+    currentReadingSearch,
+    setCurrentReadingSearch
+  ] =
+    usePersistentState<string>(
+      "dashboard.currentReadings.search",
+      "",
+      (
+        value
+      ): value is string =>
+        typeof value ===
+        "string"
+    );
 
   const sensorsQuery =
     useQuery({
@@ -146,22 +502,89 @@ function Dashboard() {
         30_000
     });
 
+  const activeAlertsQuery =
+    useQuery({
+      queryKey:
+        ["active-alerts"],
+
+      queryFn:
+        getActiveAlerts,
+
+      refetchInterval:
+        30_000
+    });
+
   React.useEffect(() => {
 
-    if (
-      !selectedSensor &&
-      sensorsQuery.data?.length
-    ) {
+    const sensors =
+      sensorsQuery.data
+      ?? [];
 
+    if (
+      sensors.length === 0
+    ) {
+      return;
+    }
+
+    const selectedExists =
+      sensors.some(
+        sensor =>
+          sensor.uid ===
+          selectedSensor
+      );
+
+    if (!selectedExists) {
       setSelectedSensor(
-        sensorsQuery.data[0].uid
+        sensors[0].uid
       );
     }
 
   }, [
     sensorsQuery.data,
-    selectedSensor
+    selectedSensor,
+    setSelectedSensor
   ]);
+
+  React.useEffect(
+    () => {
+
+      if (
+        assetLocationFilter ===
+          null
+      ) {
+        return;
+      }
+
+      const assets =
+        assetsQuery.data
+        ?? [];
+
+      if (
+        assets.length === 0
+      ) {
+        return;
+      }
+
+      const exists =
+        assets.some(
+          asset =>
+            asset.location?.id ===
+            assetLocationFilter
+        );
+
+      if (!exists) {
+        setAssetLocationFilter(
+          null
+        );
+      }
+
+    },
+    [
+      assetLocationFilter,
+      assetsQuery.data,
+      setAssetLocationFilter
+    ]
+  );
 
   const selectedAsset =
     assetsQuery.data?.find(
@@ -425,6 +848,145 @@ function Dashboard() {
         }
       );
 
+  const normalizedCurrentReadingSearch =
+    currentReadingSearch
+      .trim()
+      .toLowerCase();
+
+  const currentReadingAssets =
+    sortedAssets.filter(
+      asset => {
+
+        if (
+          normalizedCurrentReadingSearch
+            .length === 0
+        ) {
+          return true;
+        }
+
+        const displayName =
+          asset.sensor?.name
+          ?? asset.name
+          ?? asset.externalId;
+
+        return displayName
+          .toLowerCase()
+          .includes(
+            normalizedCurrentReadingSearch
+          );
+      }
+    );
+
+  const alertSeverityPriority = {
+    CRITICAL: 0,
+    WARNING: 1,
+    INFO: 2
+  } as const;
+
+  const dashboardAlerts =
+    [
+      ...(
+        activeAlertsQuery.data
+        ?? []
+      )
+    ]
+      .sort(
+        (left, right) =>
+          alertSeverityPriority[
+            left.severity
+          ] -
+          alertSeverityPriority[
+            right.severity
+          ] ||
+          new Date(
+            right.openedAt
+          ).getTime() -
+          new Date(
+            left.openedAt
+          ).getTime()
+      )
+      .slice(0, 5);
+
+  const assetLocations =
+    Array.from(
+      new Map(
+        assets
+          .filter(
+            asset =>
+              asset.location !==
+              null
+          )
+          .map(
+            asset => [
+              asset.location!.id,
+              asset.location!
+            ]
+          )
+      )
+      .values()
+    )
+    .sort(
+      (left, right) =>
+        left.name.localeCompare(
+          right.name
+        )
+    );
+
+  const normalizedAssetSearch =
+    assetSearch
+      .trim()
+      .toLowerCase();
+
+  const filteredAssets =
+    sortedAssets.filter(
+      asset => {
+
+        const matchesSearch =
+          normalizedAssetSearch
+            .length === 0 ||
+          (
+            asset.sensor?.name
+            ?? asset.name
+            ?? asset.externalId
+          )
+          .toLowerCase()
+          .includes(
+            normalizedAssetSearch
+          ) ||
+          asset.externalId
+            .toLowerCase()
+            .includes(
+              normalizedAssetSearch
+            ) ||
+          (
+            asset.location?.name
+            ?? ""
+          )
+          .toLowerCase()
+          .includes(
+            normalizedAssetSearch
+          );
+
+        const matchesHealth =
+          assetHealthFilter ===
+            "all" ||
+          asset.health.status ===
+            assetHealthFilter;
+
+        const matchesLocation =
+          assetLocationFilter ===
+            null ||
+          asset.location?.id ===
+            assetLocationFilter;
+
+        return (
+          matchesSearch &&
+          matchesHealth &&
+          matchesLocation
+        );
+      }
+    );
+
   const unassignedAssets =
     assets.filter(
       asset =>
@@ -526,6 +1088,17 @@ function Dashboard() {
       header={{
         height: 64
       }}
+      navbar={{
+        width:
+          navbarCollapsed
+            ? 72
+            : 220,
+        breakpoint: "sm",
+        collapsed: {
+          mobile:
+            !navbarOpened
+        }
+      }}
     >
 
       <AppShell.Header>
@@ -540,11 +1113,57 @@ function Dashboard() {
             justify="space-between"
           >
 
-            <Title order={2}>
-              SensorSphere
-            </Title>
+            <Group gap="sm">
 
-            <Text c="dimmed">
+              <img
+                src="/sensorsphere-app.svg"
+                alt=""
+                width="38"
+                height="38"
+                style={{
+                  flexShrink: 0
+                }}
+              />
+
+              <Burger
+                hiddenFrom="sm"
+                opened={
+                  navbarOpened
+                }
+                onClick={
+                  () =>
+                    setNavbarOpened(
+                      current =>
+                        !current
+                    )
+                }
+                size="sm"
+                aria-label="Toggle navigation"
+              />
+
+              <div>
+                <Title order={2}>
+                  SensorSphere
+                </Title>
+
+                <Text
+                  size="xs"
+                  c="dimmed"
+                >
+                  {
+                    PAGE_LABELS[
+                      activePage
+                    ]
+                  }
+                </Text>
+              </div>
+
+            </Group>
+
+            <Text
+              c="dimmed"
+              visibleFrom="sm"
+            >
               Environmental monitoring
             </Text>
 
@@ -553,6 +1172,249 @@ function Dashboard() {
         </Container>
 
       </AppShell.Header>
+
+      <AppShell.Navbar
+        p={
+          navbarCollapsed
+            ? "xs"
+            : "md"
+        }
+        style={{
+          overflow:
+            "visible"
+        }}
+      >
+        <button
+          type="button"
+          onClick={
+            () =>
+              setNavbarCollapsed(
+                current =>
+                  !current
+              )
+          }
+          aria-label={
+            navbarCollapsed
+              ? "Expand navigation"
+              : "Collapse navigation"
+          }
+          title={
+            navbarCollapsed
+              ? "Expand navigation"
+              : "Collapse navigation"
+          }
+          style={{
+            position:
+              "absolute",
+            top:
+              12,
+            right:
+              -15,
+            width:
+              30,
+            height:
+              30,
+            padding:
+              0,
+            display:
+              "flex",
+            alignItems:
+              "center",
+            justifyContent:
+              "center",
+            border:
+              "1px solid var(--mantine-color-gray-4)",
+            borderRadius:
+              4,
+            background:
+              "var(--mantine-color-body)",
+            color:
+              "var(--mantine-color-gray-7)",
+            cursor:
+              "pointer",
+            zIndex:
+              20,
+            boxShadow:
+              "var(--mantine-shadow-xs)"
+          }}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            {
+              navbarCollapsed
+                ? (
+                  <path d="m9 18 6-6-6-6" />
+                )
+                : (
+                  <path d="m15 18-6-6 6-6" />
+                )
+            }
+          </svg>
+        </button>
+
+        <Stack gap="xs">
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Dashboard"
+            }
+            leftSection={
+              <NavigationIcon
+                page="dashboard"
+              />
+            }
+            title="Dashboard"
+            aria-label="Dashboard"
+            active={
+              activePage ===
+              "dashboard"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "dashboard"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Assets"
+            }
+            leftSection={
+              <NavigationIcon
+                page="assets"
+              />
+            }
+            title="Assets"
+            aria-label="Assets"
+            active={
+              activePage ===
+              "assets"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "assets"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "History"
+            }
+            leftSection={
+              <NavigationIcon
+                page="history"
+              />
+            }
+            title="History"
+            aria-label="History"
+            active={
+              activePage ===
+              "history"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "history"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Alerts"
+            }
+            leftSection={
+              <NavigationIcon
+                page="alerts"
+              />
+            }
+            title="Alerts"
+            aria-label="Alerts"
+            active={
+              activePage ===
+              "alerts"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "alerts"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Inventory"
+            }
+            leftSection={
+              <NavigationIcon
+                page="inventory"
+              />
+            }
+            title="Inventory"
+            aria-label="Inventory"
+            active={
+              activePage ===
+              "inventory"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "inventory"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Sensors"
+            }
+            leftSection={
+              <NavigationIcon
+                page="sensors"
+              />
+            }
+            title="Sensors"
+            aria-label="Sensors"
+            active={
+              activePage ===
+              "sensors"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "sensors"
+                )
+            }
+          />
+
+        </Stack>
+      </AppShell.Navbar>
 
       <AppShell.Main>
 
@@ -563,6 +1425,9 @@ function Dashboard() {
 
           <Stack gap="xl">
 
+            {
+              activePage ===
+                "dashboard" && (
             <div>
 
               <Group
@@ -748,7 +1613,12 @@ function Dashboard() {
 
             </div>
 
+              )
+            }
+
             {
+              activePage ===
+                "dashboard" &&
               (
                 offlineAssets.length > 0 ||
                 warningAssets.length > 0 ||
@@ -878,177 +1748,1080 @@ function Dashboard() {
               )
             }
 
-            <div>
+            {
+              activePage ===
+                "dashboard" && (
+                <div>
 
-              <Title
-                order={2}
-                mb="md"
-              >
-                Latest asset observations
-              </Title>
+                  <Group
+                    justify="space-between"
+                    mb="md"
+                    align="flex-end"
+                  >
+                    <div>
+                      <Title order={2}>
+                        Active alerts
+                      </Title>
 
-              <SimpleGrid
-                cols={{
-                  base: 1,
-                  sm: 2
-                }}
-              >
+                      <Text c="dimmed">
+                        Current alerts requiring attention
+                      </Text>
+                    </div>
 
-                {sortedAssets.map(
-                  asset => (
-
-                    <AssetLatestCard
-                      key={asset.id}
-                      asset={asset}
-                      observations={
-                        observationsByAsset.get(
-                          asset.id
-                        ) ?? []
+                    <Button
+                      variant="subtle"
+                      onClick={
+                        () =>
+                          navigateTo(
+                            "alerts"
+                          )
                       }
-                    />
+                    >
+                      View all
+                    </Button>
+                  </Group>
 
-                  )
-                )}
-
-              </SimpleGrid>
-
-            </div>
-
-            <div>
-
-              <Group
-                justify="space-between"
-                mb="md"
-              >
-
-                <Title order={2}>
-                  History
-                </Title>
-
-                <SegmentedControl
-                  value={
-                    String(hours)
-                  }
-
-                  onChange={
-                    value =>
-                      setHours(
-                        Number(value)
+                  {
+                    activeAlertsQuery
+                      .isLoading
+                      ? (
+                        <Loader size="sm" />
                       )
+                      : activeAlertsQuery
+                          .isError
+                        ? (
+                          <Alert
+                            color="red"
+                            title="Unable to load alerts"
+                          >
+                            Open the Alerts page for more details.
+                          </Alert>
+                        )
+                        : dashboardAlerts
+                            .length === 0
+                          ? (
+                            <Alert
+                              color="green"
+                              title="No active alerts"
+                            >
+                              No alert currently requires attention.
+                            </Alert>
+                          )
+                          : (
+                            <Stack gap="xs">
+                              {
+                                dashboardAlerts.map(
+                                  alert => (
+                                    <Card
+                                      key={
+                                        alert.id
+                                      }
+                                      withBorder
+                                      radius="md"
+                                      padding="sm"
+                                    >
+                                      <Group
+                                        justify="space-between"
+                                        align="center"
+                                      >
+                                        <Group
+                                          gap="sm"
+                                          style={{
+                                            minWidth: 0
+                                          }}
+                                        >
+                                          <Badge
+                                            color={
+                                              alert.severity ===
+                                                "CRITICAL"
+                                                ? "red"
+                                                : alert.severity ===
+                                                    "WARNING"
+                                                  ? "yellow"
+                                                  : "blue"
+                                            }
+                                            variant="light"
+                                          >
+                                            {
+                                              alert.severity
+                                            }
+                                          </Badge>
+
+                                          <div>
+                                            <Text fw={600}>
+                                              {
+                                                alert.ruleName
+                                              }
+                                            </Text>
+
+                                            <Text
+                                              size="xs"
+                                              c="dimmed"
+                                            >
+                                              {
+                                                alert.assetDisplayName
+                                              }
+                                              {
+                                                alert.metricDisplayName
+                                                  ? ` · ${alert.metricDisplayName}`
+                                                  : ""
+                                              }
+                                            </Text>
+                                          </div>
+                                        </Group>
+
+                                        <Text
+                                          fw={600}
+                                          size="sm"
+                                        >
+                                          {
+                                            alert.currentValue !==
+                                              null
+                                              ? `${alert.currentValue}${alert.unit ? ` ${alert.unit}` : ""}`
+                                              : "—"
+                                          }
+                                        </Text>
+                                      </Group>
+                                    </Card>
+                                  )
+                                )
+                              }
+                            </Stack>
+                          )
                   }
 
-                  data={[
+                </div>
+              )
+            }
+
+            {
+              activePage ===
+                "dashboard" && (
+                <div>
+
+                  <Group
+                    justify="space-between"
+                    mb="md"
+                  >
+                    <div>
+                      <Title order={2}>
+                        Current readings
+                      </Title>
+
+                      <Text c="dimmed">
+                        Latest temperature and humidity by asset
+                      </Text>
+                    </div>
+
+                    <Group
+                      gap="sm"
+                      align="flex-end"
+                    >
+                      <TextInput
+                        label="Filter by name"
+                        placeholder="Sensor name"
+                        value={
+                          currentReadingSearch
+                        }
+                        onChange={
+                          event =>
+                            setCurrentReadingSearch(
+                              event.currentTarget
+                                .value
+                            )
+                        }
+                      />
+
+                      <Badge variant="light">
+                        {
+                          currentReadingAssets.length
+                        } / {assets.length} assets
+                      </Badge>
+                    </Group>
+                  </Group>
+
+                  <SimpleGrid
+                    cols={{
+                      base: 1,
+                      sm: 2,
+                      lg: 3
+                    }}
+                  >
                     {
-                      label: "1 h",
-                      value: "1"
-                    },
-                    {
-                      label: "2 h",
-                      value: "2"
-                    },
-                    {
-                      label: "3 h",
-                      value: "3"
-                    },
-                    {
-                      label: "6 h",
-                      value: "6"
-                    },
-                    {
-                      label: "12 h",
-                      value: "12"
-                    },
-                    {
-                      label: "24 h",
-                      value: "24"
-                    },
-                    {
-                      label: "7 days",
-                      value: "168"
-                    },
-                    {
-                      label: "30 days",
-                      value: "720"
+                      currentReadingAssets.map(
+                        asset => {
+
+                          const assetObservations =
+                            observationsByAsset.get(
+                              asset.id
+                            ) ?? [];
+
+                          const temperature =
+                            latestMetricValue(
+                              assetObservations,
+                              "temperature"
+                            );
+
+                          const humidity =
+                            latestMetricValue(
+                              assetObservations,
+                              "humidity"
+                            );
+
+                          const healthColor =
+                            asset.health.status ===
+                              "online"
+                              ? "green"
+                              : asset.health.status ===
+                                  "warning"
+                                ? "yellow"
+                                : "red";
+
+                          const assetAlerts =
+                            (
+                              activeAlertsQuery.data
+                              ?? []
+                            )
+                              .filter(
+                                alert =>
+                                  alert.assetId ===
+                                  asset.id
+                              )
+                              .sort(
+                                (
+                                  left,
+                                  right
+                                ) =>
+                                  alertSeverityPriority[
+                                    left.severity
+                                  ] -
+                                  alertSeverityPriority[
+                                    right.severity
+                                  ] ||
+                                  new Date(
+                                    right.openedAt
+                                  ).getTime() -
+                                  new Date(
+                                    left.openedAt
+                                  ).getTime()
+                              );
+
+                          const assetAlertColor =
+                            assetAlerts[0]
+                              ?.severity ===
+                              "CRITICAL"
+                              ? "red"
+                              : assetAlerts[0]
+                                  ?.severity ===
+                                  "WARNING"
+                                ? "yellow"
+                                : "blue";
+
+                          return (
+                            <Card
+                              key={asset.id}
+                              withBorder
+                              radius="md"
+                              padding="md"
+                              style={
+                                assetAlerts.length > 0
+                                  ? {
+                                      borderWidth:
+                                        2,
+                                      borderColor:
+                                        `var(--mantine-color-${assetAlertColor}-6)`
+                                    }
+                                  : undefined
+                              }
+                            >
+                              <Stack gap="xs">
+
+                                <Group
+                                  justify="space-between"
+                                  align="flex-start"
+                                >
+                                  <div>
+                                    <Text fw={700}>
+                                      {
+                                        asset.sensor?.name
+                                        ?? asset.name
+                                        ?? asset.externalId
+                                      }
+                                    </Text>
+
+                                    <Text
+                                      size="xs"
+                                      c="dimmed"
+                                    >
+                                      {
+                                        asset.location?.name
+                                        ?? "Unassigned"
+                                      }
+                                    </Text>
+                                  </div>
+
+                                  <Stack
+                                    gap={4}
+                                    align="flex-end"
+                                  >
+                                    <Badge
+                                      size="sm"
+                                      color={
+                                        healthColor
+                                      }
+                                      variant="light"
+                                    >
+                                      {
+                                        asset.health.status
+                                      }
+                                    </Badge>
+
+                                    {
+                                      assetAlerts.length >
+                                        0 && (
+                                        <Badge
+                                          size="sm"
+                                          color={
+                                            assetAlertColor
+                                          }
+                                          variant="filled"
+                                        >
+                                          {
+                                            assetAlerts.length
+                                          } alert{
+                                            assetAlerts.length >
+                                              1
+                                              ? "s"
+                                              : ""
+                                          }
+                                        </Badge>
+                                      )
+                                    }
+                                  </Stack>
+                                </Group>
+
+                                {
+                                  assetAlerts.length >
+                                    0 && (
+                                    <Stack
+                                      gap={4}
+                                      p="xs"
+                                      style={{
+                                        border:
+                                          "1px solid var(--mantine-color-gray-3)",
+                                        borderRadius:
+                                          "var(--mantine-radius-sm)"
+                                      }}
+                                    >
+                                      {
+                                        assetAlerts
+                                          .slice(
+                                            0,
+                                            3
+                                          )
+                                          .map(
+                                            alert => (
+                                              <Group
+                                                key={
+                                                  alert.id
+                                                }
+                                                gap="xs"
+                                                wrap="nowrap"
+                                                justify="space-between"
+                                              >
+                                                <Group
+                                                  gap="xs"
+                                                  wrap="nowrap"
+                                                  style={{
+                                                    minWidth:
+                                                      0
+                                                  }}
+                                                >
+                                                  <Badge
+                                                    size="xs"
+                                                    color={
+                                                      alert.severity ===
+                                                        "CRITICAL"
+                                                        ? "red"
+                                                        : alert.severity ===
+                                                            "WARNING"
+                                                          ? "yellow"
+                                                          : "blue"
+                                                    }
+                                                    variant="light"
+                                                  >
+                                                    {
+                                                      alert.severity
+                                                    }
+                                                  </Badge>
+
+                                                  <Text
+                                                    size="xs"
+                                                    truncate
+                                                    title={
+                                                      alert.ruleName
+                                                    }
+                                                  >
+                                                    {
+                                                      alert.ruleName
+                                                    }
+                                                  </Text>
+                                                </Group>
+
+                                                <Text
+                                                  size="xs"
+                                                  fw={600}
+                                                  style={{
+                                                    whiteSpace:
+                                                      "nowrap"
+                                                  }}
+                                                >
+                                                  {
+                                                    alert.currentValue !==
+                                                      null
+                                                      ? `${alert.currentValue}${alert.unit ? ` ${alert.unit}` : ""}`
+                                                      : "—"
+                                                  }
+                                                </Text>
+                                              </Group>
+                                            )
+                                          )
+                                      }
+
+                                      {
+                                        assetAlerts.length >
+                                          3 && (
+                                          <Text
+                                            size="xs"
+                                            c="dimmed"
+                                          >
+                                            +{
+                                              assetAlerts.length -
+                                              3
+                                            } more alert{
+                                              assetAlerts.length -
+                                                3 >
+                                              1
+                                                ? "s"
+                                                : ""
+                                            }
+                                          </Text>
+                                        )
+                                      }
+                                    </Stack>
+                                  )
+                                }
+
+                                <Group gap="xl">
+
+                                  <div>
+                                    <Text
+                                      size="xs"
+                                      c="dimmed"
+                                    >
+                                      Temperature
+                                    </Text>
+
+                                    <Text
+                                      fw={600}
+                                      size="lg"
+                                    >
+                                      {
+                                        temperature !== null
+                                          ? `${temperature} °C`
+                                          : "—"
+                                      }
+                                    </Text>
+                                  </div>
+
+                                  <div>
+                                    <Text
+                                      size="xs"
+                                      c="dimmed"
+                                    >
+                                      Humidity
+                                    </Text>
+
+                                    <Text
+                                      fw={600}
+                                      size="lg"
+                                    >
+                                      {
+                                        humidity !== null
+                                          ? `${humidity} %`
+                                          : "—"
+                                      }
+                                    </Text>
+                                  </div>
+
+                                </Group>
+
+                                <Text
+                                  size="xs"
+                                  c="dimmed"
+                                >
+                                  Last seen:{" "}
+                                  {
+                                    formatAge(
+                                      asset.health.ageSeconds
+                                    )
+                                  }
+                                </Text>
+
+                              </Stack>
+                            </Card>
+                          );
+                        }
+                      )
                     }
-                  ]}
-                />
+                  </SimpleGrid>
 
-              </Group>
+                </div>
+              )
+            }
 
-              {sensors.length > 0 && (
+            {
+              activePage ===
+                "assets" && (
+                <div>
 
-                <SegmentedControl
-                  mb="md"
+                  <Group
+                    justify="space-between"
+                    mb="md"
+                    align="flex-end"
+                  >
+                    <div>
+                      <Title order={2}>
+                        Assets
+                      </Title>
 
-                  value={
-                    selectedSensor
-                  }
+                      <Text c="dimmed">
+                        Latest observations and asset health
+                      </Text>
+                    </div>
 
-                  onChange={
-                    setSelectedSensor
-                  }
-
-                  data={
-                    sensors.map(
-                      sensor => ({
-                        label:
-                          sensor.name
-                          ?? sensor.uid,
-
-                        value:
-                          sensor.uid
-                      })
-                    )
-                  }
-                />
-
-              )}
-
-              {
-                (
-                  !useAggregates &&
-                  (
-                    temperatureHistoryQuery.isLoading ||
-                    humidityHistoryQuery.isLoading
-                  )
-                ) ||
-                (
-                  useAggregates &&
-                  (
-                    temperatureAggregateQuery.isLoading ||
-                    humidityAggregateQuery.isLoading
-                  )
-                )
-                  ? <Loader />
-
-                  : (
-                    <SensorChart
-                      hours={hours}
-                      temperature={
-                        temperatureHistoryQuery.data
-                        ?? []
+                    <SegmentedControl
+                      value={
+                        assetView
                       }
-                      humidity={
-                        humidityHistoryQuery.data
-                        ?? []
+                      onChange={
+                        value =>
+                          setAssetView(
+                            value as
+                              "cards"
+                              | "compact"
+                          )
                       }
-                      temperatureAggregates={
-                        temperatureAggregateQuery.data
-                        ?? []
+                      data={[
+                        {
+                          label: "Cards",
+                          value: "cards"
+                        },
+                        {
+                          label: "Compact",
+                          value: "compact"
+                        }
+                      ]}
+                    />
+                  </Group>
+
+                  <Group
+                    mb="md"
+                    align="flex-end"
+                  >
+                    <TextInput
+                      label="Search"
+                      placeholder="Name, ID or location"
+                      value={
+                        assetSearch
                       }
-                      humidityAggregates={
-                        humidityAggregateQuery.data
-                        ?? []
+                      onChange={
+                        event =>
+                          setAssetSearch(
+                            event.currentTarget
+                              .value
+                          )
+                      }
+                      style={{
+                        flex: 1
+                      }}
+                    />
+
+                    <Select
+                      label="Health"
+                      value={
+                        assetHealthFilter
+                      }
+                      onChange={
+                        value =>
+                          value &&
+                          setAssetHealthFilter(
+                            value as
+                              "all"
+                              | "online"
+                              | "warning"
+                              | "offline"
+                          )
+                      }
+                      data={[
+                        {
+                          value: "all",
+                          label: "All"
+                        },
+                        {
+                          value: "offline",
+                          label: "Offline"
+                        },
+                        {
+                          value: "warning",
+                          label: "Warning"
+                        },
+                        {
+                          value: "online",
+                          label: "Online"
+                        }
+                      ]}
+                    />
+
+                    <Select
+                      label="Location"
+                      clearable
+                      searchable
+                      placeholder="All locations"
+                      value={
+                        assetLocationFilter
+                      }
+                      onChange={
+                        setAssetLocationFilter
+                      }
+                      data={
+                        assetLocations.map(
+                          location => ({
+                            value:
+                              location.id,
+
+                            label:
+                              location.name
+                          })
+                        )
                       }
                     />
-                  )
+                  </Group>
+
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                    mb="sm"
+                  >
+                    {
+                      filteredAssets.length
+                    } of {
+                      assets.length
+                    } assets
+                  </Text>
+
+                  {
+                    filteredAssets.length ===
+                      0
+                      ? (
+                        <Alert
+                          color="blue"
+                          title="No matching assets"
+                        >
+                          Change the search or filters.
+                        </Alert>
+                      )
+                      : assetView ===
+                          "cards"
+                        ? (
+                          <SimpleGrid
+                            cols={{
+                              base: 1,
+                              sm: 2
+                            }}
+                          >
+                            {
+                              filteredAssets.map(
+                                asset => (
+                                  <AssetLatestCard
+                                    key={
+                                      asset.id
+                                    }
+                                    asset={
+                                      asset
+                                    }
+                                    observations={
+                                      observationsByAsset.get(
+                                        asset.id
+                                      ) ?? []
+                                    }
+                                  />
+                                )
+                              )
+                            }
+                          </SimpleGrid>
+                        )
+                        : (
+                          <Stack gap="xs">
+                            {
+                              filteredAssets.map(
+                                asset => {
+
+                                  const assetObservations =
+                                    observationsByAsset.get(
+                                      asset.id
+                                    ) ?? [];
+
+                                  const temperature =
+                                    latestMetricValue(
+                                      assetObservations,
+                                      "temperature"
+                                    );
+
+                                  const humidity =
+                                    latestMetricValue(
+                                      assetObservations,
+                                      "humidity"
+                                    );
+
+                                  const battery =
+                                    latestMetricValue(
+                                      assetObservations,
+                                      "battery"
+                                    );
+
+                                  const healthColor =
+                                    asset.health.status ===
+                                      "online"
+                                      ? "green"
+                                      : asset.health.status ===
+                                          "warning"
+                                        ? "yellow"
+                                        : "red";
+
+                                  return (
+                                    <Card
+                                      key={
+                                        asset.id
+                                      }
+                                      withBorder
+                                      radius="md"
+                                      padding="sm"
+                                    >
+                                      <Group
+                                        justify="space-between"
+                                        align="center"
+                                      >
+
+                                        <div
+                                          style={{
+                                            minWidth: 220
+                                          }}
+                                        >
+                                          <Text fw={700}>
+                                            {
+                                              asset.sensor?.name
+                                              ?? asset.name
+                                              ?? asset.externalId
+                                            }
+                                          </Text>
+
+                                          <Text
+                                            size="xs"
+                                            c="dimmed"
+                                          >
+                                            {
+                                              asset.location?.name
+                                              ?? "Unassigned"
+                                            }
+                                            {" · "}
+                                            {
+                                              asset.externalId
+                                            }
+                                          </Text>
+                                        </div>
+
+                                        <Group gap="xl">
+
+                                          <div>
+                                            <Text
+                                              size="xs"
+                                              c="dimmed"
+                                            >
+                                              Temperature
+                                            </Text>
+
+                                            <Text fw={600}>
+                                              {
+                                                temperature !==
+                                                  null
+                                                  ? `${temperature} °C`
+                                                  : "—"
+                                              }
+                                            </Text>
+                                          </div>
+
+                                          <div>
+                                            <Text
+                                              size="xs"
+                                              c="dimmed"
+                                            >
+                                              Humidity
+                                            </Text>
+
+                                            <Text fw={600}>
+                                              {
+                                                humidity !==
+                                                  null
+                                                  ? `${humidity} %`
+                                                  : "—"
+                                              }
+                                            </Text>
+                                          </div>
+
+                                          <div>
+                                            <Text
+                                              size="xs"
+                                              c="dimmed"
+                                            >
+                                              Battery
+                                            </Text>
+
+                                            <Text fw={600}>
+                                              {
+                                                battery !==
+                                                  null
+                                                  ? `${battery} %`
+                                                  : "—"
+                                              }
+                                            </Text>
+                                          </div>
+
+                                          <Badge
+                                            color={
+                                              healthColor
+                                            }
+                                            variant="light"
+                                          >
+                                            {
+                                              asset.health.status
+                                            }
+                                          </Badge>
+
+                                        </Group>
+
+                                      </Group>
+                                    </Card>
+                                  );
+                                }
+                              )
+                            }
+                          </Stack>
+                        )
+                  }
+
+                </div>
+              )
+            }
+
+{
+  activePage ===
+    "history" && (
+    <div>
+
+      <Title
+        order={2}
+        mb="md"
+      >
+        History
+      </Title>
+
+      <Group
+        mb="lg"
+        align="flex-end"
+        justify="space-between"
+        wrap="wrap"
+      >
+
+        {sensors.length > 0 && (
+
+          <Select
+            label="Sensor"
+            placeholder="Select a sensor"
+            searchable
+            value={
+              selectedSensor
+            }
+            onChange={
+              value => {
+                if (value) {
+                  setSelectedSensor(
+                    value
+                  );
+                }
               }
+            }
+            data={
+              sensors
+                .map(
+                  sensor => ({
+                    value:
+                      sensor.uid,
 
-            </div>
+                    label:
+                      sensor.name
+                        ? `${sensor.name} · ${sensor.uid}`
+                        : sensor.uid
+                  })
+                )
+                .sort(
+                  (left, right) =>
+                    left.label.localeCompare(
+                      right.label
+                    )
+                )
+            }
+            nothingFoundMessage="No sensor found"
+            checkIconPosition="right"
+            styles={{
+              root: {
+                flex:
+                  "1 1 320px",
 
-            <InventoryPanel />
+                maxWidth:
+                  480
+              }
+            }}
+          />
 
-            <SensorCatalog />
+        )}
+
+        <div>
+
+          <Text
+            size="sm"
+            fw={500}
+            mb={3}
+          >
+            Period
+          </Text>
+
+          <SegmentedControl
+            value={
+              String(hours)
+            }
+
+            onChange={
+              value =>
+                setHours(
+                  Number(value)
+                )
+            }
+
+            data={[
+              {
+                label: "1 h",
+                value: "1"
+              },
+              {
+                label: "2 h",
+                value: "2"
+              },
+              {
+                label: "3 h",
+                value: "3"
+              },
+              {
+                label: "6 h",
+                value: "6"
+              },
+              {
+                label: "12 h",
+                value: "12"
+              },
+              {
+                label: "24 h",
+                value: "24"
+              },
+              {
+                label: "7 days",
+                value: "168"
+              },
+              {
+                label: "30 days",
+                value: "720"
+              }
+            ]}
+          />
+
+        </div>
+
+      </Group>
+
+      {
+        (
+          !useAggregates &&
+          (
+            temperatureHistoryQuery.isLoading ||
+            humidityHistoryQuery.isLoading
+          )
+        ) ||
+        (
+          useAggregates &&
+          (
+            temperatureAggregateQuery.isLoading ||
+            humidityAggregateQuery.isLoading
+          )
+        )
+          ? <Loader />
+
+          : (
+            <SensorChart
+              hours={hours}
+              temperature={
+                temperatureHistoryQuery.data
+                ?? []
+              }
+              humidity={
+                humidityHistoryQuery.data
+                ?? []
+              }
+              temperatureAggregates={
+                temperatureAggregateQuery.data
+                ?? []
+              }
+              humidityAggregates={
+                humidityAggregateQuery.data
+                ?? []
+              }
+            />
+          )
+      }
+
+    </div>
+  )
+}
+
+            {
+              activePage ===
+                "alerts" && (
+                <AlertPanel />
+              )
+            }
+
+            {
+              activePage ===
+                "inventory" && (
+                <InventoryPanel />
+              )
+            }
+
+            {
+              activePage ===
+                "sensors" && (
+                <SensorCatalog />
+              )
+            }
 
           </Stack>
 

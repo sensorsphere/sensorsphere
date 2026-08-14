@@ -40,6 +40,22 @@ export interface AlertRuleRecord {
   updated_at: Date;
 }
 
+export interface AlertRuleStateRecord {
+  rule_id: string;
+
+  condition_started_at:
+    Date | null;
+
+  last_triggered_at:
+    Date | null;
+
+  last_resolved_at:
+    Date | null;
+
+  created_at: Date;
+  updated_at: Date;
+}
+
 export interface AlertEventRecord {
   id: string;
 
@@ -104,8 +120,36 @@ export interface AlertRepository {
     id: string
   ): Promise<boolean>;
 
+  findRuleState(
+    ruleId: string
+  ): Promise<AlertRuleStateRecord | null>;
+
+  setConditionStarted(
+    ruleId: string,
+    startedAt: Date
+  ): Promise<AlertRuleStateRecord>;
+
+  clearConditionStarted(
+    ruleId: string
+  ): Promise<void>;
+
+  markRuleTriggered(
+    ruleId: string,
+    triggeredAt: Date
+  ): Promise<void>;
+
+  markRuleResolved(
+    ruleId: string,
+    resolvedAt: Date
+  ): Promise<void>;
+
   findActiveEvents():
     Promise<ActiveAlertRecord[]>;
+
+  findEvents(
+    limit: number,
+    status?: AlertEventStatus
+  ): Promise<AlertEventRecord[]>;
 
   findEventById(
     id: string
@@ -150,6 +194,15 @@ const ALERT_RULE_COLUMNS = `
   duration_seconds,
   cooldown_seconds,
   metadata,
+  created_at,
+  updated_at
+`;
+
+const ALERT_RULE_STATE_COLUMNS = `
+  rule_id,
+  condition_started_at,
+  last_triggered_at,
+  last_resolved_at,
   created_at,
   updated_at
 `;
@@ -419,6 +472,198 @@ implements AlertRepository {
     ) > 0;
   }
 
+  async findRuleState(
+    ruleId: string
+  ): Promise<AlertRuleStateRecord | null> {
+
+    const result =
+      await this.pool
+        .query<AlertRuleStateRecord>(
+          `
+          SELECT
+            ${ALERT_RULE_STATE_COLUMNS}
+          FROM alert_rule_state
+          WHERE rule_id = $1
+          LIMIT 1
+          `,
+          [
+            ruleId
+          ]
+        );
+
+    return result.rows[0]
+      ?? null;
+  }
+
+  async setConditionStarted(
+    ruleId: string,
+    startedAt: Date
+  ): Promise<AlertRuleStateRecord> {
+
+    const result =
+      await this.pool
+        .query<AlertRuleStateRecord>(
+          `
+          INSERT INTO alert_rule_state
+          (
+            rule_id,
+            condition_started_at
+          )
+          VALUES
+          (
+            $1,
+            $2
+          )
+          ON CONFLICT (
+            rule_id
+          )
+          DO UPDATE
+          SET
+            condition_started_at =
+              COALESCE(
+                alert_rule_state
+                  .condition_started_at,
+                EXCLUDED
+                  .condition_started_at
+              ),
+            updated_at =
+              NOW()
+          RETURNING
+            ${ALERT_RULE_STATE_COLUMNS}
+          `,
+          [
+            ruleId,
+            startedAt
+          ]
+        );
+
+    const state =
+      result.rows[0];
+
+    if (!state) {
+      throw new Error(
+        "Alert rule state update returned no row"
+      );
+    }
+
+    return state;
+  }
+
+  async clearConditionStarted(
+    ruleId: string
+  ): Promise<void> {
+
+    await this.pool.query(
+      `
+      INSERT INTO alert_rule_state
+      (
+        rule_id,
+        condition_started_at
+      )
+      VALUES
+      (
+        $1,
+        NULL
+      )
+      ON CONFLICT (
+        rule_id
+      )
+      DO UPDATE
+      SET
+        condition_started_at =
+          NULL,
+        updated_at =
+          NOW()
+      `,
+      [
+        ruleId
+      ]
+    );
+  }
+
+  async markRuleTriggered(
+    ruleId: string,
+    triggeredAt: Date
+  ): Promise<void> {
+
+    await this.pool.query(
+      `
+      INSERT INTO alert_rule_state
+      (
+        rule_id,
+        condition_started_at,
+        last_triggered_at
+      )
+      VALUES
+      (
+        $1,
+        $2,
+        $2
+      )
+      ON CONFLICT (
+        rule_id
+      )
+      DO UPDATE
+      SET
+        condition_started_at =
+          COALESCE(
+            alert_rule_state
+              .condition_started_at,
+            EXCLUDED
+              .condition_started_at
+          ),
+        last_triggered_at =
+          EXCLUDED
+            .last_triggered_at,
+        updated_at =
+          NOW()
+      `,
+      [
+        ruleId,
+        triggeredAt
+      ]
+    );
+  }
+
+  async markRuleResolved(
+    ruleId: string,
+    resolvedAt: Date
+  ): Promise<void> {
+
+    await this.pool.query(
+      `
+      INSERT INTO alert_rule_state
+      (
+        rule_id,
+        condition_started_at,
+        last_resolved_at
+      )
+      VALUES
+      (
+        $1,
+        NULL,
+        $2
+      )
+      ON CONFLICT (
+        rule_id
+      )
+      DO UPDATE
+      SET
+        condition_started_at =
+          NULL,
+        last_resolved_at =
+          EXCLUDED
+            .last_resolved_at,
+        updated_at =
+          NOW()
+      `,
+      [
+        ruleId,
+        resolvedAt
+      ]
+    );
+  }
+
   async findActiveEvents():
   Promise<ActiveAlertRecord[]> {
 
@@ -463,6 +708,35 @@ implements AlertRepository {
             END,
             opened_at ASC
           `
+        );
+
+    return result.rows;
+  }
+
+  async findEvents(
+    limit: number,
+    status?: AlertEventStatus
+  ): Promise<AlertEventRecord[]> {
+
+    const result =
+      await this.pool
+        .query<AlertEventRecord>(
+          `
+          SELECT
+            ${ALERT_EVENT_COLUMNS}
+          FROM alert_events
+          WHERE (
+            $1::text IS NULL
+            OR status = $1
+          )
+          ORDER BY opened_at DESC
+          LIMIT $2
+          `,
+          [
+            status
+              ?? null,
+            limit
+          ]
         );
 
     return result.rows;

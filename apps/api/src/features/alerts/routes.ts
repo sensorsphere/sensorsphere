@@ -45,6 +45,11 @@ export async function registerAlertRoutes(
     options.controller.listActiveAlerts
   );
 
+  app.get(
+    "/alerts/history",
+    options.controller.listAlertHistory
+  );
+
   app.post(
     "/alerts/:id/ack",
     options.controller.acknowledgeAlert

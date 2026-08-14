@@ -7,6 +7,7 @@ import {
   Checkbox,
   Group,
   Modal,
+  Select,
   SimpleGrid,
   Stack,
   Text,
@@ -23,7 +24,9 @@ import {
 
 import {
   getAssets,
+  getLocations,
   getSensors,
+  updateAssetLocation,
   updateSensor
 } from "./api";
 
@@ -39,11 +42,13 @@ interface SensorFormState {
   manufacturer: string;
   model: string;
   firmwareVersion: string;
+  locationId: string;
   enabled: boolean;
 }
 
 function sensorToForm(
-  sensor: Sensor
+  sensor: Sensor,
+  asset: Asset | undefined
 ): SensorFormState {
 
   return {
@@ -61,6 +66,9 @@ function sensorToForm(
 
     firmwareVersion:
       sensor.firmwareVersion ?? "",
+
+    locationId:
+      asset?.location?.id ?? "",
 
     enabled:
       sensor.enabled
@@ -118,20 +126,48 @@ export function SensorCatalog() {
         30_000
     });
 
+  const locationsQuery =
+    useQuery({
+      queryKey:
+        ["locations"],
+
+      queryFn:
+        getLocations,
+
+      refetchInterval:
+        30_000
+    });
+
   const updateMutation =
     useMutation({
       mutationFn:
         async ({
           id,
-          input
+          input,
+          assetId,
+          locationId
         }: {
           id: string;
           input: UpdateSensor;
-        }) =>
-          updateSensor(
-            id,
-            input
-          ),
+          assetId: string | null;
+          locationId: string | null;
+        }) => {
+
+          const updatedSensor =
+            await updateSensor(
+              id,
+              input
+            );
+
+          if (assetId) {
+            await updateAssetLocation(
+              assetId,
+              locationId
+            );
+          }
+
+          return updatedSensor;
+        },
 
       onSuccess:
         async updatedSensor => {
@@ -155,11 +191,16 @@ export function SensorCatalog() {
         )
     );
 
-    await queryClient
-      .invalidateQueries({
+    await Promise.all([
+      queryClient.invalidateQueries({
         queryKey:
           ["sensors"]
-      });
+      }),
+      queryClient.invalidateQueries({
+        queryKey:
+          ["assets"]
+      })
+    ]);
 
     setSelectedSensor(
       null
@@ -180,8 +221,18 @@ export function SensorCatalog() {
         sensor
       );
 
+      const asset =
+        assetsQuery.data?.find(
+          currentAsset =>
+            currentAsset.sensor?.uid ===
+            sensor.uid
+        );
+
       setForm(
-        sensorToForm(sensor)
+        sensorToForm(
+          sensor,
+          asset
+        )
       );
     };
 
@@ -195,9 +246,22 @@ export function SensorCatalog() {
         return;
       }
 
+      const asset =
+        assets.find(
+          currentAsset =>
+            currentAsset.sensor?.uid ===
+            selectedSensor.uid
+        );
+
       updateMutation.mutate({
         id:
           selectedSensor.id,
+
+        assetId:
+          asset?.id ?? null,
+
+        locationId:
+          form.locationId || null,
 
         input: {
           name:
@@ -233,7 +297,8 @@ export function SensorCatalog() {
 
   if (
     sensorsQuery.isLoading ||
-    assetsQuery.isLoading
+    assetsQuery.isLoading ||
+    locationsQuery.isLoading
   ) {
     return (
       <Text>
@@ -244,7 +309,8 @@ export function SensorCatalog() {
 
   if (
     sensorsQuery.isError ||
-    assetsQuery.isError
+    assetsQuery.isError ||
+    locationsQuery.isError
   ) {
     return (
       <Text c="red">
@@ -258,6 +324,26 @@ export function SensorCatalog() {
 
   const assets =
     assetsQuery.data ?? [];
+
+  const locations =
+    locationsQuery.data ?? [];
+
+  const locationOptions =
+    [...locations]
+      .sort(
+        (a, b) =>
+          a.name.localeCompare(
+            b.name,
+            undefined,
+            { sensitivity: "base" }
+          )
+      )
+      .map(
+        location => ({
+          value: location.id,
+          label: location.name
+        })
+      );
 
   return (
     <>
@@ -586,6 +672,25 @@ export function SensorCatalog() {
                     ...form,
                     firmwareVersion:
                       event.currentTarget.value
+                  })
+              }
+            />
+
+            <Select
+              label="Location"
+              searchable
+              clearable
+              placeholder="Unassigned"
+              value={
+                form.locationId || null
+              }
+              data={locationOptions}
+              onChange={
+                value =>
+                  setForm({
+                    ...form,
+                    locationId:
+                      value ?? ""
                   })
               }
             />

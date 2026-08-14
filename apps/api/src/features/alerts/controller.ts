@@ -229,6 +229,26 @@ const updateRuleSchema =
     }
   );
 
+const alertHistoryQuerySchema =
+  z.object({
+    limit:
+      z.coerce
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .default(100),
+
+    status:
+      z.enum([
+        "ACTIVE",
+        "ACKNOWLEDGED",
+        "RESOLVED"
+      ])
+      .optional()
+  })
+  .strict();
+
 const acknowledgeSchema =
   z.object({
     acknowledgedBy:
@@ -454,6 +474,44 @@ export class AlertController {
         reply,
         await this.service
           .listActiveAlerts()
+      );
+    };
+
+  listAlertHistory =
+    async (
+      request:
+        FastifyRequest<{
+          Querystring: unknown;
+        }>,
+      reply: FastifyReply
+    ): Promise<void> => {
+
+      const parsedQuery =
+        alertHistoryQuerySchema.safeParse(
+          request.query
+        );
+
+      if (!parsedQuery.success) {
+        await badRequest(
+          reply,
+          parsedQuery.error
+            .issues[0]?.message
+            ?? "Invalid alert history query"
+        );
+
+        return;
+      }
+
+      const events =
+        await this.service
+          .listAlertHistory(
+            parsedQuery.data.limit,
+            parsedQuery.data.status
+          );
+
+      await ok(
+        reply,
+        events
       );
     };
 
