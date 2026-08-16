@@ -35,13 +35,25 @@
 * [X] pour les location, pouvoir chosir une icone parmi les MDI icones ou une autre librairie du meme genre. Cette icone devra s'afficher sur l'Inventory, mais aussi la carte des sensors/assets si affectee a la location
 
 * [ ] sur un grpahe history, affichage de la valeur courante de chaque courbe dans la zone de titre pour plus de clarte
+* [ ] ajouter les icones: garage, salle a manger, living room, dressing, laundry
 
 # Run
 * [*] Comment puis-je mettre en place une sauvagarde complete de toutes les donnees afin de pouvoir les restaurer facilement en cas de crash
 
-A ce stade, je pense qu'il faudrait faire un arret de tous le modules ainsi qu un rebuild complet de tous ces modules, sans perte de donnees, afin de voir si ca se construit correctement et surtout si ca se fait correctement sur un autre environnement
+* [ ] A ce stade, je pense qu'il faudrait faire un arret de tous le modules ainsi qu un rebuild complet de tous ces modules, sans perte de donnees, afin de voir si ca se construit correctement et ensuite si ca se fait correctement tenter tout un build sur un autre environnement/machine
 
-* [ ] ajouter les icones: garaga, salle a manger, living room, dressing, laundry
+## Retex rebuild
+
+```txt
+docker compose
+...
+    ports:
+      - "100.64.0.8:${MQTT_PORT:-1883}:1883"
+    Default: 0.0.0.0, sinon .env: MQTT_HOST
+...
+
+
+```
 
 ### Specif
 
