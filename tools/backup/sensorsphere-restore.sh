@@ -249,8 +249,22 @@ else
 fi
 
 log "Preparing clean TimescaleDB storage"
-rm -rf "${DATA_ROOT_ABS}/timescaledb"
 mkdir -p "${DATA_ROOT_ABS}"
+
+docker image inspect "${PROJECT_BACKUP_IMAGE}" \
+  >/dev/null 2>&1 \
+  || fail "Required helper image is not available locally: ${PROJECT_BACKUP_IMAGE}"
+
+docker run \
+  --rm \
+  --user 0:0 \
+  --entrypoint sh \
+  -v "${DATA_ROOT_ABS}:/target" \
+  "${PROJECT_BACKUP_IMAGE}" \
+  -c '
+    set -e
+    rm -rf /target/timescaledb
+  '
 
 log "Starting clean TimescaleDB"
 docker compose up -d "${DB_SERVICE}"
@@ -268,6 +282,34 @@ for _ in $(seq 1 60); do
 done
 
 [[ "${database_ready}" == "true" ]] || fail "TimescaleDB did not become ready"
+
+log "Recreating empty target database before logical restore"
+
+docker compose exec -T "${DB_SERVICE}" \
+  psql \
+    -U "${DB_USER}" \
+    -d postgres \
+    -v ON_ERROR_STOP=1 \
+    -c "
+      SELECT pg_terminate_backend(pid)
+      FROM pg_stat_activity
+      WHERE datname = '${DB_NAME}'
+        AND pid <> pg_backend_pid();
+    "
+
+docker compose exec -T "${DB_SERVICE}" \
+  dropdb \
+    -U "${DB_USER}" \
+    --if-exists \
+    "${DB_NAME}"
+
+docker compose exec -T "${DB_SERVICE}" \
+  createdb \
+    -U "${DB_USER}" \
+    -O "${DB_USER}" \
+    "${DB_NAME}"
+
+log "Empty target database created"
 
 BACKUP_POSTGRES_VERSION="$(manifest_value postgres_version)"
 BACKUP_TIMESCALEDB_VERSION="$(manifest_value timescaledb_version)"

@@ -1,503 +1,478 @@
-# SensorSphere — Backup, Restore & Retention
+# SensorSphere — Backup and Restore
 
-This document describes the backup, verification, retention, scheduling, and restore tooling used by SensorSphere.
+This document describes the SensorSphere backup, verification, retention and
+disaster-recovery procedures.
 
-## Repository layout
+The complete restore procedure has been validated by restoring a SensorSphere
+backup onto a separate machine and a separate Docker Compose instance.
 
-The tooling is versioned with the application:
+---
 
-```text
-tools/
-└── backup/
-    ├── sensorsphere-backup.sh
-    ├── sensorsphere-restore.sh
-    ├── sensorsphere-verify-backup.sh
-    ├── sensorsphere-prune-backups.sh
-    └── systemd/
-        ├── sensorsphere-backup.service
-        └── sensorsphere-backup.timer
+## 1. Components covered by the backup
 
-docs/
-└── BACKUP-RESTORE.md
-```
+A SensorSphere backup contains:
 
-The real scripts remain in the Git repository. Symbolic links under `/usr/local/sbin` make them available system-wide:
+- PostgreSQL / TimescaleDB logical database dump
+- PostgreSQL global objects
+- SensorSphere persistent application data
+- Mosquitto persistent data
+- SensorSphere project files
+- backup metadata and version information
+- SHA256 checksums
 
-```bash
-sudo ln -sfn \
-  "$(pwd)/tools/backup/sensorsphere-backup.sh" \
-  /usr/local/sbin/sensorsphere-backup
+A typical backup directory contains:
 
-sudo ln -sfn \
-  "$(pwd)/tools/backup/sensorsphere-restore.sh" \
-  /usr/local/sbin/sensorsphere-restore
+    database.dump
+    database-globals.sql
+    app-data.tar.gz
+    mosquitto.tar.gz
+    project.tar.gz
+    manifest.txt
+    SHA256SUMS
 
-sudo ln -sfn \
-  "$(pwd)/tools/backup/sensorsphere-verify-backup.sh" \
-  /usr/local/sbin/sensorsphere-verify-backup
+The current backup format is version 7.
 
-sudo ln -sfn \
-  "$(pwd)/tools/backup/sensorsphere-prune-backups.sh" \
-  /usr/local/sbin/sensorsphere-prune-backups
-```
+---
 
-## Configuration
+## 2. Backup location
 
-The scripts determine the SensorSphere repository root from their own physical location. They therefore do not depend on a hard-coded user home directory.
+Default backup root:
 
-Configuration priority is:
+    /var/backups/sensorsphere
 
-1. environment variable explicitly supplied to the script;
-2. value from the SensorSphere `.env`;
-3. built-in default.
+Each backup is stored in a timestamped directory:
 
-Database settings normally come from:
+    /var/backups/sensorsphere/YYYY-MM-DD_HHMMSS
 
-```text
-POSTGRES_DB
-POSTGRES_USER
-POSTGRES_PASSWORD
-```
+The backup root can be overridden with:
 
-The default TimescaleDB Docker Compose service is:
+    BACKUP_ROOT
 
-```text
-timescaledb
-```
+---
 
-The default backup root is:
+## 3. Configuration
 
-```text
-/var/backups/sensorsphere
-```
+The backup and restore tools resolve configuration in the following order:
 
-Initial setup:
+1. Environment variable explicitly supplied by the caller
+2. SensorSphere `.env`
+3. Built-in default
 
-```bash
-sudo mkdir -p /var/backups/sensorsphere
-sudo chown ubuntu:ubuntu /var/backups/sensorsphere
-sudo chmod 750 /var/backups/sensorsphere
-```
+Important variables include:
 
-## Backup contents
+    COMPOSE_PROJECT_NAME
+    DATA_ROOT
+    POSTGRES_DB
+    POSTGRES_USER
+    DB_SERVICE
+    DB_NAME
+    DB_USER
+    BACKUP_ROOT
+    PROJECT_BACKUP_IMAGE
 
-Each successful backup is stored in a timestamped directory:
+`POSTGRES_PASSWORD` must always be explicitly configured in `.env`.
 
-```text
-/var/backups/sensorsphere/YYYY-MM-DD_HHMMSS/
-```
+The default persistent data root is:
+
+    DATA_ROOT=./data
+
+Using a different `DATA_ROOT` allows multiple SensorSphere installations to
+coexist cleanly on the same machine.
 
 Example:
 
-```text
-2026-08-16_133206/
-├── database.dump
-├── database-globals.sql
-├── app-data.tar.gz
-├── mosquitto.tar.gz
-├── project.tar.gz
-├── manifest.txt
-└── SHA256SUMS
-```
+    COMPOSE_PROJECT_NAME=sensorsphere-test
+    DATA_ROOT=./data-test
 
-### PostgreSQL / TimescaleDB
+---
 
-`database.dump` is a PostgreSQL custom-format logical dump created with `pg_dump -Fc`.
-
-`database-globals.sql` contains PostgreSQL global objects produced by `pg_dumpall --globals-only`.
-
-The live TimescaleDB data directory is not copied into the project archive.
-
-Warnings from `pg_dump` about circular foreign-key constraints in TimescaleDB internal tables may appear. The backup script validates that the resulting dump catalogue is readable with `pg_restore -l`.
-
-### Application persistent data
-
-`app-data.tar.gz` contains:
-
-```text
-data/app/
-```
-
-This includes persistent API data such as:
-
-```text
-data/app/history-config.json
-```
-
-### Mosquitto
-
-`mosquitto.tar.gz` contains Mosquitto configuration and persistent data.
-
-The archive is created from inside the Mosquitto container instead of reading `infrastructure/mosquitto/data` directly from the host. This avoids UID/permission problems with files such as:
-
-```text
-mosquitto.db
-```
-
-### SensorSphere project
-
-`project.tar.gz` contains the application source code, infrastructure configuration, `.env`, ESPHome source configuration, tools, documentation, and other files needed to rebuild SensorSphere.
-
-The following generated, runtime, or externally versioned content is intentionally excluded:
-
-```text
-.git/
-.pnpm-store/
-node_modules/
-esphome/.esphome/
-dev/bin/
-*/.backup/
-tmp/
-
-infrastructure/timescaledb/data/
-infrastructure/mosquitto/data/
-data/app/
-```
-
-Nested Git repositories are excluded as well.
-
-The project archive is created from a temporary root container with the repository mounted read-only. This allows the backup to read files created by container UIDs without changing host permissions.
-
-### Manifest and checksums
-
-`manifest.txt` records information including:
-
-```text
-backup_version
-timestamp
-hostname
-project_dir
-db_service
-db_name
-db_user
-postgres_version
-timescaledb_version
-git_commit
-git_branch
-git_status
-docker_compose_images
-```
-
-`SHA256SUMS` is generated for all main backup files.
-
-## Creating a backup
+## 4. Creating a backup
 
 Run:
 
-```bash
-sensorsphere-backup
-```
+    ./tools/backup/sensorsphere-backup.sh
 
-or:
+The script:
 
-```bash
-./tools/backup/sensorsphere-backup.sh
-```
+1. validates the Docker Compose configuration
+2. checks PostgreSQL availability
+3. creates the PostgreSQL / TimescaleDB dump
+4. validates the dump catalog
+5. saves PostgreSQL globals
+6. archives application persistent data
+7. archives Mosquitto persistent data
+8. archives the SensorSphere project
+9. validates project exclusions
+10. creates the manifest
+11. generates SHA256 checksums
+12. verifies the checksums
 
-A successful backup ends with a summary similar to:
+A successful run ends with:
 
-```text
-Backup completed successfully
-Backup directory: /var/backups/sensorsphere/...
-Total backup size: ...
-Project archive size: ...
-Database dump size: ...
-```
+    Backup completed successfully
 
-## Verifying a backup
+---
 
-Verify the newest backup:
+## 5. Project archive exclusions
 
-```bash
-sensorsphere-verify-backup
-```
+Runtime, generated and rebuildable data are deliberately excluded from
+`project.tar.gz`.
 
-Verify a specific backup:
+Excluded content includes:
 
-```bash
-sensorsphere-verify-backup \
-  /var/backups/sensorsphere/2026-08-16_133206
-```
+    .git
+    .pnpm-store
+    node_modules
+    esphome/.esphome
+    dev/bin
+    .backup
+    tmp
+    DATA_ROOT
 
-The verifier checks:
+The actual TimescaleDB, Mosquitto and application data are backed up separately.
 
-- required backup files;
-- SHA-256 checksums;
-- gzip/tar archive integrity;
-- PostgreSQL dump catalogue readability;
-- Mosquitto backup content;
-- essential SensorSphere project files;
-- backup manifest;
-- exclusion of generated/runtime directories from `project.tar.gz`.
+This keeps `project.tar.gz` small and avoids storing content that can be rebuilt.
 
-A backup with verification errors must not be used as a validated recovery point.
+---
 
-## Retention policy
-
-SensorSphere uses a simple Grandfather-Father-Son style retention policy.
-
-Defaults:
-
-```text
-7 daily backups
-4 weekly backups
-6 monthly backups
-```
-
-The retained set is the union of:
-
-- the newest complete backup for each of the most recent 7 calendar days represented in the backup set;
-- the newest complete backup for each of the most recent 4 ISO weeks represented in the backup set;
-- the newest complete backup for each of the most recent 6 calendar months represented in the backup set.
-
-The newest complete backup is always kept.
-
-The retention script only considers directories matching:
-
-```text
-YYYY-MM-DD_HHMMSS
-```
-
-and only treats a directory as complete when the expected backup markers are present. Incomplete backups are ignored and are not automatically deleted.
-
-### Preview retention
-
-The default mode is safe and does not delete anything:
-
-```bash
-sensorsphere-prune-backups
-```
-
-or explicitly:
-
-```bash
-sensorsphere-prune-backups --dry-run
-```
-
-The script prints each complete backup with either:
-
-```text
-KEEP
-DELETE
-```
-
-and the reason for retention.
-
-### Apply retention
-
-After reviewing the dry run:
-
-```bash
-sensorsphere-prune-backups --apply
-```
-
-### Custom retention
-
-The following values may be placed in `.env`:
-
-```bash
-RETENTION_DAILY=7
-RETENTION_WEEKLY=4
-RETENTION_MONTHLY=6
-```
-
-They can also be overridden for a single invocation:
-
-```bash
-RETENTION_DAILY=14 \
-RETENTION_WEEKLY=8 \
-RETENTION_MONTHLY=12 \
-sensorsphere-prune-backups --dry-run
-```
-
-## Daily systemd scheduling
-
-The backup is scheduled with:
-
-```text
-tools/backup/systemd/sensorsphere-backup.service
-tools/backup/systemd/sensorsphere-backup.timer
-```
-
-The timer runs daily at:
-
-```text
-02:00
-```
-
-with:
-
-```ini
-Persistent=true
-```
-
-If the host is powered off at the scheduled time, systemd runs the missed timer after the host starts.
-
-The service executes the workflow in this order:
-
-```text
-1. sensorsphere-backup
-2. sensorsphere-verify-backup
-3. sensorsphere-prune-backups --apply
-```
-
-Retention therefore runs only after the backup command and verification step have succeeded.
-
-A `flock` lock prevents concurrent backup executions.
-
-### Install systemd units
-
-Create symbolic links:
-
-```bash
-sudo ln -sfn \
-  /home/ubuntu/sensorsphere/tools/backup/systemd/sensorsphere-backup.service \
-  /etc/systemd/system/sensorsphere-backup.service
-
-sudo ln -sfn \
-  /home/ubuntu/sensorsphere/tools/backup/systemd/sensorsphere-backup.timer \
-  /etc/systemd/system/sensorsphere-backup.timer
-```
-
-Reload systemd:
-
-```bash
-sudo systemctl daemon-reload
-```
-
-Validate the units:
-
-```bash
-systemd-analyze verify \
-  /etc/systemd/system/sensorsphere-backup.service \
-  /etc/systemd/system/sensorsphere-backup.timer
-```
-
-Test the complete service manually:
-
-```bash
-sudo systemctl start sensorsphere-backup.service
-```
-
-Inspect the result:
-
-```bash
-systemctl status sensorsphere-backup.service
-```
-
-Logs:
-
-```bash
-journalctl \
-  -u sensorsphere-backup.service \
-  --since "10 minutes ago" \
-  --no-pager
-```
-
-Enable the daily timer:
-
-```bash
-sudo systemctl enable --now sensorsphere-backup.timer
-```
-
-Check the next execution:
-
-```bash
-systemctl list-timers sensorsphere-backup.timer
-```
-
-## Restoring SensorSphere
-
-Before restoring, verify the selected backup:
-
-```bash
-sensorsphere-verify-backup \
-  /var/backups/sensorsphere/<backup>
-```
-
-Then run:
-
-```bash
-sensorsphere-restore \
-  /var/backups/sensorsphere/<backup>
-```
-
-The restore operation is destructive and can replace the current SensorSphere data. Review the backup and restore target before confirming the restore.
-
-The restore process handles the project files, application persistent data, Mosquitto persistent data, and the logical TimescaleDB restore.
-
-## Useful commands
-
-List backups:
-
-```bash
-ls -lht /var/backups/sensorsphere
-```
-
-Show backup sizes:
-
-```bash
-du -sh /var/backups/sensorsphere/*
-```
+## 6. Verifying a backup
 
 Verify the latest backup:
 
-```bash
-sensorsphere-verify-backup
-```
+    ./tools/backup/sensorsphere-verify-backup.sh
 
-Preview retention:
+Verify a specific backup:
 
-```bash
-sensorsphere-prune-backups
-```
+    ./tools/backup/sensorsphere-verify-backup.sh \
+      /var/backups/sensorsphere/YYYY-MM-DD_HHMMSS
 
-Apply retention:
+The verifier checks:
 
-```bash
-sensorsphere-prune-backups --apply
-```
+- required files
+- SHA256 checksums
+- TAR archive integrity
+- manifest
+- project exclusions
+- essential project content
+- application persistent data
+- Mosquitto data
+- PostgreSQL dump catalog
+- backup sizes
 
-Inspect the latest backup manifest:
+A valid backup ends with:
 
-```bash
-LATEST_BACKUP="$(
-  find /var/backups/sensorsphere \
-    -mindepth 1 \
-    -maxdepth 1 \
-    -type d \
-  | sort \
-  | tail -1
-)"
+    Backup verification PASSED
 
-cat "${LATEST_BACKUP}/manifest.txt"
-```
+---
 
-Check scheduled execution:
+## 7. Restoring SensorSphere
 
-```bash
-systemctl list-timers sensorsphere-backup.timer
-```
+Restore with:
 
-Inspect recent automatic backup logs:
+    ./tools/backup/sensorsphere-restore.sh \
+      /var/backups/sensorsphere/YYYY-MM-DD_HHMMSS
 
-```bash
-journalctl \
-  -u sensorsphere-backup.service \
-  -n 200 \
-  --no-pager
-```
+The restore is destructive and requires explicit confirmation:
 
-## Off-host backups
+    Type RESTORE to continue:
 
-Backups under `/var/backups/sensorsphere` protect against application/database failures and accidental changes, but they do not protect against loss of the VPS, VM, filesystem, or host.
+Enter:
 
-At least one additional copy should be stored outside the SensorSphere host, for example on:
+    RESTORE
 
-```text
-NAS
-another server
-object/cloud storage
-```
+---
 
-Off-host replication should be added independently of the local retention policy.
+## 8. Restore safety copy
+
+Before modifying the current installation, the restore script renames it to:
+
+    <project>.pre-restore-YYYYMMDD_HHMMSS
+
+Do not remove this directory until the restored installation has been fully
+validated.
+
+---
+
+## 9. Important PROJECT_DIR rule
+
+Always run a restore against the intended canonical project directory.
+
+Example:
+
+    PROJECT_DIR=/home/falcon/tests/sensorsphere \
+      ./tools/backup/sensorsphere-restore.sh \
+      /path/to/backup
+
+Do not use a `.pre-restore-*` directory as `PROJECT_DIR`.
+
+Before confirming a restore, verify the displayed values:
+
+    Target project
+    Target Compose project
+    Target DATA_ROOT
+
+They must correspond to the intended target installation.
+
+---
+
+## 10. Target environment preservation
+
+When restoring onto another SensorSphere instance, the target `.env` is
+preserved.
+
+This allows the restored instance to keep target-specific settings such as:
+
+    COMPOSE_PROJECT_NAME
+    DATA_ROOT
+    WEB_PORT
+    MQTT_PORT
+    MQTT_BIND_ADDRESS
+
+This is particularly important when restoring onto a test or disaster-recovery
+machine.
+
+---
+
+## 11. TimescaleDB restore
+
+The restore uses a logical PostgreSQL / TimescaleDB restore.
+
+The procedure is:
+
+    stop SensorSphere
+            |
+            v
+    preserve target .env
+            |
+            v
+    restore project
+            |
+            v
+    restore application data
+            |
+            v
+    restore Mosquitto data
+            |
+            v
+    remove TimescaleDB persistent storage
+            |
+            v
+    start clean TimescaleDB
+            |
+            v
+    wait for PostgreSQL
+            |
+            v
+    recreate empty application database
+            |
+            v
+    enable TimescaleDB
+            |
+            v
+    timescaledb_pre_restore()
+            |
+            v
+    pg_restore
+            |
+            v
+    timescaledb_post_restore()
+            |
+            v
+    ANALYZE
+            |
+            v
+    start complete SensorSphere stack
+
+The database must be empty before `pg_restore`.
+
+Otherwise errors such as:
+
+    relation "measurements" already exists
+
+can occur.
+
+---
+
+## 12. TimescaleDB messages during restore
+
+Messages such as:
+
+    terminating background worker ... due to administrator command
+    database system is shutting down
+    database "<database>" does not exist
+
+may temporarily appear while the restore deliberately stops PostgreSQL or
+recreates the application database.
+
+They are not necessarily restore failures.
+
+Always check for new errors after the restore has completed.
+
+---
+
+## 13. Post-restore validation
+
+Check all containers:
+
+    docker compose ps -a
+
+The persistent services should be running and TimescaleDB should be healthy.
+
+The migration container should terminate successfully.
+
+---
+
+## 14. Validate database migrations
+
+Run:
+
+    docker compose run --rm migrations
+
+On an already restored and fully migrated database, all migrations should be
+skipped and none should be applied.
+
+Also inspect the migration metadata when necessary:
+
+    docker compose exec -T timescaledb \
+      psql \
+        -U "${POSTGRES_USER}" \
+        -d "${POSTGRES_DB}" \
+        -c "
+          SELECT version, filename
+          FROM public.schema_migrations
+          ORDER BY version;
+        "
+
+---
+
+## 15. Validate restored data
+
+Example database checks:
+
+    docker compose exec -T timescaledb \
+      psql \
+        -U "${POSTGRES_USER}" \
+        -d "${POSTGRES_DB}" \
+        -c "
+          SELECT 'assets' AS table_name, count(*) FROM assets
+          UNION ALL
+          SELECT 'sensors', count(*) FROM sensors
+          UNION ALL
+          SELECT 'observations', count(*) FROM observations
+          UNION ALL
+          SELECT 'alert_rules', count(*) FROM alert_rules;
+        "
+
+Persistent files can also be checked under:
+
+    ${DATA_ROOT}/app
+    ${DATA_ROOT}/mosquitto
+    ${DATA_ROOT}/timescaledb
+
+---
+
+## 16. Check logs after restore
+
+Check recent errors:
+
+    docker compose logs --since 2m --no-color \
+      | grep -Ei 'error|fatal|panic|exception|failed' \
+      || true
+
+Use a short time window after the restore so expected shutdown messages from
+the restore itself are not confused with current failures.
+
+---
+
+## 17. End-to-end validation
+
+A complete disaster-recovery test should verify:
+
+    MQTT publication
+          |
+          v
+    Mosquitto
+          |
+          v
+    ingestion-service
+          |
+          v
+    TimescaleDB
+          |
+          v
+    API
+          |
+          v
+    Frontend
+
+Verify that:
+
+- MQTT accepts publications
+- ingestion-service receives measurements
+- observations are stored
+- API endpoints return restored data
+- frontend displays the expected inventory and readings
+
+---
+
+## 18. Scheduled backups
+
+SensorSphere backups can be executed automatically using the systemd backup
+service and timer.
+
+Check the timer:
+
+    systemctl status sensorsphere-backup.timer
+
+List scheduled executions:
+
+    systemctl list-timers sensorsphere-backup.timer
+
+Check backup service logs:
+
+    journalctl -u sensorsphere-backup.service
+
+Manually trigger the scheduled backup service:
+
+    sudo systemctl start sensorsphere-backup.service
+
+Then verify the latest backup:
+
+    ./tools/backup/sensorsphere-verify-backup.sh
+
+---
+
+## 19. Backup retention
+
+Old backups are automatically removed according to the configured retention
+policy.
+
+Always ensure that at least one recent backup has successfully passed:
+
+    Backup verification PASSED
+
+before relying on automatic retention.
+
+---
+
+## 20. Disaster-recovery validation status
+
+The SensorSphere backup/restore procedure has been tested with:
+
+- a real SensorSphere backup
+- transfer to another machine
+- a different project directory
+- a different Docker Compose project name
+- a different `DATA_ROOT`
+- PostgreSQL / TimescaleDB restoration
+- database migrations
+- application persistent data
+- Mosquitto persistent data
+- complete Docker Compose startup
+- frontend validation
+
+The restored installation successfully started and the application frontend
+was validated.
+
+This procedure therefore provides the baseline SensorSphere disaster-recovery
+workflow.
