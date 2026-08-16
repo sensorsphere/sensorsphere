@@ -28,6 +28,7 @@ import {
   deleteLocation,
   getAssets,
   getLocations,
+  getSensors,
   moveLocation,
   updateAssetLocation,
   updateLocation
@@ -36,6 +37,7 @@ import {
 import type {
   Asset,
   CreateLocationInput,
+  Sensor,
   Location,
   LocationType,
   UpdateLocationInput
@@ -45,6 +47,7 @@ interface LocationNodeProps {
   location: Location;
   allLocations: Location[];
   assets: Asset[];
+  sensorsByUid: Map<string, Sensor>;
   onDropAsset:
     (
       assetId: string,
@@ -57,10 +60,23 @@ interface LocationNodeProps {
     ) => void;
 }
 
+function assetIsEnabled(
+  asset: Asset,
+  sensorsByUid: Map<string, Sensor>
+): boolean {
+
+  return asset.sensor
+    ? sensorsByUid.get(
+        asset.sensor.uid
+      )?.enabled ?? asset.enabled
+    : asset.enabled;
+}
+
 function LocationNode({
   location,
   allLocations,
   assets,
+  sensorsByUid,
   onDropAsset,
   onEditLocation
 }: LocationNodeProps) {
@@ -90,16 +106,15 @@ function LocationNode({
       withBorder
       radius="md"
       padding="md"
-      bg={
-        isDragOver
-          ? "blue.1"
-          : "blue.0"
-      }
       style={{
+        background:
+          isDragOver
+            ? "var(--ss-active-bg)"
+            : "var(--ss-card-bg)",
         borderColor:
           isDragOver
-            ? "var(--mantine-color-blue-6)"
-            : "var(--mantine-color-blue-3)",
+            ? "var(--ss-accent)"
+            : "var(--ss-border)",
         transition:
           "background-color 120ms ease, border-color 120ms ease"
       }}
@@ -229,10 +244,11 @@ function LocationNode({
               key={asset.id}
               withBorder
               padding="xs"
-              bg="gray.0"
               style={{
+                background:
+                  "var(--ss-card-bg)",
                 borderColor:
-                  "var(--mantine-color-gray-4)",
+                  "var(--ss-border)",
                 cursor:
                   "grab"
               }}
@@ -263,13 +279,45 @@ function LocationNode({
                   }
                 </Text>
 
-                <Badge
-                  size="xs"
-                  variant="light"
-                  color="gray"
-                >
-                  Asset
-                </Badge>
+                <Group gap={4}>
+                  <Badge
+                    size="xs"
+                    variant="light"
+                    color={
+                      asset.health.status ===
+                        "online"
+                        ? "green"
+                        : asset.health.status ===
+                            "warning"
+                          ? "yellow"
+                          : "red"
+                    }
+                  >
+                    {asset.health.status}
+                  </Badge>
+
+                  <Badge
+                    size="xs"
+                    variant="light"
+                    color={
+                      assetIsEnabled(
+                        asset,
+                        sensorsByUid
+                      )
+                        ? "green"
+                        : "orange"
+                    }
+                  >
+                    {
+                      assetIsEnabled(
+                        asset,
+                        sensorsByUid
+                      )
+                        ? "Enabled"
+                        : "Disabled"
+                    }
+                  </Badge>
+                </Group>
               </Group>
 
               <Text
@@ -296,6 +344,9 @@ function LocationNode({
                     allLocations
                   }
                   assets={assets}
+                  sensorsByUid={
+                    sensorsByUid
+                  }
                   onDropAsset={
                     onDropAsset
                   }
@@ -405,6 +456,15 @@ export function InventoryPanel() {
 
       queryFn:
         getLocations
+    });
+
+  const sensorsQuery =
+    useQuery({
+      queryKey:
+        ["sensors"],
+
+      queryFn:
+        getSensors
     });
 
   const moveAssetMutation =
@@ -549,7 +609,8 @@ export function InventoryPanel() {
 
   if (
     assetsQuery.isLoading ||
-    locationsQuery.isLoading
+    locationsQuery.isLoading ||
+    sensorsQuery.isLoading
   ) {
     return (
       <Text>
@@ -560,7 +621,8 @@ export function InventoryPanel() {
 
   if (
     assetsQuery.isError ||
-    locationsQuery.isError
+    locationsQuery.isError ||
+    sensorsQuery.isError
   ) {
     return (
       <Text c="red">
@@ -574,6 +636,17 @@ export function InventoryPanel() {
 
   const locations =
     locationsQuery.data ?? [];
+
+  const sensors =
+    sensorsQuery.data ?? [];
+
+  const sensorsByUid =
+    new Map<string, Sensor>(
+      sensors.map(sensor => [
+        sensor.uid,
+        sensor
+      ])
+    );
 
   const normalizedSearch =
     search
@@ -655,8 +728,8 @@ export function InventoryPanel() {
           (
             statusFilter ===
             "enabled"
-              ? asset.enabled
-              : !asset.enabled
+              ? assetIsEnabled(asset, sensorsByUid)
+              : !assetIsEnabled(asset, sensorsByUid)
           )
       )
       .filter(
@@ -899,10 +972,11 @@ export function InventoryPanel() {
           withBorder
           radius="md"
           padding="md"
-          bg="yellow.0"
           style={{
+            background:
+              "var(--ss-card-bg)",
             borderColor:
-              "var(--mantine-color-yellow-4)"
+              "var(--ss-border)"
           }}
         >
           <Stack gap="sm">
@@ -924,10 +998,11 @@ export function InventoryPanel() {
                     key={asset.id}
                     withBorder
                     padding="xs"
-                    bg="gray.0"
                     style={{
+                      background:
+                        "var(--ss-card-bg)",
                       borderColor:
-                        "var(--mantine-color-gray-4)",
+                        "var(--ss-border)",
                       cursor:
                         "grab"
                     }}
@@ -958,13 +1033,45 @@ export function InventoryPanel() {
                         }
                       </Text>
 
-                      <Badge
-                        size="xs"
-                        variant="light"
-                        color="gray"
-                      >
-                        Asset
-                      </Badge>
+                      <Group gap={4}>
+                        <Badge
+                          size="xs"
+                          variant="light"
+                          color={
+                            asset.health.status ===
+                              "online"
+                              ? "green"
+                              : asset.health.status ===
+                                  "warning"
+                                ? "yellow"
+                                : "red"
+                          }
+                        >
+                          {asset.health.status}
+                        </Badge>
+
+                        <Badge
+                          size="xs"
+                          variant="light"
+                          color={
+                            assetIsEnabled(
+                              asset,
+                              sensorsByUid
+                            )
+                              ? "green"
+                              : "orange"
+                          }
+                        >
+                          {
+                            assetIsEnabled(
+                              asset,
+                              sensorsByUid
+                            )
+                              ? "Enabled"
+                              : "Disabled"
+                          }
+                        </Badge>
+                      </Group>
                     </Group>
 
                     <Text
@@ -997,6 +1104,9 @@ export function InventoryPanel() {
                   location={location}
                   allLocations={locations}
                   assets={filteredAssets}
+                  sensorsByUid={
+                    sensorsByUid
+                  }
                   onDropAsset={
                     (
                       assetId,
@@ -1047,6 +1157,7 @@ export function InventoryPanel() {
                   <Table.Th>Location</Table.Th>
                   <Table.Th>Type</Table.Th>
                   <Table.Th>Protocol</Table.Th>
+                  <Table.Th>Health</Table.Th>
                   <Table.Th>Status</Table.Th>
                 </Table.Tr>
               </Table.Thead>
@@ -1093,14 +1204,31 @@ export function InventoryPanel() {
                       <Table.Td>
                         <Badge
                           color={
-                            asset.enabled
+                            asset.health.status ===
+                              "online"
                               ? "green"
-                              : "gray"
+                              : asset.health.status ===
+                                  "warning"
+                                ? "yellow"
+                                : "red"
+                          }
+                          variant="light"
+                        >
+                          {asset.health.status}
+                        </Badge>
+                      </Table.Td>
+
+                      <Table.Td>
+                        <Badge
+                          color={
+                            assetIsEnabled(asset, sensorsByUid)
+                              ? "green"
+                              : "orange"
                           }
                           variant="light"
                         >
                           {
-                            asset.enabled
+                            assetIsEnabled(asset, sensorsByUid)
                               ? "Enabled"
                               : "Disabled"
                           }

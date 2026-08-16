@@ -54,6 +54,13 @@ interface HistoryTabConfig {
   graphs: HistoryGraphConfig[];
 }
 
+interface HistoryConfig {
+  version: 1;
+  activeTabId: string;
+  refreshIntervalMs: number;
+  tabs: HistoryTabConfig[];
+}
+
 const PERIODS = [
   { label: "1 h", value: "1" },
   { label: "2 h", value: "2" },
@@ -170,6 +177,32 @@ function isHistoryTabs(
           )
         );
       }
+    )
+  );
+}
+
+function isHistoryConfig(
+  value: unknown
+): value is HistoryConfig {
+
+  if (
+    typeof value !== "object" ||
+    value === null
+  ) {
+    return false;
+  }
+
+  const config =
+    value as Partial<HistoryConfig>;
+
+  return (
+    config.version === 1 &&
+    typeof config.activeTabId === "string" &&
+    isRefreshInterval(
+      config.refreshIntervalMs
+    ) &&
+    isHistoryTabs(
+      config.tabs
     )
   );
 }
@@ -609,6 +642,23 @@ export function HistoryPanel() {
     );
 
   const [
+    historyConfigReady,
+    setHistoryConfigReady
+  ] = React.useState(false);
+
+  const [
+    historyConfigError,
+    setHistoryConfigError
+  ] = React.useState<string | null>(
+    null
+  );
+
+  const importInputRef =
+    React.useRef<HTMLInputElement>(
+      null
+    );
+
+  const [
     draggedTabId,
     setDraggedTabId
   ] =
@@ -704,6 +754,154 @@ export function HistoryPanel() {
 
   React.useEffect(
     () => {
+      let cancelled = false;
+
+      const load = async (): Promise<void> => {
+        try {
+          const response =
+            await fetch(
+              "/api/v1/history-config"
+            );
+
+          if (response.ok) {
+            const config: unknown =
+              await response.json();
+
+            if (!isHistoryConfig(config)) {
+              throw new Error(
+                "Backend History configuration is invalid."
+              );
+            }
+
+            if (!cancelled) {
+              setTabs(config.tabs);
+              setActiveTabId(
+                config.activeTabId
+              );
+              setRefreshIntervalMs(
+                config.refreshIntervalMs
+              );
+            }
+          } else if (response.status === 404) {
+            const localConfig: HistoryConfig = {
+              version: 1,
+              activeTabId,
+              refreshIntervalMs,
+              tabs
+            };
+
+            const saveResponse =
+              await fetch(
+                "/api/v1/history-config",
+                {
+                  method: "PUT",
+                  headers: {
+                    "Content-Type":
+                      "application/json"
+                  },
+                  body: JSON.stringify(
+                    localConfig
+                  )
+                }
+              );
+
+            if (!saveResponse.ok) {
+              throw new Error(
+                "Unable to migrate local History configuration to the backend."
+              );
+            }
+          } else {
+            throw new Error(
+              `Unable to load History configuration (${response.status}).`
+            );
+          }
+        } catch (error) {
+          if (!cancelled) {
+            setHistoryConfigError(
+              error instanceof Error
+                ? error.message
+                : "Unable to load History configuration."
+            );
+          }
+        } finally {
+          if (!cancelled) {
+            setHistoryConfigReady(true);
+          }
+        }
+      };
+
+      void load();
+
+      return () => {
+        cancelled = true;
+      };
+    }, []);
+
+  React.useEffect(
+    () => {
+      if (!historyConfigReady) {
+        return;
+      }
+
+      const timeout =
+        window.setTimeout(
+          () => {
+            const config: HistoryConfig = {
+              version: 1,
+              activeTabId,
+              refreshIntervalMs,
+              tabs
+            };
+
+            void fetch(
+              "/api/v1/history-config",
+              {
+                method: "PUT",
+                headers: {
+                  "Content-Type":
+                    "application/json"
+                },
+                body: JSON.stringify(
+                  config
+                )
+              }
+            )
+              .then(response => {
+                if (!response.ok) {
+                  throw new Error(
+                    `Unable to save History configuration (${response.status}).`
+                  );
+                }
+
+                setHistoryConfigError(
+                  null
+                );
+              })
+              .catch(error => {
+                setHistoryConfigError(
+                  error instanceof Error
+                    ? error.message
+                    : "Unable to save History configuration."
+                );
+              });
+          },
+          500
+        );
+
+      return () =>
+        window.clearTimeout(
+          timeout
+        );
+    }, [
+      activeTabId,
+      historyConfigReady,
+      refreshIntervalMs,
+      tabs
+    ]
+  );
+
+  React.useEffect(
+    () => {
       if (
         !tabs.some(
           tab =>
@@ -725,6 +923,7 @@ export function HistoryPanel() {
   React.useEffect(
     () => {
       if (
+        historyConfigReady &&
         tabs.length === 1 &&
         tabs[0].id === "history-tab-default" &&
         tabs[0].graphs.length === 0
@@ -756,6 +955,7 @@ export function HistoryPanel() {
       }
     },
     [
+      historyConfigReady,
       setTabs,
       tabs
     ]
@@ -764,6 +964,7 @@ export function HistoryPanel() {
   React.useEffect(
     () => {
       if (
+        historyConfigReady &&
         graphs.length === 0 &&
         (assetsQuery.data?.length ?? 0) > 0
       ) {
@@ -797,6 +998,7 @@ export function HistoryPanel() {
     }, [
       assetsQuery.data,
       graphs.length,
+      historyConfigReady,
       setGraphs
     ]
   );
@@ -818,6 +1020,81 @@ export function HistoryPanel() {
 
   const assets =
     assetsQuery.data ?? [];
+
+  const exportHistoryConfig =
+    (): void => {
+      const config: HistoryConfig = {
+        version: 1,
+        activeTabId,
+        refreshIntervalMs,
+        tabs
+      };
+
+      const blob =
+        new Blob(
+          [
+            `${JSON.stringify(config, null, 2)}\n`
+          ],
+          {
+            type: "application/json"
+          }
+        );
+
+      const url =
+        URL.createObjectURL(blob);
+
+      const link =
+        document.createElement("a");
+
+      link.href = url;
+      link.download =
+        "sensorsphere-history-config.json";
+      link.click();
+
+      URL.revokeObjectURL(url);
+    };
+
+  const importHistoryConfig =
+    async (
+      event: React.ChangeEvent<HTMLInputElement>
+    ): Promise<void> => {
+      const file =
+        event.currentTarget.files?.[0];
+
+      event.currentTarget.value = "";
+
+      if (!file) {
+        return;
+      }
+
+      try {
+        const config: unknown =
+          JSON.parse(
+            await file.text()
+          );
+
+        if (!isHistoryConfig(config)) {
+          throw new Error(
+            "Invalid SensorSphere History JSON file."
+          );
+        }
+
+        setTabs(config.tabs);
+        setActiveTabId(
+          config.activeTabId
+        );
+        setRefreshIntervalMs(
+          config.refreshIntervalMs
+        );
+        setHistoryConfigError(null);
+      } catch (error) {
+        setHistoryConfigError(
+          error instanceof Error
+            ? error.message
+            : "Unable to import History configuration."
+        );
+      }
+    };
 
   const addTab =
     (): void => {
@@ -1210,6 +1487,28 @@ export function HistoryPanel() {
 
       </Group>
 
+      {historyConfigError && (
+        <Alert
+          color="red"
+          title="History configuration"
+        >
+          {historyConfigError}
+        </Alert>
+      )}
+
+      <input
+        ref={importInputRef}
+        type="file"
+        accept="application/json,.json"
+        hidden
+        onChange={
+          event =>
+            void importHistoryConfig(
+              event
+            )
+        }
+      />
+
       <Group
         justify="space-between"
         align="flex-end"
@@ -1227,6 +1526,25 @@ export function HistoryPanel() {
           gap="sm"
           align="flex-end"
         >
+          <Button
+            variant="default"
+            onClick={
+              () =>
+                importInputRef.current?.click()
+            }
+          >
+            Import JSON
+          </Button>
+
+          <Button
+            variant="default"
+            onClick={
+              exportHistoryConfig
+            }
+          >
+            Export JSON
+          </Button>
+
           <Select
             label="Refresh"
             value={

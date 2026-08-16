@@ -425,6 +425,28 @@ function Dashboard() {
     );
 
   const [
+    assetEnabledFilter,
+    setAssetEnabledFilter
+  ] =
+    usePersistentState<
+      "all"
+      | "enabled"
+      | "disabled"
+    >(
+      "assets.enabled",
+      "all",
+      (
+        value
+      ): value is
+        | "all"
+        | "enabled"
+        | "disabled" =>
+          value === "all" ||
+          value === "enabled" ||
+          value === "disabled"
+    );
+
+  const [
     assetLocationFilter,
     setAssetLocationFilter
   ] =
@@ -466,6 +488,18 @@ function Dashboard() {
       ): value is string =>
         typeof value ===
         "string"
+    );
+
+  const [
+    currentReadingLocation,
+    setCurrentReadingLocation
+  ] =
+    usePersistentState<string | null>(
+      "dashboard.currentReadings.location",
+      null,
+      (value): value is string | null =>
+        value === null ||
+        typeof value === "string"
     );
 
   const sensorsQuery =
@@ -618,10 +652,25 @@ function Dashboard() {
   const sensors =
     sensorsQuery.data ?? [];
 
+  const sensorsByUid =
+    new Map(
+      sensors.map(sensor => [
+        sensor.uid,
+        sensor
+      ])
+    );
+
+  const isAssetEnabled =
+    (asset: Asset): boolean =>
+      asset.sensor
+        ? sensorsByUid.get(
+            asset.sensor.uid
+          )?.enabled ?? asset.enabled
+        : asset.enabled;
+
   const enabledAssets =
     assets.filter(
-      asset =>
-        asset.enabled
+      isAssetEnabled
     ).length;
 
   const onlineAssets =
@@ -645,30 +694,10 @@ function Dashboard() {
         "offline"
     );
 
-  const healthPriority = {
-    offline: 0,
-    warning: 1,
-    online: 2
-  } as const;
-
   const sortedAssets =
     [...assets]
       .sort(
         (left, right) => {
-
-          const healthDifference =
-            healthPriority[
-              left.health.status
-            ] -
-            healthPriority[
-              right.health.status
-            ];
-
-          if (
-            healthDifference !== 0
-          ) {
-            return healthDifference;
-          }
 
           const leftName =
             left.sensor?.name
@@ -681,7 +710,11 @@ function Dashboard() {
             ?? right.externalId;
 
           return leftName.localeCompare(
-            rightName
+            rightName,
+            undefined,
+            {
+              sensitivity: "base"
+            }
           );
         }
       );
@@ -691,9 +724,44 @@ function Dashboard() {
       .trim()
       .toLowerCase();
 
+  const currentReadingLocationOptions =
+    Array.from(
+      new Map(
+        assets
+          .filter(asset => asset.location)
+          .map(asset => [
+            asset.location!.id,
+            asset.location!.name
+          ])
+      )
+    )
+      .map(([value, label]) => ({
+        value,
+        label
+      }))
+      .sort((left, right) =>
+        left.label.localeCompare(
+          right.label,
+          undefined,
+          { sensitivity: "base" }
+        )
+      );
+
   const currentReadingAssets =
     sortedAssets.filter(
       asset => {
+        const matchesLocation =
+          currentReadingLocation === null ||
+          (
+            currentReadingLocation === "__unassigned__"
+              ? asset.location === null
+              : asset.location?.id ===
+                currentReadingLocation
+          );
+
+        if (!matchesLocation) {
+          return false;
+        }
 
         if (
           normalizedCurrentReadingSearch
@@ -817,10 +885,25 @@ function Dashboard() {
           asset.location?.id ===
             assetLocationFilter;
 
+        const matchesEnabled =
+          assetEnabledFilter ===
+            "all" ||
+          (
+            assetEnabledFilter ===
+              "enabled"
+              ? isAssetEnabled(
+                  asset
+                )
+              : !isAssetEnabled(
+                  asset
+                )
+          );
+
         return (
           matchesSearch &&
           matchesHealth &&
-          matchesLocation
+          matchesLocation &&
+          matchesEnabled
         );
       }
     );
@@ -1774,6 +1857,22 @@ function Dashboard() {
                         }
                       />
 
+                      <Select
+                        label="Location"
+                        clearable
+                        searchable
+                        placeholder="All locations"
+                        value={currentReadingLocation}
+                        onChange={setCurrentReadingLocation}
+                        data={[
+                          {
+                            value: "__unassigned__",
+                            label: "Unassigned"
+                          },
+                          ...currentReadingLocationOptions
+                        ]}
+                      />
+
                       <Badge variant="light">
                         {
                           currentReadingAssets.length
@@ -2006,6 +2105,26 @@ function Dashboard() {
                                     >
                                       {
                                         asset.health.status
+                                      }
+                                    </Badge>
+
+                                    <Badge
+                                      size="sm"
+                                      color={
+                                        isAssetEnabled(
+                                          asset
+                                        )
+                                          ? "green"
+                                          : "orange"
+                                      }
+                                      variant="light"
+                                    >
+                                      {
+                                        isAssetEnabled(
+                                          asset
+                                        )
+                                          ? "Enabled"
+                                          : "Disabled"
                                       }
                                     </Badge>
 
@@ -2274,29 +2393,55 @@ function Dashboard() {
                       </Text>
                     </div>
 
-                    <SegmentedControl
-                      value={
-                        assetView
-                      }
-                      onChange={
-                        value =>
-                          setAssetView(
-                            value as
-                              "cards"
-                              | "compact"
-                          )
-                      }
-                      data={[
-                        {
-                          label: "Cards",
-                          value: "cards"
-                        },
-                        {
-                          label: "Compact",
-                          value: "compact"
+                    <Group
+                      gap="xs"
+                      justify="flex-end"
+                    >
+                      <Badge
+                        color="green"
+                        variant="light"
+                      >
+                        {onlineAssets.length} Online
+                      </Badge>
+
+                      <Badge
+                        color="yellow"
+                        variant="light"
+                      >
+                        {warningAssets.length} Warning
+                      </Badge>
+
+                      <Badge
+                        color="red"
+                        variant="light"
+                      >
+                        {offlineAssets.length} Offline
+                      </Badge>
+
+                      <SegmentedControl
+                        value={
+                          assetView
                         }
-                      ]}
-                    />
+                        onChange={
+                          value =>
+                            setAssetView(
+                              value as
+                                "cards"
+                                | "compact"
+                            )
+                        }
+                        data={[
+                          {
+                            label: "Cards",
+                            value: "cards"
+                          },
+                          {
+                            label: "Compact",
+                            value: "compact"
+                          }
+                        ]}
+                      />
+                    </Group>
                   </Group>
 
                   <Group
@@ -2353,6 +2498,37 @@ function Dashboard() {
                         {
                           value: "online",
                           label: "Online"
+                        }
+                      ]}
+                    />
+
+                    <Select
+                      label="Status"
+                      value={
+                        assetEnabledFilter
+                      }
+                      onChange={
+                        value =>
+                          value &&
+                          setAssetEnabledFilter(
+                            value as
+                              "all"
+                              | "enabled"
+                              | "disabled"
+                          )
+                      }
+                      data={[
+                        {
+                          value: "all",
+                          label: "All"
+                        },
+                        {
+                          value: "enabled",
+                          label: "Enabled"
+                        },
+                        {
+                          value: "disabled",
+                          label: "Disabled"
                         }
                       ]}
                     />
@@ -2428,6 +2604,9 @@ function Dashboard() {
                                       observationsByAsset.get(
                                         asset.id
                                       ) ?? []
+                                    }
+                                    enabled={
+                                      isAssetEnabled(asset)
                                     }
                                   />
                                 )
@@ -2570,6 +2749,21 @@ function Dashboard() {
                                               }
                                             </Text>
                                           </div>
+
+                                          <Badge
+                                            color={
+                                              isAssetEnabled(asset)
+                                                ? "green"
+                                                : "orange"
+                                            }
+                                            variant="light"
+                                          >
+                                            {
+                                              isAssetEnabled(asset)
+                                                ? "Enabled"
+                                                : "Disabled"
+                                            }
+                                          </Badge>
 
                                           <Badge
                                             color={

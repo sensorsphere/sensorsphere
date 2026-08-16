@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "activeTabId": "history-tab-1786738080269-102a568cb617d8",
+  "refreshIntervalMs": 60000,
+  "tabs": [
+    {
+      "id": "history-tab-1786738080269-102a568cb617d8",
+      "name": "Bureau",
+      "graphs": [
+        {
+          "id": "history-1786738080277-a1e141b79bd85",
+          "assetId": "f0890bb7-8491-4ba8-8d26-702d3838e310",
+          "metricIds": [
+            "9fb65c4d-757e-41c4-aef7-62bede6c5b5e"
+          ],
+          "hours": 24,
+          "collapsed": false
+        },
+        {
+          "id": "history-1786738112171-382e39ee7c8e5",
+          "assetId": "b7b86dae-5e11-4218-b94a-a32ae4f0090d",
+          "metricIds": [
+            "912cd5c8-0196-4f3c-b218-127ac124c53c"
+          ],
+          "hours": 24,
+          "collapsed": false
+        }
+      ]
+    },
+    {
+      "id": "history-tab-default",
+      "name": "Tests",
+      "graphs": [
+        {
+          "id": "history-1786738062982-97fa9f00956608",
+          "assetId": "402b6e21-7927-437b-a02e-30643df20876",
+          "metricIds": [
+            "84452d02-48fa-46f3-be63-f724a106facb",
+            "8d2ae6f3-2de7-4ae3-b5f7-2c2ccc182dd9"
+          ],
+          "hours": 24,
+          "collapsed": false
+        },
+        {
+          "id": "history-1786772015041-cdb0abad47fdf",
+          "assetId": "29eb2fb0-3a4a-4126-bfda-6da0648cc42c",
+          "metricIds": [
+            "e273d0a7-bf52-43b1-a60f-cebb4a8eca3f"
+          ],
+          "hours": 12,
+          "collapsed": false
+        }
+      ]
+    },
+    {
+      "id": "history-tab-1786738623101-04bbdbc1e4884",
+      "name": "Chambres",
+      "graphs": [
+        {
+          "id": "history-1786738623109-6585fb521fd66",
+          "assetId": "8b2dd2fa-2ab4-4438-a1d4-126759a8f22e",
+          "metricIds": [
+            "25d7b5f1-5358-488e-bdc9-1548ccd78229",
+            "54ac78f3-b049-4416-b0e3-b9ec6b3d7d26"
+          ],
+          "hours": 72,
+          "collapsed": false
+        }
+      ]
+    }
+  ]
+}

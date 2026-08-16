@@ -1,6 +1,17 @@
 import Fastify from "fastify";
 
 import {
+  mkdir,
+  readFile,
+  rename,
+  writeFile
+} from "node:fs/promises";
+
+import {
+  dirname
+} from "node:path";
+
+import {
   registerTelemetryFeature
 } from "./features/telemetry/index.js";
 
@@ -87,6 +98,76 @@ app.get("/api/measurements/latest", async () => {
   );
 
   return result.rows;
+});
+
+const historyConfigPath =
+  process.env.HISTORY_CONFIG_PATH
+  ?? "/app/data/history-config.json";
+
+app.get("/api/v1/history-config", async (_request, reply) => {
+  try {
+    const raw =
+      await readFile(
+        historyConfigPath,
+        "utf8"
+      );
+
+    return JSON.parse(raw);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return reply.code(404).send({
+        error: "history_config_not_found"
+      });
+    }
+
+    throw error;
+  }
+});
+
+app.put("/api/v1/history-config", async (request, reply) => {
+  const body = request.body as {
+    version?: unknown;
+    activeTabId?: unknown;
+    refreshIntervalMs?: unknown;
+    tabs?: unknown;
+  } | null;
+
+  if (
+    !body ||
+    body.version !== 1 ||
+    typeof body.activeTabId !== "string" ||
+    typeof body.refreshIntervalMs !== "number" ||
+    !Array.isArray(body.tabs)
+  ) {
+    return reply.code(400).send({
+      error: "invalid_history_config"
+    });
+  }
+
+  await mkdir(
+    dirname(historyConfigPath),
+    { recursive: true }
+  );
+
+  const temporaryPath =
+    `${historyConfigPath}.tmp`;
+
+  await writeFile(
+    temporaryPath,
+    `${JSON.stringify(body, null, 2)}\n`,
+    "utf8"
+  );
+
+  await rename(
+    temporaryPath,
+    historyConfigPath
+  );
+
+  return reply.code(204).send();
 });
 
 app.get("/api/measurements/history", async (request, reply) => {

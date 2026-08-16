@@ -38,6 +38,7 @@ import type {
 interface Props {
   asset: Asset;
   observations: LatestObservation[];
+  enabled: boolean;
 }
 
 function formatAge(
@@ -191,7 +192,8 @@ function qualityColor(
 
 export function AssetLatestCard({
   asset,
-  observations
+  observations,
+  enabled
 }: Props) {
 
   const queryClient =
@@ -521,13 +523,13 @@ export function AssetLatestCard({
             <Badge
               variant="light"
               color={
-                asset.enabled
+                enabled
                   ? "blue"
-                  : "gray"
+                  : "orange"
               }
             >
               {
-                asset.enabled
+                enabled
                   ? "Enabled"
                   : "Disabled"
               }
@@ -799,7 +801,7 @@ export function AssetLatestCard({
 
             <Text size="sm">
               {
-                asset.enabled
+                enabled
                 ? "Enabled"
                 : "Disabled"
               }

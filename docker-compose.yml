@@ -78,6 +78,9 @@ services:
       DB_USER: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      HISTORY_CONFIG_PATH: /app/data/history-config.json
+    volumes:
+      - ./data/app:/app/data
     depends_on:
       timescaledb:
         condition: service_healthy
