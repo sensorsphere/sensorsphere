@@ -44,6 +44,15 @@ import {
   MetricQualityEditor
 } from "./MetricQualityEditor";
 
+import {
+  LocationIcon,
+  getLocationIconName
+} from "./LocationIcon";
+
+import {
+  ResetFiltersAction
+} from "./ResetFiltersAction";
+
 interface SensorFormState {
   name: string;
   description: string;
@@ -609,15 +618,10 @@ export function SensorCatalog() {
               {filteredSensors.length} / {sensors.length} sensors
             </Badge>
 
-            {filtersActive && (
-              <Button
-                size="xs"
-                variant="subtle"
-                onClick={clearFilters}
-              >
-                Clear filters
-              </Button>
-            )}
+            <ResetFiltersAction
+              active={filtersActive}
+              onReset={clearFilters}
+            />
           </Group>
         </Group>
 
@@ -836,16 +840,23 @@ export function SensorCatalog() {
                         Location
                       </Text>
 
-                      <Text size="sm">
-                        {
-                          assets.find(
-                            asset =>
-                              asset.sensor?.uid ===
-                              sensor.uid
-                          )?.location?.name
-                          ?? "—"
-                        }
-                      </Text>
+                      <Group gap={4}>
+                        <LocationIcon
+                          name={
+                            getLocationIconName(
+                              asset?.location
+                            )
+                          }
+                          size={21}
+                        />
+
+                        <Text size="sm">
+                          {
+                            asset?.location?.name
+                            ?? "—"
+                          }
+                        </Text>
+                      </Group>
                     </div>
 
                     <div>

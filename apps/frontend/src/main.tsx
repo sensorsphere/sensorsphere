@@ -63,9 +63,22 @@ import {
   getActiveAlerts
 } from "./alerts-api";
 
+import type {
+  Asset
+} from "./types";
+
 import {
   usePersistentState
 } from "./preferences/usePersistentState";
+
+import {
+  LocationIcon,
+  getLocationIconName
+} from "./LocationIcon";
+
+import {
+  ResetFiltersAction
+} from "./ResetFiltersAction";
 
 import "./styles.css";
 
@@ -502,6 +515,34 @@ function Dashboard() {
         typeof value === "string"
     );
 
+
+  const [
+    currentReadingStatus,
+    setCurrentReadingStatus
+  ] =
+    usePersistentState<
+      "all" | "enabled" | "disabled"
+    >(
+      "dashboard.currentReadings.status",
+      "all",
+      value =>
+        value === "all" ||
+        value === "enabled" ||
+        value === "disabled"
+    );
+
+  const [
+    currentReadingHealth,
+    setCurrentReadingHealth
+  ] =
+    usePersistentState<
+      "all" | "online" | "warning" | "offline"
+    >(
+      "dashboard.currentReadings.health",
+      "all",
+      isAssetHealthFilter
+    );
+
   const sensorsQuery =
     useQuery({
       queryKey:
@@ -759,7 +800,24 @@ function Dashboard() {
                 currentReadingLocation
           );
 
-        if (!matchesLocation) {
+        const matchesStatus =
+          currentReadingStatus === "all" ||
+          (
+            currentReadingStatus === "enabled"
+              ? isAssetEnabled(asset)
+              : !isAssetEnabled(asset)
+          );
+
+        const matchesHealth =
+          currentReadingHealth === "all" ||
+          asset.health.status ===
+            currentReadingHealth;
+
+        if (
+          !matchesLocation ||
+          !matchesStatus ||
+          !matchesHealth
+        ) {
           return false;
         }
 
@@ -929,58 +987,103 @@ function Dashboard() {
         )
     ).size;
 
-  const numericTemperatureValues =
-    observations
-      .filter(
-        observation =>
-          observation.metricKey ===
-          "temperature" &&
-          typeof observation.value ===
-          "number"
-      )
-      .map(
-        observation =>
-          observation.value as number
-      );
-
-  const numericHumidityValues =
-    observations
-      .filter(
-        observation =>
-          observation.metricKey ===
-          "humidity" &&
-          typeof observation.value ===
-          "number"
-      )
-      .map(
-        observation =>
-          observation.value as number
-      );
-
-  const average =
-    (
-      values: number[]
-    ): number | null =>
-      values.length > 0
-        ? values.reduce(
-            (
-              sum,
-              value
-            ) =>
-              sum + value,
-            0
-          ) /
-          values.length
-        : null;
-
-  const averageTemperature =
-    average(
-      numericTemperatureValues
+  const assetsById =
+    new Map(
+      assets.map(asset => [
+        asset.id,
+        asset
+      ])
     );
 
-  const averageHumidity =
-    average(
-      numericHumidityValues
+  type MetricExtreme = {
+    value: number;
+    sensorName: string;
+  } | null;
+
+  const metricExtremes =
+    (
+      metricKey: string
+    ): {
+      min: MetricExtreme;
+      max: MetricExtreme;
+    } => {
+
+      const values =
+        observations
+          .filter(
+            observation =>
+              observation.metricKey ===
+                metricKey &&
+              typeof observation.value ===
+                "number"
+          )
+          .map(
+            observation => {
+              const asset =
+                assetsById.get(
+                  observation.assetId
+                );
+
+              if (
+                !asset ||
+                !isAssetEnabled(asset)
+              ) {
+                return null;
+              }
+
+              return {
+                value:
+                  observation.value as number,
+                sensorName:
+                  asset.sensor?.name
+                  ?? asset.name
+                  ?? asset.externalId
+              };
+            }
+          )
+          .filter(
+            (
+              value
+            ): value is {
+              value: number;
+              sensorName: string;
+            } =>
+              value !== null
+          );
+
+      if (values.length === 0) {
+        return {
+          min: null,
+          max: null
+        };
+      }
+
+      return {
+        min:
+          values.reduce(
+            (current, value) =>
+              value.value < current.value
+                ? value
+                : current
+          ),
+        max:
+          values.reduce(
+            (current, value) =>
+              value.value > current.value
+                ? value
+                : current
+          )
+      };
+    };
+
+  const temperatureExtremes =
+    metricExtremes(
+      "temperature"
+    );
+
+  const humidityExtremes =
+    metricExtremes(
+      "humidity"
     );
 
   const latestActivity =
@@ -1397,7 +1500,8 @@ function Dashboard() {
                 cols={{
                   base: 1,
                   xs: 2,
-                  md: 4
+                  md: 3,
+                  xl: 6
                 }}
               >
 
@@ -1455,69 +1559,72 @@ function Dashboard() {
                   </Text>
                 </Card>
 
-                <Card
-                  withBorder
-                  radius="md"
-                  padding="lg"
-                >
-                  <Text
-                    size="xs"
-                    c="dimmed"
+                {[
+                  {
+                    label: "Temperature Min",
+                    extreme:
+                      temperatureExtremes.min,
+                    unit: "°C"
+                  },
+                  {
+                    label: "Temperature Max",
+                    extreme:
+                      temperatureExtremes.max,
+                    unit: "°C"
+                  },
+                  {
+                    label: "Humidity Min",
+                    extreme:
+                      humidityExtremes.min,
+                    unit: "%"
+                  },
+                  {
+                    label: "Humidity Max",
+                    extreme:
+                      humidityExtremes.max,
+                    unit: "%"
+                  }
+                ].map(item => (
+                  <Card
+                    key={item.label}
+                    withBorder
+                    radius="md"
+                    padding="lg"
                   >
-                    Average temperature
-                  </Text>
+                    <Text
+                      size="xs"
+                      c="dimmed"
+                    >
+                      {item.label}
+                    </Text>
 
-                  <Text
-                    size="xl"
-                    fw={700}
-                  >
-                    {
-                      averageTemperature !==
-                      null
-                        ? `${averageTemperature.toFixed(1)} °C`
-                        : "—"
-                    }
-                  </Text>
+                    <Text
+                      size="xl"
+                      fw={700}
+                    >
+                      {
+                        item.extreme
+                          ? `${item.extreme.value.toFixed(1)} ${item.unit}`
+                          : "—"
+                      }
+                    </Text>
 
-                  <Text
-                    size="xs"
-                    c="dimmed"
-                  >
-                    Latest values
-                  </Text>
-                </Card>
-
-                <Card
-                  withBorder
-                  radius="md"
-                  padding="lg"
-                >
-                  <Text
-                    size="xs"
-                    c="dimmed"
-                  >
-                    Average humidity
-                  </Text>
-
-                  <Text
-                    size="xl"
-                    fw={700}
-                  >
-                    {
-                      averageHumidity !==
-                      null
-                        ? `${averageHumidity.toFixed(1)} %`
-                        : "—"
-                    }
-                  </Text>
-
-                  <Text
-                    size="xs"
-                    c="dimmed"
-                  >
-                    Latest values
-                  </Text>
-                </Card>
+                    <Text
+                      size="xs"
+                      c="dimmed"
+                      title={
+                        item.extreme
+                          ?.sensorName
+                      }
+                    >
+                      {
+                        item.extreme
+                          ?.sensorName
+                        ?? "No enabled sensor"
+                      }
+                    </Text>
+                  </Card>
+                ))}
 
               </SimpleGrid>
 
@@ -1873,6 +1980,65 @@ function Dashboard() {
                         ]}
                       />
 
+
+                      <Select
+                        label="Status"
+                        value={currentReadingStatus}
+                        onChange={
+                          value =>
+                            value &&
+                            setCurrentReadingStatus(
+                              value as
+                                "all"
+                                | "enabled"
+                                | "disabled"
+                            )
+                        }
+                        data={[
+                          { value: "all", label: "All" },
+                          { value: "enabled", label: "Enabled" },
+                          { value: "disabled", label: "Disabled" }
+                        ]}
+                      />
+
+                      <Select
+                        label="Health"
+                        value={currentReadingHealth}
+                        onChange={
+                          value =>
+                            value &&
+                            setCurrentReadingHealth(
+                              value as
+                                "all"
+                                | "online"
+                                | "warning"
+                                | "offline"
+                            )
+                        }
+                        data={[
+                          { value: "all", label: "All" },
+                          { value: "online", label: "Online" },
+                          { value: "warning", label: "Warning" },
+                          { value: "offline", label: "Offline" }
+                        ]}
+                      />
+
+                      <ResetFiltersAction
+                        active={
+                          currentReadingSearch.trim().length > 0 ||
+                          currentReadingLocation !== null ||
+                          currentReadingStatus !== "all" ||
+                          currentReadingHealth !== "all"
+                        }
+                        onReset={
+                          () => {
+                            setCurrentReadingSearch("");
+                            setCurrentReadingLocation(null);
+                            setCurrentReadingStatus("all");
+                            setCurrentReadingHealth("all");
+                          }
+                        }
+                      />
                       <Badge variant="light">
                         {
                           currentReadingAssets.length
@@ -2075,21 +2241,35 @@ function Dashboard() {
                                       }
                                     </Text>
 
-                                    <Text
-                                      size="xs"
-                                      c="dimmed"
+                                    <Group
+                                      gap={4}
+                                      wrap="nowrap"
                                     >
-                                      {
-                                        asset.location?.name
-                                        ?? "Unassigned"
-                                      }
-                                      {" · Last seen: "}
-                                      {
-                                        formatAge(
-                                          asset.health.ageSeconds
-                                        )
-                                      }
-                                    </Text>
+                                      <LocationIcon
+                                        name={
+                                          getLocationIconName(
+                                            asset.location
+                                          )
+                                        }
+                                        size={21}
+                                      />
+
+                                      <Text
+                                        size="xs"
+                                        c="dimmed"
+                                      >
+                                        {
+                                          asset.location?.name
+                                          ?? "Unassigned"
+                                        }
+                                        {" · Last seen: "}
+                                        {
+                                          formatAge(
+                                            asset.health.ageSeconds
+                                          )
+                                        }
+                                      </Text>
+                                    </Group>
                                   </div>
 
                                   <Stack
@@ -2556,7 +2736,24 @@ function Dashboard() {
                         )
                       }
                     />
-                  </Group>
+
+
+                    <ResetFiltersAction
+                      active={
+                        assetSearch.trim().length > 0 ||
+                        assetHealthFilter !== "all" ||
+                        assetEnabledFilter !== "all" ||
+                        assetLocationFilter !== null
+                      }
+                      onReset={
+                        () => {
+                          setAssetSearch("");
+                          setAssetHealthFilter("all");
+                          setAssetEnabledFilter("all");
+                          setAssetLocationFilter(null);
+                        }
+                      }
+                    />                  </Group>
 
                   <Text
                     size="xs"
@@ -2679,19 +2876,33 @@ function Dashboard() {
                                             }
                                           </Text>
 
-                                          <Text
-                                            size="xs"
-                                            c="dimmed"
+                                          <Group
+                                            gap={4}
+                                            wrap="nowrap"
                                           >
-                                            {
-                                              asset.location?.name
-                                              ?? "Unassigned"
-                                            }
-                                            {" · "}
-                                            {
-                                              asset.externalId
-                                            }
-                                          </Text>
+                                            <LocationIcon
+                                              name={
+                                                getLocationIconName(
+                                                  asset.location
+                                                )
+                                              }
+                                              size={15}
+                                            />
+
+                                            <Text
+                                              size="xs"
+                                              c="dimmed"
+                                            >
+                                              {
+                                                asset.location?.name
+                                                ?? "Unassigned"
+                                              }
+                                              {" · "}
+                                              {
+                                                asset.externalId
+                                              }
+                                            </Text>
+                                          </Group>
                                         </div>
 
                                         <Group gap="xl">

@@ -126,6 +126,7 @@ export interface Asset {
     id: string;
     name: string;
     type: string;
+    metadata: Record<string, unknown>;
   } | null;
   metrics: AssetMetric[];
   lastMeasurementAt: string | null;

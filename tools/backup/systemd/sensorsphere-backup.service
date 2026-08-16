@@ -1,0 +1,25 @@
+[Unit]
+Description=SensorSphere daily backup
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+
+WorkingDirectory=/home/ubuntu/sensorsphere
+
+# Prevent concurrent backup executions.
+ExecStart=/usr/bin/flock --nonblock /run/lock/sensorsphere-backup.lock /usr/local/sbin/sensorsphere-backup
+
+# Only run these steps after the backup command succeeds.
+ExecStartPost=/usr/local/sbin/sensorsphere-verify-backup
+ExecStartPost=/usr/local/sbin/sensorsphere-prune-backups --apply
+
+TimeoutStartSec=2h
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

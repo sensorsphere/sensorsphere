@@ -1,0 +1,11 @@
+[Unit]
+Description=Run SensorSphere backup every day at 02:00
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+AccuracySec=1min
+Unit=sensorsphere-backup.service
+
+[Install]
+WantedBy=timers.target

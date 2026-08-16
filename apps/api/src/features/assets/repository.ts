@@ -34,6 +34,7 @@ export interface AssetRecord {
   location_id: string | null;
   location_name: string | null;
   location_type: string | null;
+  location_metadata: Record<string, unknown> | null;
   room_id: string | null;
   room_name: string | null;
   source_sensor_uid: string | null;
@@ -122,6 +123,7 @@ const ASSET_SELECT = `
       a.location_id,
       l.name AS location_name,
       l.type AS location_type,
+      l.metadata AS location_metadata,
       a.room_id,
       r.name AS room_name,
       a.source_sensor_uid,

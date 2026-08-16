@@ -35,6 +35,11 @@ import type {
   LatestObservation
 } from "./types";
 
+import {
+  LocationIcon,
+  getLocationIconName
+} from "./LocationIcon";
+
 interface Props {
   asset: Asset;
   observations: LatestObservation[];
@@ -552,12 +557,23 @@ export function AssetLatestCard({
               Location:
             </Text>
 
-            <Text size="sm">
-              {
-                asset.location?.name
-                ?? "Unassigned"
-              }
-            </Text>
+            <Group gap={6}>
+              <LocationIcon
+                name={
+                  getLocationIconName(
+                    asset.location
+                  )
+                }
+                size={21}
+              />
+
+              <Text size="sm">
+                {
+                  asset.location?.name
+                  ?? "Unassigned"
+                }
+              </Text>
+            </Group>
           </Group>
 
           <Text

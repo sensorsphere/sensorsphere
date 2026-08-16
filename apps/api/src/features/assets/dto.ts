@@ -44,6 +44,7 @@ export interface AssetDto {
     id: string;
     name: string;
     type: string;
+    metadata: Record<string, unknown>;
   } | null;
   room: { id: string; name: string } | null;
   metrics: AssetMetricDto[];

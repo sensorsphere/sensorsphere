@@ -94,7 +94,10 @@ export function mapAssetToDto(
         ? {
             id: asset.location_id,
             name: asset.location_name,
-            type: asset.location_type
+            type: asset.location_type,
+            metadata:
+              asset.location_metadata
+              ?? {}
           }
         : null,
 

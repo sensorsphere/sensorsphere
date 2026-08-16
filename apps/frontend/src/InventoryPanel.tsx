@@ -43,6 +43,17 @@ import type {
   UpdateLocationInput
 } from "./types";
 
+import {
+  LOCATION_ICON_OPTIONS,
+  LocationIcon,
+  getLocationIconName,
+  type LocationIconName
+} from "./LocationIcon";
+
+import {
+  ResetFiltersAction
+} from "./ResetFiltersAction";
+
 interface LocationNodeProps {
   location: Location;
   allLocations: Location[];
@@ -192,9 +203,20 @@ function LocationNode({
           justify="space-between"
         >
           <div>
-            <Text fw={700}>
-              {location.name}
-            </Text>
+            <Group gap="xs">
+              <LocationIcon
+                name={
+                  getLocationIconName(
+                    location
+                  )
+                }
+                size={20}
+              />
+
+              <Text fw={700}>
+                {location.name}
+              </Text>
+            </Group>
 
             <Group gap="xs">
               <Badge
@@ -370,6 +392,7 @@ interface LocationFormState {
   type: LocationType;
   name: string;
   description: string;
+  icon: LocationIconName | null;
 }
 
 const emptyLocationForm:
@@ -378,7 +401,8 @@ LocationFormState = {
   parentId: null,
   type: "ROOM",
   name: "",
-  description: ""
+  description: "",
+  icon: null
 };
 
 export function InventoryPanel() {
@@ -510,6 +534,25 @@ export function InventoryPanel() {
 
           if (form.id) {
 
+            const currentLocation =
+              locationsQuery.data
+                ?.find(
+                  location =>
+                    location.id ===
+                    form.id
+                );
+
+            const metadata = {
+              ...(currentLocation?.metadata ?? {})
+            };
+
+            if (form.icon) {
+              metadata.icon =
+                form.icon;
+            } else {
+              delete metadata.icon;
+            }
+
             const updateInput:
               UpdateLocationInput = {
                 type:
@@ -519,7 +562,7 @@ export function InventoryPanel() {
                 description:
                   form.description.trim()
                     || null,
-                metadata: {}
+                metadata
               };
 
             const updated =
@@ -527,14 +570,6 @@ export function InventoryPanel() {
                 form.id,
                 updateInput
               );
-
-            const currentLocation =
-              locationsQuery.data
-                ?.find(
-                  location =>
-                    location.id ===
-                    form.id
-                );
 
             if (
               currentLocation &&
@@ -564,7 +599,10 @@ export function InventoryPanel() {
               description:
                 form.description.trim()
                   || null,
-              metadata: {}
+              metadata:
+                form.icon
+                  ? { icon: form.icon }
+                  : {}
             };
 
           return createLocation(
@@ -943,6 +981,23 @@ export function InventoryPanel() {
             w={220}
           />
 
+
+          <ResetFiltersAction
+            active={
+              search.trim().length > 0 ||
+              locationFilter !== null ||
+              statusFilter !== null ||
+              protocolFilter !== null
+            }
+            onReset={
+              () => {
+                setSearch("");
+                setLocationFilter(null);
+                setStatusFilter(null);
+                setProtocolFilter(null);
+              }
+            }
+          />
           <SegmentedControl
             value={inventoryView}
             onChange={
@@ -1131,7 +1186,11 @@ export function InventoryPanel() {
                           currentLocation.name,
                         description:
                           currentLocation.description
-                          ?? ""
+                          ?? "",
+                        icon:
+                          getLocationIconName(
+                            currentLocation
+                          )
                       })
                   }
                 />
@@ -1184,10 +1243,23 @@ export function InventoryPanel() {
                       </Table.Td>
 
                       <Table.Td>
-                        {
-                          asset.location?.name
-                          ?? "Unassigned"
-                        }
+                        <Group gap={4}>
+                          <LocationIcon
+                            name={
+                              getLocationIconName(
+                                asset.location
+                              )
+                            }
+                            size={16}
+                          />
+
+                          <Text size="sm">
+                            {
+                              asset.location?.name
+                              ?? "Unassigned"
+                            }
+                          </Text>
+                        </Group>
                       </Table.Td>
 
                       <Table.Td>
@@ -1305,6 +1377,48 @@ export function InventoryPanel() {
             ]}
           />
 
+
+          <Select
+            label="Icon"
+            description="Optional icon displayed with this location"
+            clearable
+            searchable
+            placeholder="No icon"
+            value={locationForm.icon}
+            leftSection={
+              <LocationIcon
+                name={locationForm.icon}
+                size={17}
+              />
+            }
+            data={LOCATION_ICON_OPTIONS}
+            renderOption={
+              ({ option }) => (
+                <Group gap="xs">
+                  <LocationIcon
+                    name={
+                      option.value as
+                        LocationIconName
+                    }
+                    size={17}
+                  />
+                  <Text size="sm">
+                    {option.label}
+                  </Text>
+                </Group>
+              )
+            }
+            onChange={
+              value =>
+                setLocationForm({
+                  ...locationForm,
+                  icon:
+                    value as
+                      LocationIconName
+                      | null
+                })
+            }
+          />
           <Select
             label="Parent location"
             clearable
