@@ -10,6 +10,7 @@ dev/bin/
 /*.zip
 tmp/
 mosquitto.db
+data/app
 
 !data/mosquitto/data/.gitkeep
 !data/mosquitto/log/.gitkeep

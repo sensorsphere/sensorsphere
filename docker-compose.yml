@@ -119,6 +119,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be defined}
 
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      INSTANCE_NAME: ${INSTANCE_NAME:-SensorSphere}
 
       HISTORY_CONFIG_PATH: ${HISTORY_CONFIG_PATH:-/app/data/history-config.json}
 

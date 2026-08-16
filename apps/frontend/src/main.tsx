@@ -36,6 +36,7 @@ import {
 import {
   getAssets,
   getLatestObservations,
+  getRuntimeConfig,
   getSensors
 } from "./api";
 
@@ -364,6 +365,24 @@ function latestMetricValue(
 
 function Dashboard() {
 
+  const runtimeConfigQuery =
+    useQuery({
+      queryKey:
+        ["runtime-config"],
+
+      queryFn:
+        getRuntimeConfig,
+
+      staleTime:
+        Infinity
+    });
+
+  const instanceName =
+    runtimeConfigQuery.data
+      ?.instanceName
+      ?.trim()
+    || "SensorSphere";
+
   const [
     activePage,
     setActivePage
@@ -393,6 +412,14 @@ function Dashboard() {
         typeof value ===
         "boolean"
     );
+
+  React.useEffect(
+    () => {
+      document.title =
+        instanceName;
+    },
+    [instanceName]
+  );
 
   const navigateTo =
     (
@@ -1167,7 +1194,7 @@ function Dashboard() {
 
               <div>
                 <Title order={2}>
-                  SensorSphere
+                  {instanceName}
                 </Title>
 
                 <Text

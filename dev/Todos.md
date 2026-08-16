@@ -33,27 +33,14 @@
 * [X] dans l'overview, enlever la carte "Average temperture" et             "average humidity". Afficher plutot: "Temperature Min" et "Temperature Max", idem pour humidity,et avec quel sensor pour chacun des metriques.
 * [X] pour chaque page/section ou des filtres existent, prevoir une petite icone "Reset all filters"
 * [X] pour les location, pouvoir chosir une icone parmi les MDI icones ou une autre librairie du meme genre. Cette icone devra s'afficher sur l'Inventory, mais aussi la carte des sensors/assets si affectee a la location
-
-* [ ] sur un grpahe history, affichage de la valeur courante de chaque courbe dans la zone de titre pour plus de clarte
-* [ ] ajouter les icones: garage, salle a manger, living room, dressing, laundry
+* [X] sur un graphe history, affichage de la valeur courante de chaque courbe dans la zone de titre pour plus de clarte
+* [X] ajouter les icones: garage, salle a manger, living room, dressing, laundry
+* [X] il faut pouvoir nommer l'instance en cours d'execution. ex: Sensor Sphere IAT, My Sensor Sphere, ..., l'affiher dans la nom de l'onglet et dans le header. il faudrait pouvoir surcharger une valeur par defaut en provenance du .env et qui serait renvoyee par une api du backend
 
 # Run
-* [*] Comment puis-je mettre en place une sauvagarde complete de toutes les donnees afin de pouvoir les restaurer facilement en cas de crash
+* [X] Comment puis-je mettre en place une sauvagarde complete de toutes les donnees afin de pouvoir les restaurer facilement en cas de crash
+* [X] il faudrait faire un arret de tous le modules ainsi qu un rebuild complet de tous ces modules, sans perte de donnees, afin de voir si ca se construit correctement et ensuite si ca se fait correctement tenter tout un build sur un autre environnement/machine
 
-* [ ] A ce stade, je pense qu'il faudrait faire un arret de tous le modules ainsi qu un rebuild complet de tous ces modules, sans perte de donnees, afin de voir si ca se construit correctement et ensuite si ca se fait correctement tenter tout un build sur un autre environnement/machine
-
-## Retex rebuild
-
-```txt
-docker compose
-...
-    ports:
-      - "100.64.0.8:${MQTT_PORT:-1883}:1883"
-    Default: 0.0.0.0, sinon .env: MQTT_HOST
-...
-
-
-```
 
 ### Specif
 

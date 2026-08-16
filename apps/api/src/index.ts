@@ -69,6 +69,15 @@ const healthHandler = async () => {
 app.get("/health", healthHandler);
 app.get("/api/health", healthHandler);
 
+
+const instanceName =
+  process.env.INSTANCE_NAME?.trim()
+  || "SensorSphere";
+
+app.get("/api/v1/config", async () => ({
+  instanceName
+}));
+
 app.get("/sensors", async () => {
   const result = await pool.query(
     `

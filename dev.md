@@ -23,11 +23,49 @@ printf "\033]81;L=:8080::8080#Proxy on 8080 for IOT-Platform Dashboard\007"
 
 ```
 
-## Apply PRs
+## Deploy Dev Env
 
-```ps1
-# apply-pr-remotely.ps1
+```sh
+# cp .env.example .env
+docker compose build --no-cache --pull
+docker compose up -d
+docker compose logs --no-color \
+  | grep -Ei \
+  'error|fatal|panic|exception|failed' \
+  || true
 
-./apply-pr-remotely.ps1 <prfile.tar.gz>
+# Re exec migrations
+docker compose run --rm migrations
 
+# Check
+docker compose exec -T timescaledb \
+  psql \
+    -U iot_app \
+    -d iot \
+    -c "
+      SELECT version, filename
+      FROM public.schema_migrations
+      ORDER BY version;
+    "
+
+docker compose exec -T timescaledb \
+  psql \
+    -U iot_app \
+    -d iot \
+    -c "
+      SELECT 'assets' AS table_name, count(*) FROM assets
+      UNION ALL
+      SELECT 'sensors', count(*) FROM sensors
+      UNION ALL
+      SELECT 'observations', count(*) FROM observations
+      UNION ALL
+      SELECT 'alert_rules', count(*) FROM alert_rules;
+    "
+
+```
+
+## Diags / Logs
+
+```sh
+docker compose logs --since 2m --no-color   | grep -Ei   'error|fatal|panic|exception|failed'   || true
 ```

@@ -432,6 +432,53 @@ function HistoryGraph({
                     .join(" · ")
                 : "Select a sensor and one or more metrics"}
             </Text>
+
+            {chartSeries.length > 0 && (
+              <Group
+                gap="md"
+                mt={4}
+                wrap="wrap"
+              >
+                {chartSeries.map(
+                  item => {
+
+                    const currentValue =
+                      latestNumericSeriesValue(
+                        item
+                      );
+
+                    return (
+                      <Text
+                        key={item.id}
+                        size="xs"
+                      >
+                        <Text
+                          span
+                          c="dimmed"
+                        >
+                          {item.name}:{" "}
+                        </Text>
+
+                        <Text
+                          span
+                          fw={600}
+                        >
+                          {
+                            currentValue !==
+                              null
+                              ? formatCurrentValue(
+                                  currentValue,
+                                  item.unit
+                                )
+                              : "—"
+                          }
+                        </Text>
+                      </Text>
+                    );
+                  }
+                )}
+              </Group>
+            )}
           </div>
 
           <Group gap="xs">
@@ -626,6 +673,63 @@ function HistoryGraph({
       </Stack>
     </Card>
   );
+}
+
+
+function latestNumericSeriesValue(
+  series: HistoryChartSeries
+): number | null {
+
+  const aggregate =
+    [...series.aggregates]
+      .reverse()
+      .find(
+        point =>
+          point.avg !== null
+      );
+
+  if (
+    aggregate &&
+    aggregate.avg !== null
+  ) {
+    return aggregate.avg;
+  }
+
+  const raw =
+    [...series.history]
+      .reverse()
+      .find(
+        point =>
+          typeof point.value ===
+            "number"
+      );
+
+  return (
+    raw &&
+    typeof raw.value === "number"
+  )
+    ? raw.value
+    : null;
+}
+
+function formatCurrentValue(
+  value: number,
+  unit: string | null
+): string {
+
+  const formatted =
+    Number.isInteger(value)
+      ? String(value)
+      : value.toLocaleString(
+          undefined,
+          {
+            maximumFractionDigits: 2
+          }
+        );
+
+  return unit
+    ? `${formatted} ${unit}`
+    : formatted;
 }
 
 export function HistoryPanel() {

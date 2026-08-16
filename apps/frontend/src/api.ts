@@ -8,6 +8,7 @@ import type {
   UpdateLocationInput,
   ObservationAggregatePoint,
   ObservationHistoryPoint,
+  RuntimeConfig,
   Sensor,
   UpdateSensor
 } from "./types";
@@ -34,6 +35,19 @@ async function readJson<T>(
   }
 
   return response.json();
+}
+
+export async function getRuntimeConfig():
+Promise<RuntimeConfig> {
+
+  const response =
+    await fetch(
+      "/api/v1/config"
+    );
+
+  return readJson<RuntimeConfig>(
+    response
+  );
 }
 
 export async function getSensors():

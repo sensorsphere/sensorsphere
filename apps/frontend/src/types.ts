@@ -1,3 +1,7 @@
+export interface RuntimeConfig {
+  instanceName: string;
+}
+
 export type MetricQualityStatus =
   | "GOOD"
   | "WARNING"

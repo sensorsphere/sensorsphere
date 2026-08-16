@@ -16,6 +16,15 @@ export type LocationIconName =
   | "kitchen"
   | "office"
   | "garage"
+  | "dining-room"
+  | "living-room"
+  | "dressing"
+  | "laundry"
+  | "terrace"
+  | "shower-room"
+  | "hallway"
+  | "shed"
+  | "tests"
   | "garden"
   | "warehouse"
   | "lab"
@@ -38,6 +47,15 @@ Array<{
   { value: "kitchen", label: "Kitchen" },
   { value: "office", label: "Office" },
   { value: "garage", label: "Garage" },
+  { value: "dining-room", label: "Dining room" },
+  { value: "living-room", label: "Living room" },
+  { value: "dressing", label: "Dressing" },
+  { value: "laundry", label: "Laundry" },
+  { value: "terrace", label: "Terrace" },
+  { value: "shower-room", label: "Shower room" },
+  { value: "hallway", label: "Hallway" },
+  { value: "shed", label: "Shed" },
+  { value: "tests", label: "Tests" },
   { value: "garden", label: "Garden" },
   { value: "warehouse", label: "Warehouse" },
   { value: "lab", label: "Laboratory" },
@@ -94,6 +112,70 @@ function paths(
       return <><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M9 7V5h6v2M4 12h16M10 12v2h4v-2"/></>;
     case "garage":
       return <><path d="M3 10 6 5h12l3 5v10H3V10Z"/><path d="M6 20v-7h12v7M8 16h8"/></>;
+    case "dining-room":
+      return <><circle cx="8" cy="7" r="3"/><path d="M8 10v11M5 21h6M15 4v7M18 4v7M15 8h3M16.5 11v10"/></>;
+    case "living-room":
+      return <><path d="M5 12V9a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v3"/><path d="M4 12a2 2 0 0 0-2 2v4h20v-4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v1H6v-1a2 2 0 0 0-2-2Z"/><path d="M5 18v2m14-2v2"/></>;
+    case "dressing":
+      return <><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 3v18M9 12h.01M15 12h.01"/></>;
+    case "laundry":
+      return <><rect x="5" y="3" width="14" height="18" rx="2"/><circle cx="12" cy="13" r="4"/><path d="M8 7h.01M11 7h5"/></>;
+    case "terrace":
+      return (
+        <>
+          <path d="M3 12h18" />
+          <path d="M5 12v8" />
+          <path d="M19 12v8" />
+          <path d="M7 16h10" />
+          <path d="M8 12 12 5l4 7" />
+        </>
+      );
+
+    case "shower-room":
+      return (
+        <>
+          <path d="M6 6a4 4 0 0 1 8 0" />
+          <path d="M14 6h4" />
+          <path d="M18 6v3" />
+          <path d="M12 11v1" />
+          <path d="M15 11v1" />
+          <path d="M18 11v1" />
+          <path d="M12 15v1" />
+          <path d="M15 15v1" />
+          <path d="M18 15v1" />
+        </>
+      );
+
+    case "hallway":
+      return (
+        <>
+          <path d="M5 3h14v18H5Z" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+          <path d="M9 12h6" />
+        </>
+      );
+
+    case "shed":
+      return (
+        <>
+          <path d="M3 10 12 4l9 6" />
+          <path d="M5 9v11h14V9" />
+          <path d="M9 20v-7h6v7" />
+          <path d="M7 11h10" />
+        </>
+      );
+
+    case "tests":
+      return (
+        <>
+          <path d="M9 3h6" />
+          <path d="M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3" />
+          <path d="M8 16h8" />
+          <path d="M10 13h4" />
+        </>
+      );
+
     case "garden":
       return <><path d="M12 21v-9M12 13C7 13 5 10 5 6c5 0 7 2 7 7ZM12 16c5 0 7-3 7-7-5 0-7 2-7 7Z"/></>;
     case "warehouse":
