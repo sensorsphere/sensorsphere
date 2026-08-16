@@ -9,9 +9,7 @@ coverage/
 dev/bin/
 /*.zip
 tmp/
+mosquitto.db
 
-infrastructure/mosquitto/data/*
-infrastructure/mosquitto/log/*
-infrastructure/timescaledb/data/*
-!infrastructure/mosquitto/data/.gitkeep
-!infrastructure/mosquitto/log/.gitkeep
+!data/mosquitto/data/.gitkeep
+!data/mosquitto/log/.gitkeep
