@@ -19,8 +19,100 @@ interface AssetParams {
   id: string;
 }
 
+interface AssetMetricParams {
+  id: string;
+  metricId: string;
+}
+
+interface MetricQualityPolicyParams {
+  metricKey: string;
+}
+
 const assetIdSchema =
   z.string().uuid();
+
+const metricIdSchema =
+  z.string().uuid();
+
+const finiteNumberSchema =
+  z.number().finite();
+
+const metricQualitySchema =
+  z.union(
+    [
+      z.object({
+        mode: z.literal("NONE")
+      }).strict(),
+
+      z.object({
+        mode:
+          z.literal(
+            "HIGHER_IS_BETTER"
+          ),
+        warning:
+          finiteNumberSchema,
+        good:
+          finiteNumberSchema
+      })
+      .strict()
+      .refine(
+        value =>
+          value.warning <
+          value.good,
+        {
+          message:
+            "warning must be lower than good"
+        }
+      ),
+
+      z.object({
+        mode:
+          z.literal(
+            "LOWER_IS_BETTER"
+          ),
+        good:
+          finiteNumberSchema,
+        warning:
+          finiteNumberSchema
+      })
+      .strict()
+      .refine(
+        value =>
+          value.good <
+          value.warning,
+        {
+          message:
+            "good must be lower than warning"
+        }
+      ),
+
+      z.object({
+        mode: z.literal("RANGE"),
+        criticalMin:
+          finiteNumberSchema,
+        warningMin:
+          finiteNumberSchema,
+        warningMax:
+          finiteNumberSchema,
+        criticalMax:
+          finiteNumberSchema
+      })
+      .strict()
+      .refine(
+        value =>
+          value.criticalMin <
+            value.warningMin &&
+          value.warningMin <=
+            value.warningMax &&
+          value.warningMax <
+            value.criticalMax,
+        {
+          message:
+            "Expected criticalMin < warningMin <= warningMax < criticalMax"
+        }
+      )
+    ]
+  );
 
 const createAssetSchema =
   z.object({
@@ -341,6 +433,106 @@ export class AssetController {
           return;
       }
     };
+
+  updateMetricQuality =
+    async (
+      request:
+        FastifyRequest<{
+          Params: AssetMetricParams;
+          Body: unknown;
+        }>,
+      reply: FastifyReply
+    ): Promise<void> => {
+
+      const parsedAssetId =
+        assetIdSchema.safeParse(
+          request.params.id
+        );
+
+      if (!parsedAssetId.success) {
+        await badRequest(
+          reply,
+          "Invalid asset id"
+        );
+        return;
+      }
+
+      const parsedMetricId =
+        metricIdSchema.safeParse(
+          request.params.metricId
+        );
+
+      if (!parsedMetricId.success) {
+        await badRequest(
+          reply,
+          "Invalid metric id"
+        );
+        return;
+      }
+
+      const parsedBody =
+        metricQualitySchema.safeParse(
+          request.body
+        );
+
+      if (!parsedBody.success) {
+        await badRequest(
+          reply,
+          parsedBody.error.issues[0]
+            ?.message
+            ?? "Invalid metric quality configuration"
+        );
+        return;
+      }
+
+      const result =
+        await this.service
+          .updateMetricQuality(
+            parsedAssetId.data,
+            parsedMetricId.data,
+            parsedBody.data
+          );
+
+      switch (result.status) {
+        case "updated":
+          await ok(
+            reply,
+            result.metric
+          );
+          return;
+
+        case "asset_not_found":
+          await notFound(
+            reply,
+            "Asset not found"
+          );
+          return;
+
+        case "metric_not_found":
+          await notFound(
+            reply,
+            "Metric not found"
+          );
+          return;
+      }
+    };
+
+  resetMetricQuality = async (request: FastifyRequest<{ Params: AssetMetricParams }>, reply: FastifyReply): Promise<void> => {
+    const assetId = assetIdSchema.safeParse(request.params.id);
+    const metricId = metricIdSchema.safeParse(request.params.metricId);
+    if (!assetId.success || !metricId.success) { await badRequest(reply, "Invalid asset or metric id"); return; }
+    const result = await this.service.resetMetricQuality(assetId.data, metricId.data);
+    if (result.status === "updated") { await ok(reply, result.metric); return; }
+    await notFound(reply, result.status === "asset_not_found" ? "Asset not found" : "Metric not found");
+  };
+
+  updateGlobalMetricQuality = async (request: FastifyRequest<{ Params: MetricQualityPolicyParams; Body: unknown }>, reply: FastifyReply): Promise<void> => {
+    const metricKey = request.params.metricKey.trim().toLowerCase();
+    if (!metricKey || metricKey.length > 255) { await badRequest(reply, "Invalid metric key"); return; }
+    const parsedBody = metricQualitySchema.safeParse(request.body);
+    if (!parsedBody.success) { await badRequest(reply, parsedBody.error.issues[0]?.message ?? "Invalid metric quality configuration"); return; }
+    await ok(reply, await this.service.updateGlobalMetricQuality(metricKey, parsedBody.data));
+  };
 
   deleteAsset =
     async (

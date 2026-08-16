@@ -17,6 +17,7 @@ export interface LatestObservationRecord {
   source: string | null;
   source_ref: string | null;
   quality: Record<string, unknown>;
+  metric_quality_config: Record<string, unknown>;
 }
 
 export interface ObservationHistoryQuery {
@@ -84,10 +85,13 @@ implements ObservationRepository {
           o.value_json,
           o.source,
           o.source_ref,
-          o.quality
+          o.quality,
+          COALESCE(am.quality_config, gp.quality_config, metric_quality_default(am.metric_key)) AS metric_quality_config
         FROM observations o
         JOIN asset_metrics am
           ON am.id = o.asset_metric_id
+        LEFT JOIN metric_quality_policies gp
+          ON gp.metric_key = am.metric_key
         JOIN assets a
           ON a.id = am.asset_id
         WHERE ($1::uuid IS NULL OR a.id = $1)
@@ -122,10 +126,13 @@ implements ObservationRepository {
           o.value_json,
           o.source,
           o.source_ref,
-          o.quality
+          o.quality,
+          COALESCE(am.quality_config, gp.quality_config, metric_quality_default(am.metric_key)) AS metric_quality_config
         FROM observations o
         JOIN asset_metrics am
           ON am.id = o.asset_metric_id
+        LEFT JOIN metric_quality_policies gp
+          ON gp.metric_key = am.metric_key
         JOIN assets a
           ON a.id = am.asset_id
         WHERE am.id = $1

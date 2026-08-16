@@ -8,6 +8,14 @@ export interface AssetMetricRecord {
   unit: string | null;
   value_type: string;
   enabled: boolean;
+  quality_config: Record<string, unknown>;
+  global_quality_config: Record<string, unknown>;
+  quality_overridden: boolean;
+}
+
+export interface MetricQualityPolicyRecord {
+  metric_key: string;
+  quality_config: Record<string, unknown>;
 }
 
 export interface AssetRecord {
@@ -80,6 +88,19 @@ export interface AssetRepository {
     warningAfterSeconds: number,
     offlineAfterSeconds: number
   ): Promise<boolean>;
+  updateMetricQuality(
+    assetId: string,
+    metricId: string,
+    qualityConfig: Record<string, unknown>
+  ): Promise<AssetMetricRecord | null>;
+  resetMetricQuality(
+    assetId: string,
+    metricId: string
+  ): Promise<AssetMetricRecord | null>;
+  updateGlobalMetricQuality(
+    metricKey: string,
+    qualityConfig: Record<string, unknown>
+  ): Promise<MetricQualityPolicyRecord>;
   hasMetrics(id: string): Promise<boolean>;
   delete(id: string): Promise<boolean>;
 }
@@ -215,16 +236,15 @@ implements AssetRepository {
       await this.pool.query<AssetMetricRecord>(
         `
         SELECT
-          id,
-          asset_id,
-          metric_key,
-          display_name,
-          unit,
-          value_type,
-          enabled
-        FROM asset_metrics
-        WHERE asset_id = ANY($1::uuid[])
-        ORDER BY asset_id, metric_key
+          am.id, am.asset_id, am.metric_key, am.display_name,
+          am.unit, am.value_type, am.enabled,
+          COALESCE(am.quality_config, gp.quality_config, metric_quality_default(am.metric_key)) AS quality_config,
+          COALESCE(gp.quality_config, metric_quality_default(am.metric_key)) AS global_quality_config,
+          (am.quality_config IS NOT NULL) AS quality_overridden
+        FROM asset_metrics am
+        LEFT JOIN metric_quality_policies gp ON gp.metric_key = am.metric_key
+        WHERE am.asset_id = ANY($1::uuid[])
+        ORDER BY am.asset_id, am.metric_key
         `,
         [assetIds]
       );
@@ -467,6 +487,45 @@ implements AssetRepository {
       result.rowCount
       ?? 0
     ) > 0;
+  }
+
+  async updateMetricQuality(
+    assetId: string,
+    metricId: string,
+    qualityConfig: Record<string, unknown>
+  ): Promise<AssetMetricRecord | null> {
+    await this.pool.query(
+      `UPDATE asset_metrics SET quality_config = $3::jsonb WHERE asset_id = $1 AND id = $2`,
+      [assetId, metricId, JSON.stringify(qualityConfig)]
+    );
+    const rows = await this.findMetrics([assetId]);
+    return rows.find(metric => metric.id === metricId) ?? null;
+  }
+
+  async resetMetricQuality(
+    assetId: string,
+    metricId: string
+  ): Promise<AssetMetricRecord | null> {
+    await this.pool.query(
+      `UPDATE asset_metrics SET quality_config = NULL WHERE asset_id = $1 AND id = $2`,
+      [assetId, metricId]
+    );
+    const rows = await this.findMetrics([assetId]);
+    return rows.find(metric => metric.id === metricId) ?? null;
+  }
+
+  async updateGlobalMetricQuality(
+    metricKey: string,
+    qualityConfig: Record<string, unknown>
+  ): Promise<MetricQualityPolicyRecord> {
+    const result = await this.pool.query<MetricQualityPolicyRecord>(
+      `INSERT INTO metric_quality_policies (metric_key, quality_config, updated_at)
+       VALUES ($1, $2::jsonb, NOW())
+       ON CONFLICT (metric_key) DO UPDATE SET quality_config = EXCLUDED.quality_config, updated_at = NOW()
+       RETURNING metric_key, quality_config`,
+      [metricKey, JSON.stringify(qualityConfig)]
+    );
+    return result.rows[0]!;
   }
 
   async hasMetrics(

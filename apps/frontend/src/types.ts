@@ -1,3 +1,34 @@
+export type MetricQualityStatus =
+  | "GOOD"
+  | "WARNING"
+  | "CRITICAL"
+  | "UNKNOWN";
+
+export type MetricQualityConfig =
+  | { mode: "NONE" }
+  | {
+      mode: "HIGHER_IS_BETTER";
+      warning: number;
+      good: number;
+    }
+  | {
+      mode: "LOWER_IS_BETTER";
+      good: number;
+      warning: number;
+    }
+  | {
+      mode: "RANGE";
+      criticalMin: number;
+      warningMin: number;
+      warningMax: number;
+      criticalMax: number;
+    };
+
+export interface MetricQuality {
+  status: MetricQualityStatus;
+  config: MetricQualityConfig;
+}
+
 export interface Sensor {
   id: string;
   uid: string;
@@ -61,6 +92,9 @@ export interface AssetMetric {
   unit: string | null;
   valueType: string;
   enabled: boolean;
+  qualityConfig: MetricQualityConfig;
+  globalQualityConfig: MetricQualityConfig;
+  qualityOverridden: boolean;
 }
 
 export interface Asset {
@@ -121,7 +155,7 @@ export interface LatestObservation {
     | Record<string, unknown>;
   source: string | null;
   sourceRef: string | null;
-  quality: Record<string, unknown>;
+  quality: MetricQuality;
 }
 
 export interface ObservationHistoryPoint {
@@ -138,7 +172,7 @@ export interface ObservationHistoryPoint {
     | Record<string, unknown>;
   source: string | null;
   sourceRef: string | null;
-  quality: Record<string, unknown>;
+  quality: MetricQuality;
 }
 
 export interface ObservationAggregatePoint {

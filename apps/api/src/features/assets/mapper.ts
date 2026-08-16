@@ -1,8 +1,39 @@
-import type { AssetDto } from "./dto.js";
+import type {
+  AssetDto,
+  AssetMetricDto
+} from "./dto.js";
 import type {
   AssetMetricRecord,
   AssetRecord
 } from "./repository.js";
+
+import {
+  normalizeMetricQualityConfig
+} from "../telemetry/quality.js";
+
+export function mapAssetMetricToDto(
+  metric: AssetMetricRecord
+): AssetMetricDto {
+
+  return {
+    id: metric.id,
+    key: metric.metric_key,
+    displayName: metric.display_name,
+    unit: metric.unit,
+    valueType: metric.value_type,
+    enabled: metric.enabled,
+    qualityConfig:
+      normalizeMetricQualityConfig(
+        metric.quality_config
+      ),
+    globalQualityConfig:
+      normalizeMetricQualityConfig(
+        metric.global_quality_config
+      ),
+    qualityOverridden:
+      metric.quality_overridden
+  };
+}
 
 export function mapAssetToDto(
   asset: AssetRecord,
@@ -77,14 +108,7 @@ export function mapAssetToDto(
 
     metrics:
       metrics.map(
-        metric => ({
-          id: metric.id,
-          key: metric.metric_key,
-          displayName: metric.display_name,
-          unit: metric.unit,
-          valueType: metric.value_type,
-          enabled: metric.enabled
-        })
+        mapAssetMetricToDto
       ),
 
     lastMeasurementAt:

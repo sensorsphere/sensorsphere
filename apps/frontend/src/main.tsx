@@ -1816,6 +1816,85 @@ function Dashboard() {
                               "rssi"
                             );
 
+                          const metricObservation =
+                            (
+                              metricKey: string
+                            ) => {
+
+                              const metric =
+                                asset.metrics.find(
+                                  currentMetric =>
+                                    currentMetric.key ===
+                                    metricKey
+                                );
+
+                              return metric
+                                ? assetObservations.find(
+                                    observation =>
+                                      observation.metricId ===
+                                      metric.id
+                                  )
+                                  ?? null
+                                : null;
+                            };
+
+                          const temperatureObservation =
+                            metricObservation(
+                              "temperature"
+                            );
+
+                          const humidityObservation =
+                            metricObservation(
+                              "humidity"
+                            );
+
+                          const rssiObservation =
+                            metricObservation(
+                              "rssi"
+                            );
+
+                          const qualityIndicator =
+                            (
+                              observation:
+                                typeof temperatureObservation
+                            ) => {
+
+                              const status =
+                                observation?.quality
+                                  ?.status;
+
+                              if (
+                                !status ||
+                                status === "UNKNOWN"
+                              ) {
+                                return null;
+                              }
+
+                              const color =
+                                status === "GOOD"
+                                  ? "green"
+                                  : status === "WARNING"
+                                    ? "orange"
+                                    : "red";
+
+                              const label =
+                                status === "GOOD"
+                                  ? "Good"
+                                  : status === "WARNING"
+                                    ? "Warning"
+                                    : "Critical";
+
+                              return (
+                                <Badge
+                                  size="xs"
+                                  color={color}
+                                  variant="light"
+                                >
+                                  ● {label}
+                                </Badge>
+                              );
+                            };
+
                           const healthColor =
                             asset.health.status ===
                               "online"
@@ -1904,6 +1983,12 @@ function Dashboard() {
                                       {
                                         asset.location?.name
                                         ?? "Unassigned"
+                                      }
+                                      {" · Last seen: "}
+                                      {
+                                        formatAge(
+                                          asset.health.ageSeconds
+                                        )
                                       }
                                     </Text>
                                   </div>
@@ -2070,16 +2155,27 @@ function Dashboard() {
                                       Temperature
                                     </Text>
 
-                                    <Text
-                                      fw={600}
-                                      size="lg"
+                                    <Group
+                                      gap="xs"
+                                      align="center"
                                     >
+                                      <Text
+                                        fw={600}
+                                        size="lg"
+                                      >
+                                        {
+                                          temperature !== null
+                                            ? `${temperature} °C`
+                                            : "—"
+                                        }
+                                      </Text>
+
                                       {
-                                        temperature !== null
-                                          ? `${temperature} °C`
-                                          : "—"
+                                        qualityIndicator(
+                                          temperatureObservation
+                                        )
                                       }
-                                    </Text>
+                                    </Group>
                                   </div>
 
                                   <div>
@@ -2090,16 +2186,27 @@ function Dashboard() {
                                       Humidity
                                     </Text>
 
-                                    <Text
-                                      fw={600}
-                                      size="lg"
+                                    <Group
+                                      gap="xs"
+                                      align="center"
                                     >
+                                      <Text
+                                        fw={600}
+                                        size="lg"
+                                      >
+                                        {
+                                          humidity !== null
+                                            ? `${humidity} %`
+                                            : "—"
+                                        }
+                                      </Text>
+
                                       {
-                                        humidity !== null
-                                          ? `${humidity} %`
-                                          : "—"
+                                        qualityIndicator(
+                                          humidityObservation
+                                        )
                                       }
-                                    </Text>
+                                    </Group>
                                   </div>
 
                                   {
@@ -2112,29 +2219,28 @@ function Dashboard() {
                                           RSSI
                                         </Text>
 
-                                        <Text
-                                          fw={600}
-                                          size="lg"
+                                        <Group
+                                          gap="xs"
+                                          align="center"
                                         >
-                                          {`${rssi} dBm`}
-                                        </Text>
+                                          <Text
+                                            fw={600}
+                                            size="lg"
+                                          >
+                                            {`${rssi} dBm`}
+                                          </Text>
+
+                                          {
+                                            qualityIndicator(
+                                              rssiObservation
+                                            )
+                                          }
+                                        </Group>
                                       </div>
                                     )
                                   }
 
                                 </Group>
-
-                                <Text
-                                  size="xs"
-                                  c="dimmed"
-                                >
-                                  Last seen:{" "}
-                                  {
-                                    formatAge(
-                                      asset.health.ageSeconds
-                                    )
-                                  }
-                                </Text>
 
                               </Stack>
                             </Card>

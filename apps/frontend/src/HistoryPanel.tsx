@@ -61,7 +61,10 @@ const PERIODS = [
   { label: "6 h", value: "6" },
   { label: "12 h", value: "12" },
   { label: "24 h", value: "24" },
+  { label: "2 days", value: "48" },
+  { label: "3 days", value: "72" },
   { label: "7 days", value: "168" },
+  { label: "14 days", value: "336" },
   { label: "30 days", value: "720" }
 ];
 

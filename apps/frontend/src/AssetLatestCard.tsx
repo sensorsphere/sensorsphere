@@ -104,6 +104,91 @@ function formatValue(
     : value;
 }
 
+function observationSortOrder(
+  observation: LatestObservation
+): number {
+
+  const key =
+    observation.displayName
+      .toLowerCase()
+      .replace(
+        /[\\s_-]+/g,
+        ""
+      );
+
+  if (key.includes("temperature")) {
+    return 10;
+  }
+
+  if (key.includes("humidity")) {
+    return 20;
+  }
+
+  if (
+    key.includes("batterylevel") ||
+    key === "battery"
+  ) {
+    return 30;
+  }
+
+  if (key.includes("batteryvoltage")) {
+    return 40;
+  }
+
+  if (key.includes("rssi")) {
+    return 50;
+  }
+
+  return 100;
+}
+
+function sortObservations(
+  observations: LatestObservation[]
+): LatestObservation[] {
+
+  return [...observations].sort(
+    (a, b) => {
+
+      const orderDifference =
+        observationSortOrder(a) -
+        observationSortOrder(b);
+
+      if (orderDifference !== 0) {
+        return orderDifference;
+      }
+
+      return a.displayName.localeCompare(
+        b.displayName,
+        undefined,
+        {
+          sensitivity: "base"
+        }
+      );
+    }
+  );
+}
+
+function qualityColor(
+  observation: LatestObservation
+): string | null {
+
+  switch (
+    observation.quality.status
+  ) {
+    case "GOOD":
+      return "green";
+
+    case "WARNING":
+      return "orange";
+
+    case "CRITICAL":
+      return "red";
+
+    case "UNKNOWN":
+      return null;
+  }
+}
+
 export function AssetLatestCard({
   asset,
   observations
@@ -330,6 +415,15 @@ export function AssetLatestCard({
         }
     });
 
+  const sortedObservations =
+    React.useMemo(
+      () =>
+        sortObservations(
+          observations
+        ),
+      [observations]
+    );
+
   const latestTime =
     observations.length > 0
       ? observations
@@ -443,41 +537,45 @@ export function AssetLatestCard({
 
         </Group>
 
-        <Text
-          size="xs"
-          c="dimmed"
+        <Group
+          gap="md"
+          justify="space-between"
+          wrap="wrap"
         >
-          Last seen:{" "}
-          {
-            formatAge(
-              asset.health.ageSeconds
-            )
-          }
-          {
-            asset.health.lastSeenAt
-              ? ` · ${new Date(
-                  asset.health.lastSeenAt
-                ).toLocaleString()}`
-              : ""
-          }
-        </Text>
+          <Group gap="xs">
+            <Text
+              size="sm"
+              c="dimmed"
+            >
+              Location:
+            </Text>
 
-        <Group gap="xs">
+            <Text size="sm">
+              {
+                asset.location?.name
+                ?? "Unassigned"
+              }
+            </Text>
+          </Group>
 
           <Text
-            size="sm"
+            size="xs"
             c="dimmed"
           >
-            Location:
-          </Text>
-
-          <Text size="sm">
+            Last seen:{" "}
             {
-              asset.location?.name
-              ?? "Unassigned"
+              formatAge(
+                asset.health.ageSeconds
+              )
+            }
+            {
+              asset.health.lastSeenAt
+                ? ` · ${new Date(
+                    asset.health.lastSeenAt
+                  ).toLocaleString()}`
+                : ""
             }
           </Text>
-
         </Group>
 
         {observations.length === 0
@@ -493,7 +591,7 @@ export function AssetLatestCard({
                 sm: 3
               }}
             >
-              {observations.map(
+              {sortedObservations.map(
                 observation => (
                   <div
                     key={
@@ -509,16 +607,51 @@ export function AssetLatestCard({
                       }
                     </Text>
 
-                    <Text
-                      size="lg"
-                      fw={600}
+                    <Group
+                      gap="xs"
+                      align="center"
                     >
+                      <Text
+                        size="lg"
+                        fw={600}
+                      >
+                        {
+                          formatValue(
+                            observation
+                          )
+                        }
+                      </Text>
+
                       {
-                        formatValue(
+                        qualityColor(
                           observation
+                        ) && (
+                          <Badge
+                            size="sm"
+                            variant="light"
+                            color={
+                              qualityColor(
+                                observation
+                              )!
+                            }
+                          >
+                            {
+                              observation
+                                .quality
+                                .status ===
+                              "GOOD"
+                                ? "Good"
+                                : observation
+                                    .quality
+                                    .status ===
+                                  "WARNING"
+                                  ? "Warning"
+                                  : "Critical"
+                            }
+                          </Badge>
                         )
                       }
-                    </Text>
+                    </Group>
                   </div>
                 )
               )}
@@ -836,7 +969,7 @@ export function AssetLatestCard({
                   sm: 3
                 }}
               >
-                {observations.map(
+                {sortedObservations.map(
                   observation => (
                     <Card
                       key={
@@ -854,15 +987,50 @@ export function AssetLatestCard({
                         }
                       </Text>
 
-                      <Text
-                        fw={600}
+                      <Group
+                        gap="xs"
+                        align="center"
                       >
+                        <Text
+                          fw={600}
+                        >
+                          {
+                            formatValue(
+                              observation
+                            )
+                          }
+                        </Text>
+
                         {
-                          formatValue(
+                          qualityColor(
                             observation
+                          ) && (
+                            <Badge
+                              size="sm"
+                              variant="light"
+                              color={
+                                qualityColor(
+                                  observation
+                                )!
+                              }
+                            >
+                              {
+                                observation
+                                  .quality
+                                  .status ===
+                                "GOOD"
+                                  ? "Good"
+                                  : observation
+                                      .quality
+                                      .status ===
+                                    "WARNING"
+                                    ? "Warning"
+                                    : "Critical"
+                              }
+                            </Badge>
                           )
                         }
-                      </Text>
+                      </Group>
 
                       <Text
                         size="xs"

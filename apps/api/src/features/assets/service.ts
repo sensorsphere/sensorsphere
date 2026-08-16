@@ -1,10 +1,18 @@
 import type {
   AssetDto,
+  AssetMetricDto,
   CreateAssetInput,
   UpdateAssetInput
 } from "./dto.js";
 import type { AssetRepository } from "./repository.js";
-import { mapAssetToDto } from "./mapper.js";
+import {
+  mapAssetMetricToDto,
+  mapAssetToDto
+} from "./mapper.js";
+
+import type {
+  MetricQualityConfig
+} from "../telemetry/quality.js";
 
 export class AssetService {
 
@@ -252,6 +260,73 @@ export class AssetService {
           []
         )
     };
+  }
+
+
+  async updateMetricQuality(
+    assetId: string,
+    metricId: string,
+    qualityConfig: MetricQualityConfig
+  ): Promise<{
+    status: "updated";
+    metric: AssetMetricDto;
+  } | {
+    status:
+      | "asset_not_found"
+      | "metric_not_found";
+  }> {
+
+    const asset =
+      await this.repository.findById(
+        assetId
+      );
+
+    if (!asset) {
+      return {
+        status: "asset_not_found"
+      };
+    }
+
+    const metric =
+      await this.repository
+        .updateMetricQuality(
+          assetId,
+          metricId,
+          qualityConfig
+        );
+
+    if (!metric) {
+      return {
+        status: "metric_not_found"
+      };
+    }
+
+    return {
+      status: "updated",
+      metric:
+        mapAssetMetricToDto(
+          metric
+        )
+    };
+  }
+
+
+  async resetMetricQuality(
+    assetId: string,
+    metricId: string
+  ): Promise<{ status: "updated"; metric: AssetMetricDto } | { status: "asset_not_found" | "metric_not_found" }> {
+    if (!await this.repository.findById(assetId)) return { status: "asset_not_found" };
+    const metric = await this.repository.resetMetricQuality(assetId, metricId);
+    if (!metric) return { status: "metric_not_found" };
+    return { status: "updated", metric: mapAssetMetricToDto(metric) };
+  }
+
+  async updateGlobalMetricQuality(
+    metricKey: string,
+    qualityConfig: MetricQualityConfig
+  ): Promise<{ metricKey: string; qualityConfig: MetricQualityConfig }> {
+    const policy = await this.repository.updateGlobalMetricQuality(metricKey, qualityConfig);
+    return { metricKey: policy.metric_key, qualityConfig: policy.quality_config as MetricQualityConfig };
   }
 
 

@@ -1,3 +1,7 @@
+import type {
+  MetricQuality
+} from "./quality.js";
+
 export interface MeasurementDto {
   sensorUid: string;
   time: string;
@@ -26,7 +30,7 @@ export interface LatestObservationDto {
     | Record<string, unknown>;
   source: string | null;
   sourceRef: string | null;
-  quality: Record<string, unknown>;
+  quality: MetricQuality;
 }
 
 export interface ObservationHistoryDto {
@@ -43,7 +47,7 @@ export interface ObservationHistoryDto {
     | Record<string, unknown>;
   source: string | null;
   sourceRef: string | null;
-  quality: Record<string, unknown>;
+  quality: MetricQuality;
 }
 
 export interface ObservationAggregateDto {

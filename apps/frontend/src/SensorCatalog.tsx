@@ -40,6 +40,10 @@ import {
   usePersistentState
 } from "./preferences/usePersistentState";
 
+import {
+  MetricQualityEditor
+} from "./MetricQualityEditor";
+
 interface SensorFormState {
   name: string;
   description: string;
@@ -947,6 +951,7 @@ export function SensorCatalog() {
         }
 
         centered
+        size="xl"
       >
 
         {form && (
@@ -1048,6 +1053,16 @@ export function SensorCatalog() {
                     enabled:
                       event.currentTarget.checked
                   })
+              }
+            />
+
+            <MetricQualityEditor
+              asset={
+                assets.find(
+                  asset =>
+                    asset.sensor?.uid ===
+                    selectedSensor?.uid
+                )
               }
             />
 

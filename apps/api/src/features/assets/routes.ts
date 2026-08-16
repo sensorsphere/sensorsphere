@@ -40,6 +40,21 @@ export async function registerAssetRoutes(
     options.controller.assignAssetLocation
   );
 
+  app.patch(
+    "/assets/:id/metrics/:metricId/quality",
+    options.controller.updateMetricQuality
+  );
+
+  app.delete(
+    "/assets/:id/metrics/:metricId/quality",
+    options.controller.resetMetricQuality
+  );
+
+  app.patch(
+    "/metric-quality-policies/:metricKey",
+    options.controller.updateGlobalMetricQuality
+  );
+
   app.delete(
     "/assets/:id",
     options.controller.deleteAsset

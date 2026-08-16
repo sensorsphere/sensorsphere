@@ -12,6 +12,10 @@ import type {
   ObservationHistoryDto
 } from "./dto.js";
 
+import {
+  evaluateMetricQuality
+} from "./quality.js";
+
 export function mapMeasurementToDto(
   record: MeasurementRecord
 ): MeasurementDto {
@@ -71,7 +75,11 @@ export function mapLatestObservationToDto(
     value,
     source: observation.source,
     sourceRef: observation.source_ref,
-    quality: observation.quality
+    quality:
+      evaluateMetricQuality(
+        value,
+        observation.metric_quality_config
+      )
   };
 }
 

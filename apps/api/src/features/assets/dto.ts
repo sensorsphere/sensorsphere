@@ -1,3 +1,7 @@
+import type {
+  MetricQualityConfig
+} from "../telemetry/quality.js";
+
 export interface AssetMetricDto {
   id: string;
   key: string;
@@ -5,6 +9,9 @@ export interface AssetMetricDto {
   unit: string | null;
   valueType: string;
   enabled: boolean;
+  qualityConfig: MetricQualityConfig;
+  globalQualityConfig: MetricQualityConfig;
+  qualityOverridden: boolean;
 }
 
 export interface AssetDto {
