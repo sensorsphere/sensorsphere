@@ -8,7 +8,7 @@ substitutions:
 
 packages:
   hardware: !include packages/hardware/esp32-mhetesp32minikit.yaml
-  status_led: !include packages/hardware/esp32-cam-status-led.yaml
+  status_led: !include packages/hardware/esp32-mh-et-live-status-led.yaml
 
   base: !include packages/base.yaml
   network: !include packages/network.yaml

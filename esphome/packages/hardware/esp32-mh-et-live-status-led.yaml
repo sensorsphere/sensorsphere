@@ -11,7 +11,8 @@ text_sensor:
 output:
   - platform: gpio
     pin:
-      number: GPIO4
+      number: GPIO2
+      inverted: false
     id: status_led_output
 
 light:
@@ -20,9 +21,6 @@ light:
     output: status_led_output
     internal: true
 
-#
-# Enable / disable the status LED
-#
 switch:
   - platform: template
     name: "Status LED Enabled"
@@ -35,60 +33,49 @@ switch:
     turn_off_action:
       - light.turn_off: status_led
 
-#
-# Status LED management
-#
 interval:
   - interval: 1s
     then:
-
-      # LED globally disabled
       - if:
           condition:
             switch.is_off: status_led_enabled
+
           then:
             - light.turn_off: status_led
 
           else:
-
-            # ----------------------------------------
-            # WiFi disconnected
-            # 1 blink / second
-            # ----------------------------------------
             - if:
                 condition:
                   not:
                     wifi.connected:
+
                 then:
+                  # WiFi KO:
+                  # 1 blink / second
                   - light.turn_on: status_led
                   - delay: 500ms
                   - light.turn_off: status_led
 
                 else:
-
-                  # ----------------------------------------
-                  # WiFi connected / MQTT disconnected
-                  # 2 blinks / second
-                  # ----------------------------------------
                   - if:
                       condition:
                         not:
                           mqtt.connected:
+
                       then:
+                        # WiFi OK / MQTT KO:
+                        # 2 blinks / second
                         - light.turn_on: status_led
-                        - delay: 100ms
+                        - delay: 150ms
                         - light.turn_off: status_led
-                        - delay: 100ms
+                        - delay: 150ms
                         - light.turn_on: status_led
-                        - delay: 100ms
+                        - delay: 150ms
                         - light.turn_off: status_led
 
                       else:
-
-                        # ----------------------------------------
-                        # WiFi + MQTT connected
-                        # 5 ms heartbeat
-                        # ----------------------------------------
+                        # WiFi + MQTT OK:
+                        # short heartbeat
                         - light.turn_on: status_led
-                        - delay: 5ms
+                        - delay: 50ms
                         - light.turn_off: status_led
