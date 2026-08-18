@@ -275,6 +275,14 @@ export function GatewayCoveragePanel() {
                               </Text>
                               <Text size="xs" c="dimmed">
                                 {row.sampleCount} samples
+                                {" · last "}
+                                {
+                                  row.lastSeenAt
+                                    ? new Date(
+                                        row.lastSeenAt
+                                      ).toLocaleString()
+                                    : "—"
+                                }
                               </Text>
                             </Stack>
                           </Table.Td>

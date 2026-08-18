@@ -43,6 +43,16 @@
 * [X] il faudrait faire un arret de tous le modules ainsi qu un rebuild complet de tous ces modules, sans perte de donnees, afin de voir si ca se construit correctement et ensuite si ca se fait correctement tenter tout un build sur un autre environnement/machine
 
 
+### Gateway Coverage
+* [ ] en tete de tableau, afficher le nombre total de Sensor et pour chaque sensor aussi
+* [ ] ajouter les periodes : 5minutes, 10m, 15m, 30m
+* [ ] ajoutr un bouton "refresh" pour forcer le refresh des donnees
+* [ ] mettre un badgde de differente couleur pour les "WEAK", "FAIR", "GODD", "EXCELLENT", ...
+* [ ] pour le "last seen", mettre un affichage "Depuis ..." plutot qu'une date/heure et si on passe dessus (hover) sur cette informtion, affiche la date/heure
+* [ ] pouvoir ordonner les sensors
+
+
+
 ### Specif
 
 * [ ] le flag "enabled" sur un sensor ne semble avoir aucun effet. par exemple, dans Assets apres un disable, il affiche toujours "Enabled". au passage, dans l vue "Compact", il faudrait ajouter la colonne "Enabled"
