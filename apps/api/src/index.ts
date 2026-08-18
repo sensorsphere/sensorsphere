@@ -108,62 +108,91 @@ app.get("/api/v1/gateway-coverage", async (request, reply) => {
     });
   }
 
-  const result = await pool.query(
-    `
-    WITH stats AS (
-      SELECT
-        gateway_id,
-        sensor_uid,
-        COUNT(*)::integer AS sample_count,
-        AVG(rssi)::double precision AS avg_rssi,
-        MIN(rssi)::double precision AS min_rssi,
-        MAX(rssi)::double precision AS max_rssi,
-        COALESCE(STDDEV_SAMP(rssi), 0)::double precision AS stddev_rssi,
-        MIN(time) AS first_seen_at,
-        MAX(time) AS last_seen_at
-      FROM gateway_sensor_rssi_samples
-      WHERE time >= NOW() - ($1 * INTERVAL '1 hour')
-      GROUP BY gateway_id, sensor_uid
-    ), ranked AS (
-      SELECT
-        stats.*,
-        ROW_NUMBER() OVER (
-          PARTITION BY sensor_uid
-          ORDER BY avg_rssi DESC, sample_count DESC, gateway_id
-        ) AS rank,
-        LEAD(avg_rssi) OVER (
-          PARTITION BY sensor_uid
-          ORDER BY avg_rssi DESC, sample_count DESC, gateway_id
-        ) AS second_avg_rssi
-      FROM stats
-    )
-    SELECT
-      gateway_id AS "gatewayId",
-      sensor_uid AS "sensorUid",
-      sample_count AS "sampleCount",
-      avg_rssi AS "avgRssi",
-      min_rssi AS "minRssi",
-      max_rssi AS "maxRssi",
-      stddev_rssi AS "stddevRssi",
-      first_seen_at AS "firstSeenAt",
-      last_seen_at AS "lastSeenAt",
-      rank,
-      CASE
-        WHEN rank = 1 AND second_avg_rssi IS NOT NULL
-          THEN avg_rssi - second_avg_rssi
-        ELSE NULL
-      END AS "leadDb"
-    FROM ranked
-    ORDER BY sensor_uid, rank, gateway_id
-    `,
-    [requestedHours]
-  );
+  const [result, gatewayResult] =
+    await Promise.all([
+      pool.query(
+        `
+        WITH stats AS (
+          SELECT
+            gateway_id,
+            sensor_uid,
+            COUNT(*)::integer AS sample_count,
+            AVG(rssi)::double precision AS avg_rssi,
+            MIN(rssi)::double precision AS min_rssi,
+            MAX(rssi)::double precision AS max_rssi,
+            COALESCE(STDDEV_SAMP(rssi), 0)::double precision AS stddev_rssi,
+            MIN(time) AS first_seen_at,
+            MAX(time) AS last_seen_at
+          FROM gateway_sensor_rssi_samples
+          WHERE time >= NOW() - ($1 * INTERVAL '1 hour')
+          GROUP BY gateway_id, sensor_uid
+        ), ranked AS (
+          SELECT
+            stats.*,
+            ROW_NUMBER() OVER (
+              PARTITION BY sensor_uid
+              ORDER BY avg_rssi DESC, sample_count DESC, gateway_id
+            ) AS rank,
+            LEAD(avg_rssi) OVER (
+              PARTITION BY sensor_uid
+              ORDER BY avg_rssi DESC, sample_count DESC, gateway_id
+            ) AS second_avg_rssi
+          FROM stats
+        )
+        SELECT
+          gateway_id AS "gatewayId",
+          sensor_uid AS "sensorUid",
+          sample_count AS "sampleCount",
+          avg_rssi AS "avgRssi",
+          min_rssi AS "minRssi",
+          max_rssi AS "maxRssi",
+          stddev_rssi AS "stddevRssi",
+          first_seen_at AS "firstSeenAt",
+          last_seen_at AS "lastSeenAt",
+          rank,
+          CASE
+            WHEN rank = 1 AND second_avg_rssi IS NOT NULL
+              THEN avg_rssi - second_avg_rssi
+            ELSE NULL
+          END AS "leadDb"
+        FROM ranked
+        ORDER BY sensor_uid, rank, gateway_id
+        `,
+        [requestedHours]
+      ),
+
+      pool.query(
+        `
+        SELECT
+          gateway_id AS "gatewayId",
+          MAX(time) AS "lastSeenAt",
+          COUNT(*)::integer AS "sampleCount"
+        FROM gateway_sensor_rssi_samples
+        GROUP BY gateway_id
+        ORDER BY gateway_id
+        `
+      )
+    ]);
 
   return {
     hours: requestedHours,
     generatedAt: new Date().toISOString(),
+    gateways: gatewayResult.rows,
     rows: result.rows
   };
+});
+
+app.delete("/api/v1/gateway-coverage", async (_request, reply) => {
+  const result = await pool.query(
+    `
+    DELETE FROM gateway_sensor_rssi_samples
+    `
+  );
+
+  return reply.code(200).send({
+    status: "reset",
+    deletedSamples: result.rowCount ?? 0
+  });
 });
 
 app.get("/api/measurements/latest", async () => {

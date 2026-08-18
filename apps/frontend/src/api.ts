@@ -438,3 +438,22 @@ export async function getGatewayCoverage(
     response
   );
 }
+
+export async function resetGatewayCoverage():
+Promise<{
+  status: string;
+  deletedSamples: number;
+}> {
+  const response =
+    await fetch(
+      "/api/v1/gateway-coverage",
+      {
+        method: "DELETE"
+      }
+    );
+
+  return readJson<{
+    status: string;
+    deletedSamples: number;
+  }>(response);
+}

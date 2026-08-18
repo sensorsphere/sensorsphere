@@ -241,8 +241,15 @@ export interface GatewayCoverageRow {
   leadDb: number | null;
 }
 
+export interface GatewayCoverageGateway {
+  gatewayId: string;
+  lastSeenAt: string;
+  sampleCount: number;
+}
+
 export interface GatewayCoverageResponse {
   hours: number;
   generatedAt: string;
+  gateways: GatewayCoverageGateway[];
   rows: GatewayCoverageRow[];
 }

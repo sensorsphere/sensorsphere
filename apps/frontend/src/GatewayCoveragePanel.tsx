@@ -3,9 +3,11 @@ import React from "react";
 import {
   Alert,
   Badge,
+  Button,
   Card,
   Group,
   Loader,
+  Modal,
   SegmentedControl,
   Stack,
   Table,
@@ -14,11 +16,14 @@ import {
 } from "@mantine/core";
 
 import {
-  useQuery
+  useMutation,
+  useQuery,
+  useQueryClient
 } from "@tanstack/react-query";
 
 import {
-  getGatewayCoverage
+  getGatewayCoverage,
+  resetGatewayCoverage
 } from "./api";
 
 import type {
@@ -58,8 +63,14 @@ function recommendation(
 }
 
 export function GatewayCoveragePanel() {
+  const queryClient =
+    useQueryClient();
+
   const [hours, setHours] =
     React.useState("24");
+
+  const [resetOpened, setResetOpened] =
+    React.useState(false);
 
   const query =
     useQuery({
@@ -77,12 +88,23 @@ export function GatewayCoveragePanel() {
   const rows =
     query.data?.rows ?? [];
 
+  const gatewaySummaries =
+    query.data?.gateways ?? [];
+
   const gateways =
-    Array.from(
-      new Set(
-        rows.map(row => row.gatewayId)
+    gatewaySummaries.map(
+      gateway => gateway.gatewayId
+    );
+
+  const gatewayById =
+    new Map(
+      gatewaySummaries.map(
+        gateway => [
+          gateway.gatewayId,
+          gateway
+        ]
       )
-    ).sort();
+    );
 
   const sensors =
     Array.from(
@@ -108,6 +130,23 @@ export function GatewayCoveragePanel() {
     current.push(row);
     rowsBySensor.set(row.sensorUid, current);
   }
+  const resetMutation =
+    useMutation({
+      mutationFn:
+        resetGatewayCoverage,
+
+      onSuccess:
+        async () => {
+          setResetOpened(false);
+
+          await queryClient
+            .invalidateQueries({
+              queryKey: [
+                "gateway-coverage"
+              ]
+            });
+        }
+    });
 
   return (
     <Stack gap="lg">
@@ -119,16 +158,28 @@ export function GatewayCoveragePanel() {
           </Text>
         </div>
 
-        <SegmentedControl
-          value={hours}
-          onChange={setHours}
-          data={[
-            { label: "1h", value: "1" },
-            { label: "6h", value: "6" },
-            { label: "24h", value: "24" },
-            { label: "7d", value: "168" }
-          ]}
-        />
+        <Group gap="sm">
+          <SegmentedControl
+            value={hours}
+            onChange={setHours}
+            data={[
+              { label: "1h", value: "1" },
+              { label: "6h", value: "6" },
+              { label: "24h", value: "24" },
+              { label: "7d", value: "168" }
+            ]}
+          />
+
+          <Button
+            color="red"
+            variant="light"
+            onClick={
+              () => setResetOpened(true)
+            }
+          >
+            Reset
+          </Button>
+        </Group>
       </Group>
 
       {query.isLoading && <Loader />}
@@ -156,9 +207,33 @@ export function GatewayCoveragePanel() {
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Sensor</Table.Th>
-                  {gateways.map(gateway => (
-                    <Table.Th key={gateway}>{gateway}</Table.Th>
-                  ))}
+                  {gateways.map(gateway => {
+                    const summary =
+                      gatewayById.get(gateway);
+
+                    return (
+                      <Table.Th key={gateway}>
+                        <Stack gap={2}>
+                          <Text fw={600}>
+                            {gateway}
+                          </Text>
+                          <Text
+                            size="xs"
+                            c="dimmed"
+                            fw={400}
+                          >
+                            Last reception: {
+                              summary?.lastSeenAt
+                                ? new Date(
+                                    summary.lastSeenAt
+                                  ).toLocaleString()
+                                : "—"
+                            }
+                          </Text>
+                        </Stack>
+                      </Table.Th>
+                    );
+                  })}
                   <Table.Th>Suggested gateway</Table.Th>
                 </Table.Tr>
               </Table.Thead>
@@ -219,6 +294,57 @@ export function GatewayCoveragePanel() {
           </Table.ScrollContainer>
         </Card>
       )}
+
+      <Modal
+        opened={resetOpened}
+        onClose={
+          () => setResetOpened(false)
+        }
+        title="Reset gateway coverage"
+        centered
+      >
+        <Stack gap="md">
+          <Text>
+            Delete all recorded gateway coverage RSSI samples?
+            This cannot be undone.
+          </Text>
+
+          {resetMutation.isError && (
+            <Alert
+              color="red"
+              title="Unable to reset coverage data"
+            >
+              {
+                resetMutation.error
+                  instanceof Error
+                    ? resetMutation.error.message
+                    : "Reset failed."
+              }
+            </Alert>
+          )}
+
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              onClick={
+                () => setResetOpened(false)
+              }
+            >
+              Cancel
+            </Button>
+
+            <Button
+              color="red"
+              loading={resetMutation.isPending}
+              onClick={
+                () => resetMutation.mutate()
+              }
+            >
+              Reset all data
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }
