@@ -81,6 +81,10 @@ import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
 
+import {
+  GatewayCoveragePanel
+} from "./GatewayCoveragePanel";
+
 import "./styles.css";
 
 const queryClient =
@@ -102,7 +106,8 @@ type PageKey =
   | "history"
   | "alerts"
   | "inventory"
-  | "sensors";
+  | "sensors"
+  | "gateway-coverage";
 
 
 function NavigationIcon({
@@ -180,6 +185,17 @@ function NavigationIcon({
           <path d="M19.1 4.9a10 10 0 0 1 0 14.2" />
         </svg>
       );
+
+
+    case "gateway-coverage":
+      return (
+        <svg {...common}>
+          <path d="M5 19a10 10 0 0 1 14 0" />
+          <path d="M8 16a6 6 0 0 1 8 0" />
+          <path d="M11 13a2 2 0 0 1 2 0" />
+          <circle cx="12" cy="20" r="1" />
+        </svg>
+      );
   }
 }
 
@@ -245,7 +261,10 @@ Record<PageKey, string> = {
     "Inventory",
 
   sensors:
-    "Sensors"
+    "Sensors",
+
+  "gateway-coverage":
+    "Gateway Coverage"
 };
 
 function isPageKey(
@@ -258,7 +277,8 @@ function isPageKey(
     value === "history" ||
     value === "alerts" ||
     value === "inventory" ||
-    value === "sensors"
+    value === "sensors" ||
+    value === "gateway-coverage"
   );
 }
 
@@ -1464,6 +1484,31 @@ function Dashboard() {
               () =>
                 navigateTo(
                   "sensors"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Gateway Coverage"
+            }
+            leftSection={
+              <NavigationIcon
+                page="gateway-coverage"
+              />
+            }
+            title="Gateway Coverage"
+            aria-label="Gateway Coverage"
+            active={
+              activePage ===
+              "gateway-coverage"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "gateway-coverage"
                 )
             }
           />
@@ -3055,6 +3100,13 @@ function Dashboard() {
               activePage ===
                 "sensors" && (
                 <SensorCatalog />
+              )
+            }
+
+            {
+              activePage ===
+                "gateway-coverage" && (
+                <GatewayCoveragePanel />
               )
             }
 

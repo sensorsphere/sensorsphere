@@ -210,19 +210,7 @@ for migration in "${MIGRATIONS_DIR}"/*.sql; do
     date +%s
   )"
 
-  execution_time_ms="$(
-    expr \
-      "${finished_at}" \
-      - \
-      "${started_at}"
-  )"
-
-  execution_time_ms="$(
-    expr \
-      "${execution_time_ms}" \
-      \* \
-      1000
-  )"
+  execution_time_ms=$(( (finished_at - started_at) * 1000 ))
 
   # Register only after the migration SQL completed successfully.
 

@@ -420,3 +420,21 @@ export async function moveLocation(
     response
   );
 }
+
+export async function getGatewayCoverage(
+  hours = 24
+): Promise<import("./types").GatewayCoverageResponse> {
+  const params =
+    new URLSearchParams({
+      hours: String(hours)
+    });
+
+  const response =
+    await fetch(
+      `/api/v1/gateway-coverage?${params}`
+    );
+
+  return readJson<import("./types").GatewayCoverageResponse>(
+    response
+  );
+}

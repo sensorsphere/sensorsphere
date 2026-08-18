@@ -81,6 +81,54 @@ Promise<void> {
   await collector.start(
     message => {
 
+      const coverageMatch =
+        message.topic.match(
+          /^sensors\/ble_gateway\/([^/]+)\/sensor\/rssi_([^/]+)\/state$/
+        );
+
+      if (coverageMatch) {
+        const gatewayId =
+          coverageMatch[1];
+
+        const sensorUid =
+          coverageMatch[2]
+            .toLowerCase();
+
+        const rssi =
+          Number(
+            message.payload
+              .toString()
+              .trim()
+          );
+
+        if (
+          gatewayId &&
+          sensorUid &&
+          Number.isFinite(rssi)
+        ) {
+          void repository
+            .saveGatewayCoverageRssi(
+              gatewayId,
+              sensorUid,
+              rssi,
+              message.receivedAt,
+              message.topic
+            )
+            .catch(error => {
+              logger.error(
+                {
+                  error,
+                  gatewayId,
+                  sensorUid
+                },
+                "Unable to persist gateway coverage RSSI"
+              );
+            });
+        }
+
+        return;
+      }
+
       const measurements =
         parserRegistry.parse(
           message

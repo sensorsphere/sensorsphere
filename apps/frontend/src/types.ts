@@ -226,3 +226,23 @@ export interface UpdateLocationInput {
 export interface MoveLocationInput {
   parentId: string | null;
 }
+
+export interface GatewayCoverageRow {
+  gatewayId: string;
+  sensorUid: string;
+  sampleCount: number;
+  avgRssi: number;
+  minRssi: number;
+  maxRssi: number;
+  stddevRssi: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  rank: number;
+  leadDb: number | null;
+}
+
+export interface GatewayCoverageResponse {
+  hours: number;
+  generatedAt: string;
+  rows: GatewayCoverageRow[];
+}

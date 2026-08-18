@@ -44,6 +44,35 @@ implements MeasurementRepository {
     );
   }
 
+  async saveGatewayCoverageRssi(
+    gatewayId: string,
+    sensorUid: string,
+    rssi: number,
+    receivedAt: Date,
+    sourceTopic: string
+  ): Promise<void> {
+
+    await this.pool.query(
+      `
+      INSERT INTO gateway_sensor_rssi_samples (
+        time,
+        gateway_id,
+        sensor_uid,
+        rssi,
+        source_topic
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      `,
+      [
+        receivedAt,
+        gatewayId,
+        sensorUid,
+        rssi,
+        sourceTopic
+      ]
+    );
+  }
+
   async saveSnapshotBatch(
     snapshots: SensorSnapshot[]
   ): Promise<void> {

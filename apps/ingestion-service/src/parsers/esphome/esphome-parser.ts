@@ -51,8 +51,21 @@ export class ESPHomeParser implements Parser {
     const parts =
       message.topic.split("/");
 
+    const sensorIndex =
+      parts.indexOf("sensor");
+
+    // Gateway-qualified topics are reserved for the temporary
+    // Gateway Coverage collector. They must not feed the legacy
+    // SensorSphere measurement pipeline, otherwise every gateway
+    // observing the same BLE sensor would create duplicate readings.
+    const isGatewayQualified =
+      sensorIndex >= 3 &&
+      parts[0] === "sensors" &&
+      parts[1] === "ble_gateway";
+
     return (
-      parts.includes("sensor") &&
+      sensorIndex !== -1 &&
+      !isGatewayQualified &&
       parts.at(-1) === "state"
     );
   }
