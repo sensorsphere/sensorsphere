@@ -12,7 +12,7 @@ output:
   - platform: gpio
     pin:
       number: GPIO2
-      inverted: false
+      inverted: true
     id: status_led_output
 
 light:

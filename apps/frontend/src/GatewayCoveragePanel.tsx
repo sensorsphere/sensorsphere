@@ -39,6 +39,62 @@ function qualityLabel(
   return "Weak";
 }
 
+function qualityColor(
+  rssi: number
+): string {
+  if (rssi >= -65) return "green";
+  if (rssi >= -75) return "teal";
+  if (rssi >= -85) return "yellow";
+  return "red";
+}
+
+function relativeSince(
+  value: string | null | undefined
+): string {
+  if (!value) return "—";
+
+  const timestamp =
+    new Date(value).getTime();
+
+  if (!Number.isFinite(timestamp)) {
+    return "—";
+  }
+
+  const seconds =
+    Math.max(
+      0,
+      Math.floor(
+        (Date.now() - timestamp) / 1000
+      )
+    );
+
+  if (seconds < 10) return "Depuis quelques secondes";
+  if (seconds < 60) return `Depuis ${seconds} s`;
+
+  const minutes =
+    Math.floor(seconds / 60);
+
+  if (minutes < 60) return `Depuis ${minutes} min`;
+
+  const hours =
+    Math.floor(minutes / 60);
+
+  if (hours < 24) return `Depuis ${hours} h`;
+
+  const days =
+    Math.floor(hours / 24);
+
+  return `Depuis ${days} j`;
+}
+
+function exactDate(
+  value: string | null | undefined
+): string {
+  return value
+    ? new Date(value).toLocaleString()
+    : "—";
+}
+
 function recommendation(
   rows: GatewayCoverageRow[]
 ): string {
@@ -71,6 +127,9 @@ export function GatewayCoveragePanel() {
 
   const [resetOpened, setResetOpened] =
     React.useState(false);
+
+  const [sensorSort, setSensorSort] =
+    React.useState<"asc" | "desc">("asc");
 
   const query =
     useQuery({
@@ -111,7 +170,29 @@ export function GatewayCoveragePanel() {
       new Set(
         rows.map(row => row.sensorUid)
       )
-    ).sort();
+    ).sort(
+      (left, right) =>
+        sensorSort === "asc"
+          ? left.localeCompare(right)
+          : right.localeCompare(left)
+    );
+
+  const sensorCountByGateway =
+    new Map(
+      gateways.map(
+        gateway => [
+          gateway,
+          new Set(
+            rows
+              .filter(
+                row =>
+                  row.gatewayId === gateway
+              )
+              .map(row => row.sensorUid)
+          ).size
+        ]
+      )
+    );
 
   const bySensorGateway =
     new Map(
@@ -163,12 +244,26 @@ export function GatewayCoveragePanel() {
             value={hours}
             onChange={setHours}
             data={[
+              { label: "5m", value: String(5 / 60) },
+              { label: "10m", value: String(10 / 60) },
+              { label: "15m", value: String(15 / 60) },
+              { label: "30m", value: "0.5" },
               { label: "1h", value: "1" },
               { label: "6h", value: "6" },
               { label: "24h", value: "24" },
               { label: "7d", value: "168" }
             ]}
           />
+
+          <Button
+            variant="light"
+            loading={query.isFetching}
+            onClick={
+              () => void query.refetch()
+            }
+          >
+            Refresh
+          </Button>
 
           <Button
             color="red"
@@ -206,7 +301,28 @@ export function GatewayCoveragePanel() {
             <Table striped highlightOnHover verticalSpacing="sm">
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Sensor</Table.Th>
+                  <Table.Th>
+                    <Button
+                      variant="subtle"
+                      size="compact-sm"
+                      px={0}
+                      onClick={
+                        () =>
+                          setSensorSort(
+                            current =>
+                              current === "asc"
+                                ? "desc"
+                                : "asc"
+                          )
+                      }
+                    >
+                      Sensor ({sensors.length}) {
+                        sensorSort === "asc"
+                          ? "↑"
+                          : "↓"
+                      }
+                    </Button>
+                  </Table.Th>
                   {gateways.map(gateway => {
                     const summary =
                       gatewayById.get(gateway);
@@ -222,12 +338,25 @@ export function GatewayCoveragePanel() {
                             c="dimmed"
                             fw={400}
                           >
-                            Last reception: {
-                              summary?.lastSeenAt
-                                ? new Date(
-                                    summary.lastSeenAt
-                                  ).toLocaleString()
-                                : "—"
+                            {
+                              sensorCountByGateway
+                                .get(gateway) ?? 0
+                            } sensors
+                          </Text>
+                          <Text
+                            size="xs"
+                            c="dimmed"
+                            fw={400}
+                            title={
+                              exactDate(
+                                summary?.lastSeenAt
+                              )
+                            }
+                          >
+                            {
+                              relativeSince(
+                                summary?.lastSeenAt
+                              )
                             }
                           </Text>
                         </Stack>
@@ -266,22 +395,32 @@ export function GatewayCoveragePanel() {
                                 <Text fw={row.rank === 1 ? 700 : 500}>
                                   {row.avgRssi.toFixed(1)} dBm
                                 </Text>
-                                <Badge size="xs" variant="light">
+                                <Badge
+                                  size="xs"
+                                  variant="light"
+                                  color={qualityColor(row.avgRssi)}
+                                >
                                   {qualityLabel(row.avgRssi)}
                                 </Badge>
                               </Group>
                               <Text size="xs" c="dimmed">
                                 min {row.minRssi.toFixed(0)} · max {row.maxRssi.toFixed(0)} · σ {row.stddevRssi.toFixed(1)}
                               </Text>
-                              <Text size="xs" c="dimmed">
+                              <Text
+                                size="xs"
+                                c="dimmed"
+                                title={
+                                  exactDate(
+                                    row.lastSeenAt
+                                  )
+                                }
+                              >
                                 {row.sampleCount} samples
-                                {" · last "}
+                                {" · "}
                                 {
-                                  row.lastSeenAt
-                                    ? new Date(
-                                        row.lastSeenAt
-                                      ).toLocaleString()
-                                    : "—"
+                                  relativeSince(
+                                    row.lastSeenAt
+                                  )
                                 }
                               </Text>
                             </Stack>
