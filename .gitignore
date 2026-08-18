@@ -14,3 +14,7 @@ data/app
 
 !data/mosquitto/data/.gitkeep
 !data/mosquitto/log/.gitkeep
+
+# Mosquitto runtime data
+infrastructure/mosquitto/data/
+infrastructure/mosquitto/log/

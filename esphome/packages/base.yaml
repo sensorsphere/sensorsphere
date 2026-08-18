@@ -1,3 +1,13 @@
+substitutions:
+  base_version: 0.1
+
+text_sensor:
+  - platform: template
+    name: "Mod Version Base"
+    entity_category: diagnostic
+    lambda: |-
+      return "${base_version}";
+
 esphome:
   name: "${device_name}"
   friendly_name: "${friendly_name}"
@@ -13,3 +23,4 @@ web_server:
   port: 80
 
 captive_portal:
+

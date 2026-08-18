@@ -1,11 +1,39 @@
+substitutions:
+  mqtt_version: 0.1
+
+text_sensor:
+  - platform: template
+    name: "Mod Version MQTT"
+    entity_category: diagnostic
+    lambda: |-
+      return "${mqtt_version}";
+
+  - platform: template
+    name: "MQTT Broker"
+    lambda: |-
+      return {"${mqtt_broker}"};
+
+  - platform: template
+    name: "MQTT Port"
+    lambda: |-
+      return {"${mqtt_port}"};
+
+  - platform: template
+    name: "Gateway ID"
+    lambda: |-
+      return {"${gateway_id}"};
+
 mqtt:
+  discovery: false
   broker: ${mqtt_broker}
   port: ${mqtt_port}
 
+  topic_prefix: "sensors/${gateway_kind}/${gateway_id}"
+
   birth_message:
-    topic: "${device_name}/status"
+    topic: "sensors/${gateway_kind}/${gateway_id}/status"
     payload: "online"
 
   will_message:
-    topic: "${device_name}/status"
+    topic: "sensors/${gateway_kind}/${gateway_id}/status"
     payload: "offline"

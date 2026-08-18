@@ -1,3 +1,13 @@
+substitutions:
+  network_version: 0.1
+
+text_sensor:
+  - platform: template
+    name: "Mod Version Network"
+    entity_category: diagnostic
+    lambda: |-
+      return "${network_version}";
+
 wifi:
   ssid: !secret wifi_homefcsiot_ssid
   password: !secret wifi_homefcsiot_password

@@ -1,0 +1,40 @@
+substitutions:
+  device_name: "ble-gateway-mqtt-01"
+  friendly_name: "BLE Gateway MQTT 01"
+  gateway_kind: "ble_gateway"
+  gateway_id: "ble-gateway-01"
+  mqtt_broker: "7.0.90.22"
+  mqtt_port: "1883"
+
+packages:
+  hardware: !include packages/hardware/esp32-cam.yaml
+  status_led: !include packages/hardware/esp32-cam-status-led.yaml
+
+  base: !include packages/base.yaml
+  network: !include packages/network.yaml
+  mqtt: !include packages/mqtt.yaml
+  
+  ble_tracker: !include packages/ble/tracker.yaml
+  diagnostics: !include packages/diagnostics.yaml
+
+logger:
+  level: DEBUG
+
+sensor:
+  - platform: atc_mithermometer
+    mac_address: "A4:C1:38:C8:AC:73"
+
+    temperature:
+      name: "Temperature C8:AC:73"
+
+    humidity:
+      name: "Humidity C8:AC:73"
+
+    battery_level:
+      name: "Battery Level C8:AC:73"
+
+    battery_voltage:
+      name: "Battery Voltage C8:AC:73"
+
+    signal_strength:
+      name: "RSSI C8:AC:73"

@@ -1,1 +1,11 @@
+substitutions:
+  tracker_version: 0.1
+
+text_sensor:
+  - platform: template
+    name: "Mod Version BLETracker"
+    entity_category: diagnostic
+    lambda: |-
+      return "${tracker_version}";
+
 esp32_ble_tracker:

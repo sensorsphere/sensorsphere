@@ -1,4 +1,13 @@
+substitutions:
+  diagnostic_version: 0.1
+
 text_sensor:
+  - platform: template
+    name: "Mod Version Diagnostic"
+    entity_category: diagnostic
+    lambda: |-
+      return "${diagnostic_version}";
+
   - platform: wifi_info
     ip_address:
       name: "IP Address"
@@ -15,8 +24,42 @@ text_sensor:
     dns_address:
       name: "DNS Server"
 
+  - platform: template
+    name: "Build Date"
+    entity_category: diagnostic
+    lambda: |-
+      const char *months = "JanFebMarAprMayJunJulAugSepOctNovDec";
+      const char *m = strstr(months, __DATE__);
+
+      int month = m ? ((m - months) / 3) + 1 : 0;
+      int day = atoi(__DATE__ + 4);
+      int year = atoi(__DATE__ + 7);
+
+      char result[20];
+      snprintf(
+        result,
+        sizeof(result),
+        "%04d-%02d-%02d %s",
+        year,
+        month,
+        day,
+        __TIME__
+      );
+
+      return {result};
+
   - platform: version
     name: "ESPHome Version"
+
+  - platform: template
+    name: "Device Name"
+    lambda: |-
+      return {"${device_name}"};
+
+  - platform: template
+    name: "Friendly Name"
+    lambda: |-
+      return {"${friendly_name}"};
 
 sensor:
   - platform: wifi_signal

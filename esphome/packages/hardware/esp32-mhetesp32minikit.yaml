@@ -1,0 +1,4 @@
+esp32:
+  board: mhetesp32minikit
+  framework:
+    type: esp-idf
