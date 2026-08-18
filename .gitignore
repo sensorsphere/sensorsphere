@@ -10,7 +10,9 @@ dev/bin/
 /*.zip
 tmp/
 mosquitto.db
-data/app
+
+# SensorSphere runtime/persistent data
+/data/
 
 !data/mosquitto/data/.gitkeep
 !data/mosquitto/log/.gitkeep
