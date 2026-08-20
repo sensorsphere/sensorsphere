@@ -1441,6 +1441,29 @@ export function GatewayCoveragePanel() {
                             </Text>
                           )}
                           <Group gap={4} wrap="nowrap">
+                            <ActionIcon
+                              size="xs"
+                              variant="subtle"
+                              color="blue"
+                              aria-label={`Filter sensor ${sensorUid}`}
+                              title={`Filter on ${sensorUid}`}
+                              onClick={() => setSensorFilter(sensorUid)}
+                            >
+                              <svg
+                                width="12"
+                                height="12"
+                                viewBox="0 0 16 16"
+                                fill="none"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  d="M2 3h12L9.5 8v4L6.5 14V8L2 3Z"
+                                  stroke="currentColor"
+                                  strokeWidth="1.4"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </ActionIcon>
                             <Text size="sm" fw={600}>
                               {sensorUid}
                             </Text>
@@ -1452,6 +1475,9 @@ export function GatewayCoveragePanel() {
                                   ? "green"
                                   : "gray"
                               }
+                              style={{
+                                opacity: copiedSensorUid === sensorUid ? 1 : 0.3
+                              }}
                               aria-label={`Copy ${sensorUid}`}
                               title={
                                 copiedSensorUid === sensorUid
@@ -1595,9 +1621,38 @@ export function GatewayCoveragePanel() {
                         }}
                       >
                         <Stack gap={1}>
-                          <Text fw={600}>
-                            {suggestion.gatewayId ?? "—"}
-                          </Text>
+                          <Group gap={4} wrap="nowrap">
+                            {suggestion.gatewayId && (
+                              <ActionIcon
+                                size="xs"
+                                variant="subtle"
+                                color="blue"
+                                aria-label={`Filter suggested gateway ${suggestion.gatewayId}`}
+                                title={`Filter on ${suggestion.gatewayId}`}
+                                onClick={() =>
+                                  setSuggestedGatewayFilter(suggestion.gatewayId)
+                                }
+                              >
+                                <svg
+                                  width="12"
+                                  height="12"
+                                  viewBox="0 0 16 16"
+                                  fill="none"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    d="M2 3h12L9.5 8v4L6.5 14V8L2 3Z"
+                                    stroke="currentColor"
+                                    strokeWidth="1.4"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              </ActionIcon>
+                            )}
+                            <Text fw={600}>
+                              {suggestion.gatewayId ?? "—"}
+                            </Text>
+                          </Group>
                           <Badge
                             size="xs"
                             variant="light"
