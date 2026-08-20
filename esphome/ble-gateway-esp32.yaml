@@ -1,5 +1,5 @@
 substitutions:
-  device_name: "${KIND_NAME}-${GATEWAY_INDEX}"
+  device_name: "${KIND_NAME}"
   friendly_name: "${KIND_DESCRIPTION}"
   gateway_kind: "ble_gateway"
   gateway_id: "ble-gateway-${GATEWAY_INDEX}"
@@ -7,8 +7,8 @@ substitutions:
   mqtt_port: "${MQTT_PORT}"
 
 packages:
-  hardware: !include packages/hardware/esp32-mhetesp32minikit.yaml
-  status_led: !include packages/hardware/esp32-mh-et-live-status-led.yaml
+  hardware: !include packages/hardware/board/${BOARD_ID}.yaml
+  status_led: !include packages/hardware/led/${BOARD_ID}-status-led.yaml
 
   base: !include packages/base.yaml
   network: !include packages/network.yaml

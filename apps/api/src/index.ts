@@ -277,6 +277,34 @@ app.delete(
 );
 
 app.delete(
+  "/api/v1/gateway-coverage/gateways",
+  async (_request, reply) => {
+    const result = await pool.query(
+      `
+      WITH deleted_samples AS (
+        DELETE FROM gateway_sensor_rssi_samples
+        RETURNING 1
+      ), deleted_gateways AS (
+        DELETE FROM gateway_coverage_gateways
+        RETURNING gateway_id
+      )
+      SELECT
+        (SELECT COUNT(*)::integer FROM deleted_samples) AS deleted_samples,
+        (SELECT COUNT(*)::integer FROM deleted_gateways) AS deleted_gateways
+      `
+    );
+
+    return reply.code(200).send({
+      status: "deleted",
+      deletedGateways:
+        result.rows[0]?.deleted_gateways ?? 0,
+      deletedSamples:
+        result.rows[0]?.deleted_samples ?? 0
+    });
+  }
+);
+
+app.delete(
   "/api/v1/gateway-coverage/:gatewayId",
   async (request, reply) => {
     const params = request.params as {

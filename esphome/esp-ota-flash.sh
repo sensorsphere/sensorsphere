@@ -1,4 +1,5 @@
 #!/bin/bash
+SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 
 set -e
 

@@ -22,6 +22,7 @@ import {
 } from "@tanstack/react-query";
 
 import {
+  deleteAllGatewayCoverageGateways,
   deleteGatewayCoverageGateway,
   getGatewayCoverage,
   resetGatewayCoverage,
@@ -128,6 +129,9 @@ export function GatewayCoveragePanel() {
     React.useState("24");
 
   const [resetOpened, setResetOpened] =
+    React.useState(false);
+
+  const [deleteAllOpened, setDeleteAllOpened] =
     React.useState(false);
 
   const [sensorSort, setSensorSort] =
@@ -237,6 +241,24 @@ export function GatewayCoveragePanel() {
         }
     });
 
+  const deleteAllMutation =
+    useMutation({
+      mutationFn:
+        deleteAllGatewayCoverageGateways,
+
+      onSuccess:
+        async () => {
+          setDeleteAllOpened(false);
+
+          await queryClient
+            .invalidateQueries({
+              queryKey: [
+                "gateway-coverage"
+              ]
+            });
+        }
+    });
+
   const resetGatewayMutation =
     useMutation({
       mutationFn:
@@ -309,6 +331,16 @@ export function GatewayCoveragePanel() {
             }
           >
             Reset
+          </Button>
+
+          <Button
+            color="red"
+            variant="filled"
+            onClick={
+              () => setDeleteAllOpened(true)
+            }
+          >
+            Delete
           </Button>
         </Group>
       </Group>
@@ -601,8 +633,9 @@ export function GatewayCoveragePanel() {
       >
         <Stack gap="md">
           <Text>
-            Delete all recorded gateway coverage RSSI samples?
-            This cannot be undone.
+            Reset coverage for all BLE gateways? All sensor RSSI
+            samples will be deleted, while each gateway and its
+            board/MAC/WiFi information will be kept.
           </Text>
 
           {resetMutation.isError && (
@@ -636,7 +669,59 @@ export function GatewayCoveragePanel() {
                 () => resetMutation.mutate()
               }
             >
-              Reset all data
+              Reset all gateways
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={deleteAllOpened}
+        onClose={
+          () => setDeleteAllOpened(false)
+        }
+        title="Delete all BLE gateways"
+        centered
+      >
+        <Stack gap="md">
+          <Text>
+            Delete all BLE gateways and all associated coverage data?
+            This removes gateway metadata and every recorded sensor RSSI
+            sample. This cannot be undone.
+          </Text>
+
+          {deleteAllMutation.isError && (
+            <Alert
+              color="red"
+              title="Unable to delete BLE gateways"
+            >
+              {
+                deleteAllMutation.error
+                  instanceof Error
+                    ? deleteAllMutation.error.message
+                    : "Delete failed."
+              }
+            </Alert>
+          )}
+
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              onClick={
+                () => setDeleteAllOpened(false)
+              }
+            >
+              Cancel
+            </Button>
+
+            <Button
+              color="red"
+              loading={deleteAllMutation.isPending}
+              onClick={
+                () => deleteAllMutation.mutate()
+              }
+            >
+              Delete all gateways
             </Button>
           </Group>
         </Stack>

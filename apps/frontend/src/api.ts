@@ -480,6 +480,27 @@ export async function resetGatewayCoverageGateway(
   }>(response);
 }
 
+export async function deleteAllGatewayCoverageGateways():
+Promise<{
+  status: string;
+  deletedGateways: number;
+  deletedSamples: number;
+}> {
+  const response =
+    await fetch(
+      "/api/v1/gateway-coverage/gateways",
+      {
+        method: "DELETE"
+      }
+    );
+
+  return readJson<{
+    status: string;
+    deletedGateways: number;
+    deletedSamples: number;
+  }>(response);
+}
+
 export async function deleteGatewayCoverageGateway(
   gatewayId: string
 ): Promise<{

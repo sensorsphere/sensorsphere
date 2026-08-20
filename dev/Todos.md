@@ -48,12 +48,12 @@
 
 
 ### Gateway Coverage
-* [ ] en tete de tableau, afficher le nombre total de Sensor et pour chaque sensor aussi
 * [X] ajouter les periodes : 5minutes, 10m, 15m, 30m
 * [X] ajoutr un bouton "refresh" pour forcer le refresh des donnees
 * [X] mettre un badgde de differente couleur pour les "WEAK", "FAIR", "GODD", "EXCELLENT", ...
 * [X] pour le "last seen", mettre un affichage "Depuis ..." plutot qu'une date/heure et si on passe dessus (hover) sur cette informtion, affiche la date/heure
 * [X] pouvoir ordonner les sensors
+* [ ] en tete de tableau, afficher le nombre total de Sensor. Ajouter ip_address pour chqaue BLE Gateway. dans le bouton refresh global, indiquer la valeur de l'auto refresh en secondes
 
 
 

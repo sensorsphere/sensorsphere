@@ -178,18 +178,29 @@ Puis ajouter un nouveau YAML device à la racine utilisant les mêmes packages c
 ```sh
 ESP_IP=10.0.10.11
 #ESP_IP=10.0.10.12
-./esp-build.sh generic-esp32.yaml esp32-cam-ai-thinker ${ESP_IP}
+BOARD_ID=esp32-cam-ai-thinker
+
+./esp-build.sh generic-esp32.yaml ${BOARD_ID} ${ESP_IP}
+
+```
+
+```sh
+ESP_IP=
+BOARD_ID=esp32-mhetesp32minikit
+./esp-build.sh generic-esp32.yaml ${BOARD_ID} ${ESP_IP}
 
 ```
 
 ### BLE Gateway
 
 ```sh
-ESP_IP=10.0.10.121
+#ESP_IP=10.0.10.121
 GATEWAY_INDEX=01
 MQTT_BROKER=7.0.90.22
 MQTT_PORT=1883
 BOARD_ID=esp32-mhetesp32minikit
+
+export ESP_EXTRA_VARS="-s GATEWAY_INDEX ${GATEWAY_INDEX} -s MQTT_BROKER ${MQTT_BROKER} -s MQTT_PORT ${MQTT_PORT}"
 
 ./esp-build.sh ble-gateway-esp32.yaml ${BOARD_ID} ${ESP_IP}
 

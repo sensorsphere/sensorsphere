@@ -19,6 +19,11 @@ text_sensor:
       return {"${mqtt_port}"};
 
   - platform: template
+    name: "MQTT Topic Prefix"
+    lambda: |-
+      return {"sensors/${gateway_kind}/${gateway_id}"};
+
+  - platform: template
     name: "Gateway ID"
     lambda: |-
       return {"${gateway_id}"};

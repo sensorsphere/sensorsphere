@@ -1,3 +1,6 @@
+substitutions:
+  board_name: "ESP32-MH-ET Live Minikit"
+
 esp32:
   board: mhetesp32minikit
   framework:

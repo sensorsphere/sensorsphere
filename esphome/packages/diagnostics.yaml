@@ -42,25 +42,7 @@ text_sensor:
     name: "Build Date"
     entity_category: diagnostic
     lambda: |-
-      const char *months = "JanFebMarAprMayJunJulAugSepOctNovDec";
-      const char *m = strstr(months, __DATE__);
-
-      int month = m ? ((m - months) / 3) + 1 : 0;
-      int day = atoi(__DATE__ + 4);
-      int year = atoi(__DATE__ + 7);
-
-      char result[20];
-      snprintf(
-        result,
-        sizeof(result),
-        "%04d-%02d-%02d %s",
-        year,
-        month,
-        day,
-        __TIME__
-      );
-
-      return {result};
+      return {"${BUILD_DATE}"};
 
   - platform: version
     name: "ESPHome Version"
