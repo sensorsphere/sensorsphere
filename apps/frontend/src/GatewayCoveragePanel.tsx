@@ -35,6 +35,145 @@ import type {
 
 const AUTO_REFRESH_SECONDS = 30;
 
+const STORAGE_PREFIX =
+  "sensorsphere.gatewayCoverage";
+
+const PERIOD_STORAGE_KEY =
+  `${STORAGE_PREFIX}.period`;
+
+const SENSOR_SORT_STORAGE_KEY =
+  `${STORAGE_PREFIX}.sensorSort`;
+
+const GATEWAY_SORT_STORAGE_KEY =
+  `${STORAGE_PREFIX}.gatewaySort`;
+
+const PERIOD_VALUES =
+  new Set([
+    String(5 / 60),
+    String(10 / 60),
+    String(15 / 60),
+    "0.5",
+    "1",
+    "6",
+    "24",
+    "168"
+  ]);
+
+type SortDirection =
+  "asc" | "desc";
+
+type SensorSort = {
+  mode: "name" | "gatewayRssi";
+  direction: SortDirection;
+  gatewayId?: string;
+};
+
+type GatewaySort = {
+  mode: "name" | "wifiRssi" | "sensorRssi";
+  direction: SortDirection;
+  sensorUid?: string;
+};
+
+function loadPeriod(): string {
+  if (typeof window === "undefined") {
+    return "24";
+  }
+
+  const value =
+    window.localStorage.getItem(
+      PERIOD_STORAGE_KEY
+    );
+
+  return value && PERIOD_VALUES.has(value)
+    ? value
+    : "24";
+}
+
+function loadSensorSort(): SensorSort {
+  const fallback: SensorSort = {
+    mode: "name",
+    direction: "asc"
+  };
+
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  try {
+    const raw =
+      window.localStorage.getItem(
+        SENSOR_SORT_STORAGE_KEY
+      );
+
+    if (!raw) return fallback;
+
+    const value =
+      JSON.parse(raw) as Partial<SensorSort>;
+
+    if (
+      (value.mode === "name" ||
+        value.mode === "gatewayRssi") &&
+      (value.direction === "asc" ||
+        value.direction === "desc")
+    ) {
+      return {
+        mode: value.mode,
+        direction: value.direction,
+        ...(typeof value.gatewayId === "string"
+          ? { gatewayId: value.gatewayId }
+          : {})
+      };
+    }
+  } catch {
+    // Ignore invalid persisted UI state.
+  }
+
+  return fallback;
+}
+
+function loadGatewaySort(): GatewaySort {
+  const fallback: GatewaySort = {
+    mode: "name",
+    direction: "asc"
+  };
+
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  try {
+    const raw =
+      window.localStorage.getItem(
+        GATEWAY_SORT_STORAGE_KEY
+      );
+
+    if (!raw) return fallback;
+
+    const value =
+      JSON.parse(raw) as Partial<GatewaySort>;
+
+    if (
+      (value.mode === "name" ||
+        value.mode === "wifiRssi" ||
+        value.mode === "sensorRssi") &&
+      (value.direction === "asc" ||
+        value.direction === "desc")
+    ) {
+      return {
+        mode: value.mode,
+        direction: value.direction,
+        ...(typeof value.sensorUid === "string"
+          ? { sensorUid: value.sensorUid }
+          : {})
+      };
+    }
+  } catch {
+    // Ignore invalid persisted UI state.
+  }
+
+  return fallback;
+}
+
 function qualityLabel(
   rssi: number
 ): string {
@@ -117,27 +256,69 @@ function exactDate(
     : "—";
 }
 
-function recommendation(
-  rows: GatewayCoverageRow[]
-): string {
+function recommendationInfo(
+  rows: GatewayCoverageRow[],
+  totalGateways: number
+): {
+  gatewayId: string | null;
+  status: string;
+  details: string;
+  color: string;
+} {
   const winner =
     rows.find(row => row.rank === 1);
 
-  if (!winner) return "—";
+  if (!winner) {
+    return {
+      gatewayId: null,
+      status: "No suggestion",
+      details:
+        `No RSSI data in the selected period · 0/${totalGateways} gateways with data`,
+      color: "gray"
+    };
+  }
+
+  const coverage =
+    `${rows.length}/${totalGateways} gateway${
+      totalGateways === 1 ? "" : "s"
+    } with data`;
+
+  const winnerStats =
+    `${winner.avgRssi.toFixed(1)} dBm avg · ${winner.sampleCount} samples`;
 
   if (winner.leadDb === null) {
-    return `${winner.gatewayId} (only gateway)`;
+    return {
+      gatewayId: winner.gatewayId,
+      status: "Only gateway with data",
+      details: `${winnerStats} · ${coverage}`,
+      color: "blue"
+    };
   }
 
   if (winner.leadDb < 3) {
-    return `${winner.gatewayId} (ambiguous, +${winner.leadDb.toFixed(1)} dB)`;
+    return {
+      gatewayId: winner.gatewayId,
+      status: `Ambiguous · +${winner.leadDb.toFixed(1)} dB`,
+      details: `${winnerStats} · ${coverage}`,
+      color: "yellow"
+    };
   }
 
   if (winner.leadDb < 8) {
-    return `${winner.gatewayId} (preferred, +${winner.leadDb.toFixed(1)} dB)`;
+    return {
+      gatewayId: winner.gatewayId,
+      status: `Preferred · +${winner.leadDb.toFixed(1)} dB`,
+      details: `${winnerStats} · ${coverage}`,
+      color: "teal"
+    };
   }
 
-  return `${winner.gatewayId} (strong, +${winner.leadDb.toFixed(1)} dB)`;
+  return {
+    gatewayId: winner.gatewayId,
+    status: `Strong · +${winner.leadDb.toFixed(1)} dB`,
+    details: `${winnerStats} · ${coverage}`,
+    color: "green"
+  };
 }
 
 export function GatewayCoveragePanel() {
@@ -145,7 +326,7 @@ export function GatewayCoveragePanel() {
     useQueryClient();
 
   const [hours, setHours] =
-    React.useState("24");
+    React.useState(loadPeriod);
 
   const [resetOpened, setResetOpened] =
     React.useState(false);
@@ -154,24 +335,44 @@ export function GatewayCoveragePanel() {
     React.useState(false);
 
   const [sensorSort, setSensorSort] =
-    React.useState<{
-      mode: "name" | "gatewayRssi";
-      direction: "asc" | "desc";
-      gatewayId?: string;
-    }>({
-      mode: "name",
-      direction: "asc"
-    });
+    React.useState<SensorSort>(
+      loadSensorSort
+    );
 
   const [gatewaySort, setGatewaySort] =
-    React.useState<{
-      mode: "name" | "wifiRssi" | "sensorRssi";
-      direction: "asc" | "desc";
-      sensorUid?: string;
-    }>({
-      mode: "name",
-      direction: "asc"
-    });
+    React.useState<GatewaySort>(
+      loadGatewaySort
+    );
+
+  React.useEffect(
+    () => {
+      window.localStorage.setItem(
+        PERIOD_STORAGE_KEY,
+        hours
+      );
+    },
+    [hours]
+  );
+
+  React.useEffect(
+    () => {
+      window.localStorage.setItem(
+        SENSOR_SORT_STORAGE_KEY,
+        JSON.stringify(sensorSort)
+      );
+    },
+    [sensorSort]
+  );
+
+  React.useEffect(
+    () => {
+      window.localStorage.setItem(
+        GATEWAY_SORT_STORAGE_KEY,
+        JSON.stringify(gatewaySort)
+      );
+    },
+    [gatewaySort]
+  );
 
   const [gatewayAction, setGatewayAction] =
     React.useState<{
@@ -797,6 +998,12 @@ export function GatewayCoveragePanel() {
                   const sensorRows =
                     rowsBySensor.get(sensorUid) ?? [];
 
+                  const suggestion =
+                    recommendationInfo(
+                      sensorRows,
+                      gateways.length
+                    );
+
                   return (
                     <Table.Tr key={sensorUid}>
                       <Table.Td
@@ -913,9 +1120,27 @@ export function GatewayCoveragePanel() {
                           minWidth: 240
                         }}
                       >
-                        <Text fw={600}>
-                          {recommendation(sensorRows)}
-                        </Text>
+                        <Stack gap={2}>
+                          <Text fw={600}>
+                            {suggestion.gatewayId ?? "—"}
+                          </Text>
+                          <Badge
+                            size="xs"
+                            variant="light"
+                            color={suggestion.color}
+                          >
+                            {suggestion.status}
+                          </Badge>
+                          <Text
+                            size="xs"
+                            c="dimmed"
+                            style={{
+                              whiteSpace: "normal"
+                            }}
+                          >
+                            {suggestion.details}
+                          </Text>
+                        </Stack>
                       </Table.Td>
                     </Table.Tr>
                   );

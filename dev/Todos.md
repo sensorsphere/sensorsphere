@@ -53,8 +53,9 @@
 * [X] mettre un badgde de differente couleur pour les "WEAK", "FAIR", "GODD", "EXCELLENT", ...
 * [X] pour le "last seen", mettre un affichage "Depuis ..." plutot qu'une date/heure et si on passe dessus (hover) sur cette informtion, affiche la date/heure
 * [X] pouvoir ordonner les sensors
-* [ ] en tete de tableau, afficher le nombre total de Sensor. Ajouter ip_address pour chqaue BLE Gateway. dans le bouton refresh global, indiquer la valeur de l'auto refresh en secondes
-
+* [X] en tete de tableau, afficher le nombre total de Sensor. Ajouter ip_address pour chqaue BLE Gateway. dans le bouton refresh global, indiquer la valeur de l'auto refresh en secondes
+* [ ] reduire la taille des colonnes 20%, ca devrait passer
+* [ ] mettre une couleur, et toutes differentes sur les icones du menu et reporter l'icone sur le titre de la page
 
 
 ### Specif
