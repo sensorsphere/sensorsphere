@@ -1519,8 +1519,9 @@ function Dashboard() {
       <AppShell.Main>
 
         <Container
-          size="xl"
+          fluid
           py="xl"
+          px="md"
         >
 
           <Stack gap="xl">

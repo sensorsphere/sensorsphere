@@ -543,8 +543,10 @@ export function GatewayCoveragePanel() {
           >
             Name {
               gatewaySort.mode === "name"
-                ? gatewaySort.direction === "asc" ? "↑" : "↓"
-                : "↕"
+                ? gatewaySort.direction === "asc"
+                  ? "A→Z"
+                  : "Z→A"
+                : "A↔Z"
             }
           </Button>
           <Button
@@ -593,7 +595,8 @@ export function GatewayCoveragePanel() {
               verticalSpacing="sm"
               style={{
                 tableLayout: "fixed",
-                width: `${180 + gateways.length * 260 + 240}px`
+                width: "100%",
+                minWidth: `${180 + gateways.length * 260 + 240}px`
               }}
             >
               <Table.Thead>
@@ -601,8 +604,7 @@ export function GatewayCoveragePanel() {
                   <Table.Th
                     style={{
                       width: 180,
-                      minWidth: 180,
-                      maxWidth: 180
+                      minWidth: 180
                     }}
                   >
                     <Button
@@ -638,8 +640,7 @@ export function GatewayCoveragePanel() {
                         key={gateway}
                         style={{
                           width: 260,
-                          minWidth: 260,
-                          maxWidth: 260
+                          minWidth: 260
                         }}
                       >
                         <Stack gap={3}>
@@ -764,8 +765,7 @@ export function GatewayCoveragePanel() {
                   <Table.Th
                     style={{
                       width: 240,
-                      minWidth: 240,
-                      maxWidth: 240
+                      minWidth: 240
                     }}
                   >
                     Suggested gateway
@@ -783,8 +783,7 @@ export function GatewayCoveragePanel() {
                       <Table.Td
                         style={{
                           width: 180,
-                          minWidth: 180,
-                          maxWidth: 180
+                          minWidth: 180
                         }}
                       >
                         <Group gap={4} wrap="nowrap">
@@ -805,8 +804,10 @@ export function GatewayCoveragePanel() {
                             RSSI {
                               gatewaySort.mode === "sensorRssi" &&
                               gatewaySort.sensorUid === sensorUid
-                                ? gatewaySort.direction === "asc" ? "↑" : "↓"
-                                : "↕"
+                                ? gatewaySort.direction === "desc"
+                                  ? "→"
+                                  : "←"
+                                : "↔"
                             }
                           </Button>
                         </Group>
@@ -824,8 +825,7 @@ export function GatewayCoveragePanel() {
                               key={gateway}
                               style={{
                                 width: 260,
-                                minWidth: 260,
-                                maxWidth: 260
+                                minWidth: 260
                               }}
                             >
                               —
@@ -838,8 +838,7 @@ export function GatewayCoveragePanel() {
                             key={gateway}
                             style={{
                               width: 260,
-                              minWidth: 260,
-                              maxWidth: 260
+                              minWidth: 260
                             }}
                           >
                             <Stack gap={2}>
@@ -886,8 +885,7 @@ export function GatewayCoveragePanel() {
                       <Table.Td
                         style={{
                           width: 240,
-                          minWidth: 240,
-                          maxWidth: 240
+                          minWidth: 240
                         }}
                       >
                         <Text fw={600}>
