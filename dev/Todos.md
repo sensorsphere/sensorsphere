@@ -45,6 +45,7 @@
 # Run
 * [X] Comment puis-je mettre en place une sauvagarde complete de toutes les donnees afin de pouvoir les restaurer facilement en cas de crash
 * [X] il faudrait faire un arret de tous le modules ainsi qu un rebuild complet de tous ces modules, sans perte de donnees, afin de voir si ca se construit correctement et ensuite si ca se fait correctement tenter tout un build sur un autre environnement/machine
+* [ ] mettre une couleur, et toutes differentes sur les icones du menu et reporter l'icone sur le titre de la page
 
 
 ### Gateway Coverage
@@ -54,8 +55,7 @@
 * [X] pour le "last seen", mettre un affichage "Depuis ..." plutot qu'une date/heure et si on passe dessus (hover) sur cette informtion, affiche la date/heure
 * [X] pouvoir ordonner les sensors
 * [X] en tete de tableau, afficher le nombre total de Sensor. Ajouter ip_address pour chqaue BLE Gateway. dans le bouton refresh global, indiquer la valeur de l'auto refresh en secondes
-* [ ] reduire la taille des colonnes 20%, ca devrait passer
-* [ ] mettre une couleur, et toutes differentes sur les icones du menu et reporter l'icone sur le titre de la page
+* [X] reduire la taille des colonnes 20%, ca devrait passer
 
 
 ### Specif

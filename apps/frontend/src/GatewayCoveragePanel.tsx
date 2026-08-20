@@ -274,6 +274,23 @@ function periodLabel(
   return labels[value] ?? value;
 }
 
+function minimumSamplesForPeriod(
+  value: string
+): number {
+  const minimums: Record<string, number> = {
+    [String(5 / 60)]: 4,
+    [String(10 / 60)]: 8,
+    [String(15 / 60)]: 12,
+    "0.5": 20,
+    "1": 40,
+    "6": 120,
+    "24": 240,
+    "168": 500
+  };
+
+  return minimums[value] ?? 4;
+}
+
 function recommendationInfo(
   rows: GatewayCoverageRow[],
   totalGateways: number,
@@ -284,6 +301,11 @@ function recommendationInfo(
   details: string;
   color: string;
 } {
+  const minimumSamples =
+    minimumSamplesForPeriod(
+      selectedPeriod
+    );
+
   const candidates =
     rows
       .filter(
@@ -296,35 +318,69 @@ function recommendationInfo(
           right.avgRssi - left.avgRssi
       );
 
-  const winner =
-    candidates[0];
+  const period =
+    periodLabel(selectedPeriod);
 
-  if (!winner) {
+  if (candidates.length === 0) {
     return {
       gatewayId: null,
       status: "No suggestion",
       details:
-        `No RSSI data in last ${periodLabel(selectedPeriod)} · 0/${totalGateways} gateways with data`,
+        `No RSSI data in last ${period} · 0/${totalGateways} gateways with data · minimum ${minimumSamples} samples`,
       color: "gray"
     };
   }
 
-  const coverage =
+  const eligible =
+    candidates.filter(
+      row =>
+        row.sampleCount >= minimumSamples
+    );
+
+  const dataCoverage =
     `${candidates.length}/${totalGateways} gateway${
       totalGateways === 1 ? "" : "s"
     } with data`;
 
+  const eligibleCoverage =
+    `${eligible.length}/${totalGateways} eligible`;
+
+  if (eligible.length === 0) {
+    const bestSoFar =
+      candidates.reduce(
+        (best, current) =>
+          current.sampleCount > best.sampleCount
+            ? current
+            : best,
+        candidates[0]
+      );
+
+    return {
+      gatewayId: null,
+      status: "Insufficient samples",
+      details:
+        `Best data so far: ${bestSoFar.gatewayId} · ${bestSoFar.sampleCount}/${minimumSamples} samples required · ${dataCoverage} · ${eligibleCoverage}`,
+      color: "orange"
+    };
+  }
+
+  const winner =
+    eligible[0];
+
   const winnerStats =
-    `${winner.avgRssi.toFixed(1)} dBm avg · ${winner.sampleCount} samples in last ${periodLabel(selectedPeriod)}`;
+    `${winner.avgRssi.toFixed(1)} dBm avg · ${winner.sampleCount} samples in last ${period}`;
+
+  const commonDetails =
+    `${winnerStats} · ${dataCoverage} · ${eligibleCoverage} · minimum ${minimumSamples}`;
 
   const runnerUp =
-    candidates[1];
+    eligible[1];
 
   if (!runnerUp) {
     return {
       gatewayId: winner.gatewayId,
-      status: "Only gateway with data",
-      details: `${winnerStats} · ${coverage}`,
+      status: "Only eligible gateway",
+      details: commonDetails,
       color: "blue"
     };
   }
@@ -336,7 +392,7 @@ function recommendationInfo(
     return {
       gatewayId: winner.gatewayId,
       status: `Ambiguous · +${leadDb.toFixed(1)} dB`,
-      details: `${winnerStats} · ${coverage}`,
+      details: commonDetails,
       color: "yellow"
     };
   }
@@ -345,7 +401,7 @@ function recommendationInfo(
     return {
       gatewayId: winner.gatewayId,
       status: `Preferred · +${leadDb.toFixed(1)} dB`,
-      details: `${winnerStats} · ${coverage}`,
+      details: commonDetails,
       color: "teal"
     };
   }
@@ -353,7 +409,7 @@ function recommendationInfo(
   return {
     gatewayId: winner.gatewayId,
     status: `Strong · +${leadDb.toFixed(1)} dB`,
-    details: `${winnerStats} · ${coverage}`,
+    details: commonDetails,
     color: "green"
   };
 }
