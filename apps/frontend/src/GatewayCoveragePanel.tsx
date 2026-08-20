@@ -532,52 +532,6 @@ export function GatewayCoveragePanel() {
       )}
 
       {gatewaySummaries.length > 0 && (
-        <Group gap="xs">
-          <Text size="sm" c="dimmed">
-            Gateway order:
-          </Text>
-          <Button
-            size="compact-sm"
-            variant={gatewaySort.mode === "name" ? "light" : "subtle"}
-            onClick={() => setGatewayOrder("name")}
-          >
-            Name {
-              gatewaySort.mode === "name"
-                ? gatewaySort.direction === "asc"
-                  ? "A→Z"
-                  : "Z→A"
-                : "A↔Z"
-            }
-          </Button>
-          <Button
-            size="compact-sm"
-            variant={gatewaySort.mode === "wifiRssi" ? "light" : "subtle"}
-            onClick={() => setGatewayOrder("wifiRssi")}
-          >
-            WiFi RSSI {
-              gatewaySort.mode === "wifiRssi"
-                ? gatewaySort.direction === "asc" ? "↑" : "↓"
-                : "↕"
-            }
-          </Button>
-          {gatewaySort.mode === "sensorRssi" && (
-            <Text size="sm" c="dimmed">
-              Gateway RSSI for {gatewaySort.sensorUid} {
-                gatewaySort.direction === "asc" ? "↑" : "↓"
-              }
-            </Text>
-          )}
-          {sensorSort.mode === "gatewayRssi" && (
-            <Text size="sm" c="dimmed">
-              Sensor RSSI via {sensorSort.gatewayId} {
-                sensorSort.direction === "asc" ? "↑" : "↓"
-              }
-            </Text>
-          )}
-        </Group>
-      )}
-
-      {gatewaySummaries.length > 0 && (
         <Card withBorder padding="md">
           <Group justify="space-between" mb="sm">
             <Text fw={600}>
@@ -607,29 +561,88 @@ export function GatewayCoveragePanel() {
                       minWidth: 180
                     }}
                   >
-                    <Button
-                      variant="subtle"
-                      size="compact-sm"
-                      px={0}
-                      onClick={() =>
-                        setSensorSort(current => ({
-                          mode: "name",
-                          direction:
-                            current.mode === "name" &&
-                            current.direction === "asc"
-                              ? "desc"
-                              : "asc"
-                        }))
-                      }
-                    >
-                      Sensor ({sensors.length}) {
-                        sensorSort.mode === "name"
-                          ? sensorSort.direction === "asc"
-                            ? "↑"
-                            : "↓"
-                          : "↕"
-                      }
-                    </Button>
+                    <Stack gap={6}>
+                      <Text size="xs" c="dimmed" fw={600}>
+                        Gateway order
+                      </Text>
+
+                      <Group gap={4} wrap="wrap">
+                        <Button
+                          size="compact-xs"
+                          color={gatewaySort.mode === "name" ? "blue" : "gray"}
+                          variant={gatewaySort.mode === "name" ? "light" : "subtle"}
+                          onClick={() => setGatewayOrder("name")}
+                        >
+                          Name {
+                            gatewaySort.mode === "name"
+                              ? gatewaySort.direction === "asc"
+                                ? "A→Z"
+                                : "Z→A"
+                              : "A↔Z"
+                          }
+                        </Button>
+
+                        <Button
+                          size="compact-xs"
+                          color={gatewaySort.mode === "wifiRssi" ? "blue" : "gray"}
+                          variant={gatewaySort.mode === "wifiRssi" ? "light" : "subtle"}
+                          onClick={() => setGatewayOrder("wifiRssi")}
+                        >
+                          WiFi RSSI {
+                            gatewaySort.mode === "wifiRssi"
+                              ? gatewaySort.direction === "desc"
+                                ? "→"
+                                : "←"
+                              : "↔"
+                          }
+                        </Button>
+                      </Group>
+
+                      <Text size="xs" c="dimmed" fw={600} mt={2}>
+                        Sensor order
+                      </Text>
+
+                      <Button
+                        color={sensorSort.mode === "name" ? "blue" : "gray"}
+                        variant={sensorSort.mode === "name" ? "light" : "subtle"}
+                        size="compact-sm"
+                        px={6}
+                        onClick={() =>
+                          setSensorSort(current => ({
+                            mode: "name",
+                            direction:
+                              current.mode === "name" &&
+                              current.direction === "asc"
+                                ? "desc"
+                                : "asc"
+                          }))
+                        }
+                      >
+                        Sensor ({sensors.length}) {
+                          sensorSort.mode === "name"
+                            ? sensorSort.direction === "asc"
+                              ? "A→Z"
+                              : "Z→A"
+                            : "A↔Z"
+                        }
+                      </Button>
+
+                      {gatewaySort.mode === "sensorRssi" && (
+                        <Text size="xs" c="blue">
+                          Gateway order: {gatewaySort.sensorUid} RSSI {
+                            gatewaySort.direction === "desc" ? "→" : "←"
+                          }
+                        </Text>
+                      )}
+
+                      {sensorSort.mode === "gatewayRssi" && (
+                        <Text size="xs" c="blue">
+                          Sensor order: {sensorSort.gatewayId} RSSI {
+                            sensorSort.direction === "desc" ? "↓" : "↑"
+                          }
+                        </Text>
+                      )}
+                    </Stack>
                   </Table.Th>
                   {gateways.map(gateway => {
                     const summary =
@@ -650,6 +663,12 @@ export function GatewayCoveragePanel() {
                             </Text>
                             <Button
                               size="compact-xs"
+                              color={
+                                sensorSort.mode === "gatewayRssi" &&
+                                sensorSort.gatewayId === gateway
+                                  ? "blue"
+                                  : "gray"
+                              }
                               variant={
                                 sensorSort.mode === "gatewayRssi" &&
                                 sensorSort.gatewayId === gateway
@@ -790,6 +809,12 @@ export function GatewayCoveragePanel() {
                           <Text fw={600}>{sensorUid}</Text>
                           <Button
                             size="compact-xs"
+                            color={
+                              gatewaySort.mode === "sensorRssi" &&
+                              gatewaySort.sensorUid === sensorUid
+                                ? "blue"
+                                : "gray"
+                            }
                             variant={
                               gatewaySort.mode === "sensorRssi" &&
                               gatewaySort.sensorUid === sensorUid
