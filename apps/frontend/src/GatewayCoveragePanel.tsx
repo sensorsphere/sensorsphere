@@ -860,7 +860,7 @@ export function GatewayCoveragePanel() {
               style={{
                 tableLayout: "fixed",
                 width: "100%",
-                minWidth: `${144 + gateways.length * 208 + 192}px`
+                minWidth: `${144 + gateways.length * 208 + 224}px`
               }}
             >
               <Table.Thead>
@@ -1093,8 +1093,8 @@ export function GatewayCoveragePanel() {
                   })}
                   <Table.Th
                     style={{
-                      width: 192,
-                      minWidth: 192
+                      width: 224,
+                      minWidth: 224
                     }}
                   >
                     Suggested gateway
@@ -1223,11 +1223,11 @@ export function GatewayCoveragePanel() {
 
                       <Table.Td
                         style={{
-                          width: 192,
-                          minWidth: 192
+                          width: 224,
+                          minWidth: 224
                         }}
                       >
-                        <Stack gap={2}>
+                        <Stack gap={1}>
                           <Text fw={600}>
                             {suggestion.gatewayId ?? "—"}
                           </Text>
@@ -1244,6 +1244,7 @@ export function GatewayCoveragePanel() {
                                 key={`${index}-${line}`}
                                 size="xs"
                                 c="dimmed"
+                                lh={1.25}
                                 style={{
                                   whiteSpace: "normal"
                                 }}
