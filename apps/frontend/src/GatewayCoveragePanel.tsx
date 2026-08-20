@@ -1233,12 +1233,18 @@ export function GatewayCoveragePanel() {
                               color={
                                 suggestedGatewayFilter === gateway
                                   ? "blue"
-                                  : "gray"
+                                  : "white"
                               }
                               aria-label={`Filter suggested gateway ${gateway}`}
-                              title={`Filter suggestions on ${gateway}`}
+                              title={
+                                suggestedGatewayFilter === gateway
+                                  ? `Clear suggested gateway filter ${gateway}`
+                                  : `Filter suggestions on ${gateway}`
+                              }
                               onClick={() =>
-                                setSuggestedGatewayFilter(gateway)
+                                setSuggestedGatewayFilter(current =>
+                                  current === gateway ? null : gateway
+                                )
                               }
                             >
                               <svg
@@ -1486,10 +1492,27 @@ export function GatewayCoveragePanel() {
                             <ActionIcon
                               size="xs"
                               variant="subtle"
-                              color="blue"
+                              color={
+                                sensorFilter.trim().toLocaleLowerCase() ===
+                                sensorUid.toLocaleLowerCase()
+                                  ? "blue"
+                                  : "white"
+                              }
                               aria-label={`Filter sensor ${sensorUid}`}
-                              title={`Filter on ${sensorUid}`}
-                              onClick={() => setSensorFilter(sensorUid)}
+                              title={
+                                sensorFilter.trim().toLocaleLowerCase() ===
+                                sensorUid.toLocaleLowerCase()
+                                  ? `Clear sensor filter ${sensorUid}`
+                                  : `Filter on ${sensorUid}`
+                              }
+                              onClick={() =>
+                                setSensorFilter(current =>
+                                  current.trim().toLocaleLowerCase() ===
+                                  sensorUid.toLocaleLowerCase()
+                                    ? ""
+                                    : sensorUid
+                                )
+                              }
                             >
                               <svg
                                 width="12"
@@ -1668,11 +1691,23 @@ export function GatewayCoveragePanel() {
                               <ActionIcon
                                 size="xs"
                                 variant="subtle"
-                                color="blue"
+                                color={
+                                  suggestedGatewayFilter === suggestion.gatewayId
+                                    ? "blue"
+                                    : "white"
+                                }
                                 aria-label={`Filter suggested gateway ${suggestion.gatewayId}`}
-                                title={`Filter on ${suggestion.gatewayId}`}
+                                title={
+                                  suggestedGatewayFilter === suggestion.gatewayId
+                                    ? `Clear suggested gateway filter ${suggestion.gatewayId}`
+                                    : `Filter on ${suggestion.gatewayId}`
+                                }
                                 onClick={() =>
-                                  setSuggestedGatewayFilter(suggestion.gatewayId)
+                                  setSuggestedGatewayFilter(current =>
+                                    current === suggestion.gatewayId
+                                      ? null
+                                      : suggestion.gatewayId
+                                  )
                                 }
                               >
                                 <svg
