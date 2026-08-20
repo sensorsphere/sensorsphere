@@ -314,6 +314,7 @@ export function GatewayCoveragePanel() {
           />
 
           <Button
+            color="blue"
             variant="light"
             loading={query.isFetching}
             onClick={
@@ -324,7 +325,7 @@ export function GatewayCoveragePanel() {
           </Button>
 
           <Button
-            color="red"
+            color="orange"
             variant="light"
             onClick={
               () => setResetOpened(true)
@@ -335,7 +336,7 @@ export function GatewayCoveragePanel() {
 
           <Button
             color="red"
-            variant="filled"
+            variant="light"
             onClick={
               () => setDeleteAllOpened(true)
             }
@@ -456,6 +457,7 @@ export function GatewayCoveragePanel() {
                           <Group gap={4} wrap="nowrap">
                             <Button
                               size="compact-xs"
+                              color="orange"
                               variant="light"
                               onClick={() =>
                                 setGatewayAction({
@@ -602,7 +604,7 @@ export function GatewayCoveragePanel() {
               Cancel
             </Button>
             <Button
-              color={gatewayAction?.type === "delete" ? "red" : undefined}
+              color={gatewayAction?.type === "delete" ? "red" : "orange"}
               loading={
                 resetGatewayMutation.isPending ||
                 deleteGatewayMutation.isPending
@@ -663,7 +665,7 @@ export function GatewayCoveragePanel() {
             </Button>
 
             <Button
-              color="red"
+              color="orange"
               loading={resetMutation.isPending}
               onClick={
                 () => resetMutation.mutate()

@@ -13,6 +13,7 @@ BUILD_DATE="$(date +"%Y%m%d-%H%M%S")"
 
 echo "$SCRIPT_NAME started at $(date)"
 echo "======================================"
+echo "   FLASH_ONLY      : ${FLASH_ONLY}"
 echo "   BOARD_ID        : $BOARD_ID"
 echo "   KIND_NAME       : $KIND_NAME"
 echo "   KIND_DESCRIPTION: $KIND_DESCRIPTION"
@@ -22,31 +23,28 @@ echo "   ESP_IP          : ${ESP_IP}"
 echo "   BUILD_DATE      : ${BUILD_DATE}"
 echo "======================================"
 
-# docker exec -it esphome-sensorsphere esphome clean /config/${CONFIG_FILE} \
-#     && docker exec -it esphome-sensorsphere esphome compile /config/${CONFIG_FILE} \
-#     && scp 
-
-if [[ -n "${CLEAN}" ]] && [[ "${CLEAN}" == "1" ]]; then
-    docker exec -it esphome-sensorsphere clean \
+if [[ ! -n "$FLASH_ONLY" ]] || [[ "$FLASH_ONLY" -ne "1" ]]; then
+    if [[ -n "${CLEAN}" ]] && [[ "${CLEAN}" == "1" ]]; then
+        docker exec -it esphome-sensorsphere clean \
+            -s BOARD_ID "${BOARD_ID}" \
+            -s KIND_NAME "${KIND_NAME}" \
+            -s KIND_DESCRIPTION "${KIND_DESCRIPTION}" \
+            -s LOGGER_LEVEL "${LOGGER_LEVEL}" \
+            compile /config/${CONFIG_FILE}
+    fi
+    docker exec -it esphome-sensorsphere esphome \
+        -s BUILD_DATE "${BUILD_DATE}" \
         -s BOARD_ID "${BOARD_ID}" \
         -s KIND_NAME "${KIND_NAME}" \
         -s KIND_DESCRIPTION "${KIND_DESCRIPTION}" \
         -s LOGGER_LEVEL "${LOGGER_LEVEL}" \
+        ${ESP_EXTRA_VARS} \
         compile /config/${CONFIG_FILE}
-fi
 
-docker exec -it esphome-sensorsphere esphome \
-    -s BUILD_DATE "${BUILD_DATE}" \
-    -s BOARD_ID "${BOARD_ID}" \
-    -s KIND_NAME "${KIND_NAME}" \
-    -s KIND_DESCRIPTION "${KIND_DESCRIPTION}" \
-    -s LOGGER_LEVEL "${LOGGER_LEVEL}" \
-    ${ESP_EXTRA_VARS} \
-    compile /config/${CONFIG_FILE}
-
-if [[ $? -ne 0 ]]; then
-    echo "!!!Error!!! during compilation"
-    exit 1
+    if [[ $? -ne 0 ]]; then
+        echo "!!!Error!!! during compilation"
+        exit 1
+    fi
 fi
 
 if [ -n "${ESP_IP}" ]; then
