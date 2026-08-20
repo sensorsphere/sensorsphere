@@ -178,6 +178,7 @@ export function HistoryChart({
 
     series:
       series.map(item => ({
+        id: item.id,
         name: item.name,
         type: "line",
         smooth: true,
@@ -206,6 +207,7 @@ export function HistoryChart({
   return (
     <ReactECharts
       option={option}
+      notMerge
       lazyUpdate
       style={{
         height: 390
