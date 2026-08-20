@@ -36,16 +36,15 @@
 * [X] sur un graphe history, affichage de la valeur courante de chaque courbe dans la zone de titre pour plus de clarte
 * [X] ajouter les icones: garage, salle a manger, living room, dressing, laundry
 * [X] il faut pouvoir nommer l'instance en cours d'execution. ex: Sensor Sphere IAT, My Sensor Sphere, ..., l'affiher dans la nom de l'onglet et dans le header. il faudrait pouvoir surcharger une valeur par defaut en provenance du .env et qui serait renvoyee par une api du backend
-* [ ] dans History, les echelles des courbes ne s'affichent pas correctement en d'ajout/suppression d'un metrique
+* [ ] dans History, les echelles des courbes ne s'affichent pas correctement apres ajout/suppression d'un metrique
 * [ ] dans History, faire en sorte que les couleurs des differents types de metriques soient toujours de la meme couleur et que'on puisse les changer par configuration sauvegardee dans la base
-* [ ] dans Gateway Coverage, recuperer le board_id, sn RSSI et la mac address afin de l'afficher sur chaque BLE gateway
 * [ ] dans Gateway Coverage, prevoir un bouton "Reset" sur chacune des BLE Gateway en cas de deplacement geographique (uniquement suppression de tous les sensors associee, pas sa suppression)
 * [ ] dans Gateway Coverage, mettre un bouton "Delete" sur une BL Gateway: suppression de la BLE Gateway et toutes ls donnees associees
 
 # Run
 * [X] Comment puis-je mettre en place une sauvagarde complete de toutes les donnees afin de pouvoir les restaurer facilement en cas de crash
 * [X] il faudrait faire un arret de tous le modules ainsi qu un rebuild complet de tous ces modules, sans perte de donnees, afin de voir si ca se construit correctement et ensuite si ca se fait correctement tenter tout un build sur un autre environnement/machine
-* [ ] mettre une couleur, et toutes differentes sur les icones du menu et reporter l'icone sur le titre de la page
+* [ ] mettre une couleur sur les icones du mnu de navigation verticale, et toutes differentes les unes des autres et reporter l'icone sur le titre de la page
 
 
 ### Gateway Coverage
@@ -56,6 +55,7 @@
 * [X] pouvoir ordonner les sensors
 * [X] en tete de tableau, afficher le nombre total de Sensor. Ajouter ip_address pour chqaue BLE Gateway. dans le bouton refresh global, indiquer la valeur de l'auto refresh en secondes
 * [X] reduire la taille des colonnes 20%, ca devrait passer
+* [X] dans Gateway Coverage, recuperer le board_id, sn RSSI et la mac address afin de l'afficher sur chaque BLE gateway
 
 
 ### Specif
