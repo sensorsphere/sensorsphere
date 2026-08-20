@@ -1,5 +1,7 @@
 import React from "react";
 
+import { NavigationIcon } from "./NavigationIcon";
+
 import {
   Alert,
   Badge,
@@ -784,9 +786,12 @@ export function AlertPanel() {
             mb="md"
           >
             <div>
-              <Title order={2}>
-                Active alerts
-              </Title>
+              <Group gap="xs">
+                <NavigationIcon page="alerts" size={24} />
+                <Title order={2}>
+                  Active alerts
+                </Title>
+              </Group>
 
               <Text c="dimmed">
                 Current conditions requiring attention
@@ -969,9 +974,12 @@ export function AlertPanel() {
             mb="md"
           >
             <div>
-              <Title order={2}>
-                Alert history
-              </Title>
+              <Group gap="xs">
+                <NavigationIcon page="alerts" size={24} />
+                <Title order={2}>
+                  Alert history
+                </Title>
+              </Group>
 
               <Text c="dimmed">
                 Recent alert events
@@ -1200,9 +1208,12 @@ export function AlertPanel() {
             mb="md"
           >
             <div>
-              <Title order={2}>
-                Alert rules
-              </Title>
+              <Group gap="xs">
+                <NavigationIcon page="alerts" size={24} />
+                <Title order={2}>
+                  Alert rules
+                </Title>
+              </Group>
 
               <Text c="dimmed">
                 Configured monitoring conditions

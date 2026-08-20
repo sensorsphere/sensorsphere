@@ -1,5 +1,7 @@
 import React from "react";
 
+import { NavigationIcon } from "./NavigationIcon";
+
 import {
   Badge,
   Button,
@@ -839,9 +841,12 @@ export function InventoryPanel() {
         justify="space-between"
       >
         <div>
-          <Title order={2}>
-            Inventory
-          </Title>
+          <Group gap="xs">
+              <NavigationIcon page="inventory" size={24} />
+              <Title order={2}>
+                Inventory
+              </Title>
+            </Group>
 
           <Text c="dimmed">
             Drag assets onto locations to organize your environment.

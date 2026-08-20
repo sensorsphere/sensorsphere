@@ -1,5 +1,7 @@
 import React from "react";
 
+import { NavigationIcon } from "./NavigationIcon";
+
 import {
   Badge,
   Button,
@@ -602,9 +604,12 @@ export function SensorCatalog() {
           justify="space-between"
         >
           <div>
-            <Title order={2}>
-              Sensors
-            </Title>
+            <Group gap="xs">
+                <NavigationIcon page="sensors" size={24} />
+                <Title order={2}>
+                  Sensors
+                </Title>
+              </Group>
 
             <Text c="dimmed">
               Registered SensorSphere devices

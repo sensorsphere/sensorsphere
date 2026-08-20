@@ -1,5 +1,7 @@
 import React from "react";
 
+import { NavigationIcon } from "./NavigationIcon";
+
 import {
   Alert,
   Button,
@@ -1618,9 +1620,12 @@ export function HistoryPanel() {
         align="flex-end"
       >
         <div>
-          <Title order={2}>
-            History
-          </Title>
+          <Group gap="xs">
+              <NavigationIcon page="history" size={24} />
+              <Title order={2}>
+                History
+              </Title>
+            </Group>
           <Text c="dimmed">
             Organize independent graph dashboards in multiple History tabs
           </Text>

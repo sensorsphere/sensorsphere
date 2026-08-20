@@ -1,5 +1,7 @@
 import React from "react";
 
+import { NavigationIcon } from "./NavigationIcon";
+
 import {
   ActionIcon,
   Alert,
@@ -995,7 +997,10 @@ export function GatewayCoveragePanel() {
     <Stack gap="lg">
       <Group justify="space-between" align="flex-end">
         <div>
-          <Title order={2}>Gateway Coverage</Title>
+          <Group gap="xs">
+            <NavigationIcon page="gateway-coverage" size={24} />
+            <Title order={2}>Gateway Coverage</Title>
+          </Group>
           <Text c="dimmed">
             Compare BLE RSSI received by each candidate ESP gateway.
           </Text>
