@@ -695,6 +695,17 @@ export function GatewayCoveragePanel() {
       )
     );
 
+  const suggestedCountByGateway =
+    new Map(
+      gateways.map(gateway => [
+        gateway,
+        allSensorUids.filter(
+          sensorUid =>
+            suggestionBySensorUid.get(sensorUid)?.gatewayId === gateway
+        ).length
+      ])
+    );
+
   const sensors =
     allSensorUids
       .filter(sensorUid => {
@@ -1216,6 +1227,35 @@ export function GatewayCoveragePanel() {
                       >
                         <Stack gap={3}>
                           <Group gap={4} wrap="nowrap">
+                            <ActionIcon
+                              size="xs"
+                              variant="subtle"
+                              color={
+                                suggestedGatewayFilter === gateway
+                                  ? "blue"
+                                  : "gray"
+                              }
+                              aria-label={`Filter suggested gateway ${gateway}`}
+                              title={`Filter suggestions on ${gateway}`}
+                              onClick={() =>
+                                setSuggestedGatewayFilter(gateway)
+                              }
+                            >
+                              <svg
+                                width="12"
+                                height="12"
+                                viewBox="0 0 16 16"
+                                fill="none"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  d="M2 3h12L9.5 8v4L6.5 14V8L2 3Z"
+                                  stroke="currentColor"
+                                  strokeWidth="1.4"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </ActionIcon>
                             <Tooltip
                               multiline
                               withArrow
@@ -1319,7 +1359,9 @@ export function GatewayCoveragePanel() {
                               summary?.sensorCount
                               ?? sensorCountByGateway.get(gateway)
                               ?? 0
-                            } sensors
+                            } sensors / {
+                              suggestedCountByGateway.get(gateway) ?? 0
+                            } suggested
                           </Text>
                           <Text
                             size="xs"
@@ -1434,7 +1476,7 @@ export function GatewayCoveragePanel() {
                               c="dimmed"
                               lh={1.1}
                               style={{
-                                fontSize: 10
+                                fontSize: 11
                               }}
                             >
                               {sensorDisplayName(sensorUid)}
