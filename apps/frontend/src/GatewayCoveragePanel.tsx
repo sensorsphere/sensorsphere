@@ -856,7 +856,7 @@ export function GatewayCoveragePanel() {
             <Table
               striped
               highlightOnHover
-              verticalSpacing="sm"
+              verticalSpacing="xs"
               style={{
                 tableLayout: "fixed",
                 width: "100%",
@@ -1199,6 +1199,9 @@ export function GatewayCoveragePanel() {
                               <Text size="xs" c="dimmed">
                                 min {row.minRssi.toFixed(0)} · max {row.maxRssi.toFixed(0)} · σ {row.stddevRssi.toFixed(1)}
                               </Text>
+                              <Text size="xs" c="dimmed">
+                                {row.sampleCount} samples in last {periodLabel(hours)}
+                              </Text>
                               <Text
                                 size="xs"
                                 c={ageColor(row.lastSeenAt)}
@@ -1211,13 +1214,7 @@ export function GatewayCoveragePanel() {
                                   )
                                 }
                               >
-                                {row.sampleCount} samples in last {periodLabel(hours)}
-                                {" · "}
-                                {
-                                  relativeSince(
-                                    row.lastSeenAt
-                                  )
-                                }
+                                {relativeSince(row.lastSeenAt)}
                               </Text>
                             </Stack>
                           </Table.Td>
