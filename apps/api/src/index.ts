@@ -178,6 +178,8 @@ app.get("/api/v1/gateway-coverage", async (request, reply) => {
           gateway.mac_address AS "macAddress",
           gateway.wifi_rssi AS "wifiRssi",
           gateway.wifi_rssi_seen_at AS "wifiRssiSeenAt",
+          gateway.build_date AS "buildDate",
+          gateway.ip_address AS "ipAddress",
           COALESCE(
             stats.last_rssi_at,
             gateway.last_rssi_at

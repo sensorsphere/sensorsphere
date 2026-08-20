@@ -88,7 +88,7 @@ Promise<void> {
 
       const gatewayMetadataMatch =
         message.topic.match(
-          /^sensors\/ble_gateway\/([^/]+)\/sensor\/(board_id|mac_address|wifi_rssi)\/state$/
+          /^sensors\/ble_gateway\/([^/]+)\/sensor\/(board_id|mac_address|wifi_rssi|build_date|ip_address)\/state$/
         );
 
       if (gatewayMetadataMatch) {
@@ -97,7 +97,7 @@ Promise<void> {
 
         const metric =
           gatewayMetadataMatch[2] as
-            "board_id" | "mac_address" | "wifi_rssi";
+            "board_id" | "mac_address" | "wifi_rssi" | "build_date" | "ip_address";
 
         const value =
           message.payload

@@ -33,6 +33,8 @@ import type {
   GatewayCoverageRow
 } from "./types";
 
+const AUTO_REFRESH_SECONDS = 30;
+
 function qualityLabel(
   rssi: number
 ): string {
@@ -153,7 +155,7 @@ export function GatewayCoveragePanel() {
         getGatewayCoverage(
           Number(hours)
         ),
-      refetchInterval: 30_000
+      refetchInterval: AUTO_REFRESH_SECONDS * 1000
     });
 
   const rows =
@@ -321,7 +323,7 @@ export function GatewayCoveragePanel() {
               () => void query.refetch()
             }
           >
-            Refresh
+            Refresh (auto {AUTO_REFRESH_SECONDS} s)
           </Button>
 
           <Button
@@ -366,6 +368,15 @@ export function GatewayCoveragePanel() {
 
       {gatewaySummaries.length > 0 && (
         <Card withBorder padding="md">
+          <Group justify="space-between" mb="sm">
+            <Text fw={600}>
+              Total sensors: {sensors.length}
+            </Text>
+            <Text size="sm" c="dimmed">
+              BLE gateways: {gateways.length}
+            </Text>
+          </Group>
+
           <Table.ScrollContainer minWidth={900}>
             <Table striped highlightOnHover verticalSpacing="sm">
               <Table.Thead>
@@ -408,6 +419,12 @@ export function GatewayCoveragePanel() {
                           <Text size="xs" c="dimmed" fw={400}>
                             MAC: {summary?.macAddress ?? "—"}
                           </Text>
+                          <Text size="xs" c="dimmed" fw={400}>
+                            IP: {summary?.ipAddress ?? "—"}
+                          </Text>
+                          <Text size="xs" c="dimmed" fw={400}>
+                            Build: {summary?.buildDate ?? "—"}
+                          </Text>
                           <Group gap="xs">
                             <Text size="xs" c="dimmed" fw={400}>
                               WiFi:
@@ -420,7 +437,7 @@ export function GatewayCoveragePanel() {
                                   color={qualityColor(summary.wifiRssi)}
                                   title={exactDate(summary.wifiRssiSeenAt)}
                                 >
-                                  {summary.wifiRssi.toFixed(0)} dBm
+                                  {summary.wifiRssi.toFixed(0)} dBm · {qualityLabel(summary.wifiRssi)}
                                 </Badge>
                               )
                               : (

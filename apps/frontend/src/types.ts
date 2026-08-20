@@ -247,6 +247,8 @@ export interface GatewayCoverageGateway {
   macAddress: string | null;
   wifiRssi: number | null;
   wifiRssiSeenAt: string | null;
+  buildDate: string | null;
+  ipAddress: string | null;
   lastSeenAt: string | null;
   sampleCount: number;
   sensorCount: number;
