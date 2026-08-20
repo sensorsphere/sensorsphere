@@ -137,27 +137,27 @@ implements MeasurementRepository {
       )
       VALUES (
         $1,
-        CASE WHEN $2 = 'board_id' THEN $3 ELSE NULL END,
-        CASE WHEN $2 = 'mac_address' THEN $3 ELSE NULL END,
-        CASE WHEN $2 = 'wifi_rssi' THEN $4 ELSE NULL END,
-        CASE WHEN $2 = 'wifi_rssi' THEN $5 ELSE NULL END
+        CASE WHEN $2::text = 'board_id' THEN $3::text ELSE NULL::text END,
+        CASE WHEN $2::text = 'mac_address' THEN $3::text ELSE NULL::text END,
+        CASE WHEN $2::text = 'wifi_rssi' THEN $4::double precision ELSE NULL::double precision END,
+        CASE WHEN $2::text = 'wifi_rssi' THEN $5::timestamptz ELSE NULL::timestamptz END
       )
       ON CONFLICT (gateway_id) DO UPDATE
       SET
         board_id = CASE
-          WHEN $2 = 'board_id' THEN $3
+          WHEN $2::text = 'board_id' THEN $3::text
           ELSE gateway_coverage_gateways.board_id
         END,
         mac_address = CASE
-          WHEN $2 = 'mac_address' THEN $3
+          WHEN $2::text = 'mac_address' THEN $3::text
           ELSE gateway_coverage_gateways.mac_address
         END,
         wifi_rssi = CASE
-          WHEN $2 = 'wifi_rssi' THEN $4
+          WHEN $2::text = 'wifi_rssi' THEN $4::double precision
           ELSE gateway_coverage_gateways.wifi_rssi
         END,
         wifi_rssi_seen_at = CASE
-          WHEN $2 = 'wifi_rssi' THEN $5
+          WHEN $2::text = 'wifi_rssi' THEN $5::timestamptz
           ELSE gateway_coverage_gateways.wifi_rssi_seen_at
         END,
         updated_at = now()
