@@ -1,0 +1,23 @@
+substitutions:
+  device_name: "${KIND_NAME}-${GATEWAY_INDEX}"
+  friendly_name: "${KIND_DESCRIPTION}"
+  gateway_kind: "ble_gateway"
+  gateway_id: "ble-gateway-${GATEWAY_INDEX}"
+  mqtt_broker: "${MQTT_BROKER}"
+  mqtt_port: "${MQTT_PORT}"
+
+packages:
+  hardware: !include packages/hardware/esp32-mhetesp32minikit.yaml
+  status_led: !include packages/hardware/esp32-mh-et-live-status-led.yaml
+
+  base: !include packages/base.yaml
+  network: !include packages/network.yaml
+  mqtt: !include packages/mqtt.yaml
+  
+  ble_tracker: !include packages/ble/tracker.yaml
+  diagnostics: !include packages/diagnostics.yaml
+
+  atc_sensors: !include packages/ble/atc-sensors-all.yaml
+
+logger:
+  level: ${LOGGER_LEVEL}

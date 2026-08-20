@@ -457,3 +457,47 @@ Promise<{
     deletedSamples: number;
   }>(response);
 }
+
+export async function resetGatewayCoverageGateway(
+  gatewayId: string
+): Promise<{
+  status: string;
+  gatewayId: string;
+  deletedSamples: number;
+}> {
+  const response =
+    await fetch(
+      `/api/v1/gateway-coverage/${encodeURIComponent(gatewayId)}/samples`,
+      {
+        method: "DELETE"
+      }
+    );
+
+  return readJson<{
+    status: string;
+    gatewayId: string;
+    deletedSamples: number;
+  }>(response);
+}
+
+export async function deleteGatewayCoverageGateway(
+  gatewayId: string
+): Promise<{
+  status: string;
+  gatewayId: string;
+  deletedSamples: number;
+}> {
+  const response =
+    await fetch(
+      `/api/v1/gateway-coverage/${encodeURIComponent(gatewayId)}`,
+      {
+        method: "DELETE"
+      }
+    );
+
+  return readJson<{
+    status: string;
+    gatewayId: string;
+    deletedSamples: number;
+  }>(response);
+}

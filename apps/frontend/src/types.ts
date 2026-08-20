@@ -243,8 +243,13 @@ export interface GatewayCoverageRow {
 
 export interface GatewayCoverageGateway {
   gatewayId: string;
-  lastSeenAt: string;
+  boardId: string | null;
+  macAddress: string | null;
+  wifiRssi: number | null;
+  wifiRssiSeenAt: string | null;
+  lastSeenAt: string | null;
   sampleCount: number;
+  sensorCount: number;
 }
 
 export interface GatewayCoverageResponse {

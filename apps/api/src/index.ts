@@ -163,13 +163,31 @@ app.get("/api/v1/gateway-coverage", async (request, reply) => {
 
       pool.query(
         `
+        WITH sample_stats AS (
+          SELECT
+            gateway_id,
+            COUNT(*)::integer AS sample_count,
+            COUNT(DISTINCT sensor_uid)::integer AS sensor_count,
+            MAX(time) AS last_rssi_at
+          FROM gateway_sensor_rssi_samples
+          GROUP BY gateway_id
+        )
         SELECT
-          gateway_id AS "gatewayId",
-          MAX(time) AS "lastSeenAt",
-          COUNT(*)::integer AS "sampleCount"
-        FROM gateway_sensor_rssi_samples
-        GROUP BY gateway_id
-        ORDER BY gateway_id
+          gateway.gateway_id AS "gatewayId",
+          gateway.board_id AS "boardId",
+          gateway.mac_address AS "macAddress",
+          gateway.wifi_rssi AS "wifiRssi",
+          gateway.wifi_rssi_seen_at AS "wifiRssiSeenAt",
+          COALESCE(
+            stats.last_rssi_at,
+            gateway.last_rssi_at
+          ) AS "lastSeenAt",
+          COALESCE(stats.sample_count, 0)::integer AS "sampleCount",
+          COALESCE(stats.sensor_count, 0)::integer AS "sensorCount"
+        FROM gateway_coverage_gateways gateway
+        LEFT JOIN sample_stats stats
+          ON stats.gateway_id = gateway.gateway_id
+        ORDER BY gateway.gateway_id
         `
       )
     ]);
@@ -185,15 +203,127 @@ app.get("/api/v1/gateway-coverage", async (request, reply) => {
 app.delete("/api/v1/gateway-coverage", async (_request, reply) => {
   const result = await pool.query(
     `
-    DELETE FROM gateway_sensor_rssi_samples
+    WITH deleted AS (
+      DELETE FROM gateway_sensor_rssi_samples
+      RETURNING 1
+    ), reset_gateways AS (
+      UPDATE gateway_coverage_gateways
+      SET
+        last_rssi_at = NULL,
+        updated_at = now()
+      RETURNING 1
+    )
+    SELECT COUNT(*)::integer AS count
+    FROM deleted
     `
   );
 
   return reply.code(200).send({
     status: "reset",
-    deletedSamples: result.rowCount ?? 0
+    deletedSamples: result.rows[0]?.count ?? 0
   });
 });
+
+app.delete(
+  "/api/v1/gateway-coverage/:gatewayId/samples",
+  async (request, reply) => {
+    const params = request.params as {
+      gatewayId: string;
+    };
+
+    const gatewayId =
+      params.gatewayId?.trim();
+
+    if (!gatewayId) {
+      return reply.code(400).send({
+        error: "invalid_gateway_id"
+      });
+    }
+
+    const result = await pool.query(
+      `
+      WITH deleted AS (
+        DELETE FROM gateway_sensor_rssi_samples
+        WHERE gateway_id = $1
+        RETURNING 1
+      ), reset_gateway AS (
+        UPDATE gateway_coverage_gateways
+        SET
+          last_rssi_at = NULL,
+          updated_at = now()
+        WHERE gateway_id = $1
+        RETURNING gateway_id
+      )
+      SELECT
+        (SELECT COUNT(*)::integer FROM deleted) AS deleted_samples,
+        EXISTS(SELECT 1 FROM reset_gateway) AS gateway_exists
+      `,
+      [gatewayId]
+    );
+
+    if (!result.rows[0]?.gateway_exists) {
+      return reply.code(404).send({
+        error: "gateway_not_found"
+      });
+    }
+
+    return reply.code(200).send({
+      status: "reset",
+      gatewayId,
+      deletedSamples:
+        result.rows[0]?.deleted_samples ?? 0
+    });
+  }
+);
+
+app.delete(
+  "/api/v1/gateway-coverage/:gatewayId",
+  async (request, reply) => {
+    const params = request.params as {
+      gatewayId: string;
+    };
+
+    const gatewayId =
+      params.gatewayId?.trim();
+
+    if (!gatewayId) {
+      return reply.code(400).send({
+        error: "invalid_gateway_id"
+      });
+    }
+
+    const result = await pool.query(
+      `
+      WITH deleted_samples AS (
+        DELETE FROM gateway_sensor_rssi_samples
+        WHERE gateway_id = $1
+        RETURNING 1
+      ), deleted_gateway AS (
+        DELETE FROM gateway_coverage_gateways
+        WHERE gateway_id = $1
+        RETURNING gateway_id
+      )
+      SELECT
+        (SELECT COUNT(*)::integer FROM deleted_samples) AS deleted_samples,
+        EXISTS(SELECT 1 FROM deleted_gateway) AS deleted_gateway
+      `,
+      [gatewayId]
+    );
+
+    if (!result.rows[0]?.deleted_gateway) {
+      return reply.code(404).send({
+        error: "gateway_not_found"
+      });
+    }
+
+    return reply.code(200).send({
+      status: "deleted",
+      gatewayId,
+      deletedSamples:
+        result.rows[0]?.deleted_samples ?? 0
+    });
+  }
+);
 
 app.get("/api/measurements/latest", async () => {
   const result = await pool.query(

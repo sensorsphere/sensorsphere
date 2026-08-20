@@ -86,6 +86,47 @@ Promise<void> {
           /^sensors\/ble_gateway\/([^/]+)\/sensor\/rssi_([^/]+)\/state$/
         );
 
+      const gatewayMetadataMatch =
+        message.topic.match(
+          /^sensors\/ble_gateway\/([^/]+)\/sensor\/(board_id|mac_address|wifi_rssi)\/state$/
+        );
+
+      if (gatewayMetadataMatch) {
+        const gatewayId =
+          gatewayMetadataMatch[1];
+
+        const metric =
+          gatewayMetadataMatch[2] as
+            "board_id" | "mac_address" | "wifi_rssi";
+
+        const value =
+          message.payload
+            .toString()
+            .trim();
+
+        if (gatewayId && value) {
+          void repository
+            .saveGatewayCoverageMetadata(
+              gatewayId,
+              metric,
+              value,
+              message.receivedAt
+            )
+            .catch(error => {
+              logger.error(
+                {
+                  error,
+                  gatewayId,
+                  metric
+                },
+                "Unable to persist gateway coverage metadata"
+              );
+            });
+        }
+
+        return;
+      }
+
       if (coverageMatch) {
         const gatewayId =
           coverageMatch[1];

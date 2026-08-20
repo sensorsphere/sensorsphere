@@ -22,8 +22,10 @@ import {
 } from "@tanstack/react-query";
 
 import {
+  deleteGatewayCoverageGateway,
   getGatewayCoverage,
-  resetGatewayCoverage
+  resetGatewayCoverage,
+  resetGatewayCoverageGateway
 } from "./api";
 
 import type {
@@ -131,6 +133,12 @@ export function GatewayCoveragePanel() {
   const [sensorSort, setSensorSort] =
     React.useState<"asc" | "desc">("asc");
 
+  const [gatewayAction, setGatewayAction] =
+    React.useState<{
+      type: "reset" | "delete";
+      gatewayId: string;
+    } | null>(null);
+
   const query =
     useQuery({
       queryKey: [
@@ -229,6 +237,34 @@ export function GatewayCoveragePanel() {
         }
     });
 
+  const resetGatewayMutation =
+    useMutation({
+      mutationFn:
+        resetGatewayCoverageGateway,
+
+      onSuccess:
+        async () => {
+          setGatewayAction(null);
+          await queryClient.invalidateQueries({
+            queryKey: ["gateway-coverage"]
+          });
+        }
+    });
+
+  const deleteGatewayMutation =
+    useMutation({
+      mutationFn:
+        deleteGatewayCoverageGateway,
+
+      onSuccess:
+        async () => {
+          setGatewayAction(null);
+          await queryClient.invalidateQueries({
+            queryKey: ["gateway-coverage"]
+          });
+        }
+    });
+
   return (
     <Stack gap="lg">
       <Group justify="space-between" align="flex-end">
@@ -295,7 +331,7 @@ export function GatewayCoveragePanel() {
         </Alert>
       )}
 
-      {rows.length > 0 && (
+      {gatewaySummaries.length > 0 && (
         <Card withBorder padding="md">
           <Table.ScrollContainer minWidth={900}>
             <Table striped highlightOnHover verticalSpacing="sm">
@@ -329,18 +365,44 @@ export function GatewayCoveragePanel() {
 
                     return (
                       <Table.Th key={gateway}>
-                        <Stack gap={2}>
+                        <Stack gap={3}>
                           <Text fw={600}>
                             {gateway}
                           </Text>
+                          <Text size="xs" c="dimmed" fw={400}>
+                            Board: {summary?.boardId ?? "—"}
+                          </Text>
+                          <Text size="xs" c="dimmed" fw={400}>
+                            MAC: {summary?.macAddress ?? "—"}
+                          </Text>
+                          <Group gap="xs">
+                            <Text size="xs" c="dimmed" fw={400}>
+                              WiFi:
+                            </Text>
+                            {summary?.wifiRssi !== null && summary?.wifiRssi !== undefined
+                              ? (
+                                <Badge
+                                  size="xs"
+                                  variant="light"
+                                  color={qualityColor(summary.wifiRssi)}
+                                  title={exactDate(summary.wifiRssiSeenAt)}
+                                >
+                                  {summary.wifiRssi.toFixed(0)} dBm
+                                </Badge>
+                              )
+                              : (
+                                <Text size="xs" c="dimmed">—</Text>
+                              )}
+                          </Group>
                           <Text
                             size="xs"
                             c="dimmed"
                             fw={400}
                           >
                             {
-                              sensorCountByGateway
-                                .get(gateway) ?? 0
+                              summary?.sensorCount
+                              ?? sensorCountByGateway.get(gateway)
+                              ?? 0
                             } sensors
                           </Text>
                           <Text
@@ -359,6 +421,33 @@ export function GatewayCoveragePanel() {
                               )
                             }
                           </Text>
+                          <Group gap={4} wrap="nowrap">
+                            <Button
+                              size="compact-xs"
+                              variant="light"
+                              onClick={() =>
+                                setGatewayAction({
+                                  type: "reset",
+                                  gatewayId: gateway
+                                })
+                              }
+                            >
+                              Reset
+                            </Button>
+                            <Button
+                              size="compact-xs"
+                              color="red"
+                              variant="light"
+                              onClick={() =>
+                                setGatewayAction({
+                                  type: "delete",
+                                  gatewayId: gateway
+                                })
+                              }
+                            >
+                              Delete
+                            </Button>
+                          </Group>
                         </Stack>
                       </Table.Th>
                     );
@@ -441,6 +530,66 @@ export function GatewayCoveragePanel() {
           </Table.ScrollContainer>
         </Card>
       )}
+
+      <Modal
+        opened={gatewayAction !== null}
+        onClose={() => setGatewayAction(null)}
+        title={
+          gatewayAction?.type === "delete"
+            ? "Delete BLE gateway"
+            : "Reset BLE gateway coverage"
+        }
+        centered
+      >
+        <Stack gap="md">
+          <Text>
+            {gatewayAction?.type === "delete"
+              ? `Delete ${gatewayAction.gatewayId} and all of its coverage data?`
+              : `Reset all sensor RSSI samples for ${gatewayAction?.gatewayId ?? "this gateway"}? The gateway itself and its board/MAC/WiFi information will be kept.`}
+          </Text>
+
+          {(resetGatewayMutation.isError || deleteGatewayMutation.isError) && (
+            <Alert color="red" title="Gateway operation failed">
+              {(() => {
+                const error =
+                  resetGatewayMutation.error
+                  ?? deleteGatewayMutation.error;
+
+                return error instanceof Error
+                  ? error.message
+                  : "Operation failed.";
+              })()}
+            </Alert>
+          )}
+
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              onClick={() => setGatewayAction(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              color={gatewayAction?.type === "delete" ? "red" : undefined}
+              loading={
+                resetGatewayMutation.isPending ||
+                deleteGatewayMutation.isPending
+              }
+              onClick={() => {
+                if (!gatewayAction) return;
+
+                if (gatewayAction.type === "delete") {
+                  deleteGatewayMutation.mutate(gatewayAction.gatewayId);
+                } else {
+                  resetGatewayMutation.mutate(gatewayAction.gatewayId);
+                }
+              }}
+            >
+              {gatewayAction?.type === "delete" ? "Delete gateway" : "Reset sensor data"}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal
         opened={resetOpened}

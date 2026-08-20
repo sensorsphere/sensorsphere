@@ -52,23 +52,122 @@ implements MeasurementRepository {
     sourceTopic: string
   ): Promise<void> {
 
+    const client =
+      await this.pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      await client.query(
+        `
+        INSERT INTO gateway_coverage_gateways (
+          gateway_id,
+          last_rssi_at
+        )
+        VALUES ($1, $2)
+        ON CONFLICT (gateway_id) DO UPDATE
+        SET
+          last_rssi_at = GREATEST(
+            gateway_coverage_gateways.last_rssi_at,
+            EXCLUDED.last_rssi_at
+          ),
+          updated_at = now()
+        `,
+        [
+          gatewayId,
+          receivedAt
+        ]
+      );
+
+      await client.query(
+        `
+        INSERT INTO gateway_sensor_rssi_samples (
+          time,
+          gateway_id,
+          sensor_uid,
+          rssi,
+          source_topic
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        `,
+        [
+          receivedAt,
+          gatewayId,
+          sensorUid,
+          rssi,
+          sourceTopic
+        ]
+      );
+
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async saveGatewayCoverageMetadata(
+    gatewayId: string,
+    metric: "board_id" | "mac_address" | "wifi_rssi",
+    value: string,
+    receivedAt: Date
+  ): Promise<void> {
+    const wifiRssi =
+      metric === "wifi_rssi"
+        ? Number(value)
+        : null;
+
+    if (
+      metric === "wifi_rssi" &&
+      !Number.isFinite(wifiRssi)
+    ) {
+      return;
+    }
+
     await this.pool.query(
       `
-      INSERT INTO gateway_sensor_rssi_samples (
-        time,
+      INSERT INTO gateway_coverage_gateways (
         gateway_id,
-        sensor_uid,
-        rssi,
-        source_topic
+        board_id,
+        mac_address,
+        wifi_rssi,
+        wifi_rssi_seen_at
       )
-      VALUES ($1, $2, $3, $4, $5)
+      VALUES (
+        $1,
+        CASE WHEN $2 = 'board_id' THEN $3 ELSE NULL END,
+        CASE WHEN $2 = 'mac_address' THEN $3 ELSE NULL END,
+        CASE WHEN $2 = 'wifi_rssi' THEN $4 ELSE NULL END,
+        CASE WHEN $2 = 'wifi_rssi' THEN $5 ELSE NULL END
+      )
+      ON CONFLICT (gateway_id) DO UPDATE
+      SET
+        board_id = CASE
+          WHEN $2 = 'board_id' THEN $3
+          ELSE gateway_coverage_gateways.board_id
+        END,
+        mac_address = CASE
+          WHEN $2 = 'mac_address' THEN $3
+          ELSE gateway_coverage_gateways.mac_address
+        END,
+        wifi_rssi = CASE
+          WHEN $2 = 'wifi_rssi' THEN $4
+          ELSE gateway_coverage_gateways.wifi_rssi
+        END,
+        wifi_rssi_seen_at = CASE
+          WHEN $2 = 'wifi_rssi' THEN $5
+          ELSE gateway_coverage_gateways.wifi_rssi_seen_at
+        END,
+        updated_at = now()
       `,
       [
-        receivedAt,
         gatewayId,
-        sensorUid,
-        rssi,
-        sourceTopic
+        metric,
+        value,
+        wifiRssi,
+        receivedAt
       ]
     );
   }
