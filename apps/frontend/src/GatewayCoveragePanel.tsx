@@ -298,7 +298,7 @@ function recommendationInfo(
 ): {
   gatewayId: string | null;
   status: string;
-  details: string;
+  detailLines: string[];
   color: string;
 } {
   const minimumSamples =
@@ -321,12 +321,19 @@ function recommendationInfo(
   const period =
     periodLabel(selectedPeriod);
 
+  const gatewayWord =
+    (count: number) =>
+      count === 1 ? "gateway" : "gateways";
+
   if (candidates.length === 0) {
     return {
       gatewayId: null,
-      status: "No suggestion",
-      details:
-        `No RSSI data in last ${period} · 0/${totalGateways} gateways with data · minimum ${minimumSamples} samples`,
+      status: "NO SUGGESTION",
+      detailLines: [
+        `No RSSI data in last ${period}`,
+        `0/${totalGateways} gateways with data`,
+        `Minimum required: ${minimumSamples}`
+      ],
       color: "gray"
     };
   }
@@ -337,13 +344,19 @@ function recommendationInfo(
         row.sampleCount >= minimumSamples
     );
 
-  const dataCoverage =
-    `${candidates.length}/${totalGateways} gateway${
-      totalGateways === 1 ? "" : "s"
-    } with data`;
+  const insufficientCount =
+    candidates.length - eligible.length;
 
-  const eligibleCoverage =
-    `${eligible.length}/${totalGateways} eligible`;
+  const coverageLines = [
+    `${candidates.length}/${totalGateways} ${gatewayWord(totalGateways)} with data`,
+    `${eligible.length}/${totalGateways} ${gatewayWord(totalGateways)} eligible`,
+    ...(insufficientCount > 0
+      ? [
+          `${insufficientCount} ${gatewayWord(insufficientCount)} insufficient samples`
+        ]
+      : []),
+    `Minimum required: ${minimumSamples}`
+  ];
 
   if (eligible.length === 0) {
     const bestSoFar =
@@ -357,9 +370,12 @@ function recommendationInfo(
 
     return {
       gatewayId: null,
-      status: "Insufficient samples",
-      details:
-        `Best data so far: ${bestSoFar.gatewayId} · ${bestSoFar.sampleCount}/${minimumSamples} samples required · ${dataCoverage} · ${eligibleCoverage}`,
+      status: "NO RELIABLE SUGGESTION",
+      detailLines: [
+        `Best data so far: ${bestSoFar.gatewayId}`,
+        `${bestSoFar.sampleCount}/${minimumSamples} samples required`,
+        ...coverageLines
+      ],
       color: "orange"
     };
   }
@@ -367,11 +383,11 @@ function recommendationInfo(
   const winner =
     eligible[0];
 
-  const winnerStats =
-    `${winner.avgRssi.toFixed(1)} dBm avg · ${winner.sampleCount} samples in last ${period}`;
-
-  const commonDetails =
-    `${winnerStats} · ${dataCoverage} · ${eligibleCoverage} · minimum ${minimumSamples}`;
+  const commonDetails = [
+    `${winner.avgRssi.toFixed(1)} dBm avg`,
+    `${winner.sampleCount} samples in last ${period}`,
+    ...coverageLines
+  ];
 
   const runnerUp =
     eligible[1];
@@ -379,8 +395,8 @@ function recommendationInfo(
   if (!runnerUp) {
     return {
       gatewayId: winner.gatewayId,
-      status: "Only eligible gateway",
-      details: commonDetails,
+      status: "ONLY ELIGIBLE GATEWAY",
+      detailLines: commonDetails,
       color: "blue"
     };
   }
@@ -391,8 +407,8 @@ function recommendationInfo(
   if (leadDb < 3) {
     return {
       gatewayId: winner.gatewayId,
-      status: `Ambiguous · +${leadDb.toFixed(1)} dB`,
-      details: commonDetails,
+      status: `AMBIGUOUS · +${leadDb.toFixed(1)} dB`,
+      detailLines: commonDetails,
       color: "yellow"
     };
   }
@@ -400,16 +416,16 @@ function recommendationInfo(
   if (leadDb < 8) {
     return {
       gatewayId: winner.gatewayId,
-      status: `Preferred · +${leadDb.toFixed(1)} dB`,
-      details: commonDetails,
+      status: `PREFERRED · +${leadDb.toFixed(1)} dB`,
+      detailLines: commonDetails,
       color: "teal"
     };
   }
 
   return {
     gatewayId: winner.gatewayId,
-    status: `Strong · +${leadDb.toFixed(1)} dB`,
-    details: commonDetails,
+    status: `STRONG · +${leadDb.toFixed(1)} dB`,
+    detailLines: commonDetails,
     color: "green"
   };
 }
@@ -1225,15 +1241,20 @@ export function GatewayCoveragePanel() {
                           >
                             {suggestion.status}
                           </Badge>
-                          <Text
-                            size="xs"
-                            c="dimmed"
-                            style={{
-                              whiteSpace: "normal"
-                            }}
-                          >
-                            {suggestion.details}
-                          </Text>
+                          {suggestion.detailLines.map(
+                            (line, index) => (
+                              <Text
+                                key={`${index}-${line}`}
+                                size="xs"
+                                c="dimmed"
+                                style={{
+                                  whiteSpace: "normal"
+                                }}
+                              >
+                                {line}
+                              </Text>
+                            )
+                          )}
                         </Stack>
                       </Table.Td>
                     </Table.Tr>
