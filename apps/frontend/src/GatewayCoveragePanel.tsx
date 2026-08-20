@@ -1007,6 +1007,19 @@ export function GatewayCoveragePanel() {
                           <Text size="xs" c="dimmed" fw={400}>
                             IP: {summary?.ipAddress ?? "—"}
                           </Text>
+                          <Text
+                            size="xs"
+                            c="dimmed"
+                            fw={400}
+                            title={summary?.wifiSsid ?? undefined}
+                            style={{
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap"
+                            }}
+                          >
+                            SSID: {summary?.wifiSsid ?? "—"}
+                          </Text>
                           <Text size="xs" c="dimmed" fw={400}>
                             Build: {summary?.buildDate ?? "—"}
                           </Text>

@@ -110,7 +110,7 @@ implements MeasurementRepository {
 
   async saveGatewayCoverageMetadata(
     gatewayId: string,
-    metric: "board_id" | "mac_address" | "wifi_rssi" | "build_date" | "ip_address",
+    metric: "board_id" | "mac_address" | "wifi_rssi" | "wifi_ssid" | "build_date" | "ip_address",
     value: string,
     receivedAt: Date
   ): Promise<void> {
@@ -134,6 +134,7 @@ implements MeasurementRepository {
         mac_address,
         wifi_rssi,
         wifi_rssi_seen_at,
+        wifi_ssid,
         build_date,
         ip_address
       )
@@ -143,6 +144,7 @@ implements MeasurementRepository {
         CASE WHEN $2::text = 'mac_address' THEN $3::text ELSE NULL::text END,
         CASE WHEN $2::text = 'wifi_rssi' THEN $4::double precision ELSE NULL::double precision END,
         CASE WHEN $2::text = 'wifi_rssi' THEN $5::timestamptz ELSE NULL::timestamptz END,
+        CASE WHEN $2::text = 'wifi_ssid' THEN $3::text ELSE NULL::text END,
         CASE WHEN $2::text = 'build_date' THEN $3::text ELSE NULL::text END,
         CASE WHEN $2::text = 'ip_address' THEN $3::text ELSE NULL::text END
       )
@@ -163,6 +165,10 @@ implements MeasurementRepository {
         wifi_rssi_seen_at = CASE
           WHEN $2::text = 'wifi_rssi' THEN $5::timestamptz
           ELSE gateway_coverage_gateways.wifi_rssi_seen_at
+        END,
+        wifi_ssid = CASE
+          WHEN $2::text = 'wifi_ssid' THEN $3::text
+          ELSE gateway_coverage_gateways.wifi_ssid
         END,
         build_date = CASE
           WHEN $2::text = 'build_date' THEN $3::text
