@@ -9,6 +9,8 @@ import {
   Loader,
   Modal,
   SegmentedControl,
+  TextInput,
+  Tooltip,
   Stack,
   Table,
   Text,
@@ -25,6 +27,7 @@ import {
   deleteAllGatewayCoverageGateways,
   deleteGatewayCoverageGateway,
   getGatewayCoverage,
+  getSensors,
   resetGatewayCoverage,
   resetGatewayCoverageGateway
 } from "./api";
@@ -453,6 +456,9 @@ export function GatewayCoveragePanel() {
       loadGatewaySort
     );
 
+  const [sensorFilter, setSensorFilter] =
+    React.useState("");
+
   React.useEffect(
     () => {
       window.localStorage.setItem(
@@ -502,8 +508,25 @@ export function GatewayCoveragePanel() {
       refetchInterval: AUTO_REFRESH_SECONDS * 1000
     });
 
+  const sensorsQuery =
+    useQuery({
+      queryKey: ["sensors"],
+      queryFn: getSensors
+    });
+
   const rows =
     query.data?.rows ?? [];
+
+  const sensorNameByUid =
+    new Map(
+      (sensorsQuery.data ?? []).map(
+        sensor => [sensor.uid, sensor.name]
+      )
+    );
+
+  const sensorDisplayName =
+    (sensorUid: string): string =>
+      sensorNameByUid.get(sensorUid)?.trim() || sensorUid;
 
   const gatewaySummaries =
     query.data?.gateways ?? [];
@@ -591,40 +614,68 @@ export function GatewayCoveragePanel() {
           : left.localeCompare(right);
       });
 
-  const sensors =
+  const normalizedSensorFilter =
+    sensorFilter.trim().toLocaleLowerCase();
+
+  const allSensorUids =
     Array.from(
       new Set(
         rows.map(row => row.sensorUid)
       )
-    ).sort((left, right) => {
-      if (sensorSort.mode === "name") {
-        return sensorSort.direction === "asc"
-          ? left.localeCompare(right)
-          : right.localeCompare(left);
-      }
+    );
 
-      const gatewayId =
-        sensorSort.gatewayId;
+  const sensors =
+    allSensorUids
+      .filter(sensorUid => {
+        if (!normalizedSensorFilter) return true;
 
-      const result =
-        compareNullableNumber(
-          gatewayId
-            ? bySensorGateway.get(
-                `${left}\u0000${gatewayId}`
-              )?.avgRssi
-            : null,
-          gatewayId
-            ? bySensorGateway.get(
-                `${right}\u0000${gatewayId}`
-              )?.avgRssi
-            : null,
-          sensorSort.direction
+        const name =
+          sensorDisplayName(sensorUid).toLocaleLowerCase();
+
+        return (
+          name.includes(normalizedSensorFilter) ||
+          sensorUid.toLocaleLowerCase().includes(normalizedSensorFilter)
         );
+      })
+      .sort((left, right) => {
+        if (sensorSort.mode === "name") {
+          const leftName = sensorDisplayName(left);
+          const rightName = sensorDisplayName(right);
+          const result = leftName.localeCompare(rightName);
 
-      return result !== 0
-        ? result
-        : left.localeCompare(right);
-    });
+          if (result !== 0) {
+            return sensorSort.direction === "asc"
+              ? result
+              : -result;
+          }
+
+          return left.localeCompare(right);
+        }
+
+        const gatewayId =
+          sensorSort.gatewayId;
+
+        const result =
+          compareNullableNumber(
+            gatewayId
+              ? bySensorGateway.get(
+                  `${left}\u0000${gatewayId}`
+                )?.avgRssi
+              : null,
+            gatewayId
+              ? bySensorGateway.get(
+                  `${right}\u0000${gatewayId}`
+                )?.avgRssi
+              : null,
+            sensorSort.direction
+          );
+
+        return result !== 0
+          ? result
+          : sensorDisplayName(left).localeCompare(
+              sensorDisplayName(right)
+            );
+      });
 
   const sensorCountByGateway =
     new Map(
@@ -700,6 +751,17 @@ export function GatewayCoveragePanel() {
           : "desc"
     }));
   };
+  const resetSorting = () => {
+    setGatewaySort({
+      mode: "name",
+      direction: "asc"
+    });
+    setSensorSort({
+      mode: "name",
+      direction: "asc"
+    });
+  };
+
   const resetMutation =
     useMutation({
       mutationFn:
@@ -843,13 +905,45 @@ export function GatewayCoveragePanel() {
 
       {gatewaySummaries.length > 0 && (
         <Card withBorder padding="md">
-          <Group justify="space-between" mb="sm">
+          <Group justify="space-between" mb="sm" align="flex-end">
             <Text fw={600}>
-              Total sensors: {sensors.length}
+              BLE Gateways: {gateways.length} / Sensors: {allSensorUids.length}
             </Text>
-            <Text size="sm" c="dimmed">
-              BLE gateways: {gateways.length}
-            </Text>
+            <Group gap="xs" align="flex-end">
+              <TextInput
+                size="xs"
+                label="Sensor filter"
+                placeholder="Name or UID"
+                value={sensorFilter}
+                onChange={event =>
+                  setSensorFilter(event.currentTarget.value)
+                }
+                rightSection={
+                  sensorFilter
+                    ? (
+                      <Button
+                        size="compact-xs"
+                        variant="subtle"
+                        color="gray"
+                        px={4}
+                        onClick={() => setSensorFilter("")}
+                        aria-label="Clear sensor filter"
+                      >
+                        ×
+                      </Button>
+                    )
+                    : undefined
+                }
+              />
+              <Button
+                size="compact-sm"
+                variant="light"
+                color="gray"
+                onClick={resetSorting}
+              >
+                Reset sorting
+              </Button>
+            </Group>
           </Group>
 
           <Table.ScrollContainer minWidth={720}>
@@ -928,7 +1022,7 @@ export function GatewayCoveragePanel() {
                           }))
                         }
                       >
-                        Sensor ({sensors.length}) {
+                        Sensor name ({sensors.length}) {
                           sensorSort.mode === "name"
                             ? sensorSort.direction === "asc"
                               ? "A→Z"
@@ -968,9 +1062,23 @@ export function GatewayCoveragePanel() {
                       >
                         <Stack gap={3}>
                           <Group gap={4} wrap="nowrap">
-                            <Text fw={600}>
-                              {gateway}
-                            </Text>
+                            <Tooltip
+                              multiline
+                              withArrow
+                              label={
+                                <Stack gap={2}>
+                                  <Text size="xs">Board: {summary?.boardId ?? "—"}</Text>
+                                  <Text size="xs">MAC: {summary?.macAddress ?? "—"}</Text>
+                                  <Text size="xs">IP: {summary?.ipAddress ?? "—"}</Text>
+                                  <Text size="xs">SSID: {summary?.wifiSsid ?? "—"}</Text>
+                                  <Text size="xs">Build: {summary?.buildDate ?? "—"}</Text>
+                                </Stack>
+                              }
+                            >
+                              <Text fw={600} style={{ cursor: "help" }}>
+                                {gateway}
+                              </Text>
+                            </Tooltip>
                             <Button
                               size="compact-xs"
                               color={
@@ -998,31 +1106,6 @@ export function GatewayCoveragePanel() {
                               }
                             </Button>
                           </Group>
-                          <Text size="xs" c="dimmed" fw={400}>
-                            Board: {summary?.boardId ?? "—"}
-                          </Text>
-                          <Text size="xs" c="dimmed" fw={400}>
-                            MAC: {summary?.macAddress ?? "—"}
-                          </Text>
-                          <Text size="xs" c="dimmed" fw={400}>
-                            IP: {summary?.ipAddress ?? "—"}
-                          </Text>
-                          <Text
-                            size="xs"
-                            c="dimmed"
-                            fw={400}
-                            title={summary?.wifiSsid ?? undefined}
-                            style={{
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap"
-                            }}
-                          >
-                            SSID: {summary?.wifiSsid ?? "—"}
-                          </Text>
-                          <Text size="xs" c="dimmed" fw={400}>
-                            Build: {summary?.buildDate ?? "—"}
-                          </Text>
                           <Group gap="xs">
                             <Text size="xs" c="dimmed" fw={400}>
                               WiFi:
@@ -1136,7 +1219,12 @@ export function GatewayCoveragePanel() {
                         }}
                       >
                         <Group gap={4} wrap="nowrap">
-                          <Text fw={600}>{sensorUid}</Text>
+                          <Stack gap={0}>
+                            <Text fw={600}>{sensorDisplayName(sensorUid)}</Text>
+                            {sensorDisplayName(sensorUid) !== sensorUid && (
+                              <Text size="xs" c="dimmed">{sensorUid}</Text>
+                            )}
+                          </Stack>
                           <Button
                             size="compact-xs"
                             color={
