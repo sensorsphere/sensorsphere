@@ -53,43 +53,60 @@ function qualityColor(
   return "red";
 }
 
-function relativeSince(
+function ageSeconds(
   value: string | null | undefined
-): string {
-  if (!value) return "—";
+): number | null {
+  if (!value) return null;
 
   const timestamp =
     new Date(value).getTime();
 
   if (!Number.isFinite(timestamp)) {
-    return "—";
+    return null;
   }
 
-  const seconds =
-    Math.max(
-      0,
-      Math.floor(
-        (Date.now() - timestamp) / 1000
-      )
-    );
+  return Math.max(
+    0,
+    Math.floor(
+      (Date.now() - timestamp) / 1000
+    )
+  );
+}
 
-  if (seconds < 10) return "Depuis quelques secondes";
-  if (seconds < 60) return `Depuis ${seconds} s`;
+function relativeSince(
+  value: string | null | undefined
+): string {
+  const seconds = ageSeconds(value);
+
+  if (seconds === null) return "—";
+  if (seconds < 10) return "a few seconds ago";
+  if (seconds < 60) return `${seconds} sec ago`;
 
   const minutes =
     Math.floor(seconds / 60);
 
-  if (minutes < 60) return `Depuis ${minutes} min`;
+  if (minutes < 60) return `${minutes} min ago`;
 
   const hours =
     Math.floor(minutes / 60);
 
-  if (hours < 24) return `Depuis ${hours} h`;
+  if (hours < 24) return `${hours} h ago`;
 
   const days =
     Math.floor(hours / 24);
 
-  return `Depuis ${days} j`;
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+function ageColor(
+  value: string | null | undefined
+): string {
+  const seconds = ageSeconds(value);
+
+  if (seconds === null) return "dimmed";
+  if (seconds > 5 * 60) return "red";
+  if (seconds > 2 * 60) return "orange";
+  return "dimmed";
 }
 
 function exactDate(
@@ -137,7 +154,24 @@ export function GatewayCoveragePanel() {
     React.useState(false);
 
   const [sensorSort, setSensorSort] =
-    React.useState<"asc" | "desc">("asc");
+    React.useState<{
+      mode: "name" | "gatewayRssi";
+      direction: "asc" | "desc";
+      gatewayId?: string;
+    }>({
+      mode: "name",
+      direction: "asc"
+    });
+
+  const [gatewaySort, setGatewaySort] =
+    React.useState<{
+      mode: "name" | "wifiRssi" | "sensorRssi";
+      direction: "asc" | "desc";
+      sensorUid?: string;
+    }>({
+      mode: "name",
+      direction: "asc"
+    });
 
   const [gatewayAction, setGatewayAction] =
     React.useState<{
@@ -164,11 +198,6 @@ export function GatewayCoveragePanel() {
   const gatewaySummaries =
     query.data?.gateways ?? [];
 
-  const gateways =
-    gatewaySummaries.map(
-      gateway => gateway.gatewayId
-    );
-
   const gatewayById =
     new Map(
       gatewaySummaries.map(
@@ -179,17 +208,113 @@ export function GatewayCoveragePanel() {
       )
     );
 
+  const bySensorGateway =
+    new Map(
+      rows.map(row => [
+        `${row.sensorUid}\u0000${row.gatewayId}`,
+        row
+      ])
+    );
+
+  const compareNullableNumber = (
+    left: number | null | undefined,
+    right: number | null | undefined,
+    direction: "asc" | "desc"
+  ): number => {
+    const leftMissing =
+      left === null || left === undefined;
+    const rightMissing =
+      right === null || right === undefined;
+
+    if (leftMissing && rightMissing) return 0;
+    if (leftMissing) return 1;
+    if (rightMissing) return -1;
+
+    return direction === "asc"
+      ? left - right
+      : right - left;
+  };
+
+  const gateways =
+    gatewaySummaries
+      .map(gateway => gateway.gatewayId)
+      .sort((left, right) => {
+        if (gatewaySort.mode === "name") {
+          return gatewaySort.direction === "asc"
+            ? left.localeCompare(right)
+            : right.localeCompare(left);
+        }
+
+        if (gatewaySort.mode === "wifiRssi") {
+          const result =
+            compareNullableNumber(
+              gatewayById.get(left)?.wifiRssi,
+              gatewayById.get(right)?.wifiRssi,
+              gatewaySort.direction
+            );
+
+          return result !== 0
+            ? result
+            : left.localeCompare(right);
+        }
+
+        const sensorUid =
+          gatewaySort.sensorUid;
+
+        const result =
+          compareNullableNumber(
+            sensorUid
+              ? bySensorGateway.get(
+                  `${sensorUid}\u0000${left}`
+                )?.avgRssi
+              : null,
+            sensorUid
+              ? bySensorGateway.get(
+                  `${sensorUid}\u0000${right}`
+                )?.avgRssi
+              : null,
+            gatewaySort.direction
+          );
+
+        return result !== 0
+          ? result
+          : left.localeCompare(right);
+      });
+
   const sensors =
     Array.from(
       new Set(
         rows.map(row => row.sensorUid)
       )
-    ).sort(
-      (left, right) =>
-        sensorSort === "asc"
+    ).sort((left, right) => {
+      if (sensorSort.mode === "name") {
+        return sensorSort.direction === "asc"
           ? left.localeCompare(right)
-          : right.localeCompare(left)
-    );
+          : right.localeCompare(left);
+      }
+
+      const gatewayId =
+        sensorSort.gatewayId;
+
+      const result =
+        compareNullableNumber(
+          gatewayId
+            ? bySensorGateway.get(
+                `${left}\u0000${gatewayId}`
+              )?.avgRssi
+            : null,
+          gatewayId
+            ? bySensorGateway.get(
+                `${right}\u0000${gatewayId}`
+              )?.avgRssi
+            : null,
+          sensorSort.direction
+        );
+
+      return result !== 0
+        ? result
+        : left.localeCompare(right);
+    });
 
   const sensorCountByGateway =
     new Map(
@@ -208,14 +333,6 @@ export function GatewayCoveragePanel() {
       )
     );
 
-  const bySensorGateway =
-    new Map(
-      rows.map(row => [
-        `${row.sensorUid}\u0000${row.gatewayId}`,
-        row
-      ])
-    );
-
   const rowsBySensor =
     new Map<string, GatewayCoverageRow[]>();
 
@@ -225,6 +342,54 @@ export function GatewayCoveragePanel() {
     current.push(row);
     rowsBySensor.set(row.sensorUid, current);
   }
+
+  const setGatewayOrder = (
+    mode: "name" | "wifiRssi"
+  ) => {
+    setGatewaySort(current => ({
+      mode,
+      direction:
+        current.mode === mode
+          ? current.direction === "asc"
+            ? "desc"
+            : "asc"
+          : mode === "name"
+            ? "asc"
+            : "desc"
+    }));
+  };
+
+  const sortGatewaysForSensor = (
+    sensorUid: string
+  ) => {
+    setGatewaySort(current => ({
+      mode: "sensorRssi",
+      sensorUid,
+      direction:
+        current.mode === "sensorRssi" &&
+        current.sensorUid === sensorUid
+          ? current.direction === "asc"
+            ? "desc"
+            : "asc"
+          : "desc"
+    }));
+  };
+
+  const sortSensorsForGateway = (
+    gatewayId: string
+  ) => {
+    setSensorSort(current => ({
+      mode: "gatewayRssi",
+      gatewayId,
+      direction:
+        current.mode === "gatewayRssi" &&
+        current.gatewayId === gatewayId
+          ? current.direction === "asc"
+            ? "desc"
+            : "asc"
+          : "desc"
+    }));
+  };
   const resetMutation =
     useMutation({
       mutationFn:
@@ -367,6 +532,50 @@ export function GatewayCoveragePanel() {
       )}
 
       {gatewaySummaries.length > 0 && (
+        <Group gap="xs">
+          <Text size="sm" c="dimmed">
+            Gateway order:
+          </Text>
+          <Button
+            size="compact-sm"
+            variant={gatewaySort.mode === "name" ? "light" : "subtle"}
+            onClick={() => setGatewayOrder("name")}
+          >
+            Name {
+              gatewaySort.mode === "name"
+                ? gatewaySort.direction === "asc" ? "↑" : "↓"
+                : "↕"
+            }
+          </Button>
+          <Button
+            size="compact-sm"
+            variant={gatewaySort.mode === "wifiRssi" ? "light" : "subtle"}
+            onClick={() => setGatewayOrder("wifiRssi")}
+          >
+            WiFi RSSI {
+              gatewaySort.mode === "wifiRssi"
+                ? gatewaySort.direction === "asc" ? "↑" : "↓"
+                : "↕"
+            }
+          </Button>
+          {gatewaySort.mode === "sensorRssi" && (
+            <Text size="sm" c="dimmed">
+              Gateway RSSI for {gatewaySort.sensorUid} {
+                gatewaySort.direction === "asc" ? "↑" : "↓"
+              }
+            </Text>
+          )}
+          {sensorSort.mode === "gatewayRssi" && (
+            <Text size="sm" c="dimmed">
+              Sensor RSSI via {sensorSort.gatewayId} {
+                sensorSort.direction === "asc" ? "↑" : "↓"
+              }
+            </Text>
+          )}
+        </Group>
+      )}
+
+      {gatewaySummaries.length > 0 && (
         <Card withBorder padding="md">
           <Group justify="space-between" mb="sm">
             <Text fw={600}>
@@ -378,28 +587,45 @@ export function GatewayCoveragePanel() {
           </Group>
 
           <Table.ScrollContainer minWidth={900}>
-            <Table striped highlightOnHover verticalSpacing="sm">
+            <Table
+              striped
+              highlightOnHover
+              verticalSpacing="sm"
+              style={{
+                tableLayout: "fixed",
+                width: `${180 + gateways.length * 260 + 240}px`
+              }}
+            >
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>
+                  <Table.Th
+                    style={{
+                      width: 180,
+                      minWidth: 180,
+                      maxWidth: 180
+                    }}
+                  >
                     <Button
                       variant="subtle"
                       size="compact-sm"
                       px={0}
-                      onClick={
-                        () =>
-                          setSensorSort(
-                            current =>
-                              current === "asc"
-                                ? "desc"
-                                : "asc"
-                          )
+                      onClick={() =>
+                        setSensorSort(current => ({
+                          mode: "name",
+                          direction:
+                            current.mode === "name" &&
+                            current.direction === "asc"
+                              ? "desc"
+                              : "asc"
+                        }))
                       }
                     >
                       Sensor ({sensors.length}) {
-                        sensorSort === "asc"
-                          ? "↑"
-                          : "↓"
+                        sensorSort.mode === "name"
+                          ? sensorSort.direction === "asc"
+                            ? "↑"
+                            : "↓"
+                          : "↕"
                       }
                     </Button>
                   </Table.Th>
@@ -408,11 +634,40 @@ export function GatewayCoveragePanel() {
                       gatewayById.get(gateway);
 
                     return (
-                      <Table.Th key={gateway}>
+                      <Table.Th
+                        key={gateway}
+                        style={{
+                          width: 260,
+                          minWidth: 260,
+                          maxWidth: 260
+                        }}
+                      >
                         <Stack gap={3}>
-                          <Text fw={600}>
-                            {gateway}
-                          </Text>
+                          <Group gap={4} wrap="nowrap">
+                            <Text fw={600}>
+                              {gateway}
+                            </Text>
+                            <Button
+                              size="compact-xs"
+                              variant={
+                                sensorSort.mode === "gatewayRssi" &&
+                                sensorSort.gatewayId === gateway
+                                  ? "light"
+                                  : "subtle"
+                              }
+                              onClick={() =>
+                                sortSensorsForGateway(gateway)
+                              }
+                              title={`Sort sensors by RSSI received through ${gateway}`}
+                            >
+                              RSSI {
+                                sensorSort.mode === "gatewayRssi" &&
+                                sensorSort.gatewayId === gateway
+                                  ? sensorSort.direction === "asc" ? "↑" : "↓"
+                                  : "↕"
+                              }
+                            </Button>
+                          </Group>
                           <Text size="xs" c="dimmed" fw={400}>
                             Board: {summary?.boardId ?? "—"}
                           </Text>
@@ -457,8 +712,11 @@ export function GatewayCoveragePanel() {
                           </Text>
                           <Text
                             size="xs"
-                            c="dimmed"
+                            c={ageColor(summary?.lastSeenAt)}
                             fw={400}
+                            style={{
+                              whiteSpace: "nowrap"
+                            }}
                             title={
                               exactDate(
                                 summary?.lastSeenAt
@@ -503,7 +761,15 @@ export function GatewayCoveragePanel() {
                       </Table.Th>
                     );
                   })}
-                  <Table.Th>Suggested gateway</Table.Th>
+                  <Table.Th
+                    style={{
+                      width: 240,
+                      minWidth: 240,
+                      maxWidth: 240
+                    }}
+                  >
+                    Suggested gateway
+                  </Table.Th>
                 </Table.Tr>
               </Table.Thead>
 
@@ -514,8 +780,36 @@ export function GatewayCoveragePanel() {
 
                   return (
                     <Table.Tr key={sensorUid}>
-                      <Table.Td>
-                        <Text fw={600}>{sensorUid}</Text>
+                      <Table.Td
+                        style={{
+                          width: 180,
+                          minWidth: 180,
+                          maxWidth: 180
+                        }}
+                      >
+                        <Group gap={4} wrap="nowrap">
+                          <Text fw={600}>{sensorUid}</Text>
+                          <Button
+                            size="compact-xs"
+                            variant={
+                              gatewaySort.mode === "sensorRssi" &&
+                              gatewaySort.sensorUid === sensorUid
+                                ? "light"
+                                : "subtle"
+                            }
+                            onClick={() =>
+                              sortGatewaysForSensor(sensorUid)
+                            }
+                            title={`Sort gateways by RSSI for ${sensorUid}`}
+                          >
+                            RSSI {
+                              gatewaySort.mode === "sensorRssi" &&
+                              gatewaySort.sensorUid === sensorUid
+                                ? gatewaySort.direction === "asc" ? "↑" : "↓"
+                                : "↕"
+                            }
+                          </Button>
+                        </Group>
                       </Table.Td>
 
                       {gateways.map(gateway => {
@@ -525,11 +819,29 @@ export function GatewayCoveragePanel() {
                           );
 
                         if (!row) {
-                          return <Table.Td key={gateway}>—</Table.Td>;
+                          return (
+                            <Table.Td
+                              key={gateway}
+                              style={{
+                                width: 260,
+                                minWidth: 260,
+                                maxWidth: 260
+                              }}
+                            >
+                              —
+                            </Table.Td>
+                          );
                         }
 
                         return (
-                          <Table.Td key={gateway}>
+                          <Table.Td
+                            key={gateway}
+                            style={{
+                              width: 260,
+                              minWidth: 260,
+                              maxWidth: 260
+                            }}
+                          >
                             <Stack gap={2}>
                               <Group gap="xs">
                                 <Text fw={row.rank === 1 ? 700 : 500}>
@@ -548,7 +860,10 @@ export function GatewayCoveragePanel() {
                               </Text>
                               <Text
                                 size="xs"
-                                c="dimmed"
+                                c={ageColor(row.lastSeenAt)}
+                                style={{
+                                  whiteSpace: "nowrap"
+                                }}
                                 title={
                                   exactDate(
                                     row.lastSeenAt
@@ -568,7 +883,13 @@ export function GatewayCoveragePanel() {
                         );
                       })}
 
-                      <Table.Td>
+                      <Table.Td
+                        style={{
+                          width: 240,
+                          minWidth: 240,
+                          maxWidth: 240
+                        }}
+                      >
                         <Text fw={600}>
                           {recommendation(sensorRows)}
                         </Text>
