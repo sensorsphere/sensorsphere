@@ -172,8 +172,25 @@ esp32-c3-supermini.yaml
 Puis ajouter un nouveau YAML device à la racine utilisant les mêmes packages communs.
 
 
-## 10. Upload OTA depuis le container esphome
+## 10. Build + Upload OTA remotely
+
+### Generic ESP32
+```sh
+ESP_IP=10.0.10.11
+#ESP_IP=10.0.10.12
+./esp-build.sh generic-esp32.yaml esp32-cam-ai-thinker ${ESP_IP}
+
+```
+
+### BLE Gateway
 
 ```sh
+ESP_IP=10.0.10.121
+GATEWAY_INDEX=01
+MQTT_BROKER=7.0.90.22
+MQTT_PORT=1883
+BOARD_ID=esp32-mhetesp32minikit
+
+./esp-build.sh ble-gateway-esp32.yaml ${BOARD_ID} ${ESP_IP}
 
 ```
