@@ -37,6 +37,10 @@
 * [X] ajouter les icones: garage, salle a manger, living room, dressing, laundry
 * [X] il faut pouvoir nommer l'instance en cours d'execution. ex: Sensor Sphere IAT, My Sensor Sphere, ..., l'affiher dans la nom de l'onglet et dans le header. il faudrait pouvoir surcharger une valeur par defaut en provenance du .env et qui serait renvoyee par une api du backend
 * [ ] dans History, les echelles des courbes ne s'affichent pas correctement en d'ajout/suppression d'un metrique
+* [ ] dans History, faire en sorte que les couleurs des differents types de metriques soient toujours de la meme couleur et que'on puisse les changer par configuration sauvegardee dans la base
+* [ ] dans Gateway Coverage, recuperer le board_id, sn RSSI et la mac address afin de l'afficher sur chaque BLE gateway
+* [ ] dans Gateway Coverage, prevoir un bouton "Reset" sur chacune des BLE Gateway en cas de deplacement geographique (uniquement suppression de tous les sensors associee, pas sa suppression)
+* [ ] dans Gateway Coverage, mettre un bouton "Delete" sur une BL Gateway: suppression de la BLE Gateway et toutes ls donnees associees
 
 # Run
 * [X] Comment puis-je mettre en place une sauvagarde complete de toutes les donnees afin de pouvoir les restaurer facilement en cas de crash
@@ -45,11 +49,11 @@
 
 ### Gateway Coverage
 * [ ] en tete de tableau, afficher le nombre total de Sensor et pour chaque sensor aussi
-* [ ] ajouter les periodes : 5minutes, 10m, 15m, 30m
-* [ ] ajoutr un bouton "refresh" pour forcer le refresh des donnees
-* [ ] mettre un badgde de differente couleur pour les "WEAK", "FAIR", "GODD", "EXCELLENT", ...
-* [ ] pour le "last seen", mettre un affichage "Depuis ..." plutot qu'une date/heure et si on passe dessus (hover) sur cette informtion, affiche la date/heure
-* [ ] pouvoir ordonner les sensors
+* [X] ajouter les periodes : 5minutes, 10m, 15m, 30m
+* [X] ajoutr un bouton "refresh" pour forcer le refresh des donnees
+* [X] mettre un badgde de differente couleur pour les "WEAK", "FAIR", "GODD", "EXCELLENT", ...
+* [X] pour le "last seen", mettre un affichage "Depuis ..." plutot qu'une date/heure et si on passe dessus (hover) sur cette informtion, affiche la date/heure
+* [X] pouvoir ordonner les sensors
 
 
 

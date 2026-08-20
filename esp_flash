@@ -1,4 +1,0 @@
-CONFIG_FILE=$1
-
-docker exec -it esphome-sensorsphere esphome clean /config/${CONFIG_FILE} \
-    && docker exec -it esphome-sensorsphere esphome compile /config/${CONFIG_FILE}

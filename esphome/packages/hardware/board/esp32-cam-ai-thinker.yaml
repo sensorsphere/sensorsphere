@@ -1,3 +1,6 @@
+substitutions:
+  board_name: "ESP32-CAM AI-Thinker"
+
 esp32:
   board: esp32cam
   framework:

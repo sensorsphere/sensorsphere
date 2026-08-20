@@ -171,3 +171,9 @@ esp32-c3-supermini.yaml
 
 Puis ajouter un nouveau YAML device à la racine utilisant les mêmes packages communs.
 
+
+## 10. Upload OTA depuis le container esphome
+
+```sh
+
+```

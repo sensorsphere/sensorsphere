@@ -8,6 +8,20 @@ text_sensor:
     lambda: |-
       return "${diagnostic_version}";
 
+  - platform: template
+    name: "Board Id"
+    id: board_id
+    entity_category: diagnostic
+    lambda: |-
+      return {"${BOARD_ID}"};
+
+  - platform: template
+    name: "Board Name"
+    id: board_name
+    entity_category: diagnostic
+    lambda: |-
+      return {"${board_name}"};
+
   - platform: wifi_info
     ip_address:
       name: "IP Address"

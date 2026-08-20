@@ -1,0 +1,14 @@
+substitutions:
+  device_name: "${KIND_NAME}"
+  friendly_name: "${KIND_DESCRIPTION}"
+
+packages:
+  hardware: !include packages/hardware/board/${BOARD_ID}.yaml
+
+  base: !include packages/base.yaml
+  network: !include packages/network.yaml
+
+  diagnostics: !include packages/diagnostics.yaml
+  
+logger:
+  level: ${LOGGER_LEVEL}
