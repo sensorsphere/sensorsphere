@@ -256,37 +256,71 @@ function exactDate(
     : "—";
 }
 
+
+function periodLabel(
+  value: string
+): string {
+  const labels: Record<string, string> = {
+    [String(5 / 60)]: "5m",
+    [String(10 / 60)]: "10m",
+    [String(15 / 60)]: "15m",
+    "0.5": "30m",
+    "1": "1h",
+    "6": "6h",
+    "24": "24h",
+    "168": "7d"
+  };
+
+  return labels[value] ?? value;
+}
+
 function recommendationInfo(
   rows: GatewayCoverageRow[],
-  totalGateways: number
+  totalGateways: number,
+  selectedPeriod: string
 ): {
   gatewayId: string | null;
   status: string;
   details: string;
   color: string;
 } {
+  const candidates =
+    rows
+      .filter(
+        row =>
+          Number.isFinite(row.avgRssi)
+      )
+      .slice()
+      .sort(
+        (left, right) =>
+          right.avgRssi - left.avgRssi
+      );
+
   const winner =
-    rows.find(row => row.rank === 1);
+    candidates[0];
 
   if (!winner) {
     return {
       gatewayId: null,
       status: "No suggestion",
       details:
-        `No RSSI data in the selected period · 0/${totalGateways} gateways with data`,
+        `No RSSI data in last ${periodLabel(selectedPeriod)} · 0/${totalGateways} gateways with data`,
       color: "gray"
     };
   }
 
   const coverage =
-    `${rows.length}/${totalGateways} gateway${
+    `${candidates.length}/${totalGateways} gateway${
       totalGateways === 1 ? "" : "s"
     } with data`;
 
   const winnerStats =
-    `${winner.avgRssi.toFixed(1)} dBm avg · ${winner.sampleCount} samples`;
+    `${winner.avgRssi.toFixed(1)} dBm avg · ${winner.sampleCount} samples in last ${periodLabel(selectedPeriod)}`;
 
-  if (winner.leadDb === null) {
+  const runnerUp =
+    candidates[1];
+
+  if (!runnerUp) {
     return {
       gatewayId: winner.gatewayId,
       status: "Only gateway with data",
@@ -295,19 +329,22 @@ function recommendationInfo(
     };
   }
 
-  if (winner.leadDb < 3) {
+  const leadDb =
+    winner.avgRssi - runnerUp.avgRssi;
+
+  if (leadDb < 3) {
     return {
       gatewayId: winner.gatewayId,
-      status: `Ambiguous · +${winner.leadDb.toFixed(1)} dB`,
+      status: `Ambiguous · +${leadDb.toFixed(1)} dB`,
       details: `${winnerStats} · ${coverage}`,
       color: "yellow"
     };
   }
 
-  if (winner.leadDb < 8) {
+  if (leadDb < 8) {
     return {
       gatewayId: winner.gatewayId,
-      status: `Preferred · +${winner.leadDb.toFixed(1)} dB`,
+      status: `Preferred · +${leadDb.toFixed(1)} dB`,
       details: `${winnerStats} · ${coverage}`,
       color: "teal"
     };
@@ -315,7 +352,7 @@ function recommendationInfo(
 
   return {
     gatewayId: winner.gatewayId,
-    status: `Strong · +${winner.leadDb.toFixed(1)} dB`,
+    status: `Strong · +${leadDb.toFixed(1)} dB`,
     details: `${winnerStats} · ${coverage}`,
     color: "green"
   };
@@ -743,7 +780,7 @@ export function GatewayCoveragePanel() {
             </Text>
           </Group>
 
-          <Table.ScrollContainer minWidth={900}>
+          <Table.ScrollContainer minWidth={720}>
             <Table
               striped
               highlightOnHover
@@ -751,15 +788,15 @@ export function GatewayCoveragePanel() {
               style={{
                 tableLayout: "fixed",
                 width: "100%",
-                minWidth: `${180 + gateways.length * 260 + 240}px`
+                minWidth: `${144 + gateways.length * 208 + 192}px`
               }}
             >
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th
                     style={{
-                      width: 180,
-                      minWidth: 180
+                      width: 144,
+                      minWidth: 144
                     }}
                   >
                     <Stack gap={6}>
@@ -853,8 +890,8 @@ export function GatewayCoveragePanel() {
                       <Table.Th
                         key={gateway}
                         style={{
-                          width: 260,
-                          minWidth: 260
+                          width: 208,
+                          minWidth: 208
                         }}
                       >
                         <Stack gap={3}>
@@ -984,8 +1021,8 @@ export function GatewayCoveragePanel() {
                   })}
                   <Table.Th
                     style={{
-                      width: 240,
-                      minWidth: 240
+                      width: 192,
+                      minWidth: 192
                     }}
                   >
                     Suggested gateway
@@ -1001,15 +1038,16 @@ export function GatewayCoveragePanel() {
                   const suggestion =
                     recommendationInfo(
                       sensorRows,
-                      gateways.length
+                      gateways.length,
+                      hours
                     );
 
                   return (
                     <Table.Tr key={sensorUid}>
                       <Table.Td
                         style={{
-                          width: 180,
-                          minWidth: 180
+                          width: 144,
+                          minWidth: 144
                         }}
                       >
                         <Group gap={4} wrap="nowrap">
@@ -1056,8 +1094,8 @@ export function GatewayCoveragePanel() {
                             <Table.Td
                               key={gateway}
                               style={{
-                                width: 260,
-                                minWidth: 260
+                                width: 208,
+                                minWidth: 208
                               }}
                             >
                               —
@@ -1069,8 +1107,8 @@ export function GatewayCoveragePanel() {
                           <Table.Td
                             key={gateway}
                             style={{
-                              width: 260,
-                              minWidth: 260
+                              width: 208,
+                              minWidth: 208
                             }}
                           >
                             <Stack gap={2}>
@@ -1101,7 +1139,7 @@ export function GatewayCoveragePanel() {
                                   )
                                 }
                               >
-                                {row.sampleCount} samples
+                                {row.sampleCount} samples in last {periodLabel(hours)}
                                 {" · "}
                                 {
                                   relativeSince(
@@ -1116,8 +1154,8 @@ export function GatewayCoveragePanel() {
 
                       <Table.Td
                         style={{
-                          width: 240,
-                          minWidth: 240
+                          width: 192,
+                          minWidth: 192
                         }}
                       >
                         <Stack gap={2}>
