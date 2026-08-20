@@ -250,6 +250,8 @@ export interface GatewayCoverageGateway {
   wifiSsid: string | null;
   buildDate: string | null;
   ipAddress: string | null;
+  locationId: string | null;
+  locationName: string | null;
   lastSeenAt: string | null;
   sampleCount: number;
   sensorCount: number;

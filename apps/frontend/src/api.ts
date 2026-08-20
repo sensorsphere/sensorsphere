@@ -439,6 +439,35 @@ export async function getGatewayCoverage(
   );
 }
 
+export async function updateGatewayCoverageLocation(
+  gatewayId: string,
+  locationId: string | null
+): Promise<{
+  status: string;
+  gatewayId: string;
+  locationId: string | null;
+}> {
+  const response =
+    await fetch(
+      `/api/v1/gateway-coverage/${encodeURIComponent(gatewayId)}/location`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          locationId
+        })
+      }
+    );
+
+  return readJson<{
+    status: string;
+    gatewayId: string;
+    locationId: string | null;
+  }>(response);
+}
+
 export async function resetGatewayCoverage():
 Promise<{
   status: string;

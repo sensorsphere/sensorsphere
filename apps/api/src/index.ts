@@ -181,6 +181,8 @@ app.get("/api/v1/gateway-coverage", async (request, reply) => {
           gateway.wifi_ssid AS "wifiSsid",
           gateway.build_date AS "buildDate",
           gateway.ip_address AS "ipAddress",
+          gateway.location_id AS "locationId",
+          location.name AS "locationName",
           COALESCE(
             stats.last_rssi_at,
             gateway.last_rssi_at
@@ -190,6 +192,8 @@ app.get("/api/v1/gateway-coverage", async (request, reply) => {
         FROM gateway_coverage_gateways gateway
         LEFT JOIN sample_stats stats
           ON stats.gateway_id = gateway.gateway_id
+        LEFT JOIN locations location
+          ON location.id = gateway.location_id
         ORDER BY gateway.gateway_id
         `
       )
@@ -202,6 +206,102 @@ app.get("/api/v1/gateway-coverage", async (request, reply) => {
     rows: result.rows
   };
 });
+
+app.patch(
+  "/api/v1/gateway-coverage/:gatewayId/location",
+  async (request, reply) => {
+    const params = request.params as {
+      gatewayId: string;
+    };
+
+    const body = request.body as {
+      locationId?: unknown;
+    } | null;
+
+    const gatewayId =
+      params.gatewayId?.trim();
+
+    if (!gatewayId) {
+      return reply.code(400).send({
+        error: "invalid_gateway_id"
+      });
+    }
+
+    const rawLocationId =
+      body?.locationId;
+
+    if (
+      rawLocationId !== null &&
+      typeof rawLocationId !== "string"
+    ) {
+      return reply.code(400).send({
+        error: "invalid_location_id"
+      });
+    }
+
+    const locationId =
+      typeof rawLocationId === "string"
+        ? rawLocationId.trim()
+        : null;
+
+    if (
+      typeof rawLocationId === "string" &&
+      !locationId
+    ) {
+      return reply.code(400).send({
+        error: "invalid_location_id"
+      });
+    }
+
+    if (locationId) {
+      const locationResult =
+        await pool.query(
+          `
+          SELECT EXISTS (
+            SELECT 1
+            FROM locations
+            WHERE id::text = $1
+          ) AS exists
+          `,
+          [locationId]
+        );
+
+      if (!locationResult.rows[0]?.exists) {
+        return reply.code(400).send({
+          error: "location_not_found"
+        });
+      }
+    }
+
+    const result =
+      await pool.query(
+        `
+        UPDATE gateway_coverage_gateways
+        SET
+          location_id = $2::uuid,
+          updated_at = now()
+        WHERE gateway_id = $1
+        RETURNING gateway_id
+        `,
+        [
+          gatewayId,
+          locationId
+        ]
+      );
+
+    if (result.rowCount === 0) {
+      return reply.code(404).send({
+        error: "gateway_not_found"
+      });
+    }
+
+    return reply.code(200).send({
+      status: "updated",
+      gatewayId,
+      locationId
+    });
+  }
+);
 
 app.delete("/api/v1/gateway-coverage", async (_request, reply) => {
   const result = await pool.query(

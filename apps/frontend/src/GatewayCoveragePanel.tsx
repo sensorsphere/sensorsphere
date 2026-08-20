@@ -1,6 +1,7 @@
 import React from "react";
 
 import {
+  ActionIcon,
   Alert,
   Badge,
   Button,
@@ -9,6 +10,7 @@ import {
   Loader,
   Modal,
   SegmentedControl,
+  Select,
   TextInput,
   Tooltip,
   Stack,
@@ -27,9 +29,11 @@ import {
   deleteAllGatewayCoverageGateways,
   deleteGatewayCoverageGateway,
   getGatewayCoverage,
+  getLocations,
   getSensors,
   resetGatewayCoverage,
-  resetGatewayCoverageGateway
+  resetGatewayCoverageGateway,
+  updateGatewayCoverageLocation
 } from "./api";
 
 import type {
@@ -459,6 +463,15 @@ export function GatewayCoveragePanel() {
   const [sensorFilter, setSensorFilter] =
     React.useState("");
 
+  const [copiedSensorUid, setCopiedSensorUid] =
+    React.useState<string | null>(null);
+
+  const [locationGatewayId, setLocationGatewayId] =
+    React.useState<string | null>(null);
+
+  const [locationIdDraft, setLocationIdDraft] =
+    React.useState<string | null>(null);
+
   React.useEffect(
     () => {
       window.localStorage.setItem(
@@ -512,6 +525,13 @@ export function GatewayCoveragePanel() {
     useQuery({
       queryKey: ["sensors"],
       queryFn: getSensors
+    });
+
+  const locationsQuery =
+    useQuery({
+      queryKey: ["locations"],
+      queryFn: getLocations,
+      enabled: locationGatewayId !== null
     });
 
   const rows =
@@ -762,6 +782,60 @@ export function GatewayCoveragePanel() {
     });
   };
 
+  const copySensorUid =
+    async (sensorUid: string) => {
+      if (
+        navigator.clipboard &&
+        window.isSecureContext
+      ) {
+        await navigator.clipboard.writeText(sensorUid);
+      } else {
+        const textarea =
+          document.createElement("textarea");
+
+        textarea.value = sensorUid;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+      }
+
+      setCopiedSensorUid(sensorUid);
+
+      window.setTimeout(
+        () => {
+          setCopiedSensorUid(current =>
+            current === sensorUid ? null : current
+          );
+        },
+        1200
+      );
+    };
+
+  const openLocationEditor =
+    (
+      gatewayId: string,
+      locationId: string | null | undefined
+    ) => {
+      setLocationGatewayId(gatewayId);
+      setLocationIdDraft(locationId ?? null);
+    };
+
+  const locationOptions =
+    (locationsQuery.data ?? [])
+      .slice()
+      .sort((left, right) =>
+        left.name.localeCompare(right.name)
+      )
+      .map(location => ({
+        value: location.id,
+        label: `${location.name} · ${location.type}`
+      }));
+
   const resetMutation =
     useMutation({
       mutationFn:
@@ -795,6 +869,31 @@ export function GatewayCoveragePanel() {
                 "gateway-coverage"
               ]
             });
+        }
+    });
+
+  const updateGatewayLocationMutation =
+    useMutation({
+      mutationFn: ({
+        gatewayId,
+        locationId
+      }: {
+        gatewayId: string;
+        locationId: string | null;
+      }) =>
+        updateGatewayCoverageLocation(
+          gatewayId,
+          locationId
+        ),
+
+      onSuccess:
+        async () => {
+          setLocationGatewayId(null);
+          setLocationIdDraft(null);
+
+          await queryClient.invalidateQueries({
+            queryKey: ["gateway-coverage"]
+          });
         }
     });
 
@@ -954,15 +1053,15 @@ export function GatewayCoveragePanel() {
               style={{
                 tableLayout: "fixed",
                 width: "100%",
-                minWidth: `${144 + gateways.length * 208 + 224}px`
+                minWidth: `${176 + gateways.length * 208 + 157}px`
               }}
             >
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th
                     style={{
-                      width: 144,
-                      minWidth: 144
+                      width: 176,
+                      minWidth: 176
                     }}
                   >
                     <Stack gap={6}>
@@ -1106,6 +1205,37 @@ export function GatewayCoveragePanel() {
                               }
                             </Button>
                           </Group>
+                          <Group gap={4} wrap="nowrap">
+                            <Text
+                              size="xs"
+                              c={summary?.locationName ? "blue" : "dimmed"}
+                              fw={500}
+                              style={{
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                maxWidth: 168
+                              }}
+                              title={summary?.locationName ?? "[No location]"}
+                            >
+                              {summary?.locationName ?? "[No location]"}
+                            </Text>
+                            <ActionIcon
+                              size="xs"
+                              color="green"
+                              variant="subtle"
+                              aria-label={`Edit location for ${gateway}`}
+                              title={`Edit location for ${gateway}`}
+                              onClick={() =>
+                                openLocationEditor(
+                                  gateway,
+                                  summary?.locationId
+                                )
+                              }
+                            >
+                              ✎
+                            </ActionIcon>
+                          </Group>
                           <Group gap="xs">
                             <Text size="xs" c="dimmed" fw={400}>
                               WiFi:
@@ -1189,8 +1319,8 @@ export function GatewayCoveragePanel() {
                   })}
                   <Table.Th
                     style={{
-                      width: 224,
-                      minWidth: 224
+                      width: 157,
+                      minWidth: 157
                     }}
                   >
                     Suggested gateway
@@ -1214,46 +1344,76 @@ export function GatewayCoveragePanel() {
                     <Table.Tr key={sensorUid}>
                       <Table.Td
                         style={{
-                          width: 144,
-                          minWidth: 144
+                          width: 176,
+                          minWidth: 176
                         }}
                       >
-                        <Group gap={4} wrap="nowrap">
-                          <Stack gap={0}>
-                            <Text fw={600}>{sensorDisplayName(sensorUid)}</Text>
-                            {sensorDisplayName(sensorUid) !== sensorUid && (
-                              <Text size="xs" c="dimmed">{sensorUid}</Text>
-                            )}
-                          </Stack>
-                          <Button
-                            size="compact-xs"
-                            color={
-                              gatewaySort.mode === "sensorRssi" &&
-                              gatewaySort.sensorUid === sensorUid
-                                ? "blue"
-                                : "gray"
-                            }
-                            variant={
-                              gatewaySort.mode === "sensorRssi" &&
-                              gatewaySort.sensorUid === sensorUid
-                                ? "light"
-                                : "subtle"
-                            }
-                            onClick={() =>
-                              sortGatewaysForSensor(sensorUid)
-                            }
-                            title={`Sort gateways by RSSI for ${sensorUid}`}
-                          >
-                            RSSI {
-                              gatewaySort.mode === "sensorRssi" &&
-                              gatewaySort.sensorUid === sensorUid
-                                ? gatewaySort.direction === "desc"
-                                  ? "→"
-                                  : "←"
-                                : "↔"
-                            }
-                          </Button>
-                        </Group>
+                        <Stack gap={2}>
+                          {sensorDisplayName(sensorUid) !== sensorUid && (
+                            <Text
+                              c="dimmed"
+                              lh={1.1}
+                              style={{
+                                fontSize: 10
+                              }}
+                            >
+                              {sensorDisplayName(sensorUid)}
+                            </Text>
+                          )}
+                          <Group gap={4} wrap="nowrap">
+                            <Text size="sm" fw={600}>
+                              {sensorUid}
+                            </Text>
+                            <ActionIcon
+                              size="xs"
+                              variant="subtle"
+                              color={
+                                copiedSensorUid === sensorUid
+                                  ? "green"
+                                  : "gray"
+                              }
+                              aria-label={`Copy ${sensorUid}`}
+                              title={
+                                copiedSensorUid === sensorUid
+                                  ? "Copied"
+                                  : "Copy sensor UID"
+                              }
+                              onClick={() =>
+                                void copySensorUid(sensorUid)
+                              }
+                            >
+                              {copiedSensorUid === sensorUid ? "✓" : "⧉"}
+                            </ActionIcon>
+                            <Button
+                              size="compact-xs"
+                              color={
+                                gatewaySort.mode === "sensorRssi" &&
+                                gatewaySort.sensorUid === sensorUid
+                                  ? "blue"
+                                  : "gray"
+                              }
+                              variant={
+                                gatewaySort.mode === "sensorRssi" &&
+                                gatewaySort.sensorUid === sensorUid
+                                  ? "light"
+                                  : "subtle"
+                              }
+                              onClick={() =>
+                                sortGatewaysForSensor(sensorUid)
+                              }
+                              title={`Sort gateways by RSSI for ${sensorUid}`}
+                            >
+                              RSSI {
+                                gatewaySort.mode === "sensorRssi" &&
+                                gatewaySort.sensorUid === sensorUid
+                                  ? gatewaySort.direction === "desc"
+                                    ? "→"
+                                    : "←"
+                                  : "↔"
+                              }
+                            </Button>
+                          </Group>
+                        </Stack>
                       </Table.Td>
 
                       {gateways.map(gateway => {
@@ -1324,8 +1484,8 @@ export function GatewayCoveragePanel() {
 
                       <Table.Td
                         style={{
-                          width: 224,
-                          minWidth: 224
+                          width: 157,
+                          minWidth: 157
                         }}
                       >
                         <Stack gap={1}>
@@ -1364,6 +1524,81 @@ export function GatewayCoveragePanel() {
           </Table.ScrollContainer>
         </Card>
       )}
+
+      <Modal
+        opened={locationGatewayId !== null}
+        onClose={() => {
+          setLocationGatewayId(null);
+          setLocationIdDraft(null);
+        }}
+        title="BLE gateway location"
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            {locationGatewayId}
+          </Text>
+
+          <Select
+            label="Location"
+            placeholder="Select a location"
+            data={locationOptions}
+            value={locationIdDraft}
+            onChange={setLocationIdDraft}
+            clearable
+            searchable
+            disabled={locationsQuery.isLoading}
+            nothingFoundMessage="No location found"
+          />
+
+          {locationsQuery.isError && (
+            <Alert color="red" title="Unable to load locations">
+              {locationsQuery.error instanceof Error
+                ? locationsQuery.error.message
+                : "Unable to load locations."}
+            </Alert>
+          )}
+
+          {updateGatewayLocationMutation.isError && (
+            <Alert color="red" title="Unable to update gateway location">
+              {updateGatewayLocationMutation.error instanceof Error
+                ? updateGatewayLocationMutation.error.message
+                : "Update failed."}
+            </Alert>
+          )}
+
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              onClick={() => {
+                setLocationGatewayId(null);
+                setLocationIdDraft(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="green"
+              loading={updateGatewayLocationMutation.isPending}
+              disabled={
+                !locationGatewayId ||
+                locationsQuery.isLoading ||
+                locationsQuery.isError
+              }
+              onClick={() => {
+                if (!locationGatewayId) return;
+
+                updateGatewayLocationMutation.mutate({
+                  gatewayId: locationGatewayId,
+                  locationId: locationIdDraft
+                });
+              }}
+            >
+              Save location
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal
         opened={gatewayAction !== null}
