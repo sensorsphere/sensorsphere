@@ -54,6 +54,9 @@ const SENSOR_SORT_STORAGE_KEY =
 const GATEWAY_SORT_STORAGE_KEY =
   `${STORAGE_PREFIX}.gatewaySort`;
 
+const SUGGESTED_GATEWAY_FILTER_STORAGE_KEY =
+  `${STORAGE_PREFIX}.suggestedGatewayFilter`;
+
 const PERIOD_VALUES =
   new Set([
     String(5 / 60),
@@ -463,6 +466,14 @@ export function GatewayCoveragePanel() {
   const [sensorFilter, setSensorFilter] =
     React.useState("");
 
+  const [suggestedGatewayFilter, setSuggestedGatewayFilter] =
+    React.useState<string | null>(() => {
+      if (typeof window === "undefined") return null;
+      return window.localStorage.getItem(
+        SUGGESTED_GATEWAY_FILTER_STORAGE_KEY
+      );
+    });
+
   const [copiedSensorUid, setCopiedSensorUid] =
     React.useState<string | null>(null);
 
@@ -500,6 +511,22 @@ export function GatewayCoveragePanel() {
       );
     },
     [gatewaySort]
+  );
+
+  React.useEffect(
+    () => {
+      if (suggestedGatewayFilter === null) {
+        window.localStorage.removeItem(
+          SUGGESTED_GATEWAY_FILTER_STORAGE_KEY
+        );
+      } else {
+        window.localStorage.setItem(
+          SUGGESTED_GATEWAY_FILTER_STORAGE_KEY,
+          suggestedGatewayFilter
+        );
+      }
+    },
+    [suggestedGatewayFilter]
   );
 
   const [gatewayAction, setGatewayAction] =
@@ -637,6 +664,30 @@ export function GatewayCoveragePanel() {
   const normalizedSensorFilter =
     sensorFilter.trim().toLocaleLowerCase();
 
+  const rowsBySensor =
+    new Map<string, GatewayCoverageRow[]>();
+
+  for (const row of rows) {
+    const current =
+      rowsBySensor.get(row.sensorUid) ?? [];
+    current.push(row);
+    rowsBySensor.set(row.sensorUid, current);
+  }
+
+  const suggestionBySensorUid =
+    new Map(
+      Array.from(rowsBySensor.entries()).map(
+        ([sensorUid, sensorRows]) => [
+          sensorUid,
+          recommendationInfo(
+            sensorRows,
+            gateways.length,
+            hours
+          )
+        ]
+      )
+    );
+
   const allSensorUids =
     Array.from(
       new Set(
@@ -647,15 +698,29 @@ export function GatewayCoveragePanel() {
   const sensors =
     allSensorUids
       .filter(sensorUid => {
-        if (!normalizedSensorFilter) return true;
-
         const name =
           sensorDisplayName(sensorUid).toLocaleLowerCase();
 
-        return (
+        const matchesSensorFilter =
+          !normalizedSensorFilter ||
           name.includes(normalizedSensorFilter) ||
-          sensorUid.toLocaleLowerCase().includes(normalizedSensorFilter)
-        );
+          sensorUid.toLocaleLowerCase().includes(normalizedSensorFilter);
+
+        if (!matchesSensorFilter) return false;
+        if (suggestedGatewayFilter === null) return true;
+
+        const suggestion =
+          suggestionBySensorUid.get(sensorUid);
+
+        if (suggestedGatewayFilter === "__no_reliable__") {
+          return suggestion?.status === "NO RELIABLE SUGGESTION";
+        }
+
+        if (suggestedGatewayFilter === "__no_suggestion__") {
+          return suggestion?.status === "NO SUGGESTION";
+        }
+
+        return suggestion?.gatewayId === suggestedGatewayFilter;
       })
       .sort((left, right) => {
         if (sensorSort.mode === "name") {
@@ -713,16 +778,6 @@ export function GatewayCoveragePanel() {
         ]
       )
     );
-
-  const rowsBySensor =
-    new Map<string, GatewayCoverageRow[]>();
-
-  for (const row of rows) {
-    const current =
-      rowsBySensor.get(row.sensorUid) ?? [];
-    current.push(row);
-    rowsBySensor.set(row.sensorUid, current);
-  }
 
   const setGatewayOrder = (
     mode: "name" | "wifiRssi"
@@ -1323,7 +1378,31 @@ export function GatewayCoveragePanel() {
                       minWidth: 157
                     }}
                   >
-                    Suggested gateway
+                    <Stack gap={4}>
+                      <Text fw={600}>Suggested gateway</Text>
+                      <Select
+                        size="xs"
+                        value={suggestedGatewayFilter}
+                        onChange={setSuggestedGatewayFilter}
+                        placeholder="All gateways"
+                        clearable
+                        data={[
+                          ...gateways.map(gateway => ({
+                            value: gateway,
+                            label: gateway
+                          })),
+                          {
+                            value: "__no_reliable__",
+                            label: "No reliable suggestion"
+                          },
+                          {
+                            value: "__no_suggestion__",
+                            label: "No suggestion"
+                          }
+                        ]}
+                        aria-label="Filter by suggested gateway"
+                      />
+                    </Stack>
                   </Table.Th>
                 </Table.Tr>
               </Table.Thead>
@@ -1334,7 +1413,8 @@ export function GatewayCoveragePanel() {
                     rowsBySensor.get(sensorUid) ?? [];
 
                   const suggestion =
-                    recommendationInfo(
+                    suggestionBySensorUid.get(sensorUid)
+                    ?? recommendationInfo(
                       sensorRows,
                       gateways.length,
                       hours
@@ -1382,7 +1462,33 @@ export function GatewayCoveragePanel() {
                                 void copySensorUid(sensorUid)
                               }
                             >
-                              {copiedSensorUid === sensorUid ? "✓" : "⧉"}
+                              {copiedSensorUid === sensorUid ? (
+                                "✓"
+                              ) : (
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  viewBox="0 0 16 16"
+                                  fill="none"
+                                  aria-hidden="true"
+                                >
+                                  <rect
+                                    x="5"
+                                    y="5"
+                                    width="9"
+                                    height="9"
+                                    rx="2"
+                                    stroke="currentColor"
+                                    strokeWidth="1.6"
+                                  />
+                                  <path
+                                    d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"
+                                    stroke="currentColor"
+                                    strokeWidth="1.6"
+                                    strokeLinecap="round"
+                                  />
+                                </svg>
+                              )}
                             </ActionIcon>
                             <Button
                               size="compact-xs"
