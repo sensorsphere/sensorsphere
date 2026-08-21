@@ -14,6 +14,7 @@ import {
   MultiSelect,
   SegmentedControl,
   Select,
+  SimpleGrid,
   Stack,
   Text,
   TextInput,
@@ -54,10 +55,15 @@ type HistoryGraphMode =
   | "sensor_metrics"
   | "metric_sensors";
 
+type HistoryGraphLayout =
+  | "full"
+  | "half";
+
 interface HistoryGraphConfig {
   id: string;
   name?: string;
   mode?: HistoryGraphMode;
+  layout?: HistoryGraphLayout;
   assetId: string;
   metricIds: string[];
   metricKey?: string;
@@ -259,6 +265,11 @@ function isHistoryGraphs(
           graph.mode === "sensor_metrics" ||
           graph.mode === "metric_sensors"
         ) &&
+        (
+          graph.layout === undefined ||
+          graph.layout === "full" ||
+          graph.layout === "half"
+        ) &&
         typeof graph.assetId === "string" &&
         Array.isArray(graph.metricIds) &&
         graph.metricIds.every(
@@ -339,6 +350,9 @@ function normalizeHistoryTabs(
             mode:
               graph.mode ??
               "sensor_metrics",
+            layout:
+              graph.layout ??
+              "full",
             metricKey:
               graph.metricKey ?? "",
             assetIds:
@@ -420,6 +434,7 @@ function newGraph(): HistoryGraphConfig {
       `history-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     name: "",
     mode: "sensor_metrics",
+    layout: "full",
     assetId: "",
     metricIds: [],
     metricKey: "",
@@ -548,6 +563,10 @@ function HistoryGraph({
   const mode: HistoryGraphMode =
     graph.mode ??
     "sensor_metrics";
+
+  const layout: HistoryGraphLayout =
+    graph.layout ??
+    "full";
 
   const asset =
     assets.find(
@@ -1234,6 +1253,81 @@ function HistoryGraph({
                 </ActionIcon>
               </Tooltip>
             </Group>
+
+            <Tooltip
+              label={
+                layout === "full"
+                  ? "Use half width"
+                  : "Use full width"
+              }
+            >
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                aria-label={
+                  layout === "full"
+                    ? "Use half width"
+                    : "Use full width"
+                }
+                onClick={
+                  () =>
+                    onChange({
+                      ...graph,
+                      layout:
+                        layout === "full"
+                          ? "half"
+                          : "full"
+                    })
+                }
+              >
+                {
+                  layout === "full"
+                    ? (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <rect
+                          x="3"
+                          y="5"
+                          width="8"
+                          height="14"
+                          rx="1"
+                        />
+                        <rect
+                          x="13"
+                          y="5"
+                          width="8"
+                          height="14"
+                          rx="1"
+                        />
+                      </svg>
+                    )
+                    : (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <rect
+                          x="3"
+                          y="5"
+                          width="18"
+                          height="14"
+                          rx="1"
+                        />
+                      </svg>
+                    )
+                }
+              </ActionIcon>
+            </Tooltip>
 
             <Tooltip
               label={
@@ -2989,15 +3083,29 @@ export function HistoryPanel() {
                         <span
                           aria-hidden="true"
                           style={{
+                            display:
+                              "inline-flex",
                             marginLeft:
-                              -5,
+                              -7,
                             marginRight:
-                              2,
+                              1,
                             opacity:
                               0.65
                           }}
                         >
-                          ⋮⋮
+                          <svg
+                            width="10"
+                            height="14"
+                            viewBox="0 0 10 14"
+                            fill="currentColor"
+                          >
+                            <circle cx="3" cy="3" r="1" />
+                            <circle cx="7" cy="3" r="1" />
+                            <circle cx="3" cy="7" r="1" />
+                            <circle cx="7" cy="7" r="1" />
+                            <circle cx="3" cy="11" r="1" />
+                            <circle cx="7" cy="11" r="1" />
+                          </svg>
                         </span>
 
                         {tab.name}
@@ -3552,74 +3660,97 @@ export function HistoryPanel() {
           Add a graph to start exploring history.
         </Alert>
       ) : (
-        graphs.map(
-          (
-            graph,
-            index
-          ) => (
-          <HistoryGraph
-            key={graph.id}
-            graph={graph}
-            assets={assets}
-            metricColors={
-              metricColors
-            }
-            refreshIntervalMs={
-              refreshIntervalMs
-            }
-            canMoveUp={
-              index > 0
-            }
-            canMoveDown={
-              index <
-              graphs.length - 1
-            }
-            onMoveTop={
-              () =>
-                moveGraphTo(
-                  index,
-                  0
-                )
-            }
-            onMoveUp={
-              () =>
-                moveGraph(
-                  index,
-                  -1
-                )
-            }
-            onMoveDown={
-              () =>
-                moveGraph(
-                  index,
-                  1
-                )
-            }
-            onMoveBottom={
-              () =>
-                moveGraphTo(
-                  index,
-                  graphs.length - 1
-                )
-            }
-            onChange={
-              next =>
-                updateGraph(
-                  graph.id,
-                  next
-                )
-            }
-            onRemove={
-              () =>
-                setGraphs(
-                  graphs.filter(
-                    current =>
-                      current.id !== graph.id
-                  )
-                )
-            }
-          />
-        ))
+        <SimpleGrid
+          cols={{
+            base: 1,
+            lg: 2
+          }}
+          spacing="lg"
+        >
+          {
+            graphs.map(
+              (
+                graph,
+                index
+              ) => (
+                <div
+                  key={graph.id}
+                  style={{
+                    minWidth: 0,
+                    gridColumn:
+                      (graph.layout ?? "full") ===
+                        "full"
+                        ? "1 / -1"
+                        : undefined
+                  }}
+                >
+                  <HistoryGraph
+                    graph={graph}
+                    assets={assets}
+                    metricColors={
+                      metricColors
+                    }
+                    refreshIntervalMs={
+                      refreshIntervalMs
+                    }
+                    canMoveUp={
+                      index > 0
+                    }
+                    canMoveDown={
+                      index <
+                      graphs.length - 1
+                    }
+                    onMoveTop={
+                      () =>
+                        moveGraphTo(
+                          index,
+                          0
+                        )
+                    }
+                    onMoveUp={
+                      () =>
+                        moveGraph(
+                          index,
+                          -1
+                        )
+                    }
+                    onMoveDown={
+                      () =>
+                        moveGraph(
+                          index,
+                          1
+                        )
+                    }
+                    onMoveBottom={
+                      () =>
+                        moveGraphTo(
+                          index,
+                          graphs.length - 1
+                        )
+                    }
+                    onChange={
+                      next =>
+                        updateGraph(
+                          graph.id,
+                          next
+                        )
+                    }
+                    onRemove={
+                      () =>
+                        setGraphs(
+                          graphs.filter(
+                            current =>
+                              current.id !==
+                                graph.id
+                          )
+                        )
+                    }
+                  />
+                </div>
+              )
+            )
+          }
+        </SimpleGrid>
       )}
     </Stack>
   );
