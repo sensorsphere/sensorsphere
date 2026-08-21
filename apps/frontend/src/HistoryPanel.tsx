@@ -526,8 +526,10 @@ function HistoryGraph({
   canMoveDown,
   onChange,
   onRemove,
+  onMoveTop,
   onMoveUp,
-  onMoveDown
+  onMoveDown,
+  onMoveBottom
 }: {
   graph: HistoryGraphConfig;
   assets: Awaited<ReturnType<typeof getAssets>>;
@@ -537,8 +539,10 @@ function HistoryGraph({
   canMoveDown: boolean;
   onChange: (graph: HistoryGraphConfig) => void;
   onRemove: () => void;
+  onMoveTop: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onMoveBottom: () => void;
 }) {
 
   const mode: HistoryGraphMode =
@@ -842,6 +846,53 @@ function HistoryGraph({
     graph.name?.trim() ||
     automaticGraphTitle;
 
+  const [
+    editingGraphName,
+    setEditingGraphName
+  ] =
+    React.useState(false);
+
+  const [
+    graphNameDraft,
+    setGraphNameDraft
+  ] =
+    React.useState(
+      graph.name ?? ""
+    );
+
+  React.useEffect(
+    () => {
+      if (!editingGraphName) {
+        setGraphNameDraft(
+          graph.name ?? ""
+        );
+      }
+    },
+    [
+      editingGraphName,
+      graph.name
+    ]
+  );
+
+  const saveGraphName =
+    (): void => {
+      onChange({
+        ...graph,
+        name:
+          graphNameDraft.trim()
+      });
+
+      setEditingGraphName(false);
+    };
+
+  const cancelGraphName =
+    (): void => {
+      setGraphNameDraft(
+        graph.name ?? ""
+      );
+      setEditingGraphName(false);
+    };
+
   const graphSubtitle =
     mode === "sensor_metrics"
       ? (
@@ -869,11 +920,6 @@ function HistoryGraph({
     Boolean(selectedMetricKey) &&
     seriesTargets.length === 0;
 
-  const graphImportInputRef =
-    React.useRef<HTMLInputElement>(
-      null
-    );
-
   const exportGraph =
     (): void => {
 
@@ -891,62 +937,6 @@ function HistoryGraph({
       );
     };
 
-  const importGraph =
-    async (
-      event: React.ChangeEvent<HTMLInputElement>
-    ): Promise<void> => {
-
-      const file =
-        event.currentTarget.files?.[0];
-
-      event.currentTarget.value = "";
-
-      if (!file) {
-        return;
-      }
-
-      try {
-        const payload =
-          JSON.parse(
-            await file.text()
-          ) as {
-            type?: unknown;
-            version?: unknown;
-            graph?: unknown;
-          };
-
-        if (
-          payload.type !==
-            "sensorsphere-history-graph" ||
-          payload.version !== 1 ||
-          !isHistoryGraphs([
-            payload.graph
-          ])
-        ) {
-          throw new Error(
-            "Invalid SensorSphere History graph JSON file."
-          );
-        }
-
-        const imported =
-          normalizedGraph(
-            payload.graph as
-              HistoryGraphConfig
-          );
-
-        onChange({
-          ...imported,
-          id: graph.id
-        });
-      } catch (error) {
-        window.alert(
-          error instanceof Error
-            ? error.message
-            : "Unable to import History graph."
-        );
-      }
-    };
-
   return (
     <Card
       withBorder
@@ -960,9 +950,94 @@ function HistoryGraph({
           align="flex-start"
         >
           <div>
-            <Text fw={700}>
-              {graphTitle}
-            </Text>
+            <Group
+              gap={4}
+              align="center"
+              wrap="nowrap"
+            >
+              {
+                editingGraphName
+                  ? (
+                    <TextInput
+                      autoFocus
+                      value={
+                        graphNameDraft
+                      }
+                      placeholder={
+                        automaticGraphTitle
+                      }
+                      size="xs"
+                      w={280}
+                      onChange={
+                        event =>
+                          setGraphNameDraft(
+                            event.currentTarget.value
+                          )
+                      }
+                      onBlur={
+                        saveGraphName
+                      }
+                      onKeyDown={
+                        event => {
+                          if (
+                            event.key ===
+                              "Enter"
+                          ) {
+                            event.currentTarget
+                              .blur();
+                          } else if (
+                            event.key ===
+                              "Escape"
+                          ) {
+                            event.preventDefault();
+                            cancelGraphName();
+                          }
+                        }
+                      }
+                    />
+                  )
+                  : (
+                    <>
+                      <Text fw={700}>
+                        {graphTitle}
+                      </Text>
+
+                      <Tooltip label="Rename graph">
+                        <ActionIcon
+                          size="sm"
+                          variant="subtle"
+                          color="green"
+                          aria-label="Rename graph"
+                          onClick={
+                            () => {
+                              setGraphNameDraft(
+                                graph.name ??
+                                  graphTitle
+                              );
+                              setEditingGraphName(
+                                true
+                              );
+                            }
+                          }
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                          </svg>
+                        </ActionIcon>
+                      </Tooltip>
+                    </>
+                  )
+              }
+            </Group>
+
             <Text
               size="xs"
               c="dimmed"
@@ -1019,31 +1094,6 @@ function HistoryGraph({
           </div>
 
           <Group gap="xs">
-            <input
-              ref={graphImportInputRef}
-              type="file"
-              accept="application/json,.json"
-              hidden
-              onChange={
-                event =>
-                  void importGraph(
-                    event
-                  )
-              }
-            />
-
-            <Button
-              size="xs"
-              variant="subtle"
-              onClick={
-                () =>
-                  graphImportInputRef.current
-                    ?.click()
-              }
-            >
-              Import graph
-            </Button>
-
             <Button
               size="xs"
               variant="subtle"
@@ -1052,33 +1102,95 @@ function HistoryGraph({
               Export graph
             </Button>
 
-            <Button
-              size="xs"
-              variant="subtle"
-              disabled={
-                !canMoveUp
-              }
-              onClick={
-                onMoveUp
-              }
-              title="Move graph up"
-            >
-              ↑
-            </Button>
+            <Group gap={2}>
+              <Tooltip label="Move graph to top">
+                <ActionIcon
+                  size="sm"
+                  variant="subtle"
+                  disabled={!canMoveUp}
+                  aria-label="Move graph to top"
+                  onClick={onMoveTop}
+                >
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M6 5h12" />
+                    <path d="m8 11 4-4 4 4" />
+                    <path d="M12 7v12" />
+                  </svg>
+                </ActionIcon>
+              </Tooltip>
 
-            <Button
-              size="xs"
-              variant="subtle"
-              disabled={
-                !canMoveDown
-              }
-              onClick={
-                onMoveDown
-              }
-              title="Move graph down"
-            >
-              ↓
-            </Button>
+              <Tooltip label="Move graph up">
+                <ActionIcon
+                  size="sm"
+                  variant="subtle"
+                  disabled={!canMoveUp}
+                  aria-label="Move graph up"
+                  onClick={onMoveUp}
+                >
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="m7 14 5-5 5 5" />
+                  </svg>
+                </ActionIcon>
+              </Tooltip>
+
+              <Tooltip label="Move graph down">
+                <ActionIcon
+                  size="sm"
+                  variant="subtle"
+                  disabled={!canMoveDown}
+                  aria-label="Move graph down"
+                  onClick={onMoveDown}
+                >
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="m7 10 5 5 5-5" />
+                  </svg>
+                </ActionIcon>
+              </Tooltip>
+
+              <Tooltip label="Move graph to bottom">
+                <ActionIcon
+                  size="sm"
+                  variant="subtle"
+                  disabled={!canMoveDown}
+                  aria-label="Move graph to bottom"
+                  onClick={onMoveBottom}
+                >
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M6 19h12" />
+                    <path d="m8 13 4 4 4-4" />
+                    <path d="M12 5v12" />
+                  </svg>
+                </ActionIcon>
+              </Tooltip>
+            </Group>
 
             <Tooltip
               label={
@@ -1160,24 +1272,6 @@ function HistoryGraph({
         {
           !graph.collapsed && (
             <>
-              <TextInput
-                label="Graph name"
-                placeholder={
-                  automaticGraphTitle
-                }
-                value={
-                  graph.name ?? ""
-                }
-                onChange={
-                  event =>
-                    onChange({
-                      ...graph,
-                      name:
-                        event.currentTarget.value
-                    })
-                }
-              />
-
               <div>
                 <Text
                   size="sm"
@@ -1614,8 +1708,44 @@ export function HistoryPanel() {
       null
     );
 
-  const tabImportInputRef =
-    React.useRef<HTMLInputElement>(
+  const [
+    importDialogOpened,
+    setImportDialogOpened
+  ] =
+    React.useState(false);
+
+  const [
+    importKind,
+    setImportKind
+  ] =
+    React.useState<
+      "graph" |
+      "tab" |
+      "config" |
+      null
+    >(null);
+
+  const [
+    importPayload,
+    setImportPayload
+  ] =
+    React.useState<unknown>(
+      null
+    );
+
+  const [
+    importAction,
+    setImportAction
+  ] =
+    React.useState<string>(
+      ""
+    );
+
+  const [
+    importTargetGraphId,
+    setImportTargetGraphId
+  ] =
+    React.useState<string | null>(
       null
     );
 
@@ -2097,10 +2227,11 @@ export function HistoryPanel() {
       );
     };
 
-  const importHistoryConfig =
+  const handleImportFile =
     async (
       event: React.ChangeEvent<HTMLInputElement>
     ): Promise<void> => {
+
       const file =
         event.currentTarget.files?.[0];
 
@@ -2111,18 +2242,192 @@ export function HistoryPanel() {
       }
 
       try {
-        const config =
-          normalizeHistoryConfig(
-            JSON.parse(
-              await file.text()
-            )
+        const parsed: unknown =
+          JSON.parse(
+            await file.text()
           );
 
-        if (!config) {
-          throw new Error(
-            "Invalid SensorSphere History JSON file."
+        const typed =
+          parsed as {
+            type?: unknown;
+            version?: unknown;
+            graph?: unknown;
+            tab?: unknown;
+          };
+
+        if (
+          typed.type ===
+            "sensorsphere-history-graph" &&
+          typed.version === 1 &&
+          isHistoryGraphs([
+            typed.graph
+          ])
+        ) {
+          setImportKind("graph");
+          setImportPayload(
+            normalizedGraph(
+              typed.graph as
+                HistoryGraphConfig
+            )
+          );
+          setImportAction(
+            "add_graph"
+          );
+          setImportTargetGraphId(
+            graphs[0]?.id ?? null
+          );
+        } else if (
+          typed.type ===
+            "sensorsphere-history-tab" &&
+          typed.version === 1 &&
+          isHistoryTabs([
+            typed.tab
+          ])
+        ) {
+          setImportKind("tab");
+          setImportPayload(
+            normalizeHistoryTabs([
+              typed.tab as
+                HistoryTabConfig
+            ])[0]
+          );
+          setImportAction(
+            "add_tab"
+          );
+        } else {
+          const config =
+            normalizeHistoryConfig(
+              parsed
+            );
+
+          if (!config) {
+            throw new Error(
+              "Invalid SensorSphere History JSON file."
+            );
+          }
+
+          setImportKind("config");
+          setImportPayload(config);
+          setImportAction(
+            "replace_config"
           );
         }
+
+        setImportDialogOpened(true);
+        setHistoryConfigError(null);
+      } catch (error) {
+        setHistoryConfigError(
+          error instanceof Error
+            ? error.message
+            : "Unable to import History JSON file."
+        );
+      }
+    };
+
+  const confirmImport =
+    (): void => {
+
+      if (
+        importKind === "graph" &&
+        importPayload
+      ) {
+        const imported =
+          importPayload as
+            HistoryGraphConfig;
+
+        if (
+          importAction ===
+            "replace_graph" &&
+          importTargetGraphId
+        ) {
+          setGraphs(
+            graphs.map(
+              graph =>
+                graph.id ===
+                  importTargetGraphId
+                  ? {
+                      ...imported,
+                      id:
+                        importTargetGraphId
+                    }
+                  : graph
+            )
+          );
+        } else {
+          setGraphs([
+            ...graphs,
+            {
+              ...imported,
+              id:
+                importedGraphId()
+            }
+          ]);
+        }
+      } else if (
+        importKind === "tab" &&
+        importPayload
+      ) {
+        const imported =
+          importPayload as
+            HistoryTabConfig;
+
+        const remappedGraphs =
+          imported.graphs.map(
+            (graph, index) => ({
+              ...graph,
+              id:
+                importedGraphId(
+                  `${index}-`
+                )
+            })
+          );
+
+        if (
+          importAction ===
+            "replace_tab" &&
+          activeTab
+        ) {
+          setTabs(
+            tabs.map(
+              tab =>
+                tab.id ===
+                  activeTab.id
+                  ? {
+                      ...imported,
+                      id:
+                        activeTab.id,
+                      graphs:
+                        remappedGraphs
+                    }
+                  : tab
+            )
+          );
+        } else {
+          const importedTab:
+            HistoryTabConfig = {
+              ...imported,
+              id:
+                `history-tab-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+              graphs:
+                remappedGraphs
+            };
+
+          setTabs([
+            ...tabs,
+            importedTab
+          ]);
+
+          setActiveTabId(
+            importedTab.id
+          );
+        }
+      } else if (
+        importKind === "config" &&
+        importPayload
+      ) {
+        const config =
+          importPayload as
+            HistoryConfig;
 
         setTabs(config.tabs);
         setActiveTabId(
@@ -2131,118 +2436,14 @@ export function HistoryPanel() {
         setRefreshIntervalMs(
           config.refreshIntervalMs
         );
-        setHistoryConfigError(null);
-      } catch (error) {
-        setHistoryConfigError(
-          error instanceof Error
-            ? error.message
-            : "Unable to import History configuration."
-        );
-      }
-    };
-
-  const exportActiveTab =
-    (): void => {
-
-      if (!activeTab) {
-        return;
       }
 
-      const normalizedTab =
-        normalizeHistoryTabs([
-          activeTab
-        ])[0];
-
-      downloadJson(
-        `sensorsphere-history-tab-${activeTab.id}.json`,
-        {
-          type:
-            "sensorsphere-history-tab",
-          version: 1,
-          tab: normalizedTab
-        }
-      );
-    };
-
-  const importHistoryTab =
-    async (
-      event: React.ChangeEvent<HTMLInputElement>
-    ): Promise<void> => {
-
-      const file =
-        event.currentTarget.files?.[0];
-
-      event.currentTarget.value = "";
-
-      if (!file) {
-        return;
-      }
-
-      try {
-        const payload =
-          JSON.parse(
-            await file.text()
-          ) as {
-            type?: unknown;
-            version?: unknown;
-            tab?: unknown;
-          };
-
-        if (
-          payload.type !==
-            "sensorsphere-history-tab" ||
-          payload.version !== 1 ||
-          !isHistoryTabs([
-            payload.tab
-          ])
-        ) {
-          throw new Error(
-            "Invalid SensorSphere History tab JSON file."
-          );
-        }
-
-        const normalizedTab =
-          normalizeHistoryTabs([
-            payload.tab as
-              HistoryTabConfig
-          ])[0];
-
-        const now = Date.now();
-
-        const importedTab:
-          HistoryTabConfig = {
-            ...normalizedTab,
-            id:
-              `history-tab-${now}-${Math.random().toString(16).slice(2)}`,
-            graphs:
-              normalizedTab.graphs.map(
-                (graph, index) => ({
-                  ...graph,
-                  id:
-                    importedGraphId(
-                      `${index}-`
-                    )
-                })
-              )
-          };
-
-        setTabs([
-          ...tabs,
-          importedTab
-        ]);
-
-        setActiveTabId(
-          importedTab.id
-        );
-
-        setHistoryConfigError(null);
-      } catch (error) {
-        setHistoryConfigError(
-          error instanceof Error
-            ? error.message
-            : "Unable to import History tab."
-        );
-      }
+      setImportDialogOpened(false);
+      setImportKind(null);
+      setImportPayload(null);
+      setImportAction("");
+      setImportTargetGraphId(null);
+      setHistoryConfigError(null);
     };
 
   const addTab =
@@ -2445,6 +2646,40 @@ export function HistoryPanel() {
       );
     };
 
+  const moveGraphTo =
+    (
+      index: number,
+      targetIndex: number
+    ): void => {
+
+      if (
+        index === targetIndex ||
+        index < 0 ||
+        targetIndex < 0 ||
+        index >= graphs.length ||
+        targetIndex >= graphs.length
+      ) {
+        return;
+      }
+
+      const next =
+        [...graphs];
+
+      const [moved] =
+        next.splice(
+          index,
+          1
+        );
+
+      next.splice(
+        targetIndex,
+        0,
+        moved
+      );
+
+      setGraphs(next);
+    };
+
   const setAllCollapsed =
     (
       collapsed: boolean
@@ -2637,18 +2872,6 @@ export function HistoryPanel() {
         <Button
           size="xs"
           variant="default"
-          onClick={
-            () =>
-              tabImportInputRef.current
-                ?.click()
-          }
-        >
-          Import tab
-        </Button>
-
-        <Button
-          size="xs"
-          variant="default"
           disabled={!activeTab}
           onClick={
             exportActiveTab
@@ -2684,24 +2907,150 @@ export function HistoryPanel() {
         hidden
         onChange={
           event =>
-            void importHistoryConfig(
+            void handleImportFile(
               event
             )
         }
       />
 
-      <input
-        ref={tabImportInputRef}
-        type="file"
-        accept="application/json,.json"
-        hidden
-        onChange={
-          event =>
-            void importHistoryTab(
-              event
+      <Modal
+        opened={importDialogOpened}
+        onClose={
+          () =>
+            setImportDialogOpened(
+              false
             )
         }
-      />
+        title={
+          importKind === "graph"
+            ? "Import graph"
+            : importKind === "tab"
+              ? "Import tab"
+              : "Import History configuration"
+        }
+        centered
+      >
+        <Stack gap="md">
+          {
+            importKind === "graph" && (
+              <>
+                <SegmentedControl
+                  value={importAction}
+                  onChange={
+                    setImportAction
+                  }
+                  data={[
+                    {
+                      label:
+                        "Add to current tab",
+                      value:
+                        "add_graph"
+                    },
+                    {
+                      label:
+                        "Replace graph",
+                      value:
+                        "replace_graph"
+                    }
+                  ]}
+                />
+
+                {
+                  importAction ===
+                    "replace_graph" && (
+                    <Select
+                      label="Graph to replace"
+                      value={
+                        importTargetGraphId
+                      }
+                      data={
+                        graphs.map(
+                          graph => ({
+                            value:
+                              graph.id,
+                            label:
+                              graph.name
+                                ?.trim() ||
+                              "Unnamed graph"
+                          })
+                        )
+                      }
+                      onChange={
+                        setImportTargetGraphId
+                      }
+                      placeholder="Select a graph"
+                    />
+                  )
+                }
+              </>
+            )
+          }
+
+          {
+            importKind === "tab" && (
+              <SegmentedControl
+                value={importAction}
+                onChange={
+                  setImportAction
+                }
+                data={[
+                  {
+                    label:
+                      "Add as new tab",
+                    value:
+                      "add_tab"
+                  },
+                  {
+                    label:
+                      "Replace current tab",
+                    value:
+                      "replace_tab"
+                  }
+                ]}
+              />
+            )
+          }
+
+          {
+            importKind === "config" && (
+              <Alert
+                color="yellow"
+                title="Replace complete History configuration?"
+              >
+                This import replaces all History tabs and graphs.
+              </Alert>
+            )
+          }
+
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              onClick={
+                () =>
+                  setImportDialogOpened(
+                    false
+                  )
+              }
+            >
+              Cancel
+            </Button>
+
+            <Button
+              onClick={
+                confirmImport
+              }
+              disabled={
+                importKind === "graph" &&
+                importAction ===
+                  "replace_graph" &&
+                !importTargetGraphId
+              }
+            >
+              Import
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal
         opened={metricColorsOpened}
@@ -2884,7 +3233,7 @@ export function HistoryPanel() {
                 importInputRef.current?.click()
             }
           >
-            Import JSON
+            Import
           </Button>
 
           <Button
@@ -3012,6 +3361,13 @@ export function HistoryPanel() {
               index <
               graphs.length - 1
             }
+            onMoveTop={
+              () =>
+                moveGraphTo(
+                  index,
+                  0
+                )
+            }
             onMoveUp={
               () =>
                 moveGraph(
@@ -3024,6 +3380,13 @@ export function HistoryPanel() {
                 moveGraph(
                   index,
                   1
+                )
+            }
+            onMoveBottom={
+              () =>
+                moveGraphTo(
+                  index,
+                  graphs.length - 1
                 )
             }
             onChange={
