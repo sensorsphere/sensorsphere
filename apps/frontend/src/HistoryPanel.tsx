@@ -3,6 +3,7 @@ import React from "react";
 import { NavigationIcon } from "./NavigationIcon";
 
 import {
+  ActionIcon,
   Alert,
   Button,
   Card,
@@ -15,7 +16,9 @@ import {
   Select,
   Stack,
   Text,
-  Title
+  TextInput,
+  Title,
+  Tooltip
 } from "@mantine/core";
 
 import {
@@ -53,6 +56,7 @@ type HistoryGraphMode =
 
 interface HistoryGraphConfig {
   id: string;
+  name?: string;
   mode?: HistoryGraphMode;
   assetId: string;
   metricIds: string[];
@@ -152,41 +156,16 @@ const SENSOR_SERIES_COLORS = [
   "#e8590c",
   "#9775fa",
   "#12b886",
-  "#fcc419"
+  "#fcc419",
+  "#74c0fc",
+  "#da77f2",
+  "#ffa94d",
+  "#63e6be",
+  "#faa2c1",
+  "#91a7ff",
+  "#b2f2bb",
+  "#66d9e8"
 ];
-
-function stablePaletteColor(
-  value: string,
-  palette: readonly string[]
-): string {
-
-  let hash = 0;
-
-  for (
-    let index = 0;
-    index < value.length;
-    index += 1
-  ) {
-    hash =
-      (
-        hash * 31 +
-        value.charCodeAt(index)
-      ) >>> 0;
-  }
-
-  return palette[
-    hash % palette.length
-  ];
-}
-
-function sensorSeriesColor(
-  value: string
-): string {
-  return stablePaletteColor(
-    value,
-    SENSOR_SERIES_COLORS
-  );
-}
 
 function defaultMetricColor(
   metricKey: string
@@ -272,6 +251,10 @@ function isHistoryGraphs(
       return (
         typeof graph.id === "string" &&
         (
+          graph.name === undefined ||
+          typeof graph.name === "string"
+        ) &&
+        (
           graph.mode === undefined ||
           graph.mode === "sensor_metrics" ||
           graph.mode === "metric_sensors"
@@ -351,6 +334,8 @@ function normalizeHistoryTabs(
         tab.graphs.map(
           graph => ({
             ...graph,
+            name:
+              graph.name ?? "",
             mode:
               graph.mode ??
               "sensor_metrics",
@@ -433,6 +418,7 @@ function newGraph(): HistoryGraphConfig {
   return {
     id:
       `history-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    name: "",
     mode: "sensor_metrics",
     assetId: "",
     metricIds: [],
@@ -458,6 +444,54 @@ function newTab(
     graphs:
       []
   };
+}
+
+function downloadJson(
+  filename: string,
+  value: unknown
+): void {
+
+  const blob =
+    new Blob(
+      [
+        `${JSON.stringify(value, null, 2)}\n`
+      ],
+      {
+        type: "application/json"
+      }
+    );
+
+  const url =
+    URL.createObjectURL(blob);
+
+  const link =
+    document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  link.click();
+
+  URL.revokeObjectURL(url);
+}
+
+function normalizedGraph(
+  graph: HistoryGraphConfig
+): HistoryGraphConfig {
+
+  return normalizeHistoryTabs([
+    {
+      id: "normalize",
+      name: "normalize",
+      graphs: [graph]
+    }
+  ])[0].graphs[0];
+}
+
+function importedGraphId(
+  suffix = ""
+): string {
+
+  return `history-${Date.now()}-${suffix}${Math.random().toString(16).slice(2)}`;
 }
 
 function assetLabel(
@@ -629,7 +663,7 @@ function HistoryGraph({
             })
           )
         : comparisonAssetIds
-            .map(assetId => {
+            .map((assetId, seriesIndex) => {
               const currentAsset =
                 eligibleAssets.find(
                   current =>
@@ -653,10 +687,6 @@ function HistoryGraph({
                 return null;
               }
 
-              const sensorIdentity =
-                currentAsset.sensor?.uid ??
-                currentAsset.externalId;
-
               return {
                 id: metric.id,
                 name:
@@ -665,9 +695,10 @@ function HistoryGraph({
                   ),
                 metric,
                 color:
-                  sensorSeriesColor(
-                    sensorIdentity
-                  )
+                  SENSOR_SERIES_COLORS[
+                    seriesIndex %
+                    SENSOR_SERIES_COLORS.length
+                  ]
               };
             })
             .filter(
@@ -791,7 +822,7 @@ function HistoryGraph({
         }
       );
 
-  const graphTitle =
+  const automaticGraphTitle =
     mode === "sensor_metrics"
       ? (
           asset
@@ -806,6 +837,10 @@ function HistoryGraph({
             "History graph"
           )
         );
+
+  const graphTitle =
+    graph.name?.trim() ||
+    automaticGraphTitle;
 
   const graphSubtitle =
     mode === "sensor_metrics"
@@ -833,6 +868,84 @@ function HistoryGraph({
     mode === "metric_sensors" &&
     Boolean(selectedMetricKey) &&
     seriesTargets.length === 0;
+
+  const graphImportInputRef =
+    React.useRef<HTMLInputElement>(
+      null
+    );
+
+  const exportGraph =
+    (): void => {
+
+      downloadJson(
+        `sensorsphere-history-graph-${graph.id}.json`,
+        {
+          type:
+            "sensorsphere-history-graph",
+          version: 1,
+          graph:
+            normalizedGraph(
+              graph
+            )
+        }
+      );
+    };
+
+  const importGraph =
+    async (
+      event: React.ChangeEvent<HTMLInputElement>
+    ): Promise<void> => {
+
+      const file =
+        event.currentTarget.files?.[0];
+
+      event.currentTarget.value = "";
+
+      if (!file) {
+        return;
+      }
+
+      try {
+        const payload =
+          JSON.parse(
+            await file.text()
+          ) as {
+            type?: unknown;
+            version?: unknown;
+            graph?: unknown;
+          };
+
+        if (
+          payload.type !==
+            "sensorsphere-history-graph" ||
+          payload.version !== 1 ||
+          !isHistoryGraphs([
+            payload.graph
+          ])
+        ) {
+          throw new Error(
+            "Invalid SensorSphere History graph JSON file."
+          );
+        }
+
+        const imported =
+          normalizedGraph(
+            payload.graph as
+              HistoryGraphConfig
+          );
+
+        onChange({
+          ...imported,
+          id: graph.id
+        });
+      } catch (error) {
+        window.alert(
+          error instanceof Error
+            ? error.message
+            : "Unable to import History graph."
+        );
+      }
+    };
 
   return (
     <Card
@@ -906,6 +1019,39 @@ function HistoryGraph({
           </div>
 
           <Group gap="xs">
+            <input
+              ref={graphImportInputRef}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={
+                event =>
+                  void importGraph(
+                    event
+                  )
+              }
+            />
+
+            <Button
+              size="xs"
+              variant="subtle"
+              onClick={
+                () =>
+                  graphImportInputRef.current
+                    ?.click()
+              }
+            >
+              Import graph
+            </Button>
+
+            <Button
+              size="xs"
+              variant="subtle"
+              onClick={exportGraph}
+            >
+              Export graph
+            </Button>
+
             <Button
               size="xs"
               variant="subtle"
@@ -934,39 +1080,104 @@ function HistoryGraph({
               ↓
             </Button>
 
-            <Button
-              size="xs"
-              variant="subtle"
-              onClick={
-                () =>
-                  onChange({
-                    ...graph,
-                    collapsed:
-                      !graph.collapsed
-                  })
-              }
-            >
-              {
+            <Tooltip
+              label={
                 graph.collapsed
-                  ? "Expand"
-                  : "Collapse"
+                  ? "Expand graph"
+                  : "Collapse graph"
               }
-            </Button>
-
-            <Button
-              size="xs"
-              variant="subtle"
-              color="red"
-              onClick={onRemove}
             >
-              Remove
-            </Button>
+              <ActionIcon
+                variant="subtle"
+                aria-label={
+                  graph.collapsed
+                    ? "Expand graph"
+                    : "Collapse graph"
+                }
+                onClick={
+                  () =>
+                    onChange({
+                      ...graph,
+                      collapsed:
+                        !graph.collapsed
+                    })
+                }
+              >
+                {
+                  graph.collapsed
+                    ? (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="m6 15 6-6 6 6" />
+                      </svg>
+                    )
+                    : (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    )
+                }
+              </ActionIcon>
+            </Tooltip>
+
+            <Tooltip label="Remove graph">
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                aria-label="Remove graph"
+                onClick={onRemove}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M4 7h16" />
+                  <path d="M9 7V4h6v3" />
+                  <path d="m8 11 1 8h6l1-8" />
+                </svg>
+              </ActionIcon>
+            </Tooltip>
           </Group>
         </Group>
 
         {
           !graph.collapsed && (
             <>
+              <TextInput
+                label="Graph name"
+                placeholder={
+                  automaticGraphTitle
+                }
+                value={
+                  graph.name ?? ""
+                }
+                onChange={
+                  event =>
+                    onChange({
+                      ...graph,
+                      name:
+                        event.currentTarget.value
+                    })
+                }
+              />
+
               <div>
                 <Text
                   size="sm"
@@ -1399,6 +1610,11 @@ export function HistoryPanel() {
   );
 
   const importInputRef =
+    React.useRef<HTMLInputElement>(
+      null
+    );
+
+  const tabImportInputRef =
     React.useRef<HTMLInputElement>(
       null
     );
@@ -1870,35 +2086,15 @@ export function HistoryPanel() {
 
   const exportHistoryConfig =
     (): void => {
-      const config =
+
+      downloadJson(
+        "sensorsphere-history-config.json",
         createHistoryConfig(
           activeTabId,
           refreshIntervalMs,
           tabs
-        );
-
-      const blob =
-        new Blob(
-          [
-            `${JSON.stringify(config, null, 2)}\n`
-          ],
-          {
-            type: "application/json"
-          }
-        );
-
-      const url =
-        URL.createObjectURL(blob);
-
-      const link =
-        document.createElement("a");
-
-      link.href = url;
-      link.download =
-        "sensorsphere-history-config.json";
-      link.click();
-
-      URL.revokeObjectURL(url);
+        )
+      );
     };
 
   const importHistoryConfig =
@@ -1941,6 +2137,110 @@ export function HistoryPanel() {
           error instanceof Error
             ? error.message
             : "Unable to import History configuration."
+        );
+      }
+    };
+
+  const exportActiveTab =
+    (): void => {
+
+      if (!activeTab) {
+        return;
+      }
+
+      const normalizedTab =
+        normalizeHistoryTabs([
+          activeTab
+        ])[0];
+
+      downloadJson(
+        `sensorsphere-history-tab-${activeTab.id}.json`,
+        {
+          type:
+            "sensorsphere-history-tab",
+          version: 1,
+          tab: normalizedTab
+        }
+      );
+    };
+
+  const importHistoryTab =
+    async (
+      event: React.ChangeEvent<HTMLInputElement>
+    ): Promise<void> => {
+
+      const file =
+        event.currentTarget.files?.[0];
+
+      event.currentTarget.value = "";
+
+      if (!file) {
+        return;
+      }
+
+      try {
+        const payload =
+          JSON.parse(
+            await file.text()
+          ) as {
+            type?: unknown;
+            version?: unknown;
+            tab?: unknown;
+          };
+
+        if (
+          payload.type !==
+            "sensorsphere-history-tab" ||
+          payload.version !== 1 ||
+          !isHistoryTabs([
+            payload.tab
+          ])
+        ) {
+          throw new Error(
+            "Invalid SensorSphere History tab JSON file."
+          );
+        }
+
+        const normalizedTab =
+          normalizeHistoryTabs([
+            payload.tab as
+              HistoryTabConfig
+          ])[0];
+
+        const now = Date.now();
+
+        const importedTab:
+          HistoryTabConfig = {
+            ...normalizedTab,
+            id:
+              `history-tab-${now}-${Math.random().toString(16).slice(2)}`,
+            graphs:
+              normalizedTab.graphs.map(
+                (graph, index) => ({
+                  ...graph,
+                  id:
+                    importedGraphId(
+                      `${index}-`
+                    )
+                })
+              )
+          };
+
+        setTabs([
+          ...tabs,
+          importedTab
+        ]);
+
+        setActiveTabId(
+          importedTab.id
+        );
+
+        setHistoryConfigError(null);
+      } catch (error) {
+        setHistoryConfigError(
+          error instanceof Error
+            ? error.message
+            : "Unable to import History tab."
         );
       }
     };
@@ -2334,6 +2634,29 @@ export function HistoryPanel() {
           + Add tab
         </Button>
 
+        <Button
+          size="xs"
+          variant="default"
+          onClick={
+            () =>
+              tabImportInputRef.current
+                ?.click()
+          }
+        >
+          Import tab
+        </Button>
+
+        <Button
+          size="xs"
+          variant="default"
+          disabled={!activeTab}
+          onClick={
+            exportActiveTab
+          }
+        >
+          Export tab
+        </Button>
+
       </Group>
 
       {historyConfigError && (
@@ -2362,6 +2685,19 @@ export function HistoryPanel() {
         onChange={
           event =>
             void importHistoryConfig(
+              event
+            )
+        }
+      />
+
+      <input
+        ref={tabImportInputRef}
+        type="file"
+        accept="application/json,.json"
+        hidden
+        onChange={
+          event =>
+            void importHistoryTab(
               event
             )
         }
