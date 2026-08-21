@@ -38,12 +38,14 @@
 * [X] il faut pouvoir nommer l'instance en cours d'execution. ex: Sensor Sphere IAT, My Sensor Sphere, ..., l'affiher dans la nom de l'onglet et dans le header. il faudrait pouvoir surcharger une valeur par defaut en provenance du .env et qui serait renvoyee par une api du backend
 * [X] dans History, les echelles des courbes ne s'affichent pas correctement apres ajout/suppression d'un metrique
 * [X] dans History, faire en sorte que les couleurs des differents types de metriques soient toujours de la meme couleur et que'on puisse les changer par configuration sauvegardee dans la base
-* [ ] pour l'icone du menu history, mettre quelque chose qui ressemble a un graphe
+* [X] pour l'icone du menu history, mettre quelque chose qui ressemble a un graphe
+* [X] dans history, il faudrait pouvoir mettre 2 graphes cote a cote, et conserver le fait d'en avoir qu'un seul aussi. que me proposes tu
 
 # Run
 * [X] Comment puis-je mettre en place une sauvagarde complete de toutes les donnees afin de pouvoir les restaurer facilement en cas de crash
 * [X] il faudrait faire un arret de tous le modules ainsi qu un rebuild complet de tous ces modules, sans perte de donnees, afin de voir si ca se construit correctement et ensuite si ca se fait correctement tenter tout un build sur un autre environnement/machine
 * [X] mettre une couleur sur les icones du mnu de navigation verticale, et toutes differentes les unes des autres et reporter l'icone sur le titre de la page
+* [ ] badge RSSI n'est pas le meme partout. Pendre celui du currentreadings avec le petit point devant
 
 
 ### Gateway Coverage

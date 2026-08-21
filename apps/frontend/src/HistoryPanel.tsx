@@ -1118,6 +1118,21 @@ function HistoryGraph({
             gap="xs"
             align="center"
             wrap="wrap"
+            justify={
+              layout === "half"
+                ? "flex-end"
+                : undefined
+            }
+            style={{
+              marginLeft:
+                layout === "half"
+                  ? "auto"
+                  : undefined,
+              maxWidth:
+                layout === "half"
+                  ? "100%"
+                  : undefined
+            }}
           >
             <Group gap={4} align="center">
               <Text
@@ -1413,8 +1428,18 @@ function HistoryGraph({
                 mode === "sensor_metrics"
                   ? (
                     <Group
-                      align="flex-end"
+                      align={
+                        layout === "half"
+                          ? "stretch"
+                          : "flex-end"
+                      }
                       wrap="wrap"
+                      style={{
+                        flexDirection:
+                          layout === "half"
+                            ? "column"
+                            : "row"
+                      }}
                     >
                       <Select
                         label="Sensor"
@@ -1457,7 +1482,13 @@ function HistoryGraph({
                         }
                         style={{
                           flex:
-                            "1 1 260px"
+                            layout === "half"
+                              ? "1 1 auto"
+                              : "1 1 260px",
+                          width:
+                            layout === "half"
+                              ? "100%"
+                              : undefined
                         }}
                       />
 
@@ -1497,15 +1528,31 @@ function HistoryGraph({
                         }
                         style={{
                           flex:
-                            "1 1 300px"
+                            layout === "half"
+                              ? "1 1 auto"
+                              : "1 1 300px",
+                          width:
+                            layout === "half"
+                              ? "100%"
+                              : undefined
                         }}
                       />
                     </Group>
                   )
                   : (
                     <Group
-                      align="flex-end"
+                      align={
+                        layout === "half"
+                          ? "stretch"
+                          : "flex-end"
+                      }
                       wrap="wrap"
+                      style={{
+                        flexDirection:
+                          layout === "half"
+                            ? "column"
+                            : "row"
+                      }}
                     >
                       <Select
                         label="Metric"
@@ -1531,7 +1578,13 @@ function HistoryGraph({
                         }
                         style={{
                           flex:
-                            "1 1 260px"
+                            layout === "half"
+                              ? "1 1 auto"
+                              : "1 1 260px",
+                          width:
+                            layout === "half"
+                              ? "100%"
+                              : undefined
                         }}
                       />
 
@@ -1582,7 +1635,13 @@ function HistoryGraph({
                         }
                         style={{
                           flex:
-                            "1 1 340px"
+                            layout === "half"
+                              ? "1 1 auto"
+                              : "1 1 340px",
+                          width:
+                            layout === "half"
+                              ? "100%"
+                              : undefined
                         }}
                       />
                     </Group>
