@@ -47,10 +47,17 @@ import type {
   ObservationHistoryPoint
 } from "./types";
 
+type HistoryGraphMode =
+  | "sensor_metrics"
+  | "metric_sensors";
+
 interface HistoryGraphConfig {
   id: string;
+  mode?: HistoryGraphMode;
   assetId: string;
   metricIds: string[];
+  metricKey?: string;
+  assetIds?: string[];
   hours: number;
   collapsed?: boolean;
 }
@@ -62,7 +69,7 @@ interface HistoryTabConfig {
 }
 
 interface HistoryConfig {
-  version: 1;
+  version: 2;
   activeTabId: string;
   refreshIntervalMs: number;
   tabs: HistoryTabConfig[];
@@ -132,6 +139,54 @@ const FALLBACK_METRIC_COLORS = [
   "#1c7ed6",
   "#7048e8"
 ];
+
+const SENSOR_SERIES_COLORS = [
+  "#339af0",
+  "#cc5de8",
+  "#ff922b",
+  "#20c997",
+  "#f06595",
+  "#5c7cfa",
+  "#94d82d",
+  "#22b8cf",
+  "#e8590c",
+  "#9775fa",
+  "#12b886",
+  "#fcc419"
+];
+
+function stablePaletteColor(
+  value: string,
+  palette: readonly string[]
+): string {
+
+  let hash = 0;
+
+  for (
+    let index = 0;
+    index < value.length;
+    index += 1
+  ) {
+    hash =
+      (
+        hash * 31 +
+        value.charCodeAt(index)
+      ) >>> 0;
+  }
+
+  return palette[
+    hash % palette.length
+  ];
+}
+
+function sensorSeriesColor(
+  value: string
+): string {
+  return stablePaletteColor(
+    value,
+    SENSOR_SERIES_COLORS
+  );
+}
 
 function defaultMetricColor(
   metricKey: string
@@ -216,11 +271,30 @@ function isHistoryGraphs(
 
       return (
         typeof graph.id === "string" &&
+        (
+          graph.mode === undefined ||
+          graph.mode === "sensor_metrics" ||
+          graph.mode === "metric_sensors"
+        ) &&
         typeof graph.assetId === "string" &&
         Array.isArray(graph.metricIds) &&
         graph.metricIds.every(
           metricId =>
             typeof metricId === "string"
+        ) &&
+        (
+          graph.metricKey === undefined ||
+          typeof graph.metricKey === "string"
+        ) &&
+        (
+          graph.assetIds === undefined ||
+          (
+            Array.isArray(graph.assetIds) &&
+            graph.assetIds.every(
+              assetId =>
+                typeof assetId === "string"
+            )
+          )
         ) &&
         typeof graph.hours === "number" &&
         VALID_HOURS.has(graph.hours) &&
@@ -266,38 +340,104 @@ function isHistoryTabs(
   );
 }
 
-function isHistoryConfig(
+function normalizeHistoryTabs(
+  tabs: HistoryTabConfig[]
+): HistoryTabConfig[] {
+
+  return tabs.map(
+    tab => ({
+      ...tab,
+      graphs:
+        tab.graphs.map(
+          graph => ({
+            ...graph,
+            mode:
+              graph.mode ??
+              "sensor_metrics",
+            metricKey:
+              graph.metricKey ?? "",
+            assetIds:
+              graph.assetIds ?? []
+          })
+        )
+    })
+  );
+}
+
+function normalizeHistoryConfig(
   value: unknown
-): value is HistoryConfig {
+): HistoryConfig | null {
 
   if (
     typeof value !== "object" ||
     value === null
   ) {
-    return false;
+    return null;
   }
 
   const config =
-    value as Partial<HistoryConfig>;
+    value as {
+      version?: unknown;
+      activeTabId?: unknown;
+      refreshIntervalMs?: unknown;
+      tabs?: unknown;
+    };
 
-  return (
-    config.version === 1 &&
-    typeof config.activeTabId === "string" &&
-    isRefreshInterval(
+  if (
+    (
+      config.version !== 1 &&
+      config.version !== 2
+    ) ||
+    typeof config.activeTabId !== "string" ||
+    !isRefreshInterval(
       config.refreshIntervalMs
-    ) &&
-    isHistoryTabs(
+    ) ||
+    !isHistoryTabs(
       config.tabs
     )
-  );
+  ) {
+    return null;
+  }
+
+  return {
+    version: 2,
+    activeTabId:
+      config.activeTabId,
+    refreshIntervalMs:
+      config.refreshIntervalMs,
+    tabs:
+      normalizeHistoryTabs(
+        config.tabs
+      )
+  };
+}
+
+function createHistoryConfig(
+  activeTabId: string,
+  refreshIntervalMs: number,
+  tabs: HistoryTabConfig[]
+): HistoryConfig {
+
+  return {
+    version: 2,
+    activeTabId,
+    refreshIntervalMs,
+    tabs:
+      normalizeHistoryTabs(
+        tabs
+      )
+  };
 }
 
 function newGraph(): HistoryGraphConfig {
   return {
     id:
       `history-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    mode: "sensor_metrics",
     assetId: "",
     metricIds: [],
+    metricKey: "",
+    assetIds: [],
     hours: 24,
     collapsed: false
   };
@@ -330,6 +470,19 @@ function assetLabel(
   );
 }
 
+type HistoryAsset =
+  Awaited<ReturnType<typeof getAssets>>[number];
+
+type HistoryMetric =
+  HistoryAsset["metrics"][number];
+
+interface HistorySeriesTarget {
+  id: string;
+  name: string;
+  metric: HistoryMetric;
+  color: string;
+}
+
 function HistoryGraph({
   graph,
   assets,
@@ -353,6 +506,10 @@ function HistoryGraph({
   onMoveUp: () => void;
   onMoveDown: () => void;
 }) {
+
+  const mode: HistoryGraphMode =
+    graph.mode ??
+    "sensor_metrics";
 
   const asset =
     assets.find(
@@ -379,6 +536,147 @@ function HistoryGraph({
         )
     );
 
+  const metricDefinitions =
+    new Map<string, HistoryMetric>();
+
+  assets
+    .filter(
+      current =>
+        current.sensor !== null
+    )
+    .forEach(current => {
+      current.metrics
+        .filter(metric => metric.enabled)
+        .forEach(metric => {
+          if (
+            !metricDefinitions.has(
+              metric.key
+            )
+          ) {
+            metricDefinitions.set(
+              metric.key,
+              metric
+            );
+          }
+        });
+    });
+
+  const metricOptions =
+    Array.from(
+      metricDefinitions.values()
+    )
+      .sort(
+        (left, right) =>
+          left.displayName.localeCompare(
+            right.displayName
+          )
+      )
+      .map(metric => ({
+        value: metric.key,
+        label:
+          metric.unit
+            ? `${metric.displayName} (${metric.unit})`
+            : metric.displayName
+      }));
+
+  const selectedMetricKey =
+    graph.metricKey ?? "";
+
+  const selectedMetricDefinition =
+    metricDefinitions.get(
+      selectedMetricKey
+    );
+
+  const eligibleAssets =
+    selectedMetricKey
+      ? assets
+          .filter(
+            current =>
+              current.sensor !== null &&
+              current.metrics.some(
+                metric =>
+                  metric.enabled &&
+                  metric.key ===
+                    selectedMetricKey
+              )
+          )
+          .sort(
+            (left, right) =>
+              assetLabel(left).localeCompare(
+                assetLabel(right)
+              )
+          )
+      : [];
+
+  const comparisonAssetIds =
+    graph.assetIds ?? [];
+
+  const seriesTargets:
+    HistorySeriesTarget[] =
+      mode === "sensor_metrics"
+        ? selectedMetrics.map(
+            metric => ({
+              id: metric.id,
+              name: metric.displayName,
+              metric,
+              color:
+                metricColors.get(
+                  metric.key
+                ) ??
+                defaultMetricColor(
+                  metric.key
+                )
+            })
+          )
+        : comparisonAssetIds
+            .map(assetId => {
+              const currentAsset =
+                eligibleAssets.find(
+                  current =>
+                    current.id ===
+                      assetId
+                );
+
+              if (!currentAsset) {
+                return null;
+              }
+
+              const metric =
+                currentAsset.metrics.find(
+                  current =>
+                    current.enabled &&
+                    current.key ===
+                      selectedMetricKey
+                );
+
+              if (!metric) {
+                return null;
+              }
+
+              const sensorIdentity =
+                currentAsset.sensor?.uid ??
+                currentAsset.externalId;
+
+              return {
+                id: metric.id,
+                name:
+                  assetLabel(
+                    currentAsset
+                  ),
+                metric,
+                color:
+                  sensorSeriesColor(
+                    sensorIdentity
+                  )
+              };
+            })
+            .filter(
+              (
+                target
+              ): target is HistorySeriesTarget =>
+                target !== null
+            );
+
   const useAggregates =
     graph.hours > 24;
 
@@ -390,19 +688,19 @@ function HistoryGraph({
   const dataQueries =
     useQueries({
       queries:
-        selectedMetrics.map(
-          metric => ({
+        seriesTargets.map(
+          target => ({
             queryKey:
               useAggregates
                 ? [
                     "observation-aggregate",
-                    metric.id,
+                    target.metric.id,
                     graph.hours,
                     aggregateBucket
                   ]
                 : [
                     "observation-history",
-                    metric.id,
+                    target.metric.id,
                     graph.hours
                   ],
 
@@ -410,12 +708,12 @@ function HistoryGraph({
               () =>
                 useAggregates
                   ? getObservationAggregates(
-                      metric.id,
+                      target.metric.id,
                       graph.hours,
                       aggregateBucket
                     )
                   : getObservationHistory(
-                      metric.id,
+                      target.metric.id,
                       graph.hours
                     ),
 
@@ -458,8 +756,8 @@ function HistoryGraph({
 
   const chartSeries:
     HistoryChartSeries[] =
-      selectedMetrics.map(
-        (metric, index) => {
+      seriesTargets.map(
+        (target, index) => {
 
           const data =
             dataQueries[index]?.data
@@ -467,21 +765,16 @@ function HistoryGraph({
 
           return {
             id:
-              metric.id,
+              target.id,
 
             name:
-              metric.displayName,
+              target.name,
 
             unit:
-              metric.unit,
+              target.metric.unit,
 
             color:
-              metricColors.get(
-                metric.key
-              ) ??
-              defaultMetricColor(
-                metric.key
-              ),
+              target.color,
 
             history:
               useAggregates
@@ -498,6 +791,48 @@ function HistoryGraph({
         }
       );
 
+  const graphTitle =
+    mode === "sensor_metrics"
+      ? (
+          asset
+            ? assetLabel(asset)
+            : "History graph"
+        )
+      : (
+          selectedMetricDefinition
+            ?.displayName ??
+          (
+            selectedMetricKey ||
+            "History graph"
+          )
+        );
+
+  const graphSubtitle =
+    mode === "sensor_metrics"
+      ? (
+          selectedMetrics.length > 0
+            ? selectedMetrics
+                .map(
+                  metric =>
+                    metric.displayName
+                )
+                .join(" · ")
+            : "Select a sensor and one or more metrics"
+        )
+      : (
+          seriesTargets.length > 0
+            ? `${seriesTargets.length} sensor${seriesTargets.length === 1 ? "" : "s"} · Metric → Sensors`
+            : "Select a metric and one or more sensors"
+        );
+
+  const comparisonNeedsMetric =
+    mode === "metric_sensors" &&
+    !selectedMetricKey;
+
+  const comparisonNeedsSensors =
+    mode === "metric_sensors" &&
+    Boolean(selectedMetricKey) &&
+    seriesTargets.length === 0;
 
   return (
     <Card
@@ -513,19 +848,13 @@ function HistoryGraph({
         >
           <div>
             <Text fw={700}>
-              {asset
-                ? assetLabel(asset)
-                : "History graph"}
+              {graphTitle}
             </Text>
             <Text
               size="xs"
               c="dimmed"
             >
-              {selectedMetrics.length > 0
-                ? selectedMetrics
-                    .map(metric => metric.displayName)
-                    .join(" · ")
-                : "Select a sensor and one or more metrics"}
+              {graphSubtitle}
             </Text>
 
             {chartSeries.length > 0 && (
@@ -638,129 +967,332 @@ function HistoryGraph({
         {
           !graph.collapsed && (
             <>
-        <Group
-          align="flex-end"
-          wrap="wrap"
-        >
-          <Select
-            label="Sensor"
-            searchable
-            placeholder="Select a sensor"
-            value={
-              graph.assetId || null
-            }
-            data={
-              assets
-                .filter(
-                  current =>
-                    current.sensor !== null
-                )
-                .map(current => ({
-                  value: current.id,
-                  label:
-                    current.sensor?.uid
-                      ? `${assetLabel(current)} · ${current.sensor.uid}`
-                      : assetLabel(current)
-                }))
-                .sort(
-                  (left, right) =>
-                    left.label.localeCompare(
-                      right.label
+              <div>
+                <Text
+                  size="sm"
+                  fw={500}
+                  mb={3}
+                >
+                  Graph type
+                </Text>
+
+                <SegmentedControl
+                  value={mode}
+                  onChange={
+                    value =>
+                      onChange({
+                        ...graph,
+                        mode:
+                          value as
+                            HistoryGraphMode,
+                        metricKey:
+                          graph.metricKey ?? "",
+                        assetIds:
+                          graph.assetIds ?? []
+                      })
+                  }
+                  data={[
+                    {
+                      label: "Sensor → Metrics",
+                      value: "sensor_metrics"
+                    },
+                    {
+                      label: "Metric → Sensors",
+                      value: "metric_sensors"
+                    }
+                  ]}
+                />
+              </div>
+
+              {
+                mode === "sensor_metrics"
+                  ? (
+                    <Group
+                      align="flex-end"
+                      wrap="wrap"
+                    >
+                      <Select
+                        label="Sensor"
+                        searchable
+                        placeholder="Select a sensor"
+                        value={
+                          graph.assetId || null
+                        }
+                        data={
+                          assets
+                            .filter(
+                              current =>
+                                current.sensor !== null
+                            )
+                            .map(current => ({
+                              value:
+                                current.id,
+                              label:
+                                current.sensor?.uid
+                                  ? `${assetLabel(current)} · ${current.sensor.uid}`
+                                  : assetLabel(current)
+                            }))
+                            .sort(
+                              (left, right) =>
+                                left.label.localeCompare(
+                                  right.label
+                                )
+                            )
+                        }
+                        onChange={
+                          value =>
+                            onChange({
+                              ...graph,
+                              mode:
+                                "sensor_metrics",
+                              assetId:
+                                value ?? "",
+                              metricIds: []
+                            })
+                        }
+                        style={{
+                          flex:
+                            "1 1 260px"
+                        }}
+                      />
+
+                      <MultiSelect
+                        label="Metrics"
+                        searchable
+                        clearable
+                        placeholder={
+                          asset
+                            ? "Select metrics"
+                            : "Select a sensor first"
+                        }
+                        disabled={!asset}
+                        value={
+                          graph.metricIds
+                        }
+                        data={
+                          metrics.map(
+                            metric => ({
+                              value:
+                                metric.id,
+                              label:
+                                metric.unit
+                                  ? `${metric.displayName} (${metric.unit})`
+                                  : metric.displayName
+                            })
+                          )
+                        }
+                        onChange={
+                          metricIds =>
+                            onChange({
+                              ...graph,
+                              mode:
+                                "sensor_metrics",
+                              metricIds
+                            })
+                        }
+                        style={{
+                          flex:
+                            "1 1 300px"
+                        }}
+                      />
+                    </Group>
+                  )
+                  : (
+                    <Group
+                      align="flex-end"
+                      wrap="wrap"
+                    >
+                      <Select
+                        label="Metric"
+                        searchable
+                        placeholder="Select a metric"
+                        value={
+                          selectedMetricKey ||
+                          null
+                        }
+                        data={
+                          metricOptions
+                        }
+                        onChange={
+                          value =>
+                            onChange({
+                              ...graph,
+                              mode:
+                                "metric_sensors",
+                              metricKey:
+                                value ?? "",
+                              assetIds: []
+                            })
+                        }
+                        style={{
+                          flex:
+                            "1 1 260px"
+                        }}
+                      />
+
+                      <MultiSelect
+                        label="Sensors"
+                        searchable
+                        clearable
+                        placeholder={
+                          selectedMetricKey
+                            ? "Select sensors"
+                            : "Select a metric first"
+                        }
+                        disabled={
+                          !selectedMetricKey
+                        }
+                        value={
+                          comparisonAssetIds
+                            .filter(
+                              assetId =>
+                                eligibleAssets
+                                  .some(
+                                    current =>
+                                      current.id ===
+                                        assetId
+                                  )
+                            )
+                        }
+                        data={
+                          eligibleAssets.map(
+                            current => ({
+                              value:
+                                current.id,
+                              label:
+                                current.sensor?.uid
+                                  ? `${assetLabel(current)} · ${current.sensor.uid}`
+                                  : assetLabel(current)
+                            })
+                          )
+                        }
+                        onChange={
+                          assetIds =>
+                            onChange({
+                              ...graph,
+                              mode:
+                                "metric_sensors",
+                              assetIds
+                            })
+                        }
+                        style={{
+                          flex:
+                            "1 1 340px"
+                        }}
+                      />
+                    </Group>
+                  )
+              }
+
+              <div>
+                <Text
+                  size="sm"
+                  fw={500}
+                  mb={3}
+                >
+                  Period
+                </Text>
+
+                <SegmentedControl
+                  value={String(graph.hours)}
+                  onChange={
+                    value =>
+                      onChange({
+                        ...graph,
+                        hours:
+                          Number(value)
+                      })
+                  }
+                  data={PERIODS}
+                />
+              </div>
+
+              {
+                mode === "sensor_metrics"
+                  ? (
+                    !asset
+                      ? (
+                        <Alert color="blue">
+                          Select a sensor to configure this graph.
+                        </Alert>
+                      )
+                      : selectedMetrics.length === 0
+                        ? (
+                          <Alert color="blue">
+                            Select at least one metric.
+                          </Alert>
+                        )
+                        : error
+                          ? (
+                            <Alert
+                              color="red"
+                              title="Unable to load history"
+                            >
+                              One or more metric series could not be loaded.
+                            </Alert>
+                          )
+                          : loading
+                            ? (
+                              <Loader />
+                            )
+                            : (
+                              <HistoryChart
+                                hours={
+                                  graph.hours
+                                }
+                                series={
+                                  chartSeries
+                                }
+                              />
+                            )
+                  )
+                  : comparisonNeedsMetric
+                    ? (
+                      <Alert color="blue">
+                        Select a metric to compare sensors.
+                      </Alert>
                     )
-                )
-            }
-            onChange={
-              value =>
-                onChange({
-                  ...graph,
-                  assetId: value ?? "",
-                  metricIds: []
-                })
-            }
-            style={{
-              flex: "1 1 260px"
-            }}
-          />
+                    : comparisonNeedsSensors
+                      ? (
+                        <Alert color="blue">
+                          Select at least one sensor.
+                        </Alert>
+                      )
+                      : error
+                        ? (
+                          <Alert
+                            color="red"
+                            title="Unable to load history"
+                          >
+                            One or more sensor series could not be loaded.
+                          </Alert>
+                        )
+                        : loading
+                          ? (
+                            <Loader />
+                          )
+                          : (
+                            <>
+                              {
+                                seriesTargets.length >=
+                                  10 && (
+                                  <Alert color="yellow">
+                                    {seriesTargets.length} sensors selected — graph readability may decrease.
+                                  </Alert>
+                                )
+                              }
 
-          <MultiSelect
-            label="Metrics"
-            searchable
-            clearable
-            placeholder={
-              asset
-                ? "Select metrics"
-                : "Select a sensor first"
-            }
-            disabled={!asset}
-            value={graph.metricIds}
-            data={
-              metrics.map(metric => ({
-                value: metric.id,
-                label:
-                  metric.unit
-                    ? `${metric.displayName} (${metric.unit})`
-                    : metric.displayName
-              }))
-            }
-            onChange={
-              metricIds =>
-                onChange({
-                  ...graph,
-                  metricIds
-                })
-            }
-            style={{
-              flex: "1 1 300px"
-            }}
-          />
-        </Group>
-
-        <div>
-          <Text
-            size="sm"
-            fw={500}
-            mb={3}
-          >
-            Period
-          </Text>
-
-          <SegmentedControl
-            value={String(graph.hours)}
-            onChange={
-              value =>
-                onChange({
-                  ...graph,
-                  hours: Number(value)
-                })
-            }
-            data={PERIODS}
-          />
-        </div>
-
-        {!asset ? (
-          <Alert color="blue">
-            Select a sensor to configure this graph.
-          </Alert>
-        ) : selectedMetrics.length === 0 ? (
-          <Alert color="blue">
-            Select at least one metric.
-          </Alert>
-        ) : error ? (
-          <Alert
-            color="red"
-            title="Unable to load history"
-          >
-            One or more metric series could not be loaded.
-          </Alert>
-        ) : loading ? (
-          <Loader />
-        ) : (
-          <HistoryChart
-            hours={graph.hours}
-            series={chartSeries}
-          />
-        )}
-
+                              <HistoryChart
+                                hours={
+                                  graph.hours
+                                }
+                                series={
+                                  chartSeries
+                                }
+                              />
+                            </>
+                          )
+              }
             </>
           )
         }
@@ -1018,10 +1550,12 @@ export function HistoryPanel() {
             );
 
           if (response.ok) {
-            const config: unknown =
-              await response.json();
+            const config =
+              normalizeHistoryConfig(
+                await response.json()
+              );
 
-            if (!isHistoryConfig(config)) {
+            if (!config) {
               throw new Error(
                 "Backend History configuration is invalid."
               );
@@ -1037,12 +1571,12 @@ export function HistoryPanel() {
               );
             }
           } else if (response.status === 404) {
-            const localConfig: HistoryConfig = {
-              version: 1,
-              activeTabId,
-              refreshIntervalMs,
-              tabs
-            };
+            const localConfig =
+              createHistoryConfig(
+                activeTabId,
+                refreshIntervalMs,
+                tabs
+              );
 
             const saveResponse =
               await fetch(
@@ -1100,12 +1634,12 @@ export function HistoryPanel() {
       const timeout =
         window.setTimeout(
           () => {
-            const config: HistoryConfig = {
-              version: 1,
-              activeTabId,
-              refreshIntervalMs,
-              tabs
-            };
+            const config =
+              createHistoryConfig(
+                activeTabId,
+                refreshIntervalMs,
+                tabs
+              );
 
             void fetch(
               "/api/v1/history-config",
@@ -1336,12 +1870,12 @@ export function HistoryPanel() {
 
   const exportHistoryConfig =
     (): void => {
-      const config: HistoryConfig = {
-        version: 1,
-        activeTabId,
-        refreshIntervalMs,
-        tabs
-      };
+      const config =
+        createHistoryConfig(
+          activeTabId,
+          refreshIntervalMs,
+          tabs
+        );
 
       const blob =
         new Blob(
@@ -1381,12 +1915,14 @@ export function HistoryPanel() {
       }
 
       try {
-        const config: unknown =
-          JSON.parse(
-            await file.text()
+        const config =
+          normalizeHistoryConfig(
+            JSON.parse(
+              await file.text()
+            )
           );
 
-        if (!isHistoryConfig(config)) {
+        if (!config) {
           throw new Error(
             "Invalid SensorSphere History JSON file."
           );

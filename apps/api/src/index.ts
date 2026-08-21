@@ -602,7 +602,10 @@ app.put("/api/v1/history-config", async (request, reply) => {
 
   if (
     !body ||
-    body.version !== 1 ||
+    (
+      body.version !== 1 &&
+      body.version !== 2
+    ) ||
     typeof body.activeTabId !== "string" ||
     typeof body.refreshIntervalMs !== "number" ||
     !Array.isArray(body.tabs)

@@ -38,6 +38,7 @@
 * [X] il faut pouvoir nommer l'instance en cours d'execution. ex: Sensor Sphere IAT, My Sensor Sphere, ..., l'affiher dans la nom de l'onglet et dans le header. il faudrait pouvoir surcharger une valeur par defaut en provenance du .env et qui serait renvoyee par une api du backend
 * [X] dans History, les echelles des courbes ne s'affichent pas correctement apres ajout/suppression d'un metrique
 * [X] dans History, faire en sorte que les couleurs des differents types de metriques soient toujours de la meme couleur et que'on puisse les changer par configuration sauvegardee dans la base
+* [ ] pour l'icone du menu history, mettre quelque chose qui ressemble a un graphe
 
 # Run
 * [X] Comment puis-je mettre en place une sauvagarde complete de toutes les donnees afin de pouvoir les restaurer facilement en cas de crash
@@ -57,6 +58,7 @@
 * [X] dans Gateway Coverage, prevoir un bouton "Reset" sur chacune des BLE Gateway en cas de deplacement geographique (uniquement suppression de tous les sensors associee, pas sa suppression)
 * [X] dans Gateway Coverage, mettre un bouton "Delete" sur une BL Gateway: suppression de la BLE Gateway et toutes ls donnees associees
 * [ ] dans Gateway Coverage, au niveau de la "Suggested Gateway", il manque une information: sur la gateway choisie, quel est le niveau du signal RSSI: valeur en DBM + badge (weak, excellent, ...)
+* [ ] dans Gateway Coverage, conserver la valeur du filtre "Sensor filter"
 
 
 ### Specif
