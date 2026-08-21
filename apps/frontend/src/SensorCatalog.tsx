@@ -9,9 +9,11 @@ import {
   Checkbox,
   Group,
   Modal,
+  SegmentedControl,
   Select,
   SimpleGrid,
   Stack,
+  Table,
   Text,
   TextInput,
   Textarea,
@@ -26,6 +28,7 @@ import {
 
 import {
   getAssets,
+  getGateways,
   getLocations,
   getSensors,
   updateAssetLocation,
@@ -62,6 +65,7 @@ interface SensorFormState {
   model: string;
   firmwareVersion: string;
   locationId: string;
+  gatewayId: string;
   enabled: boolean;
 }
 
@@ -88,6 +92,9 @@ function sensorToForm(
 
     locationId:
       asset?.location?.id ?? "",
+
+    gatewayId:
+      sensor.gateway?.id ?? "",
 
     enabled:
       sensor.enabled
@@ -190,6 +197,15 @@ export function SensorCatalog() {
         typeof value === "string"
     );
 
+  const [viewMode, setViewMode] =
+    usePersistentState<"cards" | "compact">(
+      "sensors.viewMode",
+      "cards",
+      value =>
+        value === "cards" ||
+        value === "compact"
+    );
+
   const sensorsQuery =
     useQuery({
       queryKey:
@@ -221,6 +237,18 @@ export function SensorCatalog() {
 
       queryFn:
         getLocations,
+
+      refetchInterval:
+        30_000
+    });
+
+  const gatewaysQuery =
+    useQuery({
+      queryKey:
+        ["gateways"],
+
+      queryFn:
+        getGateways,
 
       refetchInterval:
         30_000
@@ -377,6 +405,9 @@ export function SensorCatalog() {
               form.firmwareVersion
             ),
 
+          gatewayId:
+            form.gatewayId || null,
+
           enabled:
             form.enabled
         }
@@ -386,7 +417,8 @@ export function SensorCatalog() {
   if (
     sensorsQuery.isLoading ||
     assetsQuery.isLoading ||
-    locationsQuery.isLoading
+    locationsQuery.isLoading ||
+    gatewaysQuery.isLoading
   ) {
     return (
       <Text>
@@ -398,7 +430,8 @@ export function SensorCatalog() {
   if (
     sensorsQuery.isError ||
     assetsQuery.isError ||
-    locationsQuery.isError
+    locationsQuery.isError ||
+    gatewaysQuery.isError
   ) {
     return (
       <Text c="red">
@@ -471,24 +504,28 @@ export function SensorCatalog() {
         )
       );
 
+  const gateways =
+    gatewaysQuery.data ?? [];
+
   const gatewayOptions =
-    Array.from(
-      new Set(
-        sensors
-          .map(sensor => sensor.gateway?.name ?? null)
-          .filter(
-            (value): value is string =>
-              Boolean(value)
-          )
-      )
-    )
+    gateways
+      .slice()
       .sort((a, b) =>
-        a.localeCompare(
-          b,
+        a.name.localeCompare(
+          b.name,
           undefined,
           { sensitivity: "base" }
         )
-      );
+      )
+      .map(gateway => ({
+        value: gateway.id,
+        label: gateway.name
+      }));
+
+  const gatewayFilterOptions =
+    gatewayOptions.map(option =>
+      option.label
+    );
 
   const assetsBySensorUid =
     new Map(
@@ -617,6 +654,20 @@ export function SensorCatalog() {
           </div>
 
           <Group gap="xs">
+            <SegmentedControl
+              size="xs"
+              value={viewMode}
+              onChange={value =>
+                setViewMode(
+                  value as "cards" | "compact"
+                )
+              }
+              data={[
+                { value: "cards", label: "Card" },
+                { value: "compact", label: "Compact" }
+              ]}
+            />
+
             <Badge
               variant="light"
             >
@@ -688,7 +739,7 @@ export function SensorCatalog() {
             placeholder="All"
             value={gatewayFilter}
             onChange={setGatewayFilter}
-            data={gatewayOptions}
+            data={gatewayFilterOptions}
           />
 
           <Select
@@ -727,6 +778,7 @@ export function SensorCatalog() {
           />
         </SimpleGrid>
 
+        {viewMode === "cards" ? (
         <SimpleGrid
           cols={{
             base: 1,
@@ -939,6 +991,74 @@ export function SensorCatalog() {
           )}
 
         </SimpleGrid>
+        ) : (
+          <Table.ScrollContainer minWidth={980}>
+            <Table
+              striped
+              highlightOnHover
+              verticalSpacing="xs"
+            >
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Name</Table.Th>
+                  <Table.Th>UID</Table.Th>
+                  <Table.Th>Manufacturer</Table.Th>
+                  <Table.Th>Model</Table.Th>
+                  <Table.Th>Location</Table.Th>
+                  <Table.Th>Gateway</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  <Table.Th>Enabled</Table.Th>
+                  <Table.Th>Actions</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {filteredSensors.map(sensor => {
+                  const asset =
+                    assetsBySensorUid.get(sensor.uid);
+                  const status =
+                    asset?.health.status ?? "offline";
+
+                  return (
+                    <Table.Tr key={sensor.id}>
+                      <Table.Td fw={600}>
+                        {sensor.name ?? sensor.uid}
+                      </Table.Td>
+                      <Table.Td>{sensor.uid}</Table.Td>
+                      <Table.Td>{sensor.manufacturer ?? "—"}</Table.Td>
+                      <Table.Td>{sensor.model ?? "—"}</Table.Td>
+                      <Table.Td>{asset?.location?.name ?? "—"}</Table.Td>
+                      <Table.Td>{sensor.gateway?.name ?? "—"}</Table.Td>
+                      <Table.Td>
+                        <Badge
+                          size="sm"
+                          color={
+                            status === "online"
+                              ? "green"
+                              : status === "warning"
+                                ? "yellow"
+                                : "red"
+                          }
+                        >
+                          {status}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>{sensor.enabled ? "Yes" : "No"}</Table.Td>
+                      <Table.Td>
+                        <Button
+                          size="compact-sm"
+                          variant="light"
+                          onClick={() => openEditor(sensor)}
+                        >
+                          Edit
+                        </Button>
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        )}
 
       </Stack>
 
@@ -1054,6 +1174,25 @@ export function SensorCatalog() {
                   setForm({
                     ...form,
                     locationId:
+                      value ?? ""
+                  })
+              }
+            />
+
+            <Select
+              label="Gateway"
+              searchable
+              clearable
+              placeholder="Unassigned"
+              value={
+                form.gatewayId || null
+              }
+              data={gatewayOptions}
+              onChange={
+                value =>
+                  setForm({
+                    ...form,
+                    gatewayId:
                       value ?? ""
                   })
               }

@@ -40,5 +40,6 @@ export interface UpdateSensorDto {
   manufacturer?: string | null;
   model?: string | null;
   firmwareVersion?: string | null;
+  gatewayId?: string | null;
   enabled?: boolean;
 }

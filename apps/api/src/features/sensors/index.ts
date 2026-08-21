@@ -22,6 +22,10 @@ import {
   registerSensorRoutes
 } from "./routes.js";
 
+import {
+  registerGatewayFeature
+} from "../gateways/index.js";
+
 export interface SensorFeatureOptions {
   pool: Pool;
 }
@@ -52,5 +56,10 @@ export async function registerSensorFeature(
       prefix: "/api/v1",
       controller
     }
+  );
+
+  await registerGatewayFeature(
+    app,
+    options
   );
 }

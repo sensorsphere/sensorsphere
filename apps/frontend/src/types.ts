@@ -74,6 +74,37 @@ export interface UpdateSensor {
   manufacturer?: string | null;
   model?: string | null;
   firmwareVersion?: string | null;
+  gatewayId?: string | null;
+  enabled?: boolean;
+}
+
+export interface Gateway {
+  id: string;
+  name: string;
+  type: string;
+  version: string | null;
+  ipAddress: string | null;
+  enabled: boolean;
+  lastSeenAt: string | null;
+  sensorCount: number;
+  assetCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateGatewayInput {
+  name: string;
+  type: string;
+  version?: string | null;
+  ipAddress?: string | null;
+  enabled?: boolean;
+}
+
+export interface UpdateGatewayInput {
+  name?: string;
+  type?: string;
+  version?: string | null;
+  ipAddress?: string | null;
   enabled?: boolean;
 }
 

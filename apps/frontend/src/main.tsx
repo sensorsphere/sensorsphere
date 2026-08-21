@@ -49,6 +49,10 @@ import {
 } from "./SensorCatalog";
 
 import {
+  GatewayCatalog
+} from "./GatewayCatalog";
+
+import {
   InventoryPanel
 } from "./InventoryPanel";
 
@@ -169,6 +173,9 @@ Record<PageKey, string> = {
   sensors:
     "Sensors",
 
+  gateways:
+    "Gateways",
+
   "gateway-coverage":
     "Gateway Coverage"
 };
@@ -184,6 +191,7 @@ function isPageKey(
     value === "alerts" ||
     value === "inventory" ||
     value === "sensors" ||
+    value === "gateways" ||
     value === "gateway-coverage"
   );
 }
@@ -1390,6 +1398,31 @@ function Dashboard() {
               () =>
                 navigateTo(
                   "sensors"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Gateways"
+            }
+            leftSection={
+              <NavigationIcon
+                page="gateways"
+              />
+            }
+            title="Gateways"
+            aria-label="Gateways"
+            active={
+              activePage ===
+              "gateways"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "gateways"
                 )
             }
           />
@@ -3013,6 +3046,13 @@ function Dashboard() {
               activePage ===
                 "sensors" && (
                 <SensorCatalog />
+              )
+            }
+
+            {
+              activePage ===
+                "gateways" && (
+                <GatewayCatalog />
               )
             }
 

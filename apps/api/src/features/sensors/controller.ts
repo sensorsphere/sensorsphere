@@ -35,6 +35,9 @@ const updateSensorSchema =
     firmwareVersion:
       z.string().trim().max(200).nullable().optional(),
 
+    gatewayId:
+      z.string().uuid().nullable().optional(),
+
     enabled:
       z.boolean().optional()
   })

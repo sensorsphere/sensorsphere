@@ -146,6 +146,10 @@ implements SensorRepository {
       addUpdate("firmware_version", input.firmwareVersion ?? null);
     }
 
+    if ("gatewayId" in input) {
+      addUpdate("gateway_id", input.gatewayId ?? null);
+    }
+
     if ("enabled" in input) {
       addUpdate("enabled", input.enabled);
     }

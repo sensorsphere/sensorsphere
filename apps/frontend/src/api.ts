@@ -11,7 +11,10 @@ import type {
   ObservationHistoryPoint,
   RuntimeConfig,
   Sensor,
-  UpdateSensor
+  UpdateSensor,
+  Gateway,
+  CreateGatewayInput,
+  UpdateGatewayInput
 } from "./types";
 
 async function readJson<T>(
@@ -49,6 +52,77 @@ Promise<RuntimeConfig> {
   return readJson<RuntimeConfig>(
     response
   );
+}
+
+export async function getGateways():
+Promise<Gateway[]> {
+
+  const response =
+    await fetch(
+      "/api/v1/gateways"
+    );
+
+  return readJson<Gateway[]>(
+    response
+  );
+}
+
+export async function createGateway(
+  input: CreateGatewayInput
+): Promise<Gateway> {
+
+  const response =
+    await fetch(
+      "/api/v1/gateways",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+        body: JSON.stringify(input)
+      }
+    );
+
+  return readJson<Gateway>(response);
+}
+
+export async function updateGateway(
+  id: string,
+  input: UpdateGatewayInput
+): Promise<Gateway> {
+
+  const response =
+    await fetch(
+      `/api/v1/gateways/${id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+        body: JSON.stringify(input)
+      }
+    );
+
+  return readJson<Gateway>(response);
+}
+
+export async function deleteGateway(
+  id: string
+): Promise<void> {
+
+  const response =
+    await fetch(
+      `/api/v1/gateways/${id}`,
+      {
+        method: "DELETE"
+      }
+    );
+
+  if (!response.ok) {
+    await readJson<unknown>(response);
+  }
 }
 
 export async function getSensors():
