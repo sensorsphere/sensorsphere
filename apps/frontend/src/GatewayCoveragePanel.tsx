@@ -59,6 +59,9 @@ const GATEWAY_SORT_STORAGE_KEY =
 const SUGGESTED_GATEWAY_FILTER_STORAGE_KEY =
   `${STORAGE_PREFIX}.suggestedGatewayFilter`;
 
+const SENSOR_FILTER_STORAGE_KEY =
+  `${STORAGE_PREFIX}.sensorFilter`;
+
 const PERIOD_VALUES =
   new Set([
     String(5 / 60),
@@ -99,6 +102,18 @@ function loadPeriod(): string {
   return value && PERIOD_VALUES.has(value)
     ? value
     : "24";
+}
+
+function loadSensorFilter(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return (
+    window.localStorage.getItem(
+      SENSOR_FILTER_STORAGE_KEY
+    ) ?? ""
+  );
 }
 
 function loadSensorSort(): SensorSort {
@@ -466,7 +481,7 @@ export function GatewayCoveragePanel() {
     );
 
   const [sensorFilter, setSensorFilter] =
-    React.useState("");
+    React.useState(loadSensorFilter);
 
   const [suggestedGatewayFilter, setSuggestedGatewayFilter] =
     React.useState<string | null>(() => {
@@ -513,6 +528,22 @@ export function GatewayCoveragePanel() {
       );
     },
     [gatewaySort]
+  );
+
+  React.useEffect(
+    () => {
+      if (sensorFilter) {
+        window.localStorage.setItem(
+          SENSOR_FILTER_STORAGE_KEY,
+          sensorFilter
+        );
+      } else {
+        window.localStorage.removeItem(
+          SENSOR_FILTER_STORAGE_KEY
+        );
+      }
+    },
+    [sensorFilter]
   );
 
   React.useEffect(
@@ -1116,6 +1147,48 @@ export function GatewayCoveragePanel() {
             </Group>
           </Group>
 
+          <Group
+            gap={6}
+            mb="sm"
+            wrap="wrap"
+          >
+            <Text size="xs" c="dimmed" fw={600}>
+              RSSI quality
+            </Text>
+
+            <Badge
+              size="xs"
+              variant="light"
+              color={qualityColor(-65)}
+            >
+              Excellent ≥ -65 dBm
+            </Badge>
+
+            <Badge
+              size="xs"
+              variant="light"
+              color={qualityColor(-70)}
+            >
+              Good -75 to &lt; -65 dBm
+            </Badge>
+
+            <Badge
+              size="xs"
+              variant="light"
+              color={qualityColor(-80)}
+            >
+              Fair -85 to &lt; -75 dBm
+            </Badge>
+
+            <Badge
+              size="xs"
+              variant="light"
+              color={qualityColor(-90)}
+            >
+              Weak &lt; -85 dBm
+            </Badge>
+          </Group>
+
           <Table.ScrollContainer minWidth={720}>
             <Table
               striped
@@ -1473,6 +1546,13 @@ export function GatewayCoveragePanel() {
                       hours
                     );
 
+                  const suggestedGatewayRow =
+                    suggestion.gatewayId
+                      ? bySensorGateway.get(
+                          `${sensorUid}\u0000${suggestion.gatewayId}`
+                        )
+                      : undefined;
+
                   return (
                     <Table.Tr key={sensorUid}>
                       <Table.Td
@@ -1735,6 +1815,33 @@ export function GatewayCoveragePanel() {
                               {suggestion.gatewayId ?? "—"}
                             </Text>
                           </Group>
+                          {suggestedGatewayRow && (
+                            <Group gap={4} wrap="nowrap">
+                              <Text
+                                size="sm"
+                                fw={600}
+                              >
+                                {suggestedGatewayRow.avgRssi.toFixed(1)} dBm
+                              </Text>
+
+                              <Badge
+                                size="xs"
+                                variant="light"
+                                color={
+                                  qualityColor(
+                                    suggestedGatewayRow.avgRssi
+                                  )
+                                }
+                              >
+                                {
+                                  qualityLabel(
+                                    suggestedGatewayRow.avgRssi
+                                  )
+                                }
+                              </Badge>
+                            </Group>
+                          )}
+
                           <Badge
                             size="xs"
                             variant="light"
