@@ -1095,7 +1095,48 @@ function HistoryGraph({
             )}
           </div>
 
-          <Group gap="xs">
+          <Group
+            gap="xs"
+            align="center"
+            wrap="wrap"
+          >
+            <Group gap={4} align="center">
+              <Text
+                size="xs"
+                c="dimmed"
+              >
+                Graph type
+              </Text>
+
+              <SegmentedControl
+                size="xs"
+                value={mode}
+                onChange={
+                  value =>
+                    onChange({
+                      ...graph,
+                      mode:
+                        value as
+                          HistoryGraphMode,
+                      metricKey:
+                        graph.metricKey ?? "",
+                      assetIds:
+                        graph.assetIds ?? []
+                    })
+                }
+                data={[
+                  {
+                    label: "Sensor → Metrics",
+                    value: "sensor_metrics"
+                  },
+                  {
+                    label: "Metric → Sensors",
+                    value: "metric_sensors"
+                  }
+                ]}
+              />
+            </Group>
+
             <Button
               size="xs"
               variant="subtle"
@@ -1274,43 +1315,6 @@ function HistoryGraph({
         {
           !graph.collapsed && (
             <>
-              <div>
-                <Text
-                  size="sm"
-                  fw={500}
-                  mb={3}
-                >
-                  Graph type
-                </Text>
-
-                <SegmentedControl
-                  value={mode}
-                  onChange={
-                    value =>
-                      onChange({
-                        ...graph,
-                        mode:
-                          value as
-                            HistoryGraphMode,
-                        metricKey:
-                          graph.metricKey ?? "",
-                        assetIds:
-                          graph.assetIds ?? []
-                      })
-                  }
-                  data={[
-                    {
-                      label: "Sensor → Metrics",
-                      value: "sensor_metrics"
-                    },
-                    {
-                      label: "Metric → Sensors",
-                      value: "metric_sensors"
-                    }
-                  ]}
-                />
-              </div>
-
               {
                 mode === "sensor_metrics"
                   ? (
@@ -1758,6 +1762,20 @@ export function HistoryPanel() {
     React.useState<string | null>(
       null
     );
+
+  const [
+    editingTabId,
+    setEditingTabId
+  ] =
+    React.useState<string | null>(
+      null
+    );
+
+  const [
+    tabNameDraft,
+    setTabNameDraft
+  ] =
+    React.useState("");
 
   const [
     draggedTabId,
@@ -2535,43 +2553,51 @@ export function HistoryPanel() {
       );
     };
 
-  const renameTab =
+  const startRenameTab =
+    (
+      tab: HistoryTabConfig
+    ): void => {
+
+      setEditingTabId(
+        tab.id
+      );
+      setTabNameDraft(
+        tab.name
+      );
+    };
+
+  const saveTabName =
     (
       tabId: string
     ): void => {
 
-      const tab =
-        tabs.find(
-          current =>
-            current.id === tabId
-        );
-
-      if (!tab) {
-        return;
-      }
-
       const nextName =
-        window.prompt(
-          "History tab name",
-          tab.name
-        )?.trim();
+        tabNameDraft.trim();
 
-      if (!nextName) {
-        return;
+      if (nextName) {
+        setTabs(
+          tabs.map(
+            current =>
+              current.id === tabId
+                ? {
+                    ...current,
+                    name:
+                      nextName
+                  }
+                : current
+          )
+        );
       }
 
-      setTabs(
-        tabs.map(
-          current =>
-            current.id === tabId
-              ? {
-                  ...current,
-                  name:
-                    nextName
-                }
-              : current
-        )
-      );
+      setEditingTabId(null);
+      setTabNameDraft("");
+    };
+
+  const cancelTabName =
+    (): void => {
+
+      setEditingTabId(null);
+      setTabNameDraft("");
     };
 
   const removeTab =
@@ -2824,8 +2850,11 @@ export function HistoryPanel() {
             tab => (
               <Group
                 key={tab.id}
-                gap={4}
-                draggable
+                gap={1}
+                draggable={
+                  editingTabId !==
+                    tab.id
+                }
                 onDragStart={
                   event => {
                     setDraggedTabId(
@@ -2883,7 +2912,10 @@ export function HistoryPanel() {
                 }
                 style={{
                   cursor:
-                    "grab",
+                    editingTabId ===
+                      tab.id
+                      ? "default"
+                      : "grab",
                   opacity:
                     draggedTabId ===
                       tab.id
@@ -2891,58 +2923,150 @@ export function HistoryPanel() {
                       : 1
                 }}
               >
-                <Button
-                  size="xs"
-                  variant={
-                    tab.id === activeTab?.id
-                      ? "filled"
-                      : "default"
-                  }
-                  onClick={
-                    () =>
-                      setActiveTabId(
-                        tab.id
-                      )
-                  }
-                  onDoubleClick={
-                    () =>
-                      renameTab(
-                        tab.id
-                      )
-                  }
-                  title="Drag to reorder · Double-click to rename"
-                >
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      marginRight:
-                        6,
-                      opacity:
-                        0.65
-                    }}
-                  >
-                    ⋮⋮
-                  </span>
-                  {tab.name}
-                </Button>
+                {
+                  editingTabId ===
+                    tab.id
+                    ? (
+                      <TextInput
+                        autoFocus
+                        size="xs"
+                        value={
+                          tabNameDraft
+                        }
+                        w={150}
+                        onChange={
+                          event =>
+                            setTabNameDraft(
+                              event.currentTarget.value
+                            )
+                        }
+                        onBlur={
+                          () =>
+                            saveTabName(
+                              tab.id
+                            )
+                        }
+                        onKeyDown={
+                          event => {
+                            if (
+                              event.key ===
+                                "Enter"
+                            ) {
+                              event.currentTarget
+                                .blur();
+                            } else if (
+                              event.key ===
+                                "Escape"
+                            ) {
+                              event.preventDefault();
+                              cancelTabName();
+                            }
+                          }
+                        }
+                      />
+                    )
+                    : (
+                      <Button
+                        size="xs"
+                        variant={
+                          tab.id === activeTab?.id
+                            ? "filled"
+                            : "default"
+                        }
+                        onClick={
+                          () =>
+                            setActiveTabId(
+                              tab.id
+                            )
+                        }
+                        title="Drag to reorder"
+                        styles={{
+                          inner: {
+                            gap: 2
+                          }
+                        }}
+                      >
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            marginLeft:
+                              -5,
+                            marginRight:
+                              2,
+                            opacity:
+                              0.65
+                          }}
+                        >
+                          ⋮⋮
+                        </span>
 
-                <Button
-                  size="compact-xs"
-                  variant="subtle"
-                  color="red"
-                  disabled={
-                    tabs.length <= 1
-                  }
-                  onClick={
-                    () =>
-                      removeTab(
-                        tab.id
-                      )
-                  }
-                  title="Delete tab"
-                >
-                  ×
-                </Button>
+                        {tab.name}
+                      </Button>
+                    )
+                }
+
+                {
+                  editingTabId !==
+                    tab.id && (
+                    <Tooltip label="Rename tab">
+                      <ActionIcon
+                        size="sm"
+                        variant="subtle"
+                        color="green"
+                        aria-label="Rename tab"
+                        onClick={
+                          () =>
+                            startRenameTab(
+                              tab
+                            )
+                        }
+                      >
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M12 20h9" />
+                          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                        </svg>
+                      </ActionIcon>
+                    </Tooltip>
+                  )
+                }
+
+                <Tooltip label="Delete tab">
+                  <ActionIcon
+                    size="sm"
+                    variant="subtle"
+                    color="red"
+                    disabled={
+                      tabs.length <= 1
+                    }
+                    aria-label="Delete tab"
+                    onClick={
+                      () =>
+                        removeTab(
+                          tab.id
+                        )
+                    }
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M4 7h16" />
+                      <path d="M9 7V4h6v3" />
+                      <path d="m8 11 1 8h6l1-8" />
+                    </svg>
+                  </ActionIcon>
+                </Tooltip>
               </Group>
             )
           )
