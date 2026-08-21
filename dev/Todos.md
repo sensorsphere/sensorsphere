@@ -59,14 +59,14 @@
 * [X] dans Gateway Coverage, recuperer le board_id, sn RSSI et la mac address afin de l'afficher sur chaque BLE gateway
 * [X] dans Gateway Coverage, prevoir un bouton "Reset" sur chacune des BLE Gateway en cas de deplacement geographique (uniquement suppression de tous les sensors associee, pas sa suppression)
 * [X] dans Gateway Coverage, mettre un bouton "Delete" sur une BL Gateway: suppression de la BLE Gateway et toutes ls donnees associees
-* [ ] dans Gateway Coverage, au niveau de la "Suggested Gateway", il manque une information: sur la gateway choisie, quel est le niveau du signal RSSI: valeur en DBM + badge (weak, excellent, ...)
-* [ ] dans Gateway Coverage, conserver la valeur du filtre "Sensor filter"
+* [X] dans Gateway Coverage, au niveau de la "Suggested Gateway", il manque une information: sur la gateway choisie, quel est le niveau du signal RSSI: valeur en DBM + badge (weak, excellent, ...)
+* [X] dans Gateway Coverage, conserver la valeur du filtre "Sensor filter"
 
 
 ### Specif
 
 * [ ] le flag "enabled" sur un sensor ne semble avoir aucun effet. par exemple, dans Assets apres un disable, il affiche toujours "Enabled". au passage, dans l vue "Compact", il faudrait ajouter la colonne "Enabled"
-* [ ] il faudrait avoir la possibilite de "superposer" les courbes de plusieurs asset mais pour une meme metrique
+* [X] il faudrait avoir la possibilite de "superposer" les courbes de plusieurs asset mais pour une meme metrique
 
 * [ ] dans les cartes de current readings, si a metrique est une temperature ou humidite, ajouter la valeur min et max sur les dernieres 24h
 * [ ] dans les cartes de current readings, pour les statut "offline", il faudrait afficher depuis combien de temps

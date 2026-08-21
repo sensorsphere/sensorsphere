@@ -380,6 +380,82 @@ app.delete(
 );
 
 app.delete(
+  "/api/v1/gateway-coverage/sensors/:sensorUid/samples",
+  async (request, reply) => {
+    const params = request.params as {
+      sensorUid: string;
+    };
+
+    const sensorUid =
+      params.sensorUid?.trim();
+
+    if (!sensorUid) {
+      return reply.code(400).send({
+        error: "invalid_sensor_uid"
+      });
+    }
+
+    const result = await pool.query(
+      `
+        WITH deleted AS (
+          DELETE FROM gateway_sensor_rssi_samples
+          WHERE sensor_uid = $1
+          RETURNING 1
+        )
+        SELECT COUNT(*)::integer AS deleted_samples
+        FROM deleted
+      `,
+      [sensorUid]
+    );
+
+    return reply.code(200).send({
+      status: "reset",
+      sensorUid,
+      deletedSamples:
+        result.rows[0]?.deleted_samples ?? 0
+    });
+  }
+);
+
+app.delete(
+  "/api/v1/gateway-coverage/sensors/:sensorUid",
+  async (request, reply) => {
+    const params = request.params as {
+      sensorUid: string;
+    };
+
+    const sensorUid =
+      params.sensorUid?.trim();
+
+    if (!sensorUid) {
+      return reply.code(400).send({
+        error: "invalid_sensor_uid"
+      });
+    }
+
+    const result = await pool.query(
+      `
+        WITH deleted AS (
+          DELETE FROM gateway_sensor_rssi_samples
+          WHERE sensor_uid = $1
+          RETURNING 1
+        )
+        SELECT COUNT(*)::integer AS deleted_samples
+        FROM deleted
+      `,
+      [sensorUid]
+    );
+
+    return reply.code(200).send({
+      status: "deleted",
+      sensorUid,
+      deletedSamples:
+        result.rows[0]?.deleted_samples ?? 0
+    });
+  }
+);
+
+app.delete(
   "/api/v1/gateway-coverage/gateways",
   async (_request, reply) => {
     const result = await pool.query(

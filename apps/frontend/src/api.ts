@@ -551,6 +551,50 @@ export async function resetGatewayCoverageGateway(
   }>(response);
 }
 
+export async function resetGatewayCoverageSensor(
+  sensorUid: string
+): Promise<{
+  status: string;
+  sensorUid: string;
+  deletedSamples: number;
+}> {
+  const response =
+    await fetch(
+      `/api/v1/gateway-coverage/sensors/${encodeURIComponent(sensorUid)}/samples`,
+      {
+        method: "DELETE"
+      }
+    );
+
+  return readJson<{
+    status: string;
+    sensorUid: string;
+    deletedSamples: number;
+  }>(response);
+}
+
+export async function deleteGatewayCoverageSensor(
+  sensorUid: string
+): Promise<{
+  status: string;
+  sensorUid: string;
+  deletedSamples: number;
+}> {
+  const response =
+    await fetch(
+      `/api/v1/gateway-coverage/sensors/${encodeURIComponent(sensorUid)}`,
+      {
+        method: "DELETE"
+      }
+    );
+
+  return readJson<{
+    status: string;
+    sensorUid: string;
+    deletedSamples: number;
+  }>(response);
+}
+
 export async function deleteAllGatewayCoverageGateways():
 Promise<{
   status: string;

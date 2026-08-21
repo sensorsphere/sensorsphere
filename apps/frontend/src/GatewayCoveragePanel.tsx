@@ -30,11 +30,13 @@ import {
 import {
   deleteAllGatewayCoverageGateways,
   deleteGatewayCoverageGateway,
+  deleteGatewayCoverageSensor,
   getGatewayCoverage,
   getLocations,
   getSensors,
   resetGatewayCoverage,
   resetGatewayCoverageGateway,
+  resetGatewayCoverageSensor,
   updateGatewayCoverageLocation
 } from "./api";
 
@@ -358,8 +360,7 @@ function recommendationInfo(
       status: "NO SUGGESTION",
       detailLines: [
         `No RSSI data in last ${period}`,
-        `0/${totalGateways} gateways with data`,
-        `Minimum required: ${minimumSamples}`
+        `0/${totalGateways} gateways with data`
       ],
       color: "gray"
     };
@@ -381,8 +382,7 @@ function recommendationInfo(
       ? [
           `${insufficientCount} ${gatewayWord(insufficientCount)} insufficient samples`
         ]
-      : []),
-    `Minimum required: ${minimumSamples}`
+      : [])
   ];
 
   if (eligible.length === 0) {
@@ -400,7 +400,7 @@ function recommendationInfo(
       status: "NO RELIABLE SUGGESTION",
       detailLines: [
         `Best data so far: ${bestSoFar.gatewayId}`,
-        `${bestSoFar.sampleCount}/${minimumSamples} samples required`,
+        `${bestSoFar.sampleCount} samples available`,
         ...coverageLines
       ],
       color: "orange"
@@ -411,7 +411,6 @@ function recommendationInfo(
     eligible[0];
 
   const commonDetails = [
-    `${winner.avgRssi.toFixed(1)} dBm avg`,
     `${winner.sampleCount} samples in last ${period}`,
     ...coverageLines
   ];
@@ -566,6 +565,12 @@ export function GatewayCoveragePanel() {
     React.useState<{
       type: "reset" | "delete";
       gatewayId: string;
+    } | null>(null);
+
+  const [sensorAction, setSensorAction] =
+    React.useState<{
+      type: "reset" | "delete";
+      sensorUid: string;
     } | null>(null);
 
   const query =
@@ -1018,6 +1023,34 @@ export function GatewayCoveragePanel() {
       onSuccess:
         async () => {
           setGatewayAction(null);
+          await queryClient.invalidateQueries({
+            queryKey: ["gateway-coverage"]
+          });
+        }
+    });
+
+  const resetSensorMutation =
+    useMutation({
+      mutationFn:
+        resetGatewayCoverageSensor,
+
+      onSuccess:
+        async () => {
+          setSensorAction(null);
+          await queryClient.invalidateQueries({
+            queryKey: ["gateway-coverage"]
+          });
+        }
+    });
+
+  const deleteSensorMutation =
+    useMutation({
+      mutationFn:
+        deleteGatewayCoverageSensor,
+
+      onSuccess:
+        async () => {
+          setSensorAction(null);
           await queryClient.invalidateQueries({
             queryKey: ["gateway-coverage"]
           });
@@ -1528,6 +1561,9 @@ export function GatewayCoveragePanel() {
                         ]}
                         aria-label="Filter by suggested gateway"
                       />
+                      <Text size="xs" c="dimmed">
+                        Minimum samples for suggestion: {minimumSamplesForPeriod(hours)}
+                      </Text>
                     </Stack>
                   </Table.Th>
                 </Table.Tr>
@@ -1693,6 +1729,34 @@ export function GatewayCoveragePanel() {
                                     : "←"
                                   : "↔"
                               }
+                            </Button>
+                          </Group>
+                          <Group gap={4} wrap="nowrap">
+                            <Button
+                              size="compact-xs"
+                              color="orange"
+                              variant="light"
+                              onClick={() =>
+                                setSensorAction({
+                                  type: "reset",
+                                  sensorUid
+                                })
+                              }
+                            >
+                              Reset
+                            </Button>
+                            <Button
+                              size="compact-xs"
+                              color="red"
+                              variant="light"
+                              onClick={() =>
+                                setSensorAction({
+                                  type: "delete",
+                                  sensorUid
+                                })
+                              }
+                            >
+                              Delete
                             </Button>
                           </Group>
                         </Stack>
@@ -1874,6 +1938,68 @@ export function GatewayCoveragePanel() {
           </Table.ScrollContainer>
         </Card>
       )}
+
+      <Modal
+        opened={sensorAction !== null}
+        onClose={() => setSensorAction(null)}
+        title={
+          sensorAction?.type === "delete"
+            ? "Delete sensor coverage"
+            : "Reset sensor coverage"
+        }
+        centered
+      >
+        <Stack gap="md">
+          <Text>
+            {sensorAction?.type === "delete"
+              ? `Delete all Gateway Coverage RSSI data for ${sensorAction.sensorUid}? The SensorSphere sensor itself will not be deleted.`
+              : `Reset all Gateway Coverage RSSI samples for ${sensorAction?.sensorUid ?? "this sensor"}? The SensorSphere sensor itself will be kept.`}
+          </Text>
+
+          {(resetSensorMutation.isError || deleteSensorMutation.isError) && (
+            <Alert color="red" title="Sensor coverage operation failed">
+              {(() => {
+                const error =
+                  resetSensorMutation.error
+                  ?? deleteSensorMutation.error;
+
+                return error instanceof Error
+                  ? error.message
+                  : "Operation failed.";
+              })()}
+            </Alert>
+          )}
+
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              onClick={() => setSensorAction(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              color={sensorAction?.type === "delete" ? "red" : "orange"}
+              loading={
+                resetSensorMutation.isPending ||
+                deleteSensorMutation.isPending
+              }
+              onClick={() => {
+                if (!sensorAction) return;
+
+                if (sensorAction.type === "delete") {
+                  deleteSensorMutation.mutate(sensorAction.sensorUid);
+                } else {
+                  resetSensorMutation.mutate(sensorAction.sensorUid);
+                }
+              }}
+            >
+              {sensorAction?.type === "delete"
+                ? "Delete sensor coverage"
+                : "Reset sensor data"}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal
         opened={locationGatewayId !== null}
