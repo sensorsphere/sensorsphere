@@ -93,16 +93,34 @@ const REFRESH_INTERVALS = [
 
 const DEFAULT_METRIC_COLORS:
 Record<string, string> = {
-  temperature: "#fab005",
+  temperature: "#40c057",
   humidity: "#228be6",
-  rssi: "#fa5252",
-  battery_level: "#40c057",
+  rssi: "#ff8787",
+  battery_level: "#fab005",
   battery_voltage: "#845ef7",
-  battery: "#40c057",
+  battery: "#fab005",
   voltage: "#845ef7",
   pressure: "#15aabf",
   co2: "#fd7e14"
 };
+
+const METRIC_COLOR_SWATCHES = [
+  "#40c057",
+  "#fab005",
+  "#228be6",
+  "#ff8787",
+  "#845ef7",
+  "#15aabf",
+  "#fd7e14",
+  "#20c997",
+  "#339af0",
+  "#cc5de8",
+  "#f06595",
+  "#94d82d",
+  "#fcc419",
+  "#ff922b",
+  "#868e96"
+];
 
 const FALLBACK_METRIC_COLORS = [
   "#12b886",
@@ -1868,7 +1886,9 @@ export function HistoryPanel() {
                         )
                     }
                     format="hex"
-                    w={160}
+                    swatches={METRIC_COLOR_SWATCHES}
+                    swatchesPerRow={5}
+                    w={190}
                   />
                 </Group>
               )
