@@ -2324,6 +2324,29 @@ export function HistoryPanel() {
       }
     };
 
+  const exportActiveTab =
+    (): void => {
+
+      if (!activeTab) {
+        return;
+      }
+
+      const normalizedTab =
+        normalizeHistoryTabs([
+          activeTab
+        ])[0];
+
+      downloadJson(
+        `sensorsphere-history-tab-${activeTab.id}.json`,
+        {
+          type:
+            "sensorsphere-history-tab",
+          version: 1,
+          tab: normalizedTab
+        }
+      );
+    };
+
   const confirmImport =
     (): void => {
 
