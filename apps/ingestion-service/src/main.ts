@@ -81,92 +81,151 @@ Promise<void> {
   await collector.start(
     message => {
 
-      const coverageMatch =
+      const gatewayTopicMatch =
         message.topic.match(
-          /^sensors\/ble_gateway\/([^/]+)\/sensor\/rssi_([^/]+)\/state$/
+          /^sensors\/ble_gateway\/([^/]+)\/sensor\/([^/]+)\/state$/
         );
 
-      const gatewayMetadataMatch =
-        message.topic.match(
-          /^sensors\/ble_gateway\/([^/]+)\/sensor\/(board_id|mac_address|wifi_rssi|wifi_ssid|build_date|ip_address)\/state$/
-        );
-
-      if (gatewayMetadataMatch) {
+      if (gatewayTopicMatch) {
         const gatewayId =
-          gatewayMetadataMatch[1];
+          gatewayTopicMatch[1];
 
-        const metric =
-          gatewayMetadataMatch[2] as
-            "board_id" | "mac_address" | "wifi_rssi" | "wifi_ssid" | "build_date" | "ip_address";
+        const objectId =
+          gatewayTopicMatch[2];
 
-        const value =
-          message.payload
-            .toString()
-            .trim();
+        const metadataMetrics =
+          new Set([
+            "friendly_name",
+            "board_id",
+            "mac_address",
+            "wifi_rssi",
+            "wifi_ssid",
+            "build_date",
+            "ip_address"
+          ]);
 
-        if (gatewayId && value) {
+        if (
+          gatewayId &&
+          objectId &&
+          metadataMetrics.has(objectId)
+        ) {
+          const metric = objectId as
+            | "friendly_name"
+            | "board_id"
+            | "mac_address"
+            | "wifi_rssi"
+            | "wifi_ssid"
+            | "build_date"
+            | "ip_address";
+
+          const value =
+            message.payload
+              .toString()
+              .trim();
+
+          if (value) {
+            void repository
+              .saveGatewayMetadata(
+                gatewayId,
+                metric,
+                value,
+                message.receivedAt
+              )
+              .catch(error => {
+                logger.error(
+                  {
+                    error,
+                    gatewayId,
+                    metric
+                  },
+                  "Unable to persist functional gateway metadata"
+                );
+              });
+
+            if (metric !== "friendly_name") {
+              void repository
+                .saveGatewayCoverageMetadata(
+                  gatewayId,
+                  metric,
+                  value,
+                  message.receivedAt
+                )
+                .catch(error => {
+                  logger.error(
+                    {
+                      error,
+                      gatewayId,
+                      metric
+                    },
+                    "Unable to persist gateway coverage metadata"
+                  );
+                });
+            }
+          }
+
+          return;
+        }
+
+        if (gatewayId) {
           void repository
-            .saveGatewayCoverageMetadata(
+            .saveGatewayActivity(
               gatewayId,
-              metric,
-              value,
               message.receivedAt
             )
             .catch(error => {
               logger.error(
-                {
-                  error,
-                  gatewayId,
-                  metric
-                },
-                "Unable to persist gateway coverage metadata"
+                { error, gatewayId },
+                "Unable to persist functional gateway activity"
               );
             });
         }
 
-        return;
-      }
-
-      if (coverageMatch) {
-        const gatewayId =
-          coverageMatch[1];
-
-        const sensorUid =
-          coverageMatch[2]
-            .toLowerCase();
-
-        const rssi =
-          Number(
-            message.payload
-              .toString()
-              .trim()
-          );
+        const coverageMatch =
+          objectId?.match(/^rssi_(.+)$/);
 
         if (
           gatewayId &&
-          sensorUid &&
-          Number.isFinite(rssi)
+          coverageMatch
         ) {
-          void repository
-            .saveGatewayCoverageRssi(
-              gatewayId,
-              sensorUid,
-              rssi,
-              message.receivedAt,
-              message.topic
-            )
-            .catch(error => {
-              logger.error(
-                {
-                  error,
-                  gatewayId,
-                  sensorUid
-                },
-                "Unable to persist gateway coverage RSSI"
-              );
-            });
+          const sensorUid =
+            coverageMatch[1]
+              .toLowerCase();
+
+          const rssi =
+            Number(
+              message.payload
+                .toString()
+                .trim()
+            );
+
+          if (
+            sensorUid &&
+            Number.isFinite(rssi)
+          ) {
+            void repository
+              .saveGatewayCoverageRssi(
+                gatewayId,
+                sensorUid,
+                rssi,
+                message.receivedAt,
+                message.topic
+              )
+              .catch(error => {
+                logger.error(
+                  {
+                    error,
+                    gatewayId,
+                    sensorUid
+                  },
+                  "Unable to persist gateway coverage RSSI"
+                );
+              });
+          }
         }
 
+        // Gateway-qualified topics are never fed into the normal sensor
+        // measurement pipeline: the same BLE sensor may be observed by
+        // several gateways and would otherwise create duplicate readings.
         return;
       }
 

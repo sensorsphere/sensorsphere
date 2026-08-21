@@ -20,6 +20,7 @@ export interface SensorDto {
 
   gateway: {
     id: string;
+    gatewayId: string;
     name: string;
     type: string;
   } | null;

@@ -55,6 +55,7 @@ export interface Sensor {
 
   gateway: {
     id: string;
+    gatewayId: string;
     name: string;
     type: string;
   } | null;
@@ -78,12 +79,27 @@ export interface UpdateSensor {
   enabled?: boolean;
 }
 
+export interface GatewayType {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+}
+
 export interface Gateway {
   id: string;
+  gatewayId: string;
   name: string;
-  type: string;
+  nameManuallySet: boolean;
+  type: GatewayType;
   version: string | null;
   ipAddress: string | null;
+  macAddress: string | null;
+  wifiSsid: string | null;
+  boardId: string | null;
+  buildDate: string | null;
+  wifiRssi: number | null;
+  wifiRssiSeenAt: string | null;
   enabled: boolean;
   lastSeenAt: string | null;
   sensorCount: number;
@@ -93,18 +109,27 @@ export interface Gateway {
 }
 
 export interface CreateGatewayInput {
+  gatewayId: string;
   name: string;
-  type: string;
+  gatewayTypeId: string;
   version?: string | null;
   ipAddress?: string | null;
+  macAddress?: string | null;
+  wifiSsid?: string | null;
+  boardId?: string | null;
+  buildDate?: string | null;
   enabled?: boolean;
 }
 
 export interface UpdateGatewayInput {
   name?: string;
-  type?: string;
+  gatewayTypeId?: string;
   version?: string | null;
   ipAddress?: string | null;
+  macAddress?: string | null;
+  wifiSsid?: string | null;
+  boardId?: string | null;
+  buildDate?: string | null;
   enabled?: boolean;
 }
 

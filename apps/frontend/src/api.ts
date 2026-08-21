@@ -13,6 +13,7 @@ import type {
   Sensor,
   UpdateSensor,
   Gateway,
+  GatewayType,
   CreateGatewayInput,
   UpdateGatewayInput
 } from "./types";
@@ -50,6 +51,19 @@ Promise<RuntimeConfig> {
     );
 
   return readJson<RuntimeConfig>(
+    response
+  );
+}
+
+export async function getGatewayTypes():
+Promise<GatewayType[]> {
+
+  const response =
+    await fetch(
+      "/api/v1/gateway-types"
+    );
+
+  return readJson<GatewayType[]>(
     response
   );
 }

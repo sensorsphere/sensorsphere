@@ -44,9 +44,11 @@ export function mapSensorToDto(
     gateway:
       sensor.gateway_id &&
       sensor.gateway_name &&
+      sensor.gateway_mqtt_id &&
       sensor.gateway_type
         ? {
             id: sensor.gateway_id,
+            gatewayId: sensor.gateway_mqtt_id,
             name: sensor.gateway_name,
             type: sensor.gateway_type
           }

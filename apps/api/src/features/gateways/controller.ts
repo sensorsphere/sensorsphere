@@ -15,24 +15,35 @@ import {
   ok
 } from "../../shared/http/index.js";
 
-const gatewayIdSchema = z.string().uuid();
+const databaseIdSchema = z.string().uuid();
+const mqttGatewayIdSchema =
+  z.string().trim().min(1).max(200).regex(/^[A-Za-z0-9._-]+$/);
 
 const nullableText =
   z.string().trim().max(200).nullable();
 
 const createGatewaySchema = z.object({
+  gatewayId: mqttGatewayIdSchema,
   name: z.string().trim().min(1).max(200),
-  type: z.string().trim().min(1).max(200),
+  gatewayTypeId: databaseIdSchema,
   version: nullableText.optional(),
   ipAddress: z.string().trim().max(100).nullable().optional(),
+  macAddress: nullableText.optional(),
+  wifiSsid: nullableText.optional(),
+  boardId: nullableText.optional(),
+  buildDate: nullableText.optional(),
   enabled: z.boolean().optional()
 }).strict();
 
 const updateGatewaySchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
-  type: z.string().trim().min(1).max(200).optional(),
+  gatewayTypeId: databaseIdSchema.optional(),
   version: nullableText.optional(),
   ipAddress: z.string().trim().max(100).nullable().optional(),
+  macAddress: nullableText.optional(),
+  wifiSsid: nullableText.optional(),
+  boardId: nullableText.optional(),
+  buildDate: nullableText.optional(),
   enabled: z.boolean().optional()
 })
   .strict()
@@ -60,12 +71,22 @@ export class GatewayController {
     );
   };
 
+  listGatewayTypes = async (
+    _request: FastifyRequest,
+    reply: FastifyReply
+  ): Promise<void> => {
+    await ok(
+      reply,
+      await this.service.listGatewayTypes()
+    );
+  };
+
   getGateway = async (
     request: FastifyRequest<{ Params: GatewayParams }>,
     reply: FastifyReply
   ): Promise<void> => {
     const parsedId =
-      gatewayIdSchema.safeParse(request.params.id);
+      databaseIdSchema.safeParse(request.params.id);
 
     if (!parsedId.success) {
       await badRequest(reply, "Invalid gateway id");
@@ -99,10 +120,21 @@ export class GatewayController {
       return;
     }
 
-    await ok(
-      reply,
-      await this.service.createGateway(parsed.data)
-    );
+    try {
+      await ok(
+        reply,
+        await this.service.createGateway(parsed.data)
+      );
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "gateway_type_not_found"
+      ) {
+        await badRequest(reply, "Gateway type not found");
+        return;
+      }
+      throw error;
+    }
   };
 
   updateGateway = async (
@@ -113,7 +145,7 @@ export class GatewayController {
     reply: FastifyReply
   ): Promise<void> => {
     const parsedId =
-      gatewayIdSchema.safeParse(request.params.id);
+      databaseIdSchema.safeParse(request.params.id);
     const parsedBody =
       updateGatewaySchema.safeParse(request.body);
 
@@ -131,18 +163,29 @@ export class GatewayController {
       return;
     }
 
-    const gateway =
-      await this.service.updateGateway(
-        parsedId.data,
-        parsedBody.data
-      );
+    try {
+      const gateway =
+        await this.service.updateGateway(
+          parsedId.data,
+          parsedBody.data
+        );
 
-    if (!gateway) {
-      await notFound(reply, "Gateway not found");
-      return;
+      if (!gateway) {
+        await notFound(reply, "Gateway not found");
+        return;
+      }
+
+      await ok(reply, gateway);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "gateway_type_not_found"
+      ) {
+        await badRequest(reply, "Gateway type not found");
+        return;
+      }
+      throw error;
     }
-
-    await ok(reply, gateway);
   };
 
   deleteGateway = async (
@@ -150,7 +193,7 @@ export class GatewayController {
     reply: FastifyReply
   ): Promise<void> => {
     const parsedId =
-      gatewayIdSchema.safeParse(request.params.id);
+      databaseIdSchema.safeParse(request.params.id);
 
     if (!parsedId.success) {
       await badRequest(reply, "Invalid gateway id");

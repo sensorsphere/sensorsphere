@@ -1,6 +1,7 @@
 import type {
   CreateGatewayDto,
   GatewayDto,
+  GatewayTypeDto,
   UpdateGatewayDto
 } from "./dto.js";
 
@@ -9,7 +10,8 @@ import type {
 } from "./repository.js";
 
 import {
-  mapGatewayToDto
+  mapGatewayToDto,
+  mapGatewayTypeToDto
 } from "./mapper.js";
 
 export class GatewayService {
@@ -20,6 +22,11 @@ export class GatewayService {
   async listGateways(): Promise<GatewayDto[]> {
     return (await this.repository.findAll())
       .map(mapGatewayToDto);
+  }
+
+  async listGatewayTypes(): Promise<GatewayTypeDto[]> {
+    return (await this.repository.findTypes())
+      .map(mapGatewayTypeToDto);
   }
 
   async getGateway(
@@ -36,6 +43,10 @@ export class GatewayService {
   async createGateway(
     input: CreateGatewayDto
   ): Promise<GatewayDto> {
+    if (!(await this.repository.typeExists(input.gatewayTypeId))) {
+      throw new Error("gateway_type_not_found");
+    }
+
     return mapGatewayToDto(
       await this.repository.create(input)
     );
@@ -50,7 +61,23 @@ export class GatewayService {
 
     if (!existing) return null;
 
-    await this.repository.update(id, input);
+    if (
+      input.gatewayTypeId &&
+      !(await this.repository.typeExists(input.gatewayTypeId))
+    ) {
+      throw new Error("gateway_type_not_found");
+    }
+
+    const effectiveInput = { ...input };
+
+    if (effectiveInput.name === existing.name) {
+      delete effectiveInput.name;
+    }
+
+    if (Object.keys(effectiveInput).length > 0) {
+      await this.repository.update(id, effectiveInput);
+    }
+
     return this.getGateway(id);
   }
 

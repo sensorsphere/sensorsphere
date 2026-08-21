@@ -20,6 +20,7 @@ export interface SensorRecord {
   room_name: string | null;
   gateway_id: string | null;
   gateway_name: string | null;
+  gateway_mqtt_id: string | null;
   gateway_type: string | null;
   last_measurement_at: Date | null;
   online: boolean;
@@ -48,8 +49,9 @@ const SENSOR_SELECT = `
       r.id AS room_id,
       r.name AS room_name,
       g.id AS gateway_id,
+      g.gateway_id AS gateway_mqtt_id,
       g.name AS gateway_name,
-      g.type AS gateway_type,
+      gt.name AS gateway_type,
       latest.time AS last_measurement_at,
       CASE
           WHEN latest.time IS NULL THEN FALSE
@@ -60,6 +62,7 @@ const SENSOR_SELECT = `
   FROM sensors s
   LEFT JOIN rooms r ON r.id = s.room_id
   LEFT JOIN gateways g ON g.id = s.gateway_id
+  LEFT JOIN gateway_types gt ON gt.id = g.gateway_type_id
   LEFT JOIN LATERAL (
       SELECT m.time
       FROM measurements m

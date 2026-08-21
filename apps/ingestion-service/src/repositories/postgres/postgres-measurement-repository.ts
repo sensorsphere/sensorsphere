@@ -44,6 +44,155 @@ implements MeasurementRepository {
     );
   }
 
+
+  async saveGatewayActivity(
+    gatewayId: string,
+    receivedAt: Date
+  ): Promise<void> {
+    await this.pool.query(
+      `
+      INSERT INTO gateways (
+        gateway_id,
+        name,
+        name_manually_set,
+        gateway_type_id,
+        type,
+        last_seen_at
+      )
+      SELECT
+        $1,
+        $1,
+        FALSE,
+        gt.id,
+        'ble_gateway',
+        $2
+      FROM gateway_types gt
+      WHERE gt.key = 'ble_gateway'
+      ON CONFLICT (gateway_id) DO UPDATE
+      SET
+        last_seen_at = GREATEST(
+          gateways.last_seen_at,
+          EXCLUDED.last_seen_at
+        ),
+        updated_at = NOW()
+      `,
+      [gatewayId, receivedAt]
+    );
+  }
+
+  async saveGatewayMetadata(
+    gatewayId: string,
+    metric:
+      | "friendly_name"
+      | "board_id"
+      | "mac_address"
+      | "wifi_rssi"
+      | "wifi_ssid"
+      | "build_date"
+      | "ip_address",
+    value: string,
+    receivedAt: Date
+  ): Promise<void> {
+    const wifiRssi =
+      metric === "wifi_rssi"
+        ? Number(value)
+        : null;
+
+    if (
+      metric === "wifi_rssi" &&
+      !Number.isFinite(wifiRssi)
+    ) {
+      return;
+    }
+
+    await this.pool.query(
+      `
+      INSERT INTO gateways (
+        gateway_id,
+        name,
+        name_manually_set,
+        gateway_type_id,
+        type,
+        board_id,
+        mac_address,
+        wifi_rssi,
+        wifi_rssi_seen_at,
+        wifi_ssid,
+        build_date,
+        ip_address,
+        last_seen_at
+      )
+      SELECT
+        $1,
+        CASE
+          WHEN $2::text = 'friendly_name' THEN $3::text
+          ELSE $1::text
+        END,
+        FALSE,
+        gt.id,
+        'ble_gateway',
+        CASE WHEN $2::text = 'board_id' THEN $3::text ELSE NULL::text END,
+        CASE WHEN $2::text = 'mac_address' THEN $3::text ELSE NULL::text END,
+        CASE WHEN $2::text = 'wifi_rssi' THEN $4::double precision ELSE NULL::double precision END,
+        CASE WHEN $2::text = 'wifi_rssi' THEN $5::timestamptz ELSE NULL::timestamptz END,
+        CASE WHEN $2::text = 'wifi_ssid' THEN $3::text ELSE NULL::text END,
+        CASE WHEN $2::text = 'build_date' THEN $3::text ELSE NULL::text END,
+        CASE WHEN $2::text = 'ip_address' THEN $3::inet ELSE NULL::inet END,
+        $5
+      FROM gateway_types gt
+      WHERE gt.key = 'ble_gateway'
+      ON CONFLICT (gateway_id) DO UPDATE
+      SET
+        name = CASE
+          WHEN $2::text = 'friendly_name'
+               AND NOT gateways.name_manually_set
+            THEN $3::text
+          ELSE gateways.name
+        END,
+        board_id = CASE
+          WHEN $2::text = 'board_id' THEN $3::text
+          ELSE gateways.board_id
+        END,
+        mac_address = CASE
+          WHEN $2::text = 'mac_address' THEN $3::text
+          ELSE gateways.mac_address
+        END,
+        wifi_rssi = CASE
+          WHEN $2::text = 'wifi_rssi' THEN $4::double precision
+          ELSE gateways.wifi_rssi
+        END,
+        wifi_rssi_seen_at = CASE
+          WHEN $2::text = 'wifi_rssi' THEN $5::timestamptz
+          ELSE gateways.wifi_rssi_seen_at
+        END,
+        wifi_ssid = CASE
+          WHEN $2::text = 'wifi_ssid' THEN $3::text
+          ELSE gateways.wifi_ssid
+        END,
+        build_date = CASE
+          WHEN $2::text = 'build_date' THEN $3::text
+          ELSE gateways.build_date
+        END,
+        ip_address = CASE
+          WHEN $2::text = 'ip_address' THEN $3::inet
+          ELSE gateways.ip_address
+        END,
+        last_seen_at = GREATEST(
+          gateways.last_seen_at,
+          EXCLUDED.last_seen_at
+        ),
+        updated_at = NOW()
+      `,
+      [
+        gatewayId,
+        metric,
+        value,
+        wifiRssi,
+        receivedAt
+      ]
+    );
+  }
+
   async saveGatewayCoverageRssi(
     gatewayId: string,
     sensorUid: string,

@@ -29,6 +29,7 @@ import {
   createGateway,
   deleteGateway,
   getGateways,
+  getGatewayTypes,
   updateGateway
 } from "./api";
 
@@ -47,18 +48,28 @@ import {
 } from "./ResetFiltersAction";
 
 interface GatewayFormState {
+  gatewayId: string;
   name: string;
-  type: string;
+  gatewayTypeId: string;
   version: string;
   ipAddress: string;
+  macAddress: string;
+  wifiSsid: string;
+  boardId: string;
+  buildDate: string;
   enabled: boolean;
 }
 
 const emptyForm = (): GatewayFormState => ({
+  gatewayId: "",
   name: "",
-  type: "",
+  gatewayTypeId: "",
   version: "",
   ipAddress: "",
+  macAddress: "",
+  wifiSsid: "",
+  boardId: "",
+  buildDate: "",
   enabled: true
 });
 
@@ -66,10 +77,15 @@ function gatewayToForm(
   gateway: Gateway
 ): GatewayFormState {
   return {
+    gatewayId: gateway.gatewayId,
     name: gateway.name,
-    type: gateway.type,
+    gatewayTypeId: gateway.type.id,
     version: gateway.version ?? "",
     ipAddress: gateway.ipAddress ?? "",
+    macAddress: gateway.macAddress ?? "",
+    wifiSsid: gateway.wifiSsid ?? "",
+    boardId: gateway.boardId ?? "",
+    buildDate: gateway.buildDate ?? "",
     enabled: gateway.enabled
   };
 }
@@ -110,7 +126,7 @@ export function GatewayCatalog() {
 
   const [typeFilter, setTypeFilter] =
     usePersistentState<string | null>(
-      "gateways.type",
+      "gateways.typeId",
       null,
       value => value === null || typeof value === "string"
     );
@@ -140,19 +156,33 @@ export function GatewayCatalog() {
     refetchInterval: 30_000
   });
 
+  const gatewayTypesQuery = useQuery({
+    queryKey: ["gateway-types"],
+    queryFn: getGatewayTypes
+  });
+
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const input: CreateGatewayInput | UpdateGatewayInput = {
+      const editable: UpdateGatewayInput = {
         name: form.name.trim(),
-        type: form.type.trim(),
+        gatewayTypeId: form.gatewayTypeId,
         version: emptyToNull(form.version),
         ipAddress: emptyToNull(form.ipAddress),
+        macAddress: emptyToNull(form.macAddress),
+        wifiSsid: emptyToNull(form.wifiSsid),
+        boardId: emptyToNull(form.boardId),
+        buildDate: emptyToNull(form.buildDate),
         enabled: form.enabled
       };
 
       return editingGateway
-        ? updateGateway(editingGateway.id, input)
-        : createGateway(input as CreateGatewayInput);
+        ? updateGateway(editingGateway.id, editable)
+        : createGateway({
+            ...editable,
+            gatewayId: form.gatewayId.trim(),
+            gatewayTypeId: form.gatewayTypeId,
+            name: form.name.trim()
+          } as CreateGatewayInput);
     },
     onSuccess: async () => {
       await Promise.all([
@@ -176,29 +206,39 @@ export function GatewayCatalog() {
     }
   });
 
-  if (gatewaysQuery.isLoading) {
+  if (gatewaysQuery.isLoading || gatewayTypesQuery.isLoading) {
     return <Text>Loading gateways...</Text>;
   }
 
-  if (gatewaysQuery.isError) {
+  if (gatewaysQuery.isError || gatewayTypesQuery.isError) {
     return <Text c="red">Unable to load gateways.</Text>;
   }
 
   const gateways = gatewaysQuery.data ?? [];
+  const gatewayTypes = gatewayTypesQuery.data ?? [];
+  const gatewayTypeOptions = gatewayTypes.map(type => ({
+    value: type.id,
+    label: type.name
+  }));
   const normalizedSearch = nameSearch.trim().toLowerCase();
-  const typeOptions = Array.from(
-    new Set(gateways.map(gateway => gateway.type))
-  ).sort((a, b) => a.localeCompare(b));
+  const typeOptions = gatewayTypes.map(type => ({
+    value: type.id,
+    label: type.name
+  }));
 
   const filteredGateways = gateways
     .filter(gateway =>
       (
         !normalizedSearch ||
         gateway.name.toLowerCase().includes(normalizedSearch) ||
-        gateway.type.toLowerCase().includes(normalizedSearch) ||
+        gateway.type.name.toLowerCase().includes(normalizedSearch) ||
+        gateway.gatewayId.toLowerCase().includes(normalizedSearch) ||
+        (gateway.macAddress ?? "").toLowerCase().includes(normalizedSearch) ||
+        (gateway.wifiSsid ?? "").toLowerCase().includes(normalizedSearch) ||
+        (gateway.boardId ?? "").toLowerCase().includes(normalizedSearch) ||
         (gateway.ipAddress ?? "").toLowerCase().includes(normalizedSearch)
       ) &&
-      (typeFilter === null || gateway.type === typeFilter) &&
+      (typeFilter === null || gateway.type.id === typeFilter) &&
       (
         enabledFilter === "all" ||
         (enabledFilter === "enabled"
@@ -275,7 +315,7 @@ export function GatewayCatalog() {
         <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
           <TextInput
             label="Search"
-            placeholder="Name, type or IP"
+            placeholder="Name, gateway ID, type, MAC, SSID or IP"
             value={nameSearch}
             onChange={event => setNameSearch(event.currentTarget.value)}
           />
@@ -312,7 +352,7 @@ export function GatewayCatalog() {
                   <Group justify="space-between" align="flex-start">
                     <div>
                       <Text fw={700} size="lg">{gateway.name}</Text>
-                      <Text size="xs" c="dimmed">{gateway.type}</Text>
+                      <Text size="xs" c="dimmed">{gateway.type.name}</Text>
                     </div>
                     <Badge color={gateway.enabled ? "green" : "gray"}>
                       {gateway.enabled ? "Enabled" : "Disabled"}
@@ -321,12 +361,36 @@ export function GatewayCatalog() {
 
                   <SimpleGrid cols={2} spacing="xs">
                     <div>
+                      <Text size="xs" c="dimmed">Gateway ID</Text>
+                      <Text size="sm" fw={600}>{gateway.gatewayId}</Text>
+                    </div>
+                    <div>
+                      <Text size="xs" c="dimmed">MAC address</Text>
+                      <Text size="sm">{gateway.macAddress ?? "—"}</Text>
+                    </div>
+                    <div>
                       <Text size="xs" c="dimmed">Version</Text>
                       <Text size="sm">{gateway.version ?? "—"}</Text>
                     </div>
                     <div>
                       <Text size="xs" c="dimmed">IP address</Text>
                       <Text size="sm">{gateway.ipAddress ?? "—"}</Text>
+                    </div>
+                    <div>
+                      <Text size="xs" c="dimmed">WiFi SSID</Text>
+                      <Text size="sm">{gateway.wifiSsid ?? "—"}</Text>
+                    </div>
+                    <div>
+                      <Text size="xs" c="dimmed">WiFi RSSI</Text>
+                      <Text size="sm">{gateway.wifiRssi === null ? "—" : `${gateway.wifiRssi.toFixed(0)} dBm`}</Text>
+                    </div>
+                    <div>
+                      <Text size="xs" c="dimmed">Board</Text>
+                      <Text size="sm">{gateway.boardId ?? "—"}</Text>
+                    </div>
+                    <div>
+                      <Text size="xs" c="dimmed">Build date</Text>
+                      <Text size="sm">{gateway.buildDate ?? "—"}</Text>
                     </div>
                     <div>
                       <Text size="xs" c="dimmed">Sensors</Text>
@@ -359,13 +423,16 @@ export function GatewayCatalog() {
             ))}
           </SimpleGrid>
         ) : (
-          <Table.ScrollContainer minWidth={900}>
+          <Table.ScrollContainer minWidth={1200}>
             <Table striped highlightOnHover verticalSpacing="xs">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Name</Table.Th>
+                  <Table.Th>Gateway ID</Table.Th>
                   <Table.Th>Type</Table.Th>
                   <Table.Th>Version</Table.Th>
+                  <Table.Th>MAC</Table.Th>
+                  <Table.Th>SSID</Table.Th>
                   <Table.Th>IP</Table.Th>
                   <Table.Th>Enabled</Table.Th>
                   <Table.Th>Sensors</Table.Th>
@@ -378,8 +445,11 @@ export function GatewayCatalog() {
                 {filteredGateways.map(gateway => (
                   <Table.Tr key={gateway.id}>
                     <Table.Td fw={600}>{gateway.name}</Table.Td>
-                    <Table.Td>{gateway.type}</Table.Td>
+                    <Table.Td>{gateway.gatewayId}</Table.Td>
+                    <Table.Td>{gateway.type.name}</Table.Td>
                     <Table.Td>{gateway.version ?? "—"}</Table.Td>
+                    <Table.Td>{gateway.macAddress ?? "—"}</Table.Td>
+                    <Table.Td>{gateway.wifiSsid ?? "—"}</Table.Td>
                     <Table.Td>{gateway.ipAddress ?? "—"}</Table.Td>
                     <Table.Td>{gateway.enabled ? "Yes" : "No"}</Table.Td>
                     <Table.Td>{gateway.sensorCount}</Table.Td>
@@ -420,17 +490,26 @@ export function GatewayCatalog() {
       >
         <Stack>
           <TextInput
+            label="Gateway ID"
+            required
+            description="Stable identifier used in MQTT topics, for example ble-gateway-01"
+            value={form.gatewayId}
+            disabled={editingGateway !== null}
+            onChange={event => setForm({ ...form, gatewayId: event.currentTarget.value })}
+          />
+          <TextInput
             label="Name"
             required
+            description={editingGateway?.nameManuallySet ? "Manually managed name" : "Automatically follows MQTT friendly_name until edited manually"}
             value={form.name}
             onChange={event => setForm({ ...form, name: event.currentTarget.value })}
           />
-          <TextInput
+          <Select
             label="Type"
             required
-            placeholder="ESP32 BLE, MQTT, ..."
-            value={form.type}
-            onChange={event => setForm({ ...form, type: event.currentTarget.value })}
+            value={form.gatewayTypeId || null}
+            onChange={value => setForm({ ...form, gatewayTypeId: value ?? "" })}
+            data={gatewayTypeOptions}
           />
           <TextInput
             label="Version"
@@ -442,6 +521,26 @@ export function GatewayCatalog() {
             placeholder="192.168.1.10"
             value={form.ipAddress}
             onChange={event => setForm({ ...form, ipAddress: event.currentTarget.value })}
+          />
+          <TextInput
+            label="MAC address"
+            value={form.macAddress}
+            onChange={event => setForm({ ...form, macAddress: event.currentTarget.value })}
+          />
+          <TextInput
+            label="WiFi SSID"
+            value={form.wifiSsid}
+            onChange={event => setForm({ ...form, wifiSsid: event.currentTarget.value })}
+          />
+          <TextInput
+            label="Board ID"
+            value={form.boardId}
+            onChange={event => setForm({ ...form, boardId: event.currentTarget.value })}
+          />
+          <TextInput
+            label="Build date"
+            value={form.buildDate}
+            onChange={event => setForm({ ...form, buildDate: event.currentTarget.value })}
           />
           <Checkbox
             label="Enabled"
@@ -461,7 +560,7 @@ export function GatewayCatalog() {
             <Button variant="default" onClick={closeEditor}>Cancel</Button>
             <Button
               loading={saveMutation.isPending}
-              disabled={!form.name.trim() || !form.type.trim()}
+              disabled={!form.gatewayId.trim() || !form.name.trim() || !form.gatewayTypeId}
               onClick={() => saveMutation.mutate()}
             >
               Save

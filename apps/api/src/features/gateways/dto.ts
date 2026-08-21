@@ -1,9 +1,24 @@
+export interface GatewayTypeDto {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+}
+
 export interface GatewayDto {
   id: string;
+  gatewayId: string;
   name: string;
-  type: string;
+  nameManuallySet: boolean;
+  type: GatewayTypeDto;
   version: string | null;
   ipAddress: string | null;
+  macAddress: string | null;
+  wifiSsid: string | null;
+  boardId: string | null;
+  buildDate: string | null;
+  wifiRssi: number | null;
+  wifiRssiSeenAt: string | null;
   enabled: boolean;
   lastSeenAt: string | null;
   sensorCount: number;
@@ -13,17 +28,26 @@ export interface GatewayDto {
 }
 
 export interface CreateGatewayDto {
+  gatewayId: string;
   name: string;
-  type: string;
+  gatewayTypeId: string;
   version?: string | null;
   ipAddress?: string | null;
+  macAddress?: string | null;
+  wifiSsid?: string | null;
+  boardId?: string | null;
+  buildDate?: string | null;
   enabled?: boolean;
 }
 
 export interface UpdateGatewayDto {
   name?: string;
-  type?: string;
+  gatewayTypeId?: string;
   version?: string | null;
   ipAddress?: string | null;
+  macAddress?: string | null;
+  wifiSsid?: string | null;
+  boardId?: string | null;
+  buildDate?: string | null;
   enabled?: boolean;
 }

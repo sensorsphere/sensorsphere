@@ -9,6 +9,7 @@ export async function registerGatewayRoutes(
   app: FastifyInstance,
   options: GatewayRoutesOptions
 ): Promise<void> {
+  app.get("/gateway-types", options.controller.listGatewayTypes);
   app.get("/gateways", options.controller.listGateways);
   app.get("/gateways/:id", options.controller.getGateway);
   app.post("/gateways", options.controller.createGateway);
