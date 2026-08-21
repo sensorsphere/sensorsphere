@@ -56,6 +56,7 @@
 * [X] dans Gateway Coverage, recuperer le board_id, sn RSSI et la mac address afin de l'afficher sur chaque BLE gateway
 * [X] dans Gateway Coverage, prevoir un bouton "Reset" sur chacune des BLE Gateway en cas de deplacement geographique (uniquement suppression de tous les sensors associee, pas sa suppression)
 * [X] dans Gateway Coverage, mettre un bouton "Delete" sur une BL Gateway: suppression de la BLE Gateway et toutes ls donnees associees
+* [ ] dans Gateway Coverage, au niveau de la "Suggested Gateway", il manque une information: sur la gateway choisie, quel est le niveau du signal RSSI: valeur en DBM + badge (weak, excellent, ...)
 
 
 ### Specif
