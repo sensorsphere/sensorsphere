@@ -939,6 +939,8 @@ function HistoryGraph({
 
   return (
     <Card
+      id={`history-graph-${graph.id}`}
+      data-history-graph-id={graph.id}
       withBorder
       radius="md"
       padding="lg"
@@ -1750,6 +1752,14 @@ export function HistoryPanel() {
     );
 
   const [
+    graphIdToScrollTo,
+    setGraphIdToScrollTo
+  ] =
+    React.useState<string | null>(
+      null
+    );
+
+  const [
     draggedTabId,
     setDraggedTabId
   ] =
@@ -1873,6 +1883,44 @@ export function HistoryPanel() {
         )
       );
     };
+
+  React.useEffect(
+    () => {
+      if (!graphIdToScrollTo) {
+        return;
+      }
+
+      const frame =
+        window.requestAnimationFrame(
+          () => {
+            const element =
+              document.getElementById(
+                `history-graph-${graphIdToScrollTo}`
+              );
+
+            if (element) {
+              element.scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+              });
+            }
+
+            setGraphIdToScrollTo(
+              null
+            );
+          }
+        );
+
+      return () =>
+        window.cancelAnimationFrame(
+          frame
+        );
+    },
+    [
+      graphIdToScrollTo,
+      graphs
+    ]
+  );
 
   const [
     refreshIntervalMs,
@@ -2653,6 +2701,9 @@ export function HistoryPanel() {
         return;
       }
 
+      const movedGraphId =
+        graphs[index]?.id;
+
       const next =
         [...graphs];
 
@@ -2663,6 +2714,12 @@ export function HistoryPanel() {
         next[targetIndex],
         next[index]
       ];
+
+      if (movedGraphId) {
+        setGraphIdToScrollTo(
+          movedGraphId
+        );
+      }
 
       setGraphs(
         next
@@ -2685,6 +2742,9 @@ export function HistoryPanel() {
         return;
       }
 
+      const movedGraphId =
+        graphs[index]?.id;
+
       const next =
         [...graphs];
 
@@ -2699,6 +2759,12 @@ export function HistoryPanel() {
         0,
         moved
       );
+
+      if (movedGraphId) {
+        setGraphIdToScrollTo(
+          movedGraphId
+        );
+      }
 
       setGraphs(next);
     };
