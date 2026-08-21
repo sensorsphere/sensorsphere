@@ -101,6 +101,12 @@ export interface AssetMetric {
   qualityOverridden: boolean;
 }
 
+export interface MetricDisplaySetting {
+  metricKey: string;
+  color: string;
+  updatedAt: string;
+}
+
 export interface Asset {
   id: string;
   externalId: string;

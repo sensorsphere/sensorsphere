@@ -6,6 +6,7 @@ import type {
   Measurement,
   MoveLocationInput,
   UpdateLocationInput,
+  MetricDisplaySetting,
   ObservationAggregatePoint,
   ObservationHistoryPoint,
   RuntimeConfig,
@@ -269,6 +270,47 @@ export async function getObservationAggregates(
     );
 
   return readJson<ObservationAggregatePoint[]>(
+    response
+  );
+}
+
+export async function getMetricDisplaySettings():
+Promise<MetricDisplaySetting[]> {
+
+  const response =
+    await fetch(
+      "/api/v1/metric-display-settings"
+    );
+
+  return readJson<MetricDisplaySetting[]>(
+    response
+  );
+}
+
+export async function updateMetricDisplaySetting(
+  metricKey: string,
+  color: string
+): Promise<MetricDisplaySetting> {
+
+  const response =
+    await fetch(
+      `/api/v1/metric-display-settings/${encodeURIComponent(metricKey)}`,
+      {
+        method: "PUT",
+
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+
+        body:
+          JSON.stringify({
+            color
+          })
+      }
+    );
+
+  return readJson<MetricDisplaySetting>(
     response
   );
 }

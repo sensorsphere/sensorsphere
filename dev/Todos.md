@@ -37,7 +37,7 @@
 * [X] ajouter les icones: garage, salle a manger, living room, dressing, laundry
 * [X] il faut pouvoir nommer l'instance en cours d'execution. ex: Sensor Sphere IAT, My Sensor Sphere, ..., l'affiher dans la nom de l'onglet et dans le header. il faudrait pouvoir surcharger une valeur par defaut en provenance du .env et qui serait renvoyee par une api du backend
 * [X] dans History, les echelles des courbes ne s'affichent pas correctement apres ajout/suppression d'un metrique
-* [ ] dans History, faire en sorte que les couleurs des differents types de metriques soient toujours de la meme couleur et que'on puisse les changer par configuration sauvegardee dans la base
+* [X] dans History, faire en sorte que les couleurs des differents types de metriques soient toujours de la meme couleur et que'on puisse les changer par configuration sauvegardee dans la base
 
 # Run
 * [X] Comment puis-je mettre en place une sauvagarde complete de toutes les donnees afin de pouvoir les restaurer facilement en cas de crash
@@ -66,7 +66,7 @@
 * [ ] dans les cartes de current readings, si a metrique est une temperature ou humidite, ajouter la valeur min et max sur les dernieres 24h
 * [ ] dans les cartes de current readings, pour les statut "offline", il faudrait afficher depuis combien de temps
 
-si on voulait remonter les infos telles que manufacturer, model et gateway via un message MQTT, quel serait le meilleur topic pour l'annoncer et ensuite valorser automatiquemet ces infos dans les donnees du sensor ?
+si on voulait remonter les infos telles que manufacturer, model et gateway via un message MQTT, quel serait le meilleur topic pour l'annoncer et ensuite valoriser automatiquemet ces infos dans les donnees du sensor ?
 
 Avoir des progressions de valeur par heure: ex augmentation de 5 degres durant la derniere heure
 
@@ -80,10 +80,12 @@ Avoir des progressions de valeur par heure: ex augmentation de 5 degres durant l
 * est-il possible d'écrire un petit programme (ex: python) permettant de se connecter a un ESPhome afin de recuperer les logs et pouvoir les filtrer ?
 
 # Global
-* [ ] Flasher 2 ESP32 relais
-  * [ ] 1 garage
-  * [ ] 1 first floor
-  * [ ] les remonter comme des sensors: Connecter + RSSI
-* [ ] Ajouter les infos des ESP32 dans les infs des sensors pour "rattachement"
+* [X] Flasher 4 ESP32 relais
+  * [X] 1 garage
+  * [X] 1 first floor (dressing F)
+  * [X] 1 living room
+  * [X] 1 bureau
+  * [X] les remonter comme des sensors: Connecter + RSSI
+* [ ] Ajouter les infos des ESP32 dans les infos des sensors pour "rattachement"
 * [ ] Monter une plateforme d'IAT
     * [ ] Utiliser le meme MQTT "Gateway" pour les 2 ? est-il possible de mettre 2 "connection"?

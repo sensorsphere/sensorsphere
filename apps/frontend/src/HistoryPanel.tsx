@@ -6,8 +6,10 @@ import {
   Alert,
   Button,
   Card,
+  ColorInput,
   Group,
   Loader,
+  Modal,
   MultiSelect,
   SegmentedControl,
   Select,
@@ -17,6 +19,7 @@ import {
 } from "@mantine/core";
 
 import {
+  useMutation,
   useQueries,
   useQuery,
   useQueryClient
@@ -24,8 +27,10 @@ import {
 
 import {
   getAssets,
+  getMetricDisplaySettings,
   getObservationAggregates,
-  getObservationHistory
+  getObservationHistory,
+  updateMetricDisplaySetting
 } from "./api";
 
 import {
@@ -85,6 +90,66 @@ const REFRESH_INTERVALS = [
   { label: "5 min", value: "300000" },
   { label: "10 min", value: "600000" }
 ];
+
+const DEFAULT_METRIC_COLORS:
+Record<string, string> = {
+  temperature: "#fab005",
+  humidity: "#228be6",
+  rssi: "#fa5252",
+  battery_level: "#40c057",
+  battery_voltage: "#845ef7",
+  battery: "#40c057",
+  voltage: "#845ef7",
+  pressure: "#15aabf",
+  co2: "#fd7e14"
+};
+
+const FALLBACK_METRIC_COLORS = [
+  "#12b886",
+  "#4c6ef5",
+  "#be4bdb",
+  "#e64980",
+  "#f76707",
+  "#0ca678",
+  "#1c7ed6",
+  "#7048e8"
+];
+
+function defaultMetricColor(
+  metricKey: string
+): string {
+
+  const normalized =
+    metricKey.trim().toLowerCase();
+
+  const configured =
+    DEFAULT_METRIC_COLORS[
+      normalized
+    ];
+
+  if (configured) {
+    return configured;
+  }
+
+  let hash = 0;
+
+  for (
+    let index = 0;
+    index < normalized.length;
+    index += 1
+  ) {
+    hash =
+      (
+        hash * 31 +
+        normalized.charCodeAt(index)
+      ) >>> 0;
+  }
+
+  return FALLBACK_METRIC_COLORS[
+    hash %
+    FALLBACK_METRIC_COLORS.length
+  ];
+}
 
 const VALID_REFRESH_INTERVALS =
   new Set(
@@ -250,6 +315,7 @@ function assetLabel(
 function HistoryGraph({
   graph,
   assets,
+  metricColors,
   refreshIntervalMs,
   canMoveUp,
   canMoveDown,
@@ -260,6 +326,7 @@ function HistoryGraph({
 }: {
   graph: HistoryGraphConfig;
   assets: Awaited<ReturnType<typeof getAssets>>;
+  metricColors: ReadonlyMap<string, string>;
   refreshIntervalMs: number;
   canMoveUp: boolean;
   canMoveDown: boolean;
@@ -389,6 +456,14 @@ function HistoryGraph({
 
             unit:
               metric.unit,
+
+            color:
+              metricColors.get(
+                metric.key
+              ) ??
+              defaultMetricColor(
+                metric.key
+              ),
 
             history:
               useAggregates
@@ -740,6 +815,20 @@ export function HistoryPanel() {
     useQueryClient();
 
   const [
+    metricColorsOpened,
+    setMetricColorsOpened
+  ] =
+    React.useState(false);
+
+  const [
+    metricColorDrafts,
+    setMetricColorDrafts
+  ] =
+    React.useState<
+      Record<string, string>
+    >({});
+
+  const [
     refreshing,
     setRefreshing
   ] =
@@ -779,6 +868,47 @@ export function HistoryPanel() {
       queryKey: ["assets"],
       queryFn: getAssets,
       refetchInterval: 30_000
+    });
+
+  const metricDisplaySettingsQuery =
+    useQuery({
+      queryKey:
+        ["metric-display-settings"],
+      queryFn:
+        getMetricDisplaySettings
+    });
+
+  const saveMetricColorsMutation =
+    useMutation({
+      mutationFn:
+        async (
+          colors:
+            Record<string, string>
+        ) => {
+          await Promise.all(
+            Object.entries(colors)
+              .map(
+                ([metricKey, color]) =>
+                  updateMetricDisplaySetting(
+                    metricKey,
+                    color
+                  )
+              )
+          );
+        },
+
+      onSuccess:
+        async () => {
+          await queryClient
+            .invalidateQueries({
+              queryKey:
+                ["metric-display-settings"]
+            });
+
+          setMetricColorsOpened(
+            false
+          );
+        }
     });
 
   const [
@@ -1126,6 +1256,65 @@ export function HistoryPanel() {
 
   const assets =
     assetsQuery.data ?? [];
+
+  const metricDisplaySettings =
+    metricDisplaySettingsQuery.data
+    ?? [];
+
+  const metricColors =
+    new Map(
+      metricDisplaySettings.map(
+        setting => [
+          setting.metricKey,
+          setting.color
+        ]
+      )
+    );
+
+  const metricKeys =
+    Array.from(
+      new Set(
+        assets.flatMap(
+          asset =>
+            asset.metrics.map(
+              metric => metric.key
+            )
+        )
+      )
+    ).sort(
+      (left, right) =>
+        left.localeCompare(
+          right,
+          undefined,
+          {
+            sensitivity: "base"
+          }
+        )
+    );
+
+  const openMetricColors =
+    (): void => {
+
+      setMetricColorDrafts(
+        Object.fromEntries(
+          metricKeys.map(
+            metricKey => [
+              metricKey,
+              metricColors.get(
+                metricKey
+              ) ??
+              defaultMetricColor(
+                metricKey
+              )
+            ]
+          )
+        )
+      );
+
+      setMetricColorsOpened(
+        true
+      );
+    };
 
   const exportHistoryConfig =
     (): void => {
@@ -1602,6 +1791,15 @@ export function HistoryPanel() {
         </Alert>
       )}
 
+      {metricDisplaySettingsQuery.isError && (
+        <Alert
+          color="yellow"
+          title="Metric colors"
+        >
+          Unable to load saved metric colors. Default colors are being used.
+        </Alert>
+      )}
+
       <input
         ref={importInputRef}
         type="file"
@@ -1614,6 +1812,149 @@ export function HistoryPanel() {
             )
         }
       />
+
+      <Modal
+        opened={metricColorsOpened}
+        onClose={
+          () =>
+            setMetricColorsOpened(
+              false
+            )
+        }
+        title="Metric colors"
+        centered
+      >
+        <Stack gap="sm">
+          <Text
+            size="sm"
+            c="dimmed"
+          >
+            Colors are global by metric type and are shared by all History graphs.
+          </Text>
+
+          {
+            metricKeys.map(
+              metricKey => (
+                <Group
+                  key={metricKey}
+                  justify="space-between"
+                  align="center"
+                  wrap="nowrap"
+                >
+                  <Text
+                    size="sm"
+                    fw={500}
+                  >
+                    {metricKey}
+                  </Text>
+
+                  <ColorInput
+                    value={
+                      metricColorDrafts[
+                        metricKey
+                      ] ??
+                      defaultMetricColor(
+                        metricKey
+                      )
+                    }
+                    onChange={
+                      color =>
+                        setMetricColorDrafts(
+                          current => ({
+                            ...current,
+                            [metricKey]:
+                              color
+                          })
+                        )
+                    }
+                    format="hex"
+                    w={160}
+                  />
+                </Group>
+              )
+            )
+          }
+
+          {
+            metricKeys.length === 0 && (
+              <Text
+                size="sm"
+                c="dimmed"
+              >
+                No metric types are available.
+              </Text>
+            )
+          }
+
+          <Group
+            justify="space-between"
+            mt="sm"
+          >
+            <Button
+              variant="default"
+              onClick={
+                () =>
+                  setMetricColorDrafts(
+                    Object.fromEntries(
+                      metricKeys.map(
+                        metricKey => [
+                          metricKey,
+                          defaultMetricColor(
+                            metricKey
+                          )
+                        ]
+                      )
+                    )
+                  )
+              }
+            >
+              Restore defaults
+            </Button>
+
+            <Group gap="xs">
+              <Button
+                variant="default"
+                onClick={
+                  () =>
+                    setMetricColorsOpened(
+                      false
+                    )
+                }
+              >
+                Cancel
+              </Button>
+
+              <Button
+                loading={
+                  saveMetricColorsMutation
+                    .isPending
+                }
+                disabled={
+                  metricKeys.length === 0
+                }
+                onClick={
+                  () =>
+                    saveMetricColorsMutation
+                      .mutate(
+                        metricColorDrafts
+                      )
+                }
+              >
+                Save colors
+              </Button>
+            </Group>
+          </Group>
+
+          {
+            saveMetricColorsMutation
+              .isError && (
+              <Alert color="red">
+                Unable to save metric colors.
+              </Alert>
+            )
+          }
+        </Stack>
+      </Modal>
 
       <Group
         justify="space-between"
@@ -1635,6 +1976,15 @@ export function HistoryPanel() {
           gap="sm"
           align="flex-end"
         >
+          <Button
+            variant="default"
+            onClick={
+              openMetricColors
+            }
+          >
+            Metric colors
+          </Button>
+
           <Button
             variant="default"
             onClick={
@@ -1757,6 +2107,9 @@ export function HistoryPanel() {
             key={graph.id}
             graph={graph}
             assets={assets}
+            metricColors={
+              metricColors
+            }
             refreshIntervalMs={
               refreshIntervalMs
             }

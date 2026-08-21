@@ -13,6 +13,7 @@ export interface HistoryChartSeries {
   id: string;
   name: string;
   unit: string | null;
+  color: string;
   history: ObservationHistoryPoint[];
   aggregates: ObservationAggregatePoint[];
 }
@@ -184,7 +185,11 @@ export function HistoryChart({
         smooth: true,
         showSymbol: false,
         lineStyle: {
-          width: 2.5
+          width: 2.5,
+          color: item.color
+        },
+        itemStyle: {
+          color: item.color
         },
         yAxisIndex:
           Math.max(

@@ -475,6 +475,95 @@ app.get("/api/measurements/latest", async () => {
   return result.rows;
 });
 
+app.get(
+  "/api/v1/metric-display-settings",
+  async () => {
+    const result =
+      await pool.query(
+        `
+        SELECT
+          metric_key AS "metricKey",
+          color,
+          updated_at AS "updatedAt"
+        FROM metric_display_settings
+        ORDER BY metric_key
+        `
+      );
+
+    return result.rows;
+  }
+);
+
+app.put(
+  "/api/v1/metric-display-settings/:metricKey",
+  async (request, reply) => {
+    const params =
+      request.params as {
+        metricKey?: string;
+      };
+
+    const body =
+      request.body as {
+        color?: unknown;
+      } | null;
+
+    const metricKey =
+      params.metricKey
+        ?.trim()
+        .toLowerCase();
+
+    if (
+      !metricKey ||
+      metricKey.length > 255
+    ) {
+      return reply.code(400).send({
+        error: "invalid_metric_key"
+      });
+    }
+
+    const color =
+      typeof body?.color === "string"
+        ? body.color.trim().toLowerCase()
+        : "";
+
+    if (
+      !/^#[0-9a-f]{6}$/.test(color)
+    ) {
+      return reply.code(400).send({
+        error: "invalid_metric_color"
+      });
+    }
+
+    const result =
+      await pool.query(
+        `
+        INSERT INTO metric_display_settings (
+          metric_key,
+          color,
+          updated_at
+        )
+        VALUES ($1, $2, now())
+        ON CONFLICT (metric_key)
+        DO UPDATE SET
+          color = EXCLUDED.color,
+          updated_at = now()
+        RETURNING
+          metric_key AS "metricKey",
+          color,
+          updated_at AS "updatedAt"
+        `,
+        [
+          metricKey,
+          color
+        ]
+      );
+
+    return reply.code(200).send(
+      result.rows[0]
+    );
+  }
+);
+
 const historyConfigPath =
   process.env.HISTORY_CONFIG_PATH
   ?? "/app/data/history-config.json";
