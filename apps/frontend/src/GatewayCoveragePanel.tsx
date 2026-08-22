@@ -2267,6 +2267,17 @@ export function GatewayCoveragePanel() {
                               {suggestion.gatewayId ?? "—"}
                             </Text>
                           </Group>
+                          {suggestion.gatewayId &&
+                            gatewayById.get(suggestion.gatewayId)?.locationName && (
+                              <Text
+                                size="xs"
+                                c="blue"
+                                fw={500}
+                                lh={1.2}
+                              >
+                                {gatewayById.get(suggestion.gatewayId)?.locationName}
+                              </Text>
+                            )}
                           {suggestedGatewayRow && (
                             <Group gap={4} wrap="nowrap">
                               <Text
