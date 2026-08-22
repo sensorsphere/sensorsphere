@@ -2121,7 +2121,7 @@ export function GatewayCoveragePanel() {
                           )}
                           <Text
                             size="xs"
-                            c={assignedGateway ? "blue" : "dimmed"}
+                            c={assignedGateway ? "green" : "dimmed"}
                             fw={500}
                             title={
                               assignedGateway
@@ -2137,9 +2137,8 @@ export function GatewayCoveragePanel() {
                           </Text>
                           <Button
                             size="compact-xs"
-                            variant="subtle"
+                            variant="light"
                             color="blue"
-                            px={0}
                             style={{ alignSelf: "flex-start" }}
                             onClick={() =>
                               openSensorAssignment(sensorUid)
