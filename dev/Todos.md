@@ -45,6 +45,7 @@
 * [X] Comment puis-je mettre en place une sauvagarde complete de toutes les donnees afin de pouvoir les restaurer facilement en cas de crash
 * [X] il faudrait faire un arret de tous le modules ainsi qu un rebuild complet de tous ces modules, sans perte de donnees, afin de voir si ca se construit correctement et ensuite si ca se fait correctement tenter tout un build sur un autre environnement/machine
 * [X] mettre une couleur sur les icones du mnu de navigation verticale, et toutes differentes les unes des autres et reporter l'icone sur le titre de la page
+* [ ] pour les gateways, ajouter une Location (lien avec la table Location), et pour "Last seen" mattre "... ago" devant la date/heure. mettre "Online/Offline" , la badge de niveau pour le RSSI
 * [ ] badge RSSI n'est pas le meme partout. Pendre celui du currentreadings avec le petit point devant
 
 
