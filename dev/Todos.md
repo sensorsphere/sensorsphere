@@ -62,6 +62,7 @@
 * [X] dans Gateway Coverage, mettre un bouton "Delete" sur une BL Gateway: suppression de la BLE Gateway et toutes ls donnees associees
 * [X] dans Gateway Coverage, au niveau de la "Suggested Gateway", il manque une information: sur la gateway choisie, quel est le niveau du signal RSSI: valeur en DBM + badge (weak, excellent, ...)
 * [X] dans Gateway Coverage, conserver la valeur du filtre "Sensor filter"
+* [ ] dans Gateway Coverage, ajouter un filtre sur le "Recommandation". le mettre sous "Suggested Gateway"
 
 
 ### Specif
