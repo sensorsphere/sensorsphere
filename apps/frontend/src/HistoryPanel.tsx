@@ -1094,6 +1094,7 @@ function HistoryGraph({
 
                         <Text
                           span
+                          c="blue"
                           fw={600}
                         >
                           {
