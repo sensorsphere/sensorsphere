@@ -879,6 +879,22 @@ export function GatewayCoveragePanel() {
         : "MISMATCH";
     };
 
+  const matchSensorCount =
+    allSensorUids.filter(
+      sensorUid => assignmentMatchStatus(sensorUid) === "MATCH"
+    ).length;
+
+  const mismatchSensorCount =
+    allSensorUids.filter(
+      sensorUid => assignmentMatchStatus(sensorUid) === "MISMATCH"
+    ).length;
+
+  const noRecommendationSensorCount =
+    allSensorUids.filter(
+      sensorUid =>
+        assignmentMatchStatus(sensorUid) === "NO RECOMMENDATION"
+    ).length;
+
   const sensors =
     allSensorUids
       .filter(sensorUid => {
@@ -1334,11 +1350,16 @@ export function GatewayCoveragePanel() {
       )}
 
       {gatewaySummaries.length > 0 && (
-        <Card withBorder padding="md">
-          <Group justify="space-between" mb="sm" align="flex-end">
-            <Text fw={600}>
-              BLE Gateways: {gateways.length} / Sensors: {allSensorUids.length} / Assigned sensors: {assignedSensorCount} / Unassigned: {unassignedSensorCount}
-            </Text>
+        <Card withBorder padding="md" pt={6}>
+          <Group justify="space-between" mb="xs" align="flex-end">
+            <Stack gap={1}>
+              <Text fw={600}>
+                BLE Gateways: {gateways.length}
+              </Text>
+              <Text fw={600}>
+                Sensors: {allSensorUids.length} / Assigned: {assignedSensorCount} / Unassigned: {unassignedSensorCount} / Match: {matchSensorCount} / Mismatch: {mismatchSensorCount} / No recommendation: {noRecommendationSensorCount}
+              </Text>
+            </Stack>
             <Group gap="xs" align="flex-end">
               <TextInput
                 size="xs"
