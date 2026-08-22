@@ -89,3 +89,7 @@ schema_migrations
 ```
 
 This table is operational metadata and must not be modified manually.
+
+### 022-metric-routing-dry-run.sql
+
+Adds functional gateway locations and the metric-routing dry-run observability tables. `metric_routing_events` stores structured routing decisions for 48-hour diagnostic retention; `metric_routing_status` exposes the ingestion routing mode (`legacy`, `dry_run`, or `active`) to the API/UI.

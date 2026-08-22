@@ -32,6 +32,7 @@ const createGatewaySchema = z.object({
   wifiSsid: nullableText.optional(),
   boardId: nullableText.optional(),
   buildDate: nullableText.optional(),
+  locationId: databaseIdSchema.nullable().optional(),
   enabled: z.boolean().optional()
 }).strict();
 
@@ -44,6 +45,7 @@ const updateGatewaySchema = z.object({
   wifiSsid: nullableText.optional(),
   boardId: nullableText.optional(),
   buildDate: nullableText.optional(),
+  locationId: databaseIdSchema.nullable().optional(),
   enabled: z.boolean().optional()
 })
   .strict()

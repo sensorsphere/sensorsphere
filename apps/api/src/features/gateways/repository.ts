@@ -29,6 +29,9 @@ export interface GatewayRecord {
   build_date: string | null;
   wifi_rssi: number | null;
   wifi_rssi_seen_at: Date | null;
+  location_id: string | null;
+  location_name: string | null;
+  location_type: string | null;
   enabled: boolean;
   last_seen_at: Date | null;
   sensor_count: number;
@@ -65,6 +68,9 @@ const GATEWAY_SELECT = `
     g.build_date,
     g.wifi_rssi,
     g.wifi_rssi_seen_at,
+    g.location_id,
+    l.name AS location_name,
+    l.type AS location_type,
     g.enabled,
     g.last_seen_at,
     (
@@ -82,6 +88,8 @@ const GATEWAY_SELECT = `
   FROM gateways g
   JOIN gateway_types gt
     ON gt.id = g.gateway_type_id
+  LEFT JOIN locations l
+    ON l.id = g.location_id
 `;
 
 export class PostgresGatewayRepository
@@ -157,6 +165,7 @@ implements GatewayRepository {
         wifi_ssid,
         board_id,
         build_date,
+        location_id,
         enabled,
         type
       )
@@ -171,7 +180,8 @@ implements GatewayRepository {
         $7,
         $8,
         $9,
-        $10,
+        $10::uuid,
+        $11,
         'managed'
       )
       RETURNING id
@@ -186,6 +196,7 @@ implements GatewayRepository {
         input.wifiSsid ?? null,
         input.boardId ?? null,
         input.buildDate ?? null,
+        input.locationId ?? null,
         input.enabled ?? true
       ]
     );
@@ -244,6 +255,10 @@ implements GatewayRepository {
     }
     if ("buildDate" in input) {
       addUpdate("build_date", input.buildDate ?? null);
+    }
+    if ("locationId" in input) {
+      values.push(input.locationId ?? null);
+      updates.push(`location_id = $${values.length}::uuid`);
     }
     if ("enabled" in input) {
       addUpdate("enabled", input.enabled);

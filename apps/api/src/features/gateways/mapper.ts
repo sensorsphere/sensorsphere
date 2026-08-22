@@ -41,6 +41,13 @@ export function mapGatewayToDto(
     wifiRssi: record.wifi_rssi,
     wifiRssiSeenAt:
       record.wifi_rssi_seen_at?.toISOString() ?? null,
+    location: record.location_id
+      ? {
+          id: record.location_id,
+          name: record.location_name ?? record.location_id,
+          type: record.location_type ?? "unknown"
+        }
+      : null,
     enabled: record.enabled,
     lastSeenAt:
       record.last_seen_at?.toISOString() ?? null,

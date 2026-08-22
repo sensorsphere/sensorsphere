@@ -40,6 +40,29 @@ const logger = createLogger({
 
     });
 
+const configuredMetricRoutingMode =
+  (process.env.METRIC_ROUTING_MODE ?? "dry_run")
+    .trim()
+    .toLowerCase();
+
+const metricRoutingMode:
+  "legacy" | "dry_run" | "active" =
+    configuredMetricRoutingMode === "legacy" ||
+    configuredMetricRoutingMode === "active" ||
+    configuredMetricRoutingMode === "dry_run"
+      ? configuredMetricRoutingMode
+      : "dry_run";
+
+const METRIC_ROUTING_DEDUP_WINDOW_MS = 5_000;
+
+interface DedupEntry {
+  gatewayId: string;
+  receivedAtMs: number;
+}
+
+const metricRoutingDedup =
+  new Map<string, DedupEntry>();
+
 async function main():
 Promise<void> {
 
@@ -63,12 +86,49 @@ Promise<void> {
     "Database connection established"
   );
 
+  await repository.setMetricRoutingMode(
+    metricRoutingMode
+  );
+
+  if (metricRoutingMode !== "legacy") {
+    const purged =
+      await repository.purgeMetricRoutingEvents(48);
+
+    logger.info(
+      {
+        metricRoutingMode,
+        purgedRoutingEvents: purged,
+        retentionHours: 48,
+        dedupWindowMs: METRIC_ROUTING_DEDUP_WINDOW_MS
+      },
+      "Metric routing initialized"
+    );
+    const retentionTimer =
+      setInterval(
+        () => {
+          void repository
+            .purgeMetricRoutingEvents(48)
+            .catch(error => {
+              logger.error(
+                { error },
+                "Unable to purge metric routing events"
+              );
+            });
+        },
+        60 * 60 * 1000
+      );
+
+  }
+
   const cache =
     new SensorCache();
 
+  const esphomeParser =
+    new ESPHomeParser();
+
   const parserRegistry =
     new ParserRegistry([
-      new ESPHomeParser()
+      esphomeParser
     ]);
 
   const collector =
@@ -79,7 +139,7 @@ Promise<void> {
     );
 
   await collector.start(
-    message => {
+    async message => {
 
       const gatewayTopicMatch =
         message.topic.match(
@@ -223,9 +283,113 @@ Promise<void> {
           }
         }
 
-        // Gateway-qualified topics are never fed into the normal sensor
-        // measurement pipeline: the same BLE sensor may be observed by
-        // several gateways and would otherwise create duplicate readings.
+        if (metricRoutingMode === "legacy") {
+          return;
+        }
+
+        const qualifiedMeasurements =
+          esphomeParser.parse(message);
+
+        for (const measurement of qualifiedMeasurements) {
+          const assignment =
+            await repository.getSensorRoutingAssignment(
+              measurement.sensorUid
+            );
+
+          let decision:
+            "ACCEPT" | "IGNORE" | "DEDUPLICATE" =
+              "ACCEPT";
+          let reason = "unassigned_first_candidate";
+          let dedupKey: string | null = null;
+          let dedupAgeMs: number | null = null;
+
+          if (assignment.assignedGatewayId) {
+            if (
+              assignment.assignedGatewayId === gatewayId
+            ) {
+              reason = "assigned_gateway";
+            } else {
+              decision = "IGNORE";
+              reason = "not_assigned_gateway";
+            }
+          } else {
+            dedupKey =
+              measurement.metric === "rssi"
+                ? `${measurement.sensorUid}\u0000${measurement.metric}`
+                : `${measurement.sensorUid}\u0000${measurement.metric}\u0000${measurement.value}`;
+
+            const currentTime =
+              measurement.receivedAt.getTime();
+            const previous =
+              metricRoutingDedup.get(dedupKey);
+
+            if (
+              previous &&
+              previous.gatewayId !== gatewayId &&
+              currentTime - previous.receivedAtMs <
+                METRIC_ROUTING_DEDUP_WINDOW_MS
+            ) {
+              decision = "DEDUPLICATE";
+              reason = "duplicate_candidate";
+              dedupAgeMs =
+                currentTime - previous.receivedAtMs;
+            } else {
+              metricRoutingDedup.set(
+                dedupKey,
+                {
+                  gatewayId,
+                  receivedAtMs: currentTime
+                }
+              );
+            }
+          }
+
+          await repository.saveMetricRoutingEvent({
+            occurredAt: measurement.receivedAt,
+            gatewayId,
+            sensorUid: measurement.sensorUid,
+            sensorName: assignment.sensorName,
+            metric: measurement.metric,
+            value: measurement.value,
+            decision,
+            reason,
+            assignedGatewayId:
+              assignment.assignedGatewayId,
+            mode: metricRoutingMode,
+            sourceTopic: measurement.sourceTopic,
+            dedupKey,
+            dedupAgeMs
+          });
+
+          logger.debug(
+            {
+              metricRoutingMode,
+              gatewayId,
+              sensorUid: measurement.sensorUid,
+              metric: measurement.metric,
+              value: measurement.value,
+              decision,
+              reason,
+              assignedGatewayId:
+                assignment.assignedGatewayId,
+              dedupAgeMs
+            },
+            "Metric routing decision"
+          );
+
+          if (
+            metricRoutingMode === "active" &&
+            decision === "ACCEPT"
+          ) {
+            cache.update(
+              measurement.sensorUid,
+              measurement.metric,
+              measurement.value,
+              measurement.receivedAt
+            );
+          }
+        }
+
         return;
       }
 

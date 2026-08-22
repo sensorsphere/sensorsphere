@@ -19,6 +19,11 @@ export interface GatewayDto {
   buildDate: string | null;
   wifiRssi: number | null;
   wifiRssiSeenAt: string | null;
+  location: {
+    id: string;
+    name: string;
+    type: string;
+  } | null;
   enabled: boolean;
   lastSeenAt: string | null;
   sensorCount: number;
@@ -37,6 +42,7 @@ export interface CreateGatewayDto {
   wifiSsid?: string | null;
   boardId?: string | null;
   buildDate?: string | null;
+  locationId?: string | null;
   enabled?: boolean;
 }
 
@@ -49,5 +55,6 @@ export interface UpdateGatewayDto {
   wifiSsid?: string | null;
   boardId?: string | null;
   buildDate?: string | null;
+  locationId?: string | null;
   enabled?: boolean;
 }

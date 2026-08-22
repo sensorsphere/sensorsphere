@@ -89,6 +89,10 @@ import {
   GatewayCoveragePanel
 } from "./GatewayCoveragePanel";
 
+import {
+  MetricRoutingPanel
+} from "./MetricRoutingPanel";
+
 import "./styles.css";
 
 const queryClient =
@@ -176,6 +180,9 @@ Record<PageKey, string> = {
   gateways:
     "Gateways",
 
+  "metric-routing":
+    "Metric Routing",
+
   "gateway-coverage":
     "Gateway Coverage"
 };
@@ -192,6 +199,7 @@ function isPageKey(
     value === "inventory" ||
     value === "sensors" ||
     value === "gateways" ||
+    value === "metric-routing" ||
     value === "gateway-coverage"
   );
 }
@@ -1423,6 +1431,31 @@ function Dashboard() {
               () =>
                 navigateTo(
                   "gateways"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Metric Routing"
+            }
+            leftSection={
+              <NavigationIcon
+                page="metric-routing"
+              />
+            }
+            title="Metric Routing"
+            aria-label="Metric Routing"
+            active={
+              activePage ===
+              "metric-routing"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "metric-routing"
                 )
             }
           />
@@ -3053,6 +3086,13 @@ function Dashboard() {
               activePage ===
                 "gateways" && (
                 <GatewayCatalog />
+              )
+            }
+
+            {
+              activePage ===
+                "metric-routing" && (
+                <MetricRoutingPanel />
               )
             }
 

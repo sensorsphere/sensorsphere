@@ -31,6 +31,14 @@ import {
   registerAlertFeature
 } from "./features/alerts/index.js";
 
+import {
+  registerGatewayFeature
+} from "./features/gateways/index.js";
+
+import {
+  registerMetricRoutingFeature
+} from "./features/metric-routing/index.js";
+
 
 import {
   loadApiConfig
@@ -778,6 +786,20 @@ await registerAssetFeature(
 );
 
 await registerAlertFeature(
+  app,
+  {
+    pool
+  }
+);
+
+await registerGatewayFeature(
+  app,
+  {
+    pool
+  }
+);
+
+await registerMetricRoutingFeature(
   app,
   {
     pool

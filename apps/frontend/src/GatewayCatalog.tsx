@@ -30,6 +30,7 @@ import {
   deleteGateway,
   getGateways,
   getGatewayTypes,
+  getLocations,
   updateGateway
 } from "./api";
 
@@ -57,6 +58,7 @@ interface GatewayFormState {
   wifiSsid: string;
   boardId: string;
   buildDate: string;
+  locationId: string;
   enabled: boolean;
 }
 
@@ -70,6 +72,7 @@ const emptyForm = (): GatewayFormState => ({
   wifiSsid: "",
   boardId: "",
   buildDate: "",
+  locationId: "",
   enabled: true
 });
 
@@ -86,6 +89,7 @@ function gatewayToForm(
     wifiSsid: gateway.wifiSsid ?? "",
     boardId: gateway.boardId ?? "",
     buildDate: gateway.buildDate ?? "",
+    locationId: gateway.location?.id ?? "",
     enabled: gateway.enabled
   };
 }
@@ -97,12 +101,57 @@ function emptyToNull(
   return normalized ? normalized : null;
 }
 
+function ageSeconds(
+  value: string | null
+): number | null {
+  if (!value) return null;
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return null;
+  return Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+}
+
+function relativeAgo(
+  value: string | null
+): string {
+  const seconds = ageSeconds(value);
+  if (seconds === null) return "Never";
+  if (seconds < 10) return "a few seconds ago";
+  if (seconds < 60) return `${seconds} sec ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
 function lastSeenLabel(
   value: string | null
 ): string {
   return value
-    ? new Date(value).toLocaleString()
+    ? `${relativeAgo(value)} · ${new Date(value).toLocaleString()}`
     : "Never";
+}
+
+function isOnline(
+  value: string | null
+): boolean {
+  const seconds = ageSeconds(value);
+  return seconds !== null && seconds <= 120;
+}
+
+function qualityLabel(rssi: number): string {
+  if (rssi >= -65) return "Excellent";
+  if (rssi >= -75) return "Good";
+  if (rssi >= -85) return "Fair";
+  return "Weak";
+}
+
+function qualityColor(rssi: number): string {
+  if (rssi >= -65) return "green";
+  if (rssi >= -75) return "teal";
+  if (rssi >= -85) return "yellow";
+  return "red";
 }
 
 export function GatewayCatalog() {
@@ -161,6 +210,11 @@ export function GatewayCatalog() {
     queryFn: getGatewayTypes
   });
 
+  const locationsQuery = useQuery({
+    queryKey: ["locations"],
+    queryFn: getLocations
+  });
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const editable: UpdateGatewayInput = {
@@ -172,6 +226,7 @@ export function GatewayCatalog() {
         wifiSsid: emptyToNull(form.wifiSsid),
         boardId: emptyToNull(form.boardId),
         buildDate: emptyToNull(form.buildDate),
+        locationId: form.locationId || null,
         enabled: form.enabled
       };
 
@@ -206,11 +261,19 @@ export function GatewayCatalog() {
     }
   });
 
-  if (gatewaysQuery.isLoading || gatewayTypesQuery.isLoading) {
+  if (
+    gatewaysQuery.isLoading ||
+    gatewayTypesQuery.isLoading ||
+    locationsQuery.isLoading
+  ) {
     return <Text>Loading gateways...</Text>;
   }
 
-  if (gatewaysQuery.isError || gatewayTypesQuery.isError) {
+  if (
+    gatewaysQuery.isError ||
+    gatewayTypesQuery.isError ||
+    locationsQuery.isError
+  ) {
     return <Text c="red">Unable to load gateways.</Text>;
   }
 
@@ -220,6 +283,14 @@ export function GatewayCatalog() {
     value: type.id,
     label: type.name
   }));
+  const locationOptions =
+    (locationsQuery.data ?? [])
+      .slice()
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map(location => ({
+        value: location.id,
+        label: `${location.name} · ${location.type}`
+      }));
   const normalizedSearch = nameSearch.trim().toLowerCase();
   const typeOptions = gatewayTypes.map(type => ({
     value: type.id,
@@ -354,9 +425,14 @@ export function GatewayCatalog() {
                       <Text fw={700} size="lg">{gateway.name}</Text>
                       <Text size="xs" c="dimmed">{gateway.type.name}</Text>
                     </div>
-                    <Badge color={gateway.enabled ? "green" : "gray"}>
-                      {gateway.enabled ? "Enabled" : "Disabled"}
-                    </Badge>
+                    <Group gap={4}>
+                      <Badge color={isOnline(gateway.lastSeenAt) ? "green" : "red"}>
+                        {isOnline(gateway.lastSeenAt) ? "ONLINE" : "OFFLINE"}
+                      </Badge>
+                      <Badge color={gateway.enabled ? "blue" : "gray"} variant="light">
+                        {gateway.enabled ? "Enabled" : "Disabled"}
+                      </Badge>
+                    </Group>
                   </Group>
 
                   <SimpleGrid cols={2} spacing="xs">
@@ -382,7 +458,17 @@ export function GatewayCatalog() {
                     </div>
                     <div>
                       <Text size="xs" c="dimmed">WiFi RSSI</Text>
-                      <Text size="sm">{gateway.wifiRssi === null ? "—" : `${gateway.wifiRssi.toFixed(0)} dBm`}</Text>
+                      {gateway.wifiRssi === null ? (
+                        <Text size="sm">—</Text>
+                      ) : (
+                        <Badge
+                          size="sm"
+                          variant="light"
+                          color={qualityColor(gateway.wifiRssi)}
+                        >
+                          {gateway.wifiRssi.toFixed(0)} dBm · {qualityLabel(gateway.wifiRssi)}
+                        </Badge>
+                      )}
                     </div>
                     <div>
                       <Text size="xs" c="dimmed">Board</Text>
@@ -391,6 +477,10 @@ export function GatewayCatalog() {
                     <div>
                       <Text size="xs" c="dimmed">Build date</Text>
                       <Text size="sm">{gateway.buildDate ?? "—"}</Text>
+                    </div>
+                    <div>
+                      <Text size="xs" c="dimmed">Location</Text>
+                      <Text size="sm">{gateway.location?.name ?? "—"}</Text>
                     </div>
                     <div>
                       <Text size="xs" c="dimmed">Sensors</Text>
@@ -434,6 +524,9 @@ export function GatewayCatalog() {
                   <Table.Th>MAC</Table.Th>
                   <Table.Th>SSID</Table.Th>
                   <Table.Th>IP</Table.Th>
+                  <Table.Th>Location</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  <Table.Th>WiFi RSSI</Table.Th>
                   <Table.Th>Enabled</Table.Th>
                   <Table.Th>Sensors</Table.Th>
                   <Table.Th>Assets</Table.Th>
@@ -451,6 +544,23 @@ export function GatewayCatalog() {
                     <Table.Td>{gateway.macAddress ?? "—"}</Table.Td>
                     <Table.Td>{gateway.wifiSsid ?? "—"}</Table.Td>
                     <Table.Td>{gateway.ipAddress ?? "—"}</Table.Td>
+                    <Table.Td>{gateway.location?.name ?? "—"}</Table.Td>
+                    <Table.Td>
+                      <Badge size="sm" color={isOnline(gateway.lastSeenAt) ? "green" : "red"}>
+                        {isOnline(gateway.lastSeenAt) ? "ONLINE" : "OFFLINE"}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      {gateway.wifiRssi === null ? "—" : (
+                        <Badge
+                          size="sm"
+                          variant="light"
+                          color={qualityColor(gateway.wifiRssi)}
+                        >
+                          {gateway.wifiRssi.toFixed(0)} dBm · {qualityLabel(gateway.wifiRssi)}
+                        </Badge>
+                      )}
+                    </Table.Td>
                     <Table.Td>{gateway.enabled ? "Yes" : "No"}</Table.Td>
                     <Table.Td>{gateway.sensorCount}</Table.Td>
                     <Table.Td>{gateway.assetCount}</Table.Td>
@@ -541,6 +651,15 @@ export function GatewayCatalog() {
             label="Build date"
             value={form.buildDate}
             onChange={event => setForm({ ...form, buildDate: event.currentTarget.value })}
+          />
+          <Select
+            label="Location"
+            placeholder="No location"
+            clearable
+            searchable
+            value={form.locationId || null}
+            onChange={value => setForm({ ...form, locationId: value ?? "" })}
+            data={locationOptions}
           />
           <Checkbox
             label="Enabled"

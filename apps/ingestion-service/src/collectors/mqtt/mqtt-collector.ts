@@ -75,11 +75,21 @@ implements Collector {
       "message",
       (mqttTopic, payload) => {
 
-        void handler({
-          source: "mqtt",
-          topic: mqttTopic,
-          payload,
-          receivedAt: new Date()
+        void Promise.resolve(
+          handler({
+            source: "mqtt",
+            topic: mqttTopic,
+            payload,
+            receivedAt: new Date()
+          })
+        ).catch(error => {
+          this.logger.error(
+            {
+              error,
+              topic: mqttTopic
+            },
+            "MQTT message handler failed"
+          );
         });
       }
     );

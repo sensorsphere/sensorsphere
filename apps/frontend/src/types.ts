@@ -100,6 +100,11 @@ export interface Gateway {
   buildDate: string | null;
   wifiRssi: number | null;
   wifiRssiSeenAt: string | null;
+  location: {
+    id: string;
+    name: string;
+    type: string;
+  } | null;
   enabled: boolean;
   lastSeenAt: string | null;
   sensorCount: number;
@@ -118,6 +123,7 @@ export interface CreateGatewayInput {
   wifiSsid?: string | null;
   boardId?: string | null;
   buildDate?: string | null;
+  locationId?: string | null;
   enabled?: boolean;
 }
 
@@ -130,6 +136,7 @@ export interface UpdateGatewayInput {
   wifiSsid?: string | null;
   boardId?: string | null;
   buildDate?: string | null;
+  locationId?: string | null;
   enabled?: boolean;
 }
 
@@ -324,4 +331,47 @@ export interface GatewayCoverageResponse {
   generatedAt: string;
   gateways: GatewayCoverageGateway[];
   rows: GatewayCoverageRow[];
+}
+
+
+export type MetricRoutingMode =
+  | "legacy"
+  | "dry_run"
+  | "active";
+
+export type MetricRoutingDecision =
+  | "ACCEPT"
+  | "IGNORE"
+  | "DEDUPLICATE"
+  | "ERROR";
+
+export interface MetricRoutingStatus {
+  mode: MetricRoutingMode;
+  updatedAt: string;
+}
+
+export interface MetricRoutingEvent {
+  id: number;
+  occurredAt: string;
+  gatewayId: string;
+  sensorUid: string;
+  sensorName: string | null;
+  metric: string;
+  value: number;
+  decision: MetricRoutingDecision;
+  reason: string;
+  assignedGatewayId: string | null;
+  mode: "dry_run" | "active";
+  sourceTopic: string;
+  dedupKey: string | null;
+  dedupAgeMs: number | null;
+}
+
+export interface MetricRoutingSummary {
+  hours: number;
+  received: number;
+  accepted: number;
+  ignored: number;
+  deduplicated: number;
+  errors: number;
 }

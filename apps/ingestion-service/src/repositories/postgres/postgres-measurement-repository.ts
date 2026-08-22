@@ -45,6 +45,94 @@ implements MeasurementRepository {
   }
 
 
+
+  async setMetricRoutingMode(
+    mode: "legacy" | "dry_run" | "active"
+  ): Promise<void> {
+    await this.pool.query(
+      `
+      INSERT INTO metric_routing_status (singleton, mode, updated_at)
+      VALUES (TRUE, $1, NOW())
+      ON CONFLICT (singleton) DO UPDATE
+      SET mode = EXCLUDED.mode, updated_at = NOW()
+      `,
+      [mode]
+    );
+  }
+
+  async getSensorRoutingAssignment(
+    sensorUid: string
+  ): Promise<{
+    sensorName: string | null;
+    assignedGatewayId: string | null;
+  }> {
+    const result = await this.pool.query<{
+      sensor_name: string | null;
+      assigned_gateway_id: string | null;
+    }>(
+      `
+      SELECT
+        s.name AS sensor_name,
+        g.gateway_id AS assigned_gateway_id
+      FROM sensors s
+      LEFT JOIN gateways g
+        ON g.id = s.gateway_id
+      WHERE LOWER(s.sensor_uid) = LOWER($1)
+      LIMIT 1
+      `,
+      [sensorUid]
+    );
+
+    return {
+      sensorName: result.rows[0]?.sensor_name ?? null,
+      assignedGatewayId: result.rows[0]?.assigned_gateway_id ?? null
+    };
+  }
+
+  async saveMetricRoutingEvent(input: {
+    occurredAt: Date;
+    gatewayId: string;
+    sensorUid: string;
+    sensorName: string | null;
+    metric: string;
+    value: number;
+    decision: "ACCEPT" | "IGNORE" | "DEDUPLICATE" | "ERROR";
+    reason: string;
+    assignedGatewayId: string | null;
+    mode: "dry_run" | "active";
+    sourceTopic: string;
+    dedupKey?: string | null;
+    dedupAgeMs?: number | null;
+  }): Promise<void> {
+    await this.pool.query(
+      `
+      INSERT INTO metric_routing_events (
+        occurred_at, gateway_id, sensor_uid, sensor_name, metric, value,
+        decision, reason, assigned_gateway_id, mode, source_topic,
+        dedup_key, dedup_age_ms
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      `,
+      [
+        input.occurredAt, input.gatewayId, input.sensorUid, input.sensorName,
+        input.metric, input.value, input.decision, input.reason,
+        input.assignedGatewayId, input.mode, input.sourceTopic,
+        input.dedupKey ?? null, input.dedupAgeMs ?? null
+      ]
+    );
+  }
+
+  async purgeMetricRoutingEvents(
+    retentionHours = 48
+  ): Promise<number> {
+    const result = await this.pool.query(
+      `DELETE FROM metric_routing_events
+       WHERE occurred_at < NOW() - ($1 * INTERVAL '1 hour')`,
+      [retentionHours]
+    );
+    return result.rowCount ?? 0;
+  }
+
   async saveGatewayActivity(
     gatewayId: string,
     receivedAt: Date
