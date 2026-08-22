@@ -34,6 +34,7 @@ export class MetricRoutingController {
       decision: parsedDecision?.data as MetricRoutingDecision | undefined,
       sensorUid: query.sensorUid?.trim() || undefined,
       gatewayId: query.gatewayId?.trim() || undefined,
+      location: query.location?.trim() || undefined,
       metric: query.metric?.trim() || undefined
     }));
   };

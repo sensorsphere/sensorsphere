@@ -11,6 +11,8 @@ interface EventRecord {
   id: string;
   occurred_at: Date;
   gateway_id: string;
+  gateway_location_id: string | null;
+  gateway_location_name: string | null;
   sensor_uid: string;
   sensor_name: string | null;
   metric: string;
@@ -30,6 +32,7 @@ export interface MetricRoutingFilters {
   decision?: MetricRoutingDecision;
   sensorUid?: string;
   gatewayId?: string;
+  location?: string;
   metric?: string;
 }
 
@@ -61,18 +64,26 @@ export class MetricRoutingRepository {
 
     if (filters.decision) add("decision = ?", filters.decision);
     if (filters.sensorUid) add("sensor_uid = ?", filters.sensorUid);
-    if (filters.gatewayId) add("gateway_id = ?", filters.gatewayId);
-    if (filters.metric) add("metric = ?", filters.metric);
+    if (filters.gatewayId) add("event.gateway_id = ?", filters.gatewayId);
+    if (filters.location) add("location.name ILIKE ?", `%${filters.location}%`);
+    if (filters.metric) add("event.metric = ?", filters.metric);
 
     values.push(filters.limit);
     const result = await this.pool.query<EventRecord>(`
       SELECT
-        id, occurred_at, gateway_id, sensor_uid, sensor_name, metric, value,
-        decision, reason, assigned_gateway_id, mode, source_topic,
-        dedup_key, dedup_age_ms
-      FROM metric_routing_events
+        event.id, event.occurred_at, event.gateway_id,
+        gateway.location_id AS gateway_location_id,
+        location.name AS gateway_location_name,
+        event.sensor_uid, event.sensor_name, event.metric, event.value,
+        event.decision, event.reason, event.assigned_gateway_id, event.mode, event.source_topic,
+        event.dedup_key, event.dedup_age_ms
+      FROM metric_routing_events event
+      LEFT JOIN gateways gateway
+        ON gateway.gateway_id = event.gateway_id
+      LEFT JOIN locations location
+        ON location.id = gateway.location_id
       WHERE ${clauses.join(" AND ")}
-      ORDER BY occurred_at DESC, id DESC
+      ORDER BY event.occurred_at DESC, event.id DESC
       LIMIT $${values.length}
     `, values);
 
@@ -80,6 +91,8 @@ export class MetricRoutingRepository {
       id: Number(row.id),
       occurredAt: row.occurred_at.toISOString(),
       gatewayId: row.gateway_id,
+      gatewayLocationId: row.gateway_location_id,
+      gatewayLocationName: row.gateway_location_name,
       sensorUid: row.sensor_uid,
       sensorName: row.sensor_name,
       metric: row.metric,

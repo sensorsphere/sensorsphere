@@ -157,6 +157,7 @@ export async function getMetricRoutingEvents(input: {
   decision?: MetricRoutingDecision | null;
   sensorUid?: string;
   gatewayId?: string;
+  location?: string;
   metric?: string;
 }): Promise<MetricRoutingEvent[]> {
   const params = new URLSearchParams({
@@ -167,6 +168,7 @@ export async function getMetricRoutingEvents(input: {
   if (input.decision) params.set("decision", input.decision);
   if (input.sensorUid?.trim()) params.set("sensorUid", input.sensorUid.trim());
   if (input.gatewayId?.trim()) params.set("gatewayId", input.gatewayId.trim());
+  if (input.location?.trim()) params.set("location", input.location.trim());
   if (input.metric?.trim()) params.set("metric", input.metric.trim());
 
   return readJson<MetricRoutingEvent[]>(

@@ -5,6 +5,8 @@ export interface MetricRoutingEventDto {
   id: number;
   occurredAt: string;
   gatewayId: string;
+  gatewayLocationId: string | null;
+  gatewayLocationName: string | null;
   sensorUid: string;
   sensorName: string | null;
   metric: string;

@@ -56,6 +56,7 @@ export function MetricRoutingPanel() {
   const [decision, setDecision] = React.useState<string | null>(null);
   const [sensorUid, setSensorUid] = React.useState("");
   const [gatewayId, setGatewayId] = React.useState("");
+  const [location, setLocation] = React.useState("");
   const [metric, setMetric] = React.useState("");
 
   const statusQuery = useQuery({
@@ -77,6 +78,7 @@ export function MetricRoutingPanel() {
       decision,
       sensorUid,
       gatewayId,
+      location,
       metric
     ],
     queryFn: () => getMetricRoutingEvents({
@@ -84,6 +86,7 @@ export function MetricRoutingPanel() {
       decision: decision as MetricRoutingDecision | null,
       sensorUid,
       gatewayId,
+      location,
       metric,
       limit: 500
     }),
@@ -187,6 +190,7 @@ export function MetricRoutingPanel() {
             />
             <TextInput label="Sensor" placeholder="UID" value={sensorUid} onChange={e => setSensorUid(e.currentTarget.value)} />
             <TextInput label="Gateway" placeholder="gateway_id" value={gatewayId} onChange={e => setGatewayId(e.currentTarget.value)} />
+            <TextInput label="Location" placeholder="Location name" value={location} onChange={e => setLocation(e.currentTarget.value)} />
             <TextInput label="Metric" placeholder="temperature" value={metric} onChange={e => setMetric(e.currentTarget.value)} />
           </Group>
 
@@ -217,7 +221,12 @@ export function MetricRoutingPanel() {
                       </Table.Td>
                       <Table.Td>{event.metric}</Table.Td>
                       <Table.Td>{event.value}</Table.Td>
-                      <Table.Td>{event.gatewayId}</Table.Td>
+                      <Table.Td>
+                        <Text size="sm" fw={600}>{event.gatewayId}</Text>
+                        <Text size="xs" c={event.gatewayLocationName ? "dimmed" : "gray"}>
+                          {event.gatewayLocationName ?? "[No location]"}
+                        </Text>
+                      </Table.Td>
                       <Table.Td>{event.assignedGatewayId ?? "—"}</Table.Td>
                       <Table.Td>
                         <Badge color={decisionColor(event.decision)} variant="light">
