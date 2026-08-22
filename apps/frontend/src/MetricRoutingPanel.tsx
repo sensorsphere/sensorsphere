@@ -25,11 +25,15 @@ import {
 import { NavigationIcon } from "./NavigationIcon";
 import {
   clearMetricRoutingEvents,
+  getLocations,
   getMetricRoutingEvents,
   getMetricRoutingStatus,
   getMetricRoutingSummary
 } from "./api";
+import { usePersistentState } from "./preferences/usePersistentState";
 import type { MetricRoutingDecision } from "./types";
+
+const REFRESH_INTERVAL_MS = 2_000;
 
 const DECISIONS: MetricRoutingDecision[] = [
   "ACCEPT",
@@ -51,46 +55,41 @@ function timeLabel(value: string): string {
 
 export function MetricRoutingPanel() {
   const queryClient = useQueryClient();
-  const [hours, setHours] = React.useState("1");
+  const [hours, setHours] = usePersistentState("metricRouting.period", "1");
   const [paused, setPaused] = React.useState(false);
-  const [decision, setDecision] = React.useState<string | null>(null);
-  const [sensorUid, setSensorUid] = React.useState("");
-  const [gatewayId, setGatewayId] = React.useState("");
-  const [location, setLocation] = React.useState("");
-  const [metric, setMetric] = React.useState("");
+  const [decision, setDecision] = usePersistentState<string | null>("metricRouting.decision", null);
+  const [sensorFilter, setSensorFilter] = usePersistentState("metricRouting.sensor", "");
+  const [gatewayFilter, setGatewayFilter] = usePersistentState("metricRouting.gateway", "");
+  const [locationId, setLocationId] = usePersistentState<string | null>("metricRouting.location", null);
+  const [metricFilter, setMetricFilter] = usePersistentState("metricRouting.metric", "");
 
   const statusQuery = useQuery({
     queryKey: ["metric-routing-status"],
     queryFn: getMetricRoutingStatus,
-    refetchInterval: paused ? false : 5_000
+    refetchInterval: paused ? false : REFRESH_INTERVAL_MS
   });
 
   const summaryQuery = useQuery({
     queryKey: ["metric-routing-summary", hours],
     queryFn: () => getMetricRoutingSummary(Number(hours)),
-    refetchInterval: paused ? false : 2_000
+    refetchInterval: paused ? false : REFRESH_INTERVAL_MS
   });
 
   const eventsQuery = useQuery({
     queryKey: [
       "metric-routing-events",
-      hours,
-      decision,
-      sensorUid,
-      gatewayId,
-      location,
-      metric
+      hours
     ],
     queryFn: () => getMetricRoutingEvents({
       hours: Number(hours),
-      decision: decision as MetricRoutingDecision | null,
-      sensorUid,
-      gatewayId,
-      location,
-      metric,
       limit: 500
     }),
-    refetchInterval: paused ? false : 2_000
+    refetchInterval: paused ? false : REFRESH_INTERVAL_MS
+  });
+
+  const locationsQuery = useQuery({
+    queryKey: ["locations"],
+    queryFn: getLocations
   });
 
   const clearMutation = useMutation({
@@ -105,7 +104,47 @@ export function MetricRoutingPanel() {
 
   const status = statusQuery.data;
   const summary = summaryQuery.data;
-  const events = eventsQuery.data ?? [];
+
+  const normalizedSensorFilter =
+    sensorFilter.trim().toLocaleLowerCase();
+  const normalizedGatewayFilter =
+    gatewayFilter.trim().toLocaleLowerCase();
+  const normalizedMetricFilter =
+    metricFilter.trim().toLocaleLowerCase();
+
+  const events = (eventsQuery.data ?? []).filter(event => {
+    if (decision && event.decision !== decision) return false;
+
+    if (normalizedSensorFilter) {
+      const uid = event.sensorUid.toLocaleLowerCase();
+      const name = (event.sensorName ?? "").toLocaleLowerCase();
+      if (!uid.includes(normalizedSensorFilter) && !name.includes(normalizedSensorFilter)) {
+        return false;
+      }
+    }
+
+    if (normalizedGatewayFilter &&
+        !event.gatewayId.toLocaleLowerCase().includes(normalizedGatewayFilter)) {
+      return false;
+    }
+
+    if (locationId && event.gatewayLocationId !== locationId) return false;
+
+    if (normalizedMetricFilter &&
+        !event.metric.toLocaleLowerCase().includes(normalizedMetricFilter)) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const locationOptions = (locationsQuery.data ?? [])
+    .slice()
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .map(location => ({
+      value: location.id,
+      label: location.name
+    }));
 
   return (
     <Stack gap="lg">
@@ -126,6 +165,9 @@ export function MetricRoutingPanel() {
           >
             {status?.mode === "dry_run" ? "DRY RUN" : (status?.mode ?? "UNKNOWN").toUpperCase()}
           </Badge>
+          <Text size="sm" c="dimmed">
+            Refresh: {REFRESH_INTERVAL_MS / 1000} s
+          </Text>
           <Button variant="light" onClick={() => setPaused(value => !value)}>
             {paused ? "Resume live" : "Pause live"}
           </Button>
@@ -173,6 +215,10 @@ export function MetricRoutingPanel() {
               value={hours}
               onChange={setHours}
               data={[
+                { value: String(2 / 60), label: "2m" },
+                { value: String(3 / 60), label: "3m" },
+                { value: String(5 / 60), label: "5m" },
+                { value: String(10 / 60), label: "10m" },
                 { value: "0.25", label: "15m" },
                 { value: "1", label: "1h" },
                 { value: "6", label: "6h" },
@@ -188,17 +234,53 @@ export function MetricRoutingPanel() {
               onChange={setDecision}
               data={DECISIONS}
             />
-            <TextInput label="Sensor" placeholder="UID" value={sensorUid} onChange={e => setSensorUid(e.currentTarget.value)} />
-            <TextInput label="Gateway" placeholder="gateway_id" value={gatewayId} onChange={e => setGatewayId(e.currentTarget.value)} />
-            <TextInput label="Location" placeholder="Location name" value={location} onChange={e => setLocation(e.currentTarget.value)} />
-            <TextInput label="Metric" placeholder="temperature" value={metric} onChange={e => setMetric(e.currentTarget.value)} />
+            <TextInput
+              label="Sensor"
+              placeholder="Name or UID"
+              value={sensorFilter}
+              onChange={e => setSensorFilter(e.currentTarget.value)}
+            />
+            <TextInput
+              label="Gateway"
+              placeholder="gateway_id"
+              value={gatewayFilter}
+              onChange={e => setGatewayFilter(e.currentTarget.value)}
+            />
+            <Select
+              label="Location"
+              placeholder="All locations"
+              clearable
+              searchable
+              value={locationId}
+              onChange={setLocationId}
+              data={locationOptions}
+            />
+            <TextInput
+              label="Metric"
+              placeholder="temperature"
+              value={metricFilter}
+              onChange={e => setMetricFilter(e.currentTarget.value)}
+            />
+            <Button
+              variant="light"
+              color="gray"
+              onClick={() => {
+                setDecision(null);
+                setSensorFilter("");
+                setGatewayFilter("");
+                setLocationId(null);
+                setMetricFilter("");
+              }}
+            >
+              Reset filters
+            </Button>
           </Group>
 
           {eventsQuery.isError ? (
             <Text c="red">Unable to load routing events.</Text>
           ) : (
             <Table.ScrollContainer minWidth={1050}>
-              <Table striped highlightOnHover verticalSpacing="xs">
+              <Table striped highlightOnHover verticalSpacing={3}>
                 <Table.Thead>
                   <Table.Tr>
                     <Table.Th>Time</Table.Th>
