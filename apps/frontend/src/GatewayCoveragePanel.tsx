@@ -32,12 +32,14 @@ import {
   deleteGatewayCoverageGateway,
   deleteGatewayCoverageSensor,
   getGatewayCoverage,
+  getGateways,
   getLocations,
   getSensors,
   resetGatewayCoverage,
   resetGatewayCoverageGateway,
   resetGatewayCoverageSensor,
-  updateGatewayCoverageLocation
+  updateGatewayCoverageLocation,
+  updateSensor
 } from "./api";
 
 import type {
@@ -641,6 +643,12 @@ export function GatewayCoveragePanel() {
       sensorUid: string;
     } | null>(null);
 
+  const [assignmentSensorUid, setAssignmentSensorUid] =
+    React.useState<string | null>(null);
+
+  const [assignmentGatewayIdDraft, setAssignmentGatewayIdDraft] =
+    React.useState<string | null>(null);
+
   const query =
     useQuery({
       queryKey: [
@@ -658,6 +666,12 @@ export function GatewayCoveragePanel() {
     useQuery({
       queryKey: ["sensors"],
       queryFn: getSensors
+    });
+
+  const functionalGatewaysQuery =
+    useQuery({
+      queryKey: ["gateways"],
+      queryFn: getGateways
     });
 
   const locationsQuery =
@@ -807,6 +821,32 @@ export function GatewayCoveragePanel() {
         rows.map(row => row.sensorUid)
       )
     );
+
+  const assignedSensorCount =
+    allSensorUids.filter(
+      sensorUid => Boolean(sensorByUid.get(sensorUid)?.gateway)
+    ).length;
+
+  const unassignedSensorCount =
+    allSensorUids.length - assignedSensorCount;
+
+  const functionalGatewayByGatewayId =
+    new Map(
+      (functionalGatewaysQuery.data ?? []).map(
+        gateway => [gateway.gatewayId, gateway]
+      )
+    );
+
+  const assignmentGatewayOptions =
+    (functionalGatewaysQuery.data ?? [])
+      .slice()
+      .sort((left, right) =>
+        left.name.localeCompare(right.name)
+      )
+      .map(gateway => ({
+        value: gateway.id,
+        label: `${gateway.name} · ${gateway.gatewayId} · ${gateway.location?.name ?? "[No location]"}`
+      }));
 
   const suggestedCountByGateway =
     new Map(
@@ -1056,6 +1096,22 @@ export function GatewayCoveragePanel() {
         label: `${location.name} · ${location.type}`
       }));
 
+  const openSensorAssignment =
+    (
+      sensorUid: string,
+      targetGatewayId?: string | null
+    ) => {
+      const sensor = sensorByUid.get(sensorUid);
+      const targetGateway = targetGatewayId
+        ? functionalGatewayByGatewayId.get(targetGatewayId)
+        : null;
+
+      setAssignmentSensorUid(sensorUid);
+      setAssignmentGatewayIdDraft(
+        targetGateway?.id ?? sensor?.gateway?.id ?? null
+      );
+    };
+
   const resetMutation =
     useMutation({
       mutationFn:
@@ -1173,6 +1229,30 @@ export function GatewayCoveragePanel() {
         }
     });
 
+  const updateSensorAssignmentMutation =
+    useMutation({
+      mutationFn: ({
+        sensorId,
+        gatewayId
+      }: {
+        sensorId: string;
+        gatewayId: string | null;
+      }) =>
+        updateSensor(sensorId, {
+          gatewayId
+        }),
+
+      onSuccess:
+        async () => {
+          setAssignmentSensorUid(null);
+          setAssignmentGatewayIdDraft(null);
+
+          await queryClient.invalidateQueries({
+            queryKey: ["sensors"]
+          });
+        }
+    });
+
   return (
     <Stack gap="lg">
       <Group justify="space-between" align="flex-end">
@@ -1257,7 +1337,7 @@ export function GatewayCoveragePanel() {
         <Card withBorder padding="md">
           <Group justify="space-between" mb="sm" align="flex-end">
             <Text fw={600}>
-              BLE Gateways: {gateways.length} / Sensors: {allSensorUids.length}
+              BLE Gateways: {gateways.length} / Sensors: {allSensorUids.length} / Assigned sensors: {assignedSensorCount} / Unassigned: {unassignedSensorCount}
             </Text>
             <Group gap="xs" align="flex-end">
               <TextInput
@@ -1914,6 +1994,18 @@ export function GatewayCoveragePanel() {
                                 : "—"
                             }
                           </Text>
+                          <Button
+                            size="compact-xs"
+                            variant="subtle"
+                            color="blue"
+                            px={0}
+                            style={{ alignSelf: "flex-start" }}
+                            onClick={() =>
+                              openSensorAssignment(sensorUid)
+                            }
+                          >
+                            Change
+                          </Button>
                           <Group gap={4} wrap="nowrap">
                             <Button
                               size="compact-xs"
@@ -2113,6 +2205,32 @@ export function GatewayCoveragePanel() {
                               Assigned: {assignedGateway.gatewayId}
                             </Text>
                           )}
+                          {suggestion.gatewayId && assignmentStatus !== "MATCH" && (
+                            <Button
+                              size="compact-xs"
+                              variant="light"
+                              color="blue"
+                              mt={2}
+                              disabled={
+                                !functionalGatewayByGatewayId.has(
+                                  suggestion.gatewayId
+                                )
+                              }
+                              title={
+                                functionalGatewayByGatewayId.has(suggestion.gatewayId)
+                                  ? `Assign ${sensorUid} to ${suggestion.gatewayId}`
+                                  : `${suggestion.gatewayId} is not present in the functional gateway registry`
+                              }
+                              onClick={() =>
+                                openSensorAssignment(
+                                  sensorUid,
+                                  suggestion.gatewayId
+                                )
+                              }
+                            >
+                              Assign suggested
+                            </Button>
+                          )}
                           {suggestion.detailLines.map(
                             (line, index) => (
                               <Text
@@ -2138,6 +2256,135 @@ export function GatewayCoveragePanel() {
           </Table.ScrollContainer>
         </Card>
       )}
+
+      <Modal
+        opened={assignmentSensorUid !== null}
+        onClose={() => {
+          setAssignmentSensorUid(null);
+          setAssignmentGatewayIdDraft(null);
+        }}
+        title="Assign sensor to gateway"
+        centered
+      >
+        {(() => {
+          const sensor = assignmentSensorUid
+            ? sensorByUid.get(assignmentSensorUid)
+            : undefined;
+          const suggestion = assignmentSensorUid
+            ? suggestionBySensorUid.get(assignmentSensorUid)
+            : undefined;
+          const suggestedGateway = suggestion?.gatewayId
+            ? functionalGatewayByGatewayId.get(suggestion.gatewayId)
+            : undefined;
+
+          return (
+            <Stack gap="md">
+              <div>
+                <Text fw={600}>
+                  {sensor?.name?.trim() || assignmentSensorUid || "Sensor"}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {assignmentSensorUid}
+                </Text>
+              </div>
+
+              <Text size="sm">
+                Current: {sensor?.gateway
+                  ? `${sensor.gateway.name} · ${sensor.gateway.gatewayId}`
+                  : "Unassigned"}
+              </Text>
+
+              <Text size="sm">
+                Suggested: {suggestedGateway
+                  ? `${suggestedGateway.name} · ${suggestedGateway.gatewayId} · ${suggestedGateway.location?.name ?? "[No location]"}`
+                  : suggestion?.gatewayId ?? "No recommendation"}
+              </Text>
+
+              <Select
+                label="Gateway"
+                placeholder="Select a gateway"
+                data={assignmentGatewayOptions}
+                value={assignmentGatewayIdDraft}
+                onChange={setAssignmentGatewayIdDraft}
+                searchable
+                clearable
+                disabled={functionalGatewaysQuery.isLoading}
+                nothingFoundMessage="No gateway found"
+              />
+
+              {functionalGatewaysQuery.isError && (
+                <Alert color="red" title="Unable to load gateways">
+                  {functionalGatewaysQuery.error instanceof Error
+                    ? functionalGatewaysQuery.error.message
+                    : "Unable to load gateways."}
+                </Alert>
+              )}
+
+              {updateSensorAssignmentMutation.isError && (
+                <Alert color="red" title="Unable to update sensor assignment">
+                  {updateSensorAssignmentMutation.error instanceof Error
+                    ? updateSensorAssignmentMutation.error.message
+                    : "Update failed."}
+                </Alert>
+              )}
+
+              <Text size="xs" c="dimmed">
+                Saving changes the functional SensorSphere sensor/gateway assignment only. Gateway Coverage data is not modified.
+              </Text>
+
+              <Group justify="space-between">
+                <Button
+                  color="orange"
+                  variant="light"
+                  disabled={!sensor?.gateway}
+                  loading={updateSensorAssignmentMutation.isPending}
+                  onClick={() => {
+                    if (!sensor) return;
+
+                    updateSensorAssignmentMutation.mutate({
+                      sensorId: sensor.id,
+                      gatewayId: null
+                    });
+                  }}
+                >
+                  Unassign
+                </Button>
+
+                <Group gap="sm">
+                  <Button
+                    variant="default"
+                    onClick={() => {
+                      setAssignmentSensorUid(null);
+                      setAssignmentGatewayIdDraft(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    color="blue"
+                    loading={updateSensorAssignmentMutation.isPending}
+                    disabled={
+                      !sensor ||
+                      !assignmentGatewayIdDraft ||
+                      assignmentGatewayIdDraft === sensor.gateway?.id
+                    }
+                    onClick={() => {
+                      if (!sensor || !assignmentGatewayIdDraft) return;
+
+                      updateSensorAssignmentMutation.mutate({
+                        sensorId: sensor.id,
+                        gatewayId: assignmentGatewayIdDraft
+                      });
+                    }}
+                  >
+                    Assign
+                  </Button>
+                </Group>
+              </Group>
+            </Stack>
+          );
+        })()}
+      </Modal>
 
       <Modal
         opened={sensorAction !== null}
