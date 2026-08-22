@@ -1,6 +1,7 @@
 import React from "react";
 
 import { NavigationIcon } from "./NavigationIcon";
+import { ResetFiltersAction } from "./ResetFiltersAction";
 
 import {
   ActionIcon,
@@ -1111,6 +1112,21 @@ export function GatewayCoveragePanel() {
     });
   };
 
+  const filtersActive =
+    assignmentFilter !== null ||
+    sensorFilter.trim().length > 0 ||
+    suggestedGatewayFilter !== null ||
+    recommendationFilter !== null ||
+    assignmentMatchFilter !== null;
+
+  const resetFilters = () => {
+    setAssignmentFilter(null);
+    setSensorFilter("");
+    setSuggestedGatewayFilter(null);
+    setRecommendationFilter(null);
+    setAssignmentMatchFilter(null);
+  };
+
   const copySensorUid =
     async (sensorUid: string) => {
       if (
@@ -1410,7 +1426,7 @@ export function GatewayCoveragePanel() {
                 BLE Gateways: {gateways.length}
               </Text>
               <Text fw={600}>
-                Sensors: {allSensorUids.length} / Assigned: {assignedSensorCount} / Unassigned: {unassignedSensorCount} / Match: {matchSensorCount} / Mismatch: {mismatchSensorCount} / No recommendation: {noRecommendationSensorCount}
+                Sensors: {sensors.length} / {allSensorUids.length} / Assigned: {assignedSensorCount} / Unassigned: {unassignedSensorCount} / Match: {matchSensorCount} / Mismatch: {mismatchSensorCount} / No recommendation: {noRecommendationSensorCount}
               </Text>
             </Stack>
             <Group gap="xs" align="flex-end">
@@ -1457,6 +1473,10 @@ export function GatewayCoveragePanel() {
                     )
                     : undefined
                 }
+              />
+              <ResetFiltersAction
+                active={filtersActive}
+                onReset={resetFilters}
               />
               <Button
                 size="compact-sm"
