@@ -46,8 +46,8 @@
 * [X] il faudrait faire un arret de tous le modules ainsi qu un rebuild complet de tous ces modules, sans perte de donnees, afin de voir si ca se construit correctement et ensuite si ca se fait correctement tenter tout un build sur un autre environnement/machine
 * [X] mettre une couleur sur les icones du mnu de navigation verticale, et toutes differentes les unes des autres et reporter l'icone sur le titre de la page
 * [X] pour les gateways, ajouter une Location (lien avec la table Location), et pour "Last seen" mettre "... ago" devant la date/heure. mettre "Online/Offline" , la badge de niveau pour le RSSI
+* [X] dans l'history, mettre les valeurs des metriques au dessus des graphes en bleu plutot qu'en blanc
 * [ ] badge RSSI n'est pas le meme partout. Pendre celui du currentreadings avec le petit point devant
-
 
 ### Gateway Coverage
 * [X] ajouter les periodes : 5minutes, 10m, 15m, 30m
