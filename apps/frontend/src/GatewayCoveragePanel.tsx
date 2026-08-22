@@ -64,6 +64,9 @@ const SUGGESTED_GATEWAY_FILTER_STORAGE_KEY =
 const SENSOR_FILTER_STORAGE_KEY =
   `${STORAGE_PREFIX}.sensorFilter`;
 
+const RECOMMENDATION_FILTER_STORAGE_KEY =
+  `${STORAGE_PREFIX}.recommendationFilter`;
+
 const PERIOD_VALUES =
   new Set([
     String(5 / 60),
@@ -490,6 +493,14 @@ export function GatewayCoveragePanel() {
       );
     });
 
+  const [recommendationFilter, setRecommendationFilter] =
+    React.useState<string | null>(() => {
+      if (typeof window === "undefined") return null;
+      return window.localStorage.getItem(
+        RECOMMENDATION_FILTER_STORAGE_KEY
+      );
+    });
+
   const [copiedSensorUid, setCopiedSensorUid] =
     React.useState<string | null>(null);
 
@@ -559,6 +570,22 @@ export function GatewayCoveragePanel() {
       }
     },
     [suggestedGatewayFilter]
+  );
+
+  React.useEffect(
+    () => {
+      if (recommendationFilter === null) {
+        window.localStorage.removeItem(
+          RECOMMENDATION_FILTER_STORAGE_KEY
+        );
+      } else {
+        window.localStorage.setItem(
+          RECOMMENDATION_FILTER_STORAGE_KEY,
+          recommendationFilter
+        );
+      }
+    },
+    [recommendationFilter]
   );
 
   const [gatewayAction, setGatewayAction] =
@@ -756,10 +783,24 @@ export function GatewayCoveragePanel() {
           sensorUid.toLocaleLowerCase().includes(normalizedSensorFilter);
 
         if (!matchesSensorFilter) return false;
-        if (suggestedGatewayFilter === null) return true;
 
         const suggestion =
           suggestionBySensorUid.get(sensorUid);
+
+        if (recommendationFilter !== null) {
+          const recommendationMatches =
+            recommendationFilter === "STRONG"
+              ? suggestion?.status.startsWith("STRONG")
+              : recommendationFilter === "PREFERRED"
+                ? suggestion?.status.startsWith("PREFERRED")
+                : recommendationFilter === "AMBIGUOUS"
+                  ? suggestion?.status.startsWith("AMBIGUOUS")
+                  : suggestion?.status === recommendationFilter;
+
+          if (!recommendationMatches) return false;
+        }
+
+        if (suggestedGatewayFilter === null) return true;
 
         if (suggestedGatewayFilter === "__no_reliable__") {
           return suggestion?.status === "NO RELIABLE SUGGESTION";
@@ -1560,6 +1601,23 @@ export function GatewayCoveragePanel() {
                           }
                         ]}
                         aria-label="Filter by suggested gateway"
+                      />
+                      <Select
+                        size="xs"
+                        label="Recommendation"
+                        value={recommendationFilter}
+                        onChange={setRecommendationFilter}
+                        placeholder="All recommendations"
+                        clearable
+                        data={[
+                          "STRONG",
+                          "PREFERRED",
+                          "AMBIGUOUS",
+                          "ONLY ELIGIBLE GATEWAY",
+                          "NO RELIABLE SUGGESTION",
+                          "NO SUGGESTION"
+                        ]}
+                        aria-label="Filter by recommendation"
                       />
                       <Text size="xs" c="dimmed">
                         Minimum samples for suggestion: {minimumSamplesForPeriod(hours)}

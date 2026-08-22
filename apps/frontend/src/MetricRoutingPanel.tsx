@@ -242,14 +242,6 @@ export function MetricRoutingPanel() {
                 { value: "48", label: "48h" }
               ]}
             />
-            <Select
-              label="Decision"
-              placeholder="All"
-              clearable
-              value={decision}
-              onChange={setDecision}
-              data={DECISIONS}
-            />
             <TextInput
               label="Sensor"
               placeholder="Name or UID"
@@ -276,6 +268,14 @@ export function MetricRoutingPanel() {
               placeholder="temperature"
               value={metricFilter}
               onChange={e => setMetricFilter(e.currentTarget.value)}
+            />
+            <Select
+              label="Decision"
+              placeholder="All"
+              clearable
+              value={decision}
+              onChange={setDecision}
+              data={DECISIONS}
             />
             <ResetFiltersAction
               active={filtersActive}

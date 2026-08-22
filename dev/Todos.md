@@ -30,7 +30,7 @@
 * [X] dans "Inventory", afficher le health et le statut enabled/disabled sur les asset
 
 * [X] dans les current readings ajouter les filtres "status", "health"
-* [X] dans l'overview, enlever la carte "Average temperture" et             "average humidity". Afficher plutot: "Temperature Min" et "Temperature Max", idem pour humidity,et avec quel sensor pour chacun des metriques.
+* [X] dans l'overview, enlever la carte "Average temperture" et "average humidity". Afficher plutot: "Temperature Min" et "Temperature Max", idem pour humidity,et avec quel sensor pour chacun des metriques.
 * [X] pour chaque page/section ou des filtres existent, prevoir une petite icone "Reset all filters"
 * [X] pour les location, pouvoir chosir une icone parmi les MDI icones ou une autre librairie du meme genre. Cette icone devra s'afficher sur l'Inventory, mais aussi la carte des sensors/assets si affectee a la location
 * [X] sur un graphe history, affichage de la valeur courante de chaque courbe dans la zone de titre pour plus de clarte
@@ -45,7 +45,7 @@
 * [X] Comment puis-je mettre en place une sauvagarde complete de toutes les donnees afin de pouvoir les restaurer facilement en cas de crash
 * [X] il faudrait faire un arret de tous le modules ainsi qu un rebuild complet de tous ces modules, sans perte de donnees, afin de voir si ca se construit correctement et ensuite si ca se fait correctement tenter tout un build sur un autre environnement/machine
 * [X] mettre une couleur sur les icones du mnu de navigation verticale, et toutes differentes les unes des autres et reporter l'icone sur le titre de la page
-* [ ] pour les gateways, ajouter une Location (lien avec la table Location), et pour "Last seen" mattre "... ago" devant la date/heure. mettre "Online/Offline" , la badge de niveau pour le RSSI
+* [X] pour les gateways, ajouter une Location (lien avec la table Location), et pour "Last seen" mettre "... ago" devant la date/heure. mettre "Online/Offline" , la badge de niveau pour le RSSI
 * [ ] badge RSSI n'est pas le meme partout. Pendre celui du currentreadings avec le petit point devant
 
 
@@ -62,7 +62,7 @@
 * [X] dans Gateway Coverage, mettre un bouton "Delete" sur une BL Gateway: suppression de la BLE Gateway et toutes ls donnees associees
 * [X] dans Gateway Coverage, au niveau de la "Suggested Gateway", il manque une information: sur la gateway choisie, quel est le niveau du signal RSSI: valeur en DBM + badge (weak, excellent, ...)
 * [X] dans Gateway Coverage, conserver la valeur du filtre "Sensor filter"
-* [ ] dans Gateway Coverage, ajouter un filtre sur le "Recommandation". le mettre sous "Suggested Gateway"
+* [X] dans Gateway Coverage, ajouter un filtre sur le "Recommandation". le mettre sous "Suggested Gateway"
 
 
 ### Specif
