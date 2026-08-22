@@ -69,3 +69,22 @@ docker compose exec -T timescaledb \
 ```sh
 docker compose logs --since 2m --no-color   | grep -Ei   'error|fatal|panic|exception|failed'   || true
 ```
+
+# Patch commands
+
+Apply a patch from Windows Machine
+
+```powershell
+scp ubuntu@100.64.0.8  "cd /home/ubuntu/sensorsphere; tar czf /tmp/PR-047-sources.tar.gz apps/frontend/src/GatewayCoveragePanel.tsx apps/frontend/src/MetricRoutingPanel.tsx"
+
+```
+
+Request a baseline/source code
+
+```powershell
+ssh ubuntu@100.64.0.8 "cd /home/ubuntu/sensorsphere; tar czf /tmp/PR-XXX-sources.tar.gz <fichiers...>"
+
+scp ubuntu@100.64.0.8:/tmp/PR-XXX-sources.tar.gz C:\Users\fabri\Downloads
+
+```
+

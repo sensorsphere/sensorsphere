@@ -23,6 +23,7 @@ import {
 } from "@tanstack/react-query";
 
 import { NavigationIcon } from "./NavigationIcon";
+import { ResetFiltersAction } from "./ResetFiltersAction";
 import {
   clearMetricRoutingEvents,
   getLocations,
@@ -146,6 +147,21 @@ export function MetricRoutingPanel() {
       label: location.name
     }));
 
+  const filtersActive =
+    decision !== null ||
+    sensorFilter.trim().length > 0 ||
+    gatewayFilter.trim().length > 0 ||
+    locationId !== null ||
+    metricFilter.trim().length > 0;
+
+  const resetFilters = (): void => {
+    setDecision(null);
+    setSensorFilter("");
+    setGatewayFilter("");
+    setLocationId(null);
+    setMetricFilter("");
+  };
+
   return (
     <Stack gap="lg">
       <Group justify="space-between" align="flex-end">
@@ -261,19 +277,10 @@ export function MetricRoutingPanel() {
               value={metricFilter}
               onChange={e => setMetricFilter(e.currentTarget.value)}
             />
-            <Button
-              variant="light"
-              color="gray"
-              onClick={() => {
-                setDecision(null);
-                setSensorFilter("");
-                setGatewayFilter("");
-                setLocationId(null);
-                setMetricFilter("");
-              }}
-            >
-              Reset filters
-            </Button>
+            <ResetFiltersAction
+              active={filtersActive}
+              onReset={resetFilters}
+            />
           </Group>
 
           {eventsQuery.isError ? (

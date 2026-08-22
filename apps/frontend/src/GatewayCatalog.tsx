@@ -26,6 +26,11 @@ import {
 import { NavigationIcon } from "./NavigationIcon";
 
 import {
+  LocationIcon,
+  getLocationIconName
+} from "./LocationIcon";
+
+import {
   createGateway,
   deleteGateway,
   getGateways,
@@ -250,6 +255,55 @@ export function GatewayCatalog() {
     }
   });
 
+  React.useEffect(
+    () => {
+      if (
+        (!creating && editingGateway === null)
+      ) {
+        return;
+      }
+
+      const handleKeyDown =
+        (event: KeyboardEvent) => {
+          if (
+            (event.ctrlKey || event.metaKey) &&
+            event.key.toLowerCase() === "s"
+          ) {
+            event.preventDefault();
+
+            const canSave =
+              form.gatewayId.trim().length > 0 &&
+              form.name.trim().length > 0 &&
+              form.gatewayTypeId.length > 0;
+
+            if (
+              canSave &&
+              !saveMutation.isPending
+            ) {
+              saveMutation.mutate();
+            }
+          }
+        };
+
+      window.addEventListener(
+        "keydown",
+        handleKeyDown
+      );
+
+      return () =>
+        window.removeEventListener(
+          "keydown",
+          handleKeyDown
+        );
+    },
+    [
+      creating,
+      editingGateway,
+      form,
+      saveMutation.isPending
+    ]
+  );
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteGateway(id),
     onSuccess: async () => {
@@ -291,6 +345,15 @@ export function GatewayCatalog() {
         value: location.id,
         label: `${location.name} · ${location.type}`
       }));
+  const locationsById =
+    new Map(
+      (locationsQuery.data ?? []).map(
+        location => [
+          location.id,
+          location
+        ]
+      )
+    );
   const normalizedSearch = nameSearch.trim().toLowerCase();
   const typeOptions = gatewayTypes.map(type => ({
     value: type.id,
@@ -480,7 +543,21 @@ export function GatewayCatalog() {
                     </div>
                     <div>
                       <Text size="xs" c="dimmed">Location</Text>
-                      <Text size="sm">{gateway.location?.name ?? "—"}</Text>
+                      {gateway.location ? (
+                        <Group gap={5} wrap="nowrap">
+                          <LocationIcon
+                            name={
+                              getLocationIconName(
+                                locationsById.get(gateway.location.id)
+                              )
+                            }
+                            size={16}
+                          />
+                          <Text size="sm">{gateway.location.name}</Text>
+                        </Group>
+                      ) : (
+                        <Text size="sm">—</Text>
+                      )}
                     </div>
                     <div>
                       <Text size="xs" c="dimmed">Sensors</Text>
@@ -544,7 +621,21 @@ export function GatewayCatalog() {
                     <Table.Td>{gateway.macAddress ?? "—"}</Table.Td>
                     <Table.Td>{gateway.wifiSsid ?? "—"}</Table.Td>
                     <Table.Td>{gateway.ipAddress ?? "—"}</Table.Td>
-                    <Table.Td>{gateway.location?.name ?? "—"}</Table.Td>
+                    <Table.Td>
+                      {gateway.location ? (
+                        <Group gap={5} wrap="nowrap">
+                          <LocationIcon
+                            name={
+                              getLocationIconName(
+                                locationsById.get(gateway.location.id)
+                              )
+                            }
+                            size={16}
+                          />
+                          <Text size="sm">{gateway.location.name}</Text>
+                        </Group>
+                      ) : "—"}
+                    </Table.Td>
                     <Table.Td>
                       <Badge size="sm" color={isOnline(gateway.lastSeenAt) ? "green" : "red"}>
                         {isOnline(gateway.lastSeenAt) ? "ONLINE" : "OFFLINE"}

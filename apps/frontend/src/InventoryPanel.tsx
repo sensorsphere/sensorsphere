@@ -627,6 +627,52 @@ export function InventoryPanel() {
         }
     });
 
+  React.useEffect(
+    () => {
+      if (!locationForm) {
+        return;
+      }
+
+      const handleKeyDown =
+        (event: KeyboardEvent) => {
+          if (
+            (event.ctrlKey || event.metaKey) &&
+            event.key.toLowerCase() === "s"
+          ) {
+            event.preventDefault();
+
+            const canSave =
+              locationForm.name.trim().length > 0 &&
+              locationForm.type.trim().length > 0;
+
+            if (
+              canSave &&
+              !saveLocationMutation.isPending
+            ) {
+              saveLocationMutation.mutate(
+                locationForm
+              );
+            }
+          }
+        };
+
+      window.addEventListener(
+        "keydown",
+        handleKeyDown
+      );
+
+      return () =>
+        window.removeEventListener(
+          "keydown",
+          handleKeyDown
+        );
+    },
+    [
+      locationForm,
+      saveLocationMutation.isPending
+    ]
+  );
+
   const deleteLocationMutation =
     useMutation({
       mutationFn:

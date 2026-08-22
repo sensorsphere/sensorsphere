@@ -414,6 +414,47 @@ export function SensorCatalog() {
       });
     };
 
+  React.useEffect(
+    () => {
+      if (
+        !selectedSensor ||
+        !form
+      ) {
+        return;
+      }
+
+      const handleKeyDown =
+        (event: KeyboardEvent) => {
+          if (
+            (event.ctrlKey || event.metaKey) &&
+            event.key.toLowerCase() === "s"
+          ) {
+            event.preventDefault();
+
+            if (!updateMutation.isPending) {
+              save();
+            }
+          }
+        };
+
+      window.addEventListener(
+        "keydown",
+        handleKeyDown
+      );
+
+      return () =>
+        window.removeEventListener(
+          "keydown",
+          handleKeyDown
+        );
+    },
+    [
+      selectedSensor,
+      form,
+      updateMutation.isPending
+    ]
+  );
+
   if (
     sensorsQuery.isLoading ||
     assetsQuery.isLoading ||
@@ -519,13 +560,20 @@ export function SensorCatalog() {
       )
       .map(gateway => ({
         value: gateway.id,
-        label: gateway.name
+        label: `${gateway.name} · ${gateway.gatewayId} · ${gateway.location?.name ?? "[No location]"}`
       }));
 
   const gatewayFilterOptions =
-    gatewayOptions.map(option =>
-      option.label
-    );
+    gateways
+      .slice()
+      .sort((a, b) =>
+        a.name.localeCompare(
+          b.name,
+          undefined,
+          { sensitivity: "base" }
+        )
+      )
+      .map(gateway => gateway.name);
 
   const assetsBySensorUid =
     new Map(
