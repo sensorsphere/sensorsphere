@@ -32,6 +32,7 @@ import {
   deleteAllGatewayCoverageGateways,
   deleteGatewayCoverageGateway,
   deleteGatewayCoverageSensor,
+  getAssets,
   getGatewayCoverage,
   getGateways,
   getLocations,
@@ -705,6 +706,12 @@ export function GatewayCoveragePanel() {
       queryFn: getSensors
     });
 
+  const assetsQuery =
+    useQuery({
+      queryKey: ["assets"],
+      queryFn: getAssets
+    });
+
   const functionalGatewaysQuery =
     useQuery({
       queryKey: ["gateways"],
@@ -738,6 +745,16 @@ export function GatewayCoveragePanel() {
   const sensorDisplayName =
     (sensorUid: string): string =>
       sensorNameByUid.get(sensorUid)?.trim() || sensorUid;
+
+  const sensorLocationNameByUid =
+    new Map(
+      (assetsQuery.data ?? [])
+        .filter(asset => asset.sensor?.uid && asset.location?.name)
+        .map(asset => [
+          asset.sensor!.uid,
+          asset.location!.name
+        ])
+    );
 
   const gatewaySummaries =
     query.data?.gateways ?? [];
@@ -2091,6 +2108,17 @@ export function GatewayCoveragePanel() {
                               }
                             </Button>
                           </Group>
+                          {sensorLocationNameByUid.get(sensorUid) && (
+                            <Text
+                              size="xs"
+                              c="blue"
+                              fw={500}
+                              lh={1.1}
+                              title={sensorLocationNameByUid.get(sensorUid)}
+                            >
+                              {sensorLocationNameByUid.get(sensorUid)}
+                            </Text>
+                          )}
                           <Text
                             size="xs"
                             c={assignedGateway ? "blue" : "dimmed"}
