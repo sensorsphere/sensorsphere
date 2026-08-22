@@ -72,6 +72,9 @@ const RECOMMENDATION_FILTER_STORAGE_KEY =
 const ASSIGNMENT_MATCH_FILTER_STORAGE_KEY =
   `${STORAGE_PREFIX}.assignmentMatchFilter`;
 
+const ASSIGNMENT_FILTER_STORAGE_KEY =
+  `${STORAGE_PREFIX}.assignmentFilter`;
+
 const PERIOD_VALUES =
   new Set([
     String(5 / 60),
@@ -98,6 +101,10 @@ type AssignmentMatchStatus =
   | "MISMATCH"
   | "UNASSIGNED"
   | "NO RECOMMENDATION";
+
+type AssignmentFilter =
+  | "ASSIGNED"
+  | "UNASSIGNED";
 
 type GatewaySort = {
   mode: "name" | "wifiRssi" | "sensorRssi";
@@ -528,6 +535,19 @@ export function GatewayCoveragePanel() {
         : null;
     });
 
+  const [assignmentFilter, setAssignmentFilter] =
+    React.useState<AssignmentFilter | null>(() => {
+      if (typeof window === "undefined") return null;
+
+      const value = window.localStorage.getItem(
+        ASSIGNMENT_FILTER_STORAGE_KEY
+      );
+
+      return value === "ASSIGNED" || value === "UNASSIGNED"
+        ? value
+        : null;
+    });
+
   const [copiedSensorUid, setCopiedSensorUid] =
     React.useState<string | null>(null);
 
@@ -629,6 +649,22 @@ export function GatewayCoveragePanel() {
       }
     },
     [assignmentMatchFilter]
+  );
+
+  React.useEffect(
+    () => {
+      if (assignmentFilter === null) {
+        window.localStorage.removeItem(
+          ASSIGNMENT_FILTER_STORAGE_KEY
+        );
+      } else {
+        window.localStorage.setItem(
+          ASSIGNMENT_FILTER_STORAGE_KEY,
+          assignmentFilter
+        );
+      }
+    },
+    [assignmentFilter]
   );
 
   const [gatewayAction, setGatewayAction] =
@@ -907,6 +943,23 @@ export function GatewayCoveragePanel() {
           sensorUid.toLocaleLowerCase().includes(normalizedSensorFilter);
 
         if (!matchesSensorFilter) return false;
+
+        const isAssigned =
+          Boolean(sensorByUid.get(sensorUid)?.gateway);
+
+        if (
+          assignmentFilter === "ASSIGNED" &&
+          !isAssigned
+        ) {
+          return false;
+        }
+
+        if (
+          assignmentFilter === "UNASSIGNED" &&
+          isAssigned
+        ) {
+          return false;
+        }
 
         const suggestion =
           suggestionBySensorUid.get(sensorUid);
@@ -1361,6 +1414,25 @@ export function GatewayCoveragePanel() {
               </Text>
             </Stack>
             <Group gap="xs" align="flex-end">
+              <Select
+                size="xs"
+                label="Assignment"
+                placeholder="All"
+                clearable
+                value={assignmentFilter}
+                onChange={value =>
+                  setAssignmentFilter(
+                    value === "ASSIGNED" || value === "UNASSIGNED"
+                      ? value
+                      : null
+                  )
+                }
+                data={[
+                  { value: "ASSIGNED", label: "Assigned" },
+                  { value: "UNASSIGNED", label: "Not assigned" }
+                ]}
+                aria-label="Filter sensors by gateway assignment"
+              />
               <TextInput
                 size="xs"
                 label="Sensor filter"
