@@ -315,8 +315,8 @@ Promise<void> {
           } else {
             dedupKey =
               measurement.metric === "rssi"
-                ? `${measurement.sensorUid}\u0000${measurement.metric}`
-                : `${measurement.sensorUid}\u0000${measurement.metric}\u0000${measurement.value}`;
+                ? `${measurement.sensorUid}|${measurement.metric}`
+                : `${measurement.sensorUid}|${measurement.metric}|${measurement.value}`;
 
             const currentTime =
               measurement.receivedAt.getTime();
