@@ -358,6 +358,16 @@ function LocationNode({
                 </Text>
 
                 <Group gap={4}>
+                  {asset.sensor && (
+                    <Badge
+                      size="xs"
+                      variant="light"
+                      color="blue"
+                    >
+                      Sensor
+                    </Badge>
+                  )}
+
                   <Badge
                     size="xs"
                     variant="light"
@@ -1442,6 +1452,16 @@ export function InventoryPanel() {
                       </Text>
 
                       <Group gap={4}>
+                        {asset.sensor && (
+                          <Badge
+                            size="xs"
+                            variant="light"
+                            color="blue"
+                          >
+                            Sensor
+                          </Badge>
+                        )}
+
                         <Badge
                           size="xs"
                           variant="light"
@@ -1693,7 +1713,17 @@ export function InventoryPanel() {
                       </Table.Td>
 
                       <Table.Td>
-                        {asset.assetType}
+                        {asset.sensor ? (
+                          <Badge
+                            size="sm"
+                            variant="light"
+                            color="blue"
+                          >
+                            Sensor
+                          </Badge>
+                        ) : (
+                          asset.assetType
+                        )}
                       </Table.Td>
 
                       <Table.Td>

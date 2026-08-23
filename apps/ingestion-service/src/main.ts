@@ -66,6 +66,52 @@ interface DedupEntry {
 const metricRoutingDedup =
   new Map<string, DedupEntry>();
 
+type SensorMetadataMetric =
+  | "manufacturer"
+  | "model"
+  | "firmware";
+
+function parseSensorMetadataObjectId(
+  objectId: string | null
+): {
+  metric: SensorMetadataMetric;
+  sensorUid: string;
+} | null {
+  if (!objectId) {
+    return null;
+  }
+
+  const prefixes: Array<{
+    prefix: string;
+    metric: SensorMetadataMetric;
+  }> = [
+    { prefix: "manufacturer_", metric: "manufacturer" },
+    { prefix: "firmware_", metric: "firmware" },
+    { prefix: "model_", metric: "model" }
+  ];
+
+  const normalized = objectId.toLowerCase();
+
+  for (const entry of prefixes) {
+    if (!normalized.startsWith(entry.prefix)) {
+      continue;
+    }
+
+    const sensorUid = normalized.substring(entry.prefix.length);
+
+    if (!sensorUid) {
+      return null;
+    }
+
+    return {
+      metric: entry.metric,
+      sensorUid
+    };
+  }
+
+  return null;
+}
+
 async function main():
 Promise<void> {
 
@@ -214,10 +260,16 @@ Promise<void> {
           "ip_address"
         ]);
 
+      const sensorMetadata =
+        parseSensorMetadataObjectId(
+          trafficObjectId
+        );
+
       const gatewayTrafficMeasurements =
         gatewayTopicMatch &&
         trafficObjectId &&
-        !metadataMetrics.has(trafficObjectId)
+        !metadataMetrics.has(trafficObjectId) &&
+        !sensorMetadata
           ? esphomeParser.parse(message)
           : [];
 
@@ -228,7 +280,7 @@ Promise<void> {
         "METADATA" | "SENSOR" | "UNKNOWN" =
           trafficObjectId && metadataMetrics.has(trafficObjectId)
             ? "METADATA"
-            : trafficMeasurement
+            : sensorMetadata || trafficMeasurement
               ? "SENSOR"
               : "UNKNOWN";
 
@@ -238,11 +290,16 @@ Promise<void> {
             occurredAt: message.receivedAt,
             gatewayId: trafficGatewayId,
             messageType: trafficMessageType,
-            sensorUid: trafficMeasurement?.sensorUid ?? null,
+            sensorUid:
+              sensorMetadata?.sensorUid
+              ?? trafficMeasurement?.sensorUid
+              ?? null,
             metric:
               trafficMessageType === "METADATA"
                 ? trafficObjectId
-                : trafficMeasurement?.metric ?? null,
+                : sensorMetadata?.metric
+                  ?? trafficMeasurement?.metric
+                  ?? null,
             payload: message.payload.toString(),
             sourceTopic: message.topic
           })
@@ -337,6 +394,35 @@ Promise<void> {
                 "Unable to persist functional gateway activity"
               );
             });
+        }
+
+        if (sensorMetadata) {
+          const value =
+            message.payload
+              .toString()
+              .trim();
+
+          if (value) {
+            void repository
+              .saveSensorMetadata(
+                sensorMetadata.sensorUid,
+                sensorMetadata.metric,
+                value
+              )
+              .catch(error => {
+                logger.error(
+                  {
+                    error,
+                    gatewayId,
+                    sensorUid: sensorMetadata.sensorUid,
+                    metric: sensorMetadata.metric
+                  },
+                  "Unable to persist sensor metadata"
+                );
+              });
+          }
+
+          return;
         }
 
         const coverageMatch =

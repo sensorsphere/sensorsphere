@@ -355,6 +355,51 @@ implements MeasurementRepository {
     );
   }
 
+  async saveSensorMetadata(
+    sensorUid: string,
+    metric: "manufacturer" | "model" | "firmware",
+    value: string
+  ): Promise<void> {
+    await this.pool.query(
+      `
+      INSERT INTO sensors (
+        sensor_uid,
+        manufacturer,
+        model,
+        firmware_version
+      )
+      VALUES (
+        $1,
+        CASE WHEN $2::text = 'manufacturer' THEN $3::text ELSE NULL::text END,
+        CASE WHEN $2::text = 'model' THEN $3::text ELSE NULL::text END,
+        CASE WHEN $2::text = 'firmware' THEN $3::text ELSE NULL::text END
+      )
+      ON CONFLICT (sensor_uid) DO UPDATE
+      SET
+        manufacturer = CASE
+          WHEN $2::text = 'manufacturer' THEN $3::text
+          ELSE sensors.manufacturer
+        END,
+        model = CASE
+          WHEN $2::text = 'model' THEN $3::text
+          ELSE sensors.model
+        END,
+        firmware_version = CASE
+          WHEN $2::text = 'firmware' THEN $3::text
+          ELSE sensors.firmware_version
+        END,
+        updated_at = CASE
+          WHEN ($2::text = 'manufacturer' AND sensors.manufacturer IS DISTINCT FROM $3::text)
+            OR ($2::text = 'model' AND sensors.model IS DISTINCT FROM $3::text)
+            OR ($2::text = 'firmware' AND sensors.firmware_version IS DISTINCT FROM $3::text)
+            THEN NOW()
+          ELSE sensors.updated_at
+        END
+      `,
+      [sensorUid, metric, value]
+    );
+  }
+
   async saveGatewayCoverageRssi(
     gatewayId: string,
     sensorUid: string,
