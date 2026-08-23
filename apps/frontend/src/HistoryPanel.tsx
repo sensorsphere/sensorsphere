@@ -879,6 +879,12 @@ function HistoryGraph({
       graph.name ?? ""
     );
 
+  const [
+    removeConfirmOpened,
+    setRemoveConfirmOpened
+  ] =
+    React.useState(false);
+
   React.useEffect(
     () => {
       if (!editingGraphName) {
@@ -964,6 +970,53 @@ function HistoryGraph({
       radius="md"
       padding="lg"
     >
+      <Modal
+        opened={removeConfirmOpened}
+        onClose={
+          () =>
+            setRemoveConfirmOpened(false)
+        }
+        title="Delete graph"
+        centered
+      >
+        <Stack gap="md">
+          <Text>
+            Delete graph "{graphTitle}"?
+          </Text>
+
+          <Text
+            size="sm"
+            c="dimmed"
+          >
+            This action cannot be undone.
+          </Text>
+
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              onClick={
+                () =>
+                  setRemoveConfirmOpened(false)
+              }
+            >
+              Cancel
+            </Button>
+
+            <Button
+              color="red"
+              onClick={
+                () => {
+                  setRemoveConfirmOpened(false);
+                  onRemove();
+                }
+              }
+            >
+              Delete
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
       <Stack gap="md">
 
         <Group
@@ -1403,7 +1456,12 @@ function HistoryGraph({
                 variant="subtle"
                 color="red"
                 aria-label="Remove graph"
-                onClick={onRemove}
+                onClick={
+                  () =>
+                    setRemoveConfirmOpened(
+                      true
+                    )
+                }
               >
                 <svg
                   width="16"

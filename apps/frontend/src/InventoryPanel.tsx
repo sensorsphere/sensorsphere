@@ -32,16 +32,19 @@ import {
   createLocation,
   deleteLocation,
   getAssets,
+  getGateways,
   getLocations,
   getSensors,
   moveLocation,
   updateAssetLocation,
+  updateGateway,
   updateLocation
 } from "./api";
 
 import type {
   Asset,
   CreateLocationInput,
+  Gateway,
   Sensor,
   Location,
   LocationType,
@@ -63,10 +66,17 @@ interface LocationNodeProps {
   location: Location;
   allLocations: Location[];
   assets: Asset[];
+  gateways: Gateway[];
   sensorsByUid: Map<string, Sensor>;
   onDropAsset:
     (
       assetId: string,
+      locationId: string
+    ) => void;
+
+  onDropGateway:
+    (
+      gatewayId: string,
       locationId: string
     ) => void;
 
@@ -88,12 +98,32 @@ function assetIsEnabled(
     : asset.enabled;
 }
 
+function gatewayIsOnline(
+  gateway: Gateway
+): boolean {
+
+  if (!gateway.lastSeenAt) {
+    return false;
+  }
+
+  const ageMs =
+    Date.now() -
+    new Date(
+      gateway.lastSeenAt
+    ).getTime();
+
+  return ageMs >= 0 &&
+    ageMs <= 120_000;
+}
+
 function LocationNode({
   location,
   allLocations,
   assets,
+  gateways,
   sensorsByUid,
   onDropAsset,
+  onDropGateway,
   onEditLocation
 }: LocationNodeProps) {
 
@@ -114,6 +144,13 @@ function LocationNode({
     assets.filter(
       asset =>
         asset.location?.id ===
+        location.id
+    );
+
+  const locationGateways =
+    gateways.filter(
+      gateway =>
+        gateway.location?.id ===
         location.id
     );
 
@@ -198,6 +235,20 @@ function LocationNode({
               assetId,
               location.id
             );
+            return;
+          }
+
+          const gatewayId =
+            event.dataTransfer
+              .getData(
+                "text/sensorsphere-gateway-id"
+              );
+
+          if (gatewayId) {
+            onDropGateway(
+              gatewayId,
+              location.id
+            );
           }
         }
       }
@@ -243,7 +294,7 @@ function LocationNode({
 
           <Group gap="xs">
             <Badge variant="light">
-              {locationAssets.length} assets
+              {locationAssets.length} assets · {locationGateways.length} gateways
             </Badge>
 
             <Button
@@ -357,6 +408,97 @@ function LocationNode({
           )
         )}
 
+        {locationGateways.map(
+          gateway => (
+            <Card
+              key={`gateway-${gateway.id}`}
+              withBorder
+              padding="xs"
+              style={{
+                background:
+                  "var(--ss-card-bg)",
+                borderColor:
+                  "var(--ss-border)",
+                cursor:
+                  "grab"
+              }}
+              draggable
+              onDragStart={
+                event => {
+                  event.dataTransfer
+                    .setData(
+                      "text/sensorsphere-gateway-id",
+                      gateway.id
+                    );
+                }
+              }
+            >
+              <Group
+                justify="space-between"
+                gap="xs"
+              >
+                <div>
+                  <Text
+                    size="sm"
+                    fw={600}
+                  >
+                    {gateway.name}
+                  </Text>
+
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                  >
+                    {gateway.gatewayId}
+                  </Text>
+                </div>
+
+                <Group gap={4}>
+                  <Badge
+                    size="xs"
+                    variant="light"
+                    color="violet"
+                  >
+                    Gateway
+                  </Badge>
+
+                  <Badge
+                    size="xs"
+                    variant="light"
+                    color={
+                      gatewayIsOnline(gateway)
+                        ? "green"
+                        : "red"
+                    }
+                  >
+                    {
+                      gatewayIsOnline(gateway)
+                        ? "Online"
+                        : "Offline"
+                    }
+                  </Badge>
+
+                  <Badge
+                    size="xs"
+                    variant="light"
+                    color={
+                      gateway.enabled
+                        ? "green"
+                        : "orange"
+                    }
+                  >
+                    {
+                      gateway.enabled
+                        ? "Enabled"
+                        : "Disabled"
+                    }
+                  </Badge>
+                </Group>
+              </Group>
+            </Card>
+          )
+        )}
+
         {children.length > 0 && (
           <Stack
             gap="sm"
@@ -371,11 +513,15 @@ function LocationNode({
                     allLocations
                   }
                   assets={assets}
+                  gateways={gateways}
                   sensorsByUid={
                     sensorsByUid
                   }
                   onDropAsset={
                     onDropAsset
+                  }
+                  onDropGateway={
+                    onDropGateway
                   }
                   onEditLocation={
                     onEditLocation
@@ -478,6 +624,15 @@ export function InventoryPanel() {
         getAssets
     });
 
+  const gatewaysQuery =
+    useQuery({
+      queryKey:
+        ["gateways"],
+
+      queryFn:
+        getGateways
+    });
+
   const locationsQuery =
     useQuery({
       queryKey:
@@ -527,6 +682,31 @@ export function InventoryPanel() {
                   ["latest-observations"]
               })
           ]);
+        }
+    });
+
+  const moveGatewayMutation =
+    useMutation({
+      mutationFn:
+        ({
+          gatewayId,
+          locationId
+        }: {
+          gatewayId: string;
+          locationId: string | null;
+        }) =>
+          updateGateway(
+            gatewayId,
+            { locationId }
+          ),
+
+      onSuccess:
+        async () => {
+          await queryClient
+            .invalidateQueries({
+              queryKey:
+                ["gateways"]
+            });
         }
     });
 
@@ -698,6 +878,7 @@ export function InventoryPanel() {
 
   if (
     assetsQuery.isLoading ||
+    gatewaysQuery.isLoading ||
     locationsQuery.isLoading ||
     sensorsQuery.isLoading
   ) {
@@ -710,6 +891,7 @@ export function InventoryPanel() {
 
   if (
     assetsQuery.isError ||
+    gatewaysQuery.isError ||
     locationsQuery.isError ||
     sensorsQuery.isError
   ) {
@@ -722,6 +904,9 @@ export function InventoryPanel() {
 
   const assets =
     assetsQuery.data ?? [];
+
+  const gateways =
+    gatewaysQuery.data ?? [];
 
   const locations =
     locationsQuery.data ?? [];
@@ -771,10 +956,41 @@ export function InventoryPanel() {
       );
     };
 
+  const matchesGateway =
+    (
+      gateway: Gateway
+    ): boolean => {
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const values = [
+        gateway.name,
+        gateway.gatewayId,
+        gateway.type.name,
+        gateway.type.key,
+        gateway.ipAddress,
+        gateway.macAddress,
+        gateway.wifiSsid,
+        gateway.boardId,
+        gateway.location?.name
+      ];
+
+      return values.some(
+        value =>
+          value
+            ?.toLowerCase()
+            .includes(
+              normalizedSearch
+            )
+      );
+    };
+
   const protocolOptions =
     Array.from(
-      new Set(
-        assets
+      new Set([
+        ...assets
           .map(
             asset =>
               asset.protocol
@@ -784,8 +1000,11 @@ export function InventoryPanel() {
               value
             ): value is string =>
               Boolean(value)
-          )
-      )
+          ),
+        ...(gateways.length > 0
+          ? ["MQTT"]
+          : [])
+      ])
     )
       .sort()
       .map(
@@ -870,6 +1089,63 @@ export function InventoryPanel() {
         }
       );
 
+  const filteredGateways =
+    gateways
+      .filter(
+        matchesGateway
+      )
+      .filter(
+        gateway =>
+          !locationFilter ||
+          (
+            locationFilter ===
+            "__unassigned__"
+              ? gateway.location === null
+              : gateway.location?.id ===
+                locationFilter
+          )
+      )
+      .filter(
+        gateway =>
+          !statusFilter ||
+          (
+            statusFilter ===
+            "enabled"
+              ? gateway.enabled
+              : !gateway.enabled
+          )
+      )
+      .filter(
+        () =>
+          !protocolFilter ||
+          protocolFilter === "MQTT"
+      )
+      .sort(
+        (left, right) => {
+          if (sortBy === "location") {
+            return (
+              left.location?.name
+              ?? "Unassigned"
+            ).localeCompare(
+              right.location?.name
+              ?? "Unassigned"
+            );
+          }
+
+          if (sortBy === "type") {
+            return left.type.name
+              .localeCompare(
+                right.type.name
+              );
+          }
+
+          return left.name
+            .localeCompare(
+              right.name
+            );
+        }
+      );
+
   const rootLocations =
     locations.filter(
       location =>
@@ -880,6 +1156,12 @@ export function InventoryPanel() {
     filteredAssets.filter(
       asset =>
         asset.location === null
+    );
+
+  const unassignedGateways =
+    filteredGateways.filter(
+      gateway =>
+        gateway.location === null
     );
 
   return (
@@ -898,7 +1180,7 @@ export function InventoryPanel() {
             </Group>
 
           <Text c="dimmed">
-            Drag assets onto locations to organize your environment.
+            Drag assets and gateways onto locations to organize your environment.
           </Text>
         </div>
 
@@ -909,6 +1191,18 @@ export function InventoryPanel() {
               assets.length
                 ? `${assets.length} assets`
                 : `${filteredAssets.length} / ${assets.length} assets`
+            }
+          </Badge>
+
+          <Badge
+            variant="light"
+            color="violet"
+          >
+            {
+              filteredGateways.length ===
+              gateways.length
+                ? `${gateways.length} gateways`
+                : `${filteredGateways.length} / ${gateways.length} gateways`
             }
           </Badge>
 
@@ -933,7 +1227,7 @@ export function InventoryPanel() {
         >
           <TextInput
             label="Search"
-            placeholder="Asset, sensor UID, location..."
+            placeholder="Asset, gateway, sensor UID, location..."
             value={search}
             onChange={
               event =>
@@ -1081,7 +1375,7 @@ export function InventoryPanel() {
 
       </Stack>
 
-      {unassignedAssets.length > 0 && (
+      {(unassignedAssets.length > 0 || unassignedGateways.length > 0) && (
         <Card
           withBorder
           radius="md"
@@ -1096,7 +1390,7 @@ export function InventoryPanel() {
           <Stack gap="sm">
 
             <Text fw={700}>
-              Unassigned assets
+              Unassigned assets & gateways
             </Text>
 
             <SimpleGrid
@@ -1197,6 +1491,71 @@ export function InventoryPanel() {
                   </Card>
                 )
               )}
+
+              {unassignedGateways.map(
+                gateway => (
+                  <Card
+                    key={`gateway-${gateway.id}`}
+                    withBorder
+                    padding="xs"
+                    style={{
+                      background:
+                        "var(--ss-card-bg)",
+                      borderColor:
+                        "var(--ss-border)",
+                      cursor:
+                        "grab"
+                    }}
+                    draggable
+                    onDragStart={
+                      event => {
+                        event.dataTransfer
+                          .setData(
+                            "text/sensorsphere-gateway-id",
+                            gateway.id
+                          );
+                      }
+                    }
+                  >
+                    <Group
+                      justify="space-between"
+                      gap="xs"
+                    >
+                      <div>
+                        <Text
+                          size="sm"
+                          fw={600}
+                        >
+                          {gateway.name}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                          {gateway.gatewayId}
+                        </Text>
+                      </div>
+
+                      <Group gap={4}>
+                        <Badge size="xs" variant="light" color="violet">
+                          Gateway
+                        </Badge>
+                        <Badge
+                          size="xs"
+                          variant="light"
+                          color={gatewayIsOnline(gateway) ? "green" : "red"}
+                        >
+                          {gatewayIsOnline(gateway) ? "Online" : "Offline"}
+                        </Badge>
+                        <Badge
+                          size="xs"
+                          variant="light"
+                          color={gateway.enabled ? "green" : "orange"}
+                        >
+                          {gateway.enabled ? "Enabled" : "Disabled"}
+                        </Badge>
+                      </Group>
+                    </Group>
+                  </Card>
+                )
+              )}
             </SimpleGrid>
 
           </Stack>
@@ -1218,6 +1577,7 @@ export function InventoryPanel() {
                   location={location}
                   allLocations={locations}
                   assets={filteredAssets}
+                  gateways={filteredGateways}
                   sensorsByUid={
                     sensorsByUid
                   }
@@ -1229,6 +1589,17 @@ export function InventoryPanel() {
                       moveAssetMutation
                         .mutate({
                           assetId,
+                          locationId
+                        })
+                  }
+                  onDropGateway={
+                    (
+                      gatewayId,
+                      locationId
+                    ) =>
+                      moveGatewayMutation
+                        .mutate({
+                          gatewayId,
                           locationId
                         })
                   }
@@ -1270,8 +1641,8 @@ export function InventoryPanel() {
             >
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Asset</Table.Th>
-                  <Table.Th>Sensor UID</Table.Th>
+                  <Table.Th>Item</Table.Th>
+                  <Table.Th>Identifier</Table.Th>
                   <Table.Th>Location</Table.Th>
                   <Table.Th>Type</Table.Th>
                   <Table.Th>Protocol</Table.Th>
@@ -1363,6 +1734,59 @@ export function InventoryPanel() {
                               ? "Enabled"
                               : "Disabled"
                           }
+                        </Badge>
+                      </Table.Td>
+                    </Table.Tr>
+                  )
+                )}
+
+                {filteredGateways.map(
+                  gateway => (
+                    <Table.Tr
+                      key={`gateway-${gateway.id}`}
+                    >
+                      <Table.Td>
+                        <Group gap="xs">
+                          <Text>{gateway.name}</Text>
+                          <Badge size="xs" variant="light" color="violet">
+                            Gateway
+                          </Badge>
+                        </Group>
+                      </Table.Td>
+
+                      <Table.Td>
+                        {gateway.gatewayId}
+                      </Table.Td>
+
+                      <Table.Td>
+                        <Text size="sm">
+                          {gateway.location?.name ?? "Unassigned"}
+                        </Text>
+                      </Table.Td>
+
+                      <Table.Td>
+                        {gateway.type.name}
+                      </Table.Td>
+
+                      <Table.Td>
+                        MQTT
+                      </Table.Td>
+
+                      <Table.Td>
+                        <Badge
+                          color={gatewayIsOnline(gateway) ? "green" : "red"}
+                          variant="light"
+                        >
+                          {gatewayIsOnline(gateway) ? "online" : "offline"}
+                        </Badge>
+                      </Table.Td>
+
+                      <Table.Td>
+                        <Badge
+                          color={gateway.enabled ? "green" : "orange"}
+                          variant="light"
+                        >
+                          {gateway.enabled ? "Enabled" : "Disabled"}
                         </Badge>
                       </Table.Td>
                     </Table.Tr>
