@@ -1214,17 +1214,30 @@ export function GatewayCoveragePanel() {
       targetGatewayId?: string | null
     ) => {
       const sensor = sensorByUid.get(sensorUid);
+      const suggestion = suggestionBySensorUid.get(sensorUid);
       const targetGateway = targetGatewayId
         ? functionalGatewayByGatewayId.get(targetGatewayId)
         : null;
+      const suggestedPrimaryGateway = suggestion?.gatewayId
+        ? functionalGatewayByGatewayId.get(suggestion.gatewayId)
+        : null;
+      const suggestedBackupGateway = suggestion?.backupCandidateGatewayId
+        ? functionalGatewayByGatewayId.get(suggestion.backupCandidateGatewayId)
+        : null;
+      const primaryGatewayId =
+        targetGateway?.id ??
+        sensor?.gateway?.id ??
+        suggestedPrimaryGateway?.id ??
+        null;
+      const backupGatewayId =
+        sensor?.backupGateway?.id ??
+        (suggestedBackupGateway?.id !== primaryGatewayId
+          ? suggestedBackupGateway?.id ?? null
+          : null);
 
       setAssignmentSensorUid(sensorUid);
-      setAssignmentGatewayIdDraft(
-        targetGateway?.id ?? sensor?.gateway?.id ?? null
-      );
-      setAssignmentBackupGatewayIdDraft(
-        sensor?.backupGateway?.id ?? null
-      );
+      setAssignmentGatewayIdDraft(primaryGatewayId);
+      setAssignmentBackupGatewayIdDraft(backupGatewayId);
     };
 
   const resetMutation =
@@ -1461,26 +1474,48 @@ export function GatewayCoveragePanel() {
               </Text>
               <Text fw={600}>
                 Sensors: {" "}
-                <Text span c={sensors.length > 0 ? "blue" : undefined} fw={700}>
+                <Text
+                  span
+                  c={sensors.length < allSensorUids.length ? "blue" : undefined}
+                  fw={700}
+                >
                   {sensors.length}
-                </Text>{" "}
-                (filtered) / {allSensorUids.length}
+                </Text>
+                {filtersActive && (
+                  <Text span c="dimmed" fw={500}>
+                    {" "}(filtered)
+                  </Text>
+                )}
+                {" / "}{allSensorUids.length}
                 {" · "}
                 Assigned: {" "}
-                <Text span c={assignedSensorCount > 0 ? "orange" : undefined} fw={700}>
+                <Text
+                  span
+                  c={assignedSensorCount < allSensorUids.length ? "orange" : undefined}
+                  fw={700}
+                >
                   {assignedSensorCount}
-                </Text>{" "}
-                / {allSensorUids.length}
+                </Text>
+                {" / "}{allSensorUids.length}
                 {" · "}
                 Match: {" "}
-                <Text span c={matchSensorCount > 0 ? "green" : undefined} fw={700}>
+                <Text
+                  span
+                  c={
+                    matchSensorCount > 0 &&
+                    matchSensorCount < assignedSensorCount
+                      ? "green"
+                      : undefined
+                  }
+                  fw={700}
+                >
                   {matchSensorCount}
-                </Text>{" "}
-                - Mismatch: {" "}
+                </Text>
+                {" - Mismatch: "}
                 <Text span c={mismatchSensorCount > 0 ? "red" : undefined} fw={700}>
                   {mismatchSensorCount}
-                </Text>{" "}
-                - No recommendation: {" "}
+                </Text>
+                {" - No recommendation: "}
                 <Text span c={noRecommendationSensorCount > 0 ? "orange" : undefined} fw={700}>
                   {noRecommendationSensorCount}
                 </Text>
@@ -1610,7 +1645,7 @@ export function GatewayCoveragePanel() {
                   position: "sticky",
                   top: 0,
                   zIndex: 3,
-                  background: "var(--mantine-color-dark-6)"
+                  background: "var(--mantine-color-default-hover)"
                 }}
               >
                 <Table.Tr>
