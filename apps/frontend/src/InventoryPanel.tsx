@@ -1,6 +1,7 @@
 import React from "react";
 
 import { activeFilterStyles } from "./filterStyles";
+import { BadgeSelect } from "./BadgeSelect";
 
 import { NavigationIcon } from "./NavigationIcon";
 
@@ -971,7 +972,8 @@ export function InventoryPanel() {
             styles={activeFilterStyles(locationFilter !== null)}
           />
 
-          <Select
+          <BadgeSelect
+            badgeColor={value => value === "enabled" ? "blue" : "gray"}
             label="Status"
             placeholder="All statuses"
             clearable

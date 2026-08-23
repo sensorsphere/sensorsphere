@@ -1,6 +1,7 @@
 import React from "react";
 
 import { activeFilterStyles } from "./filterStyles";
+import { BadgeSelect } from "./BadgeSelect";
 
 import {
   Badge,
@@ -466,7 +467,8 @@ export function GatewayCatalog() {
             data={typeOptions}
             styles={activeFilterStyles(typeFilter !== null)}
           />
-          <Select
+          <BadgeSelect
+            badgeColor={value => value === "enabled" ? "blue" : value === "disabled" ? "gray" : "gray"}
             label="Enabled"
             value={enabledFilter}
             onChange={value =>

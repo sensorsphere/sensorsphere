@@ -8,7 +8,8 @@ import {
   Button,
   Card,
   Group,
-  MultiSelect,
+  Menu,
+  SegmentedControl,
   Select,
   SimpleGrid,
   Stack,
@@ -188,24 +189,25 @@ export function MetricRoutingPanel() {
           </Text>
         </div>
         <Group align="flex-end" wrap="wrap">
-          <Select
-            label="Period"
-            value={hours}
-            onChange={value => value && setHours(value)}
-            allowDeselect={false}
-            w={96}
-            data={[
-              { value: String(2 / 60), label: "2m" },
-              { value: String(3 / 60), label: "3m" },
-              { value: String(5 / 60), label: "5m" },
-              { value: String(10 / 60), label: "10m" },
-              { value: "0.25", label: "15m" },
-              { value: "1", label: "1h" },
-              { value: "6", label: "6h" },
-              { value: "24", label: "24h" },
-              { value: "48", label: "48h" }
-            ]}
-          />
+          <Stack gap={2}>
+            <Text size="xs" fw={500}>Period</Text>
+            <SegmentedControl
+              size="xs"
+              value={hours}
+              onChange={setHours}
+              data={[
+                { value: String(2 / 60), label: "2m" },
+                { value: String(3 / 60), label: "3m" },
+                { value: String(5 / 60), label: "5m" },
+                { value: String(10 / 60), label: "10m" },
+                { value: "0.25", label: "15m" },
+                { value: "1", label: "1h" },
+                { value: "6", label: "6h" },
+                { value: "24", label: "24h" },
+                { value: "48", label: "48h" }
+              ]}
+            />
+          </Stack>
           <Badge
             size="lg"
             color={status?.mode === "active" ? "green" : status?.mode === "dry_run" ? "yellow" : "gray"}
@@ -292,29 +294,81 @@ export function MetricRoutingPanel() {
           </SimpleGrid>
 
           <Group align="flex-end" wrap="wrap">
-            <MultiSelect
-              label="Hide decisions"
-              placeholder="None hidden"
-              clearable
-              w={360}
-              value={hiddenDecisions}
-              onChange={values =>
-                setHiddenDecisions(values as MetricRoutingDecision[])
-              }
-              data={DECISIONS.map(decision => ({
-                value: decision,
-                label: decision
-              }))}
-              renderOption={({ option }) => (
-                <Badge
-                  color={decisionColor(option.value as MetricRoutingDecision)}
-                  variant="light"
-                >
-                  {option.label}
-                </Badge>
-              )}
-              styles={activeFilterStyles(hiddenDecisions.length > 0)}
-            />
+            <Stack gap={4} w={360}>
+              <Text size="sm" fw={500}>Hide decisions</Text>
+              <Menu closeOnItemClick={false} withinPortal>
+                <Menu.Target>
+                  <Button
+                    variant="default"
+                    justify="flex-start"
+                    styles={{
+                      root: {
+                        minHeight: 36,
+                        height: "auto",
+                        paddingTop: 5,
+                        paddingBottom: 5,
+                        ...(hiddenDecisions.length > 0
+                          ? { border: "2px solid var(--mantine-color-blue-6)" }
+                          : {})
+                      },
+                      label: {
+                        width: "100%",
+                        overflow: "visible"
+                      }
+                    }}
+                  >
+                    {hiddenDecisions.length === 0 ? (
+                      <Text size="sm" c="dimmed" fw={400}>None hidden</Text>
+                    ) : (
+                      <Group gap={4} wrap="wrap">
+                        {hiddenDecisions.map(decision => (
+                          <Badge
+                            key={decision}
+                            size="sm"
+                            color={decisionColor(decision)}
+                            variant="light"
+                          >
+                            {decision}
+                          </Badge>
+                        ))}
+                      </Group>
+                    )}
+                  </Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  {DECISIONS.map(decision => {
+                    const selected = hiddenDecisions.includes(decision);
+                    return (
+                      <Menu.Item
+                        key={decision}
+                        onClick={() =>
+                          setHiddenDecisions(
+                            selected
+                              ? hiddenDecisions.filter(value => value !== decision)
+                              : [...hiddenDecisions, decision]
+                          )
+                        }
+                        leftSection={selected ? "✓" : undefined}
+                      >
+                        <Badge
+                          size="sm"
+                          color={decisionColor(decision)}
+                          variant="light"
+                        >
+                          {decision}
+                        </Badge>
+                      </Menu.Item>
+                    );
+                  })}
+                  {hiddenDecisions.length > 0 && (
+                    <>
+                      <Menu.Divider />
+                      <Menu.Item onClick={() => setHiddenDecisions([])}>Clear selection</Menu.Item>
+                    </>
+                  )}
+                </Menu.Dropdown>
+              </Menu>
+            </Stack>
             <Button
               size="compact-sm"
               variant={

@@ -1,6 +1,7 @@
 import React from "react";
 
 import { activeFilterStyles } from "./filterStyles";
+import { BadgeSelect } from "./BadgeSelect";
 
 import { NavigationIcon } from "./NavigationIcon";
 import { ResetFiltersAction } from "./ResetFiltersAction";
@@ -1653,7 +1654,8 @@ export function GatewayCoveragePanel() {
                     : undefined
                 }
               />
-              <Select
+              <BadgeSelect
+                badgeColor={value => value === "ASSIGNED" ? "blue" : "gray"}
                 size="xs"
                 label="Primary Assignment"
                 placeholder="All"
@@ -1673,7 +1675,8 @@ export function GatewayCoveragePanel() {
                 aria-label="Filter sensors by primary gateway assignment"
                 styles={activeFilterStyles(assignmentFilter !== null)}
               />
-              <Select
+              <BadgeSelect
+                badgeColor={value => value === "ASSIGNED" ? "blue" : "gray"}
                 size="xs"
                 label="Backup Assignment"
                 placeholder="All"
@@ -1693,7 +1696,8 @@ export function GatewayCoveragePanel() {
                 aria-label="Filter sensors by backup gateway assignment"
                 styles={activeFilterStyles(backupFilter !== null)}
               />
-              <Select
+              <BadgeSelect
+                badgeColor={recommendationFilterColor}
                 size="xs"
                 label="Recommendation"
                 value={recommendationFilter}
@@ -1708,19 +1712,11 @@ export function GatewayCoveragePanel() {
                   "NO RELIABLE SUGGESTION",
                   "NO SUGGESTION"
                 ]}
-                renderOption={({ option }) => (
-                  <Badge
-                    size="sm"
-                    variant="light"
-                    color={recommendationFilterColor(option.value)}
-                  >
-                    {option.label}
-                  </Badge>
-                )}
                 aria-label="Filter by recommendation"
                 styles={activeFilterStyles(recommendationFilter !== null)}
               />
-              <Select
+              <BadgeSelect
+                badgeColor={assignmentMatchFilterColor}
                 size="xs"
                 label="Assignment match"
                 value={assignmentMatchFilter}
@@ -1737,15 +1733,6 @@ export function GatewayCoveragePanel() {
                   "UNASSIGNED",
                   "NO RECOMMENDATION"
                 ]}
-                renderOption={({ option }) => (
-                  <Badge
-                    size="sm"
-                    variant="light"
-                    color={assignmentMatchFilterColor(option.value)}
-                  >
-                    {option.label}
-                  </Badge>
-                )}
                 aria-label="Filter by gateway assignment match"
                 styles={activeFilterStyles(assignmentMatchFilter !== null)}
               />

@@ -1,6 +1,7 @@
 import React from "react";
 
 import { activeFilterStyles } from "./filterStyles";
+import { BadgeSelect } from "./BadgeSelect";
 
 import { NavigationIcon } from "./NavigationIcon";
 
@@ -804,7 +805,8 @@ export function SensorCatalog() {
             styles={activeFilterStyles(gatewayFilter !== null)}
           />
 
-          <Select
+          <BadgeSelect
+            badgeColor={value => value === "enabled" ? "blue" : value === "disabled" ? "gray" : "gray"}
             label="Enabled"
             value={enabledFilter}
             onChange={value =>
@@ -822,7 +824,8 @@ export function SensorCatalog() {
             styles={activeFilterStyles(enabledFilter !== "all")}
           />
 
-          <Select
+          <BadgeSelect
+            badgeColor={value => value === "online" ? "green" : value === "warning" ? "yellow" : value === "offline" ? "red" : "gray"}
             label="Status"
             value={statusFilter}
             onChange={value =>

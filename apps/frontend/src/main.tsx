@@ -1,6 +1,7 @@
 import React from "react";
 
 import { activeFilterStyles } from "./filterStyles";
+import { BadgeSelect } from "./BadgeSelect";
 import ReactDOM from "react-dom/client";
 
 import {
@@ -2033,7 +2034,8 @@ function Dashboard() {
                       />
 
 
-                      <Select
+                      <BadgeSelect
+                        badgeColor={value => value === "enabled" ? "blue" : value === "disabled" ? "gray" : "gray"}
                         label="Status"
                         value={currentReadingStatus}
                         onChange={
@@ -2054,7 +2056,8 @@ function Dashboard() {
                         styles={activeFilterStyles(currentReadingStatus !== "all")}
                       />
 
-                      <Select
+                      <BadgeSelect
+                        badgeColor={value => value === "online" ? "green" : value === "warning" ? "yellow" : value === "offline" ? "red" : "gray"}
                         label="Health"
                         value={currentReadingHealth}
                         onChange={
@@ -2704,7 +2707,8 @@ function Dashboard() {
                       styles={activeFilterStyles(assetSearch.trim().length > 0)}
                     />
 
-                    <Select
+                    <BadgeSelect
+                      badgeColor={value => value === "online" ? "green" : value === "warning" ? "yellow" : value === "offline" ? "red" : "gray"}
                       label="Health"
                       value={
                         assetHealthFilter
@@ -2741,7 +2745,8 @@ function Dashboard() {
                       styles={activeFilterStyles(assetHealthFilter !== "all")}
                     />
 
-                    <Select
+                    <BadgeSelect
+                      badgeColor={value => value === "enabled" ? "blue" : value === "disabled" ? "gray" : "gray"}
                       label="Status"
                       value={
                         assetEnabledFilter

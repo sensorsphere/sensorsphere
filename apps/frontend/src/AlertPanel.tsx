@@ -1,6 +1,7 @@
 import React from "react";
 
 import { activeFilterControlStyle } from "./filterStyles";
+import { BadgeSelect } from "./BadgeSelect";
 
 import { NavigationIcon } from "./NavigationIcon";
 
@@ -1549,7 +1550,8 @@ export function AlertPanel() {
 
               <SimpleGrid cols={2}>
 
-                <Select
+                <BadgeSelect
+                  badgeColor={value => severityColor(value as AlertSeverity)}
                   label="Severity"
                   value={
                     ruleForm.severity
