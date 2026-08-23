@@ -52,6 +52,30 @@ const PRIORITY_OPTIONS = [
   { value: "HIGH", label: "HIGH" },
   { value: "CRITICAL", label: "CRITICAL" }
 ];
+const STATUS_ORDER: ProjectTodoStatus[] = ["OPEN", "IN_PROGRESS", "DONE"];
+const SECTION_COLORS = [
+  "blue", "violet", "grape", "pink", "orange", "yellow",
+  "lime", "green", "teal", "cyan", "indigo", "red"
+];
+
+const sectionColor = (sectionId: string, sections: ProjectTodoSection[]) => {
+  const index = Math.max(0, sections.findIndex(section => section.id === sectionId));
+  return SECTION_COLORS[index % SECTION_COLORS.length];
+};
+
+const sectionAccent = (color: string) => `var(--mantine-color-${color}-6)`;
+
+const taskPromptText = (task: ProjectTodo, section: ProjectTodoSection) => [
+  "SensorSphere Project Todo",
+  `Section: ${section.name}`,
+  `Task: ${task.title}`,
+  `Status: ${task.status}`,
+  `Priority: ${task.priority}`,
+  task.component ? `Component: ${task.component}` : null,
+  task.prReference ? `PR: ${task.prReference}` : null,
+  task.patchReference ? `Patch: ${task.patchReference}` : null,
+  task.description ? `\nNotes:\n${task.description}` : null
+].filter(Boolean).join("\n");
 
 const statusColor = (status: ProjectTodoStatus) =>
   status === "DONE" ? "green" : status === "IN_PROGRESS" ? "blue" : "gray";
@@ -93,18 +117,7 @@ function TaskRow({
   };
 
   const copyPrompt = async () => {
-    const lines = [
-      `SensorSphere Project Todo`,
-      `Section: ${section.name}`,
-      `Task: ${task.title}`,
-      `Status: ${task.status}`,
-      `Priority: ${task.priority}`,
-      task.component ? `Component: ${task.component}` : null,
-      task.prReference ? `PR: ${task.prReference}` : null,
-      task.patchReference ? `Patch: ${task.patchReference}` : null,
-      task.description ? `\nNotes:\n${task.description}` : null
-    ].filter(Boolean).join("\n");
-    await navigator.clipboard.writeText(lines);
+    await navigator.clipboard.writeText(taskPromptText(task, section));
   };
 
   return (
@@ -317,6 +330,24 @@ export function ProjectTodosPanel() {
     setDragOverTaskId(null);
     await refresh();
   };
+
+  const moveBoardTaskByStatus = async (task: ProjectTodo, direction: -1 | 1) => {
+    const currentIndex = STATUS_ORDER.indexOf(task.status);
+    const nextStatus = STATUS_ORDER[currentIndex + direction];
+    if (!nextStatus) return;
+    const targetRows = tasks.filter(candidate => candidate.status === nextStatus && candidate.id !== task.id);
+    const lastSortOrder = targetRows.reduce((max, candidate) => Math.max(max, candidate.sortOrder), -1);
+    await updateProjectTodo(task.id, { status: nextStatus, sortOrder: lastSortOrder + 1 });
+    await refresh();
+  };
+
+  const copyBoardPrompt = async (task: ProjectTodo) => {
+    const section = sections.find(item => item.id === task.sectionId);
+    if (!section) return;
+    await navigator.clipboard.writeText(taskPromptText(task, section));
+    setMessage(`Copied prompt for “${task.title}”.`);
+  };
+
   const filtersActive = Boolean(search.trim() || statusFilter || priorityFilter || sectionFilter);
 
   if (query.isLoading) return <Text>Loading project todos…</Text>;
@@ -425,7 +456,12 @@ export function ProjectTodosPanel() {
               const stats = sectionStats(section.id, tasks);
               const isCollapsed = collapsed.has(section.id);
               return (
-                <Card key={section.id} withBorder padding="sm">
+                <Card
+                  key={section.id}
+                  withBorder
+                  padding="sm"
+                  style={{ borderLeft: `4px solid ${sectionAccent(sectionColor(section.id, sections))}` }}
+                >
                   <Group justify="space-between">
                     <Group gap="xs">
                       <ActionIcon
@@ -436,8 +472,11 @@ export function ProjectTodosPanel() {
                           return next;
                         })}
                       >{isCollapsed ? "▸" : "▾"}</ActionIcon>
-                      <Text fw={700}>{section.name}</Text>
-                      <Badge variant="light" color={stats.done === stats.total && stats.total > 0 ? "green" : "blue"}>{stats.done}/{stats.total}</Badge>
+                      <Text fw={700} c={sectionColor(section.id, sections)}>{section.name}</Text>
+                      <Badge
+                        variant="light"
+                        color={stats.done === stats.total && stats.total > 0 ? "green" : sectionColor(section.id, sections)}
+                      >{stats.done}/{stats.total}</Badge>
                     </Group>
                     <Group gap={4}>
                       <ActionIcon
@@ -539,6 +578,8 @@ export function ProjectTodosPanel() {
                 <Stack gap="xs">
                   {rows.map(task => {
                     const section = sections.find(item => item.id === task.sectionId);
+                    const color = section ? sectionColor(section.id, sections) : "gray";
+                    const currentStatusIndex = STATUS_ORDER.indexOf(task.status);
                     const isDragged = draggedTaskId === task.id;
                     const isCardDropTarget = draggedTaskId !== null && dragOverTaskId === task.id;
                     return (
@@ -575,16 +616,50 @@ export function ProjectTodosPanel() {
                         style={{
                           cursor: isDragged ? "grabbing" : "grab",
                           opacity: isDragged ? 0.45 : 1,
+                          borderLeft: `4px solid ${sectionAccent(color)}`,
                           outline: isCardDropTarget ? "2px solid var(--mantine-color-blue-5)" : undefined,
                           outlineOffset: isCardDropTarget ? -2 : undefined
                         }}
                       >
                         <Group justify="space-between" gap="xs" wrap="nowrap">
-                          <Text fw={600} style={{ minWidth: 0 }}>{task.title}</Text>
-                          <Text size="xs" c="dimmed" title="Drag to move task">⋮⋮</Text>
+                          <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+                            <Text size="xs" c="dimmed" title="Drag to move task">⋮⋮</Text>
+                            <Text fw={600} style={{ minWidth: 0 }}>{task.title}</Text>
+                          </Group>
+                          <Group gap={2} wrap="nowrap">
+                            <ActionIcon
+                              size="sm"
+                              variant="subtle"
+                              disabled={currentStatusIndex <= 0}
+                              title="Move to previous column"
+                              onClick={async event => {
+                                event.stopPropagation();
+                                await moveBoardTaskByStatus(task, -1);
+                              }}
+                            >←</ActionIcon>
+                            <ActionIcon
+                              size="sm"
+                              variant="subtle"
+                              disabled={currentStatusIndex >= STATUS_ORDER.length - 1}
+                              title="Move to next column"
+                              onClick={async event => {
+                                event.stopPropagation();
+                                await moveBoardTaskByStatus(task, 1);
+                              }}
+                            >→</ActionIcon>
+                            <ActionIcon
+                              size="sm"
+                              variant="subtle"
+                              title="Copy as prompt"
+                              onClick={async event => {
+                                event.stopPropagation();
+                                await copyBoardPrompt(task);
+                              }}
+                            >⧉</ActionIcon>
+                          </Group>
                         </Group>
                         <Group gap="xs" mt={6}>
-                          {section && <Badge size="sm" variant="outline">{section.name}</Badge>}
+                          {section && <Badge size="sm" variant="light" color={color}>{section.name}</Badge>}
                           <Badge size="sm" variant="light" color={priorityColor(task.priority)}>{task.priority}</Badge>
                           {task.prReference && <Badge size="sm" color="violet" variant="outline">{task.prReference}</Badge>}
                         </Group>
