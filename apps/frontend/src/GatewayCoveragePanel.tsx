@@ -78,6 +78,9 @@ const ASSIGNMENT_MATCH_FILTER_STORAGE_KEY =
 const ASSIGNMENT_FILTER_STORAGE_KEY =
   `${STORAGE_PREFIX}.assignmentFilter`;
 
+const BACKUP_FILTER_STORAGE_KEY =
+  `${STORAGE_PREFIX}.backupFilter`;
+
 const PERIOD_VALUES =
   new Set([
     String(5 / 60),
@@ -106,6 +109,10 @@ type AssignmentMatchStatus =
   | "NO RECOMMENDATION";
 
 type AssignmentFilter =
+  | "ASSIGNED"
+  | "UNASSIGNED";
+
+type BackupFilter =
   | "ASSIGNED"
   | "UNASSIGNED";
 
@@ -579,6 +586,19 @@ export function GatewayCoveragePanel() {
         : null;
     });
 
+  const [backupFilter, setBackupFilter] =
+    React.useState<BackupFilter | null>(() => {
+      if (typeof window === "undefined") return null;
+
+      const value = window.localStorage.getItem(
+        BACKUP_FILTER_STORAGE_KEY
+      );
+
+      return value === "ASSIGNED" || value === "UNASSIGNED"
+        ? value
+        : null;
+    });
+
   const [copiedSensorUid, setCopiedSensorUid] =
     React.useState<string | null>(null);
 
@@ -696,6 +716,22 @@ export function GatewayCoveragePanel() {
       }
     },
     [assignmentFilter]
+  );
+
+  React.useEffect(
+    () => {
+      if (backupFilter === null) {
+        window.localStorage.removeItem(
+          BACKUP_FILTER_STORAGE_KEY
+        );
+      } else {
+        window.localStorage.setItem(
+          BACKUP_FILTER_STORAGE_KEY,
+          backupFilter
+        );
+      }
+    },
+    [backupFilter]
   );
 
   const [gatewayAction, setGatewayAction] =
@@ -916,6 +952,14 @@ export function GatewayCoveragePanel() {
   const unassignedSensorCount =
     allSensorUids.length - assignedSensorCount;
 
+  const backupAssignedSensorCount =
+    allSensorUids.filter(
+      sensorUid => Boolean(sensorByUid.get(sensorUid)?.backupGateway)
+    ).length;
+
+  const noBackupSensorCount =
+    allSensorUids.length - backupAssignedSensorCount;
+
   const functionalGatewayByGatewayId =
     new Map(
       (functionalGatewaysQuery.data ?? []).map(
@@ -1007,6 +1051,23 @@ export function GatewayCoveragePanel() {
         if (
           assignmentFilter === "UNASSIGNED" &&
           isAssigned
+        ) {
+          return false;
+        }
+
+        const hasBackup =
+          Boolean(sensorByUid.get(sensorUid)?.backupGateway);
+
+        if (
+          backupFilter === "ASSIGNED" &&
+          !hasBackup
+        ) {
+          return false;
+        }
+
+        if (
+          backupFilter === "UNASSIGNED" &&
+          hasBackup
         ) {
           return false;
         }
@@ -1163,6 +1224,7 @@ export function GatewayCoveragePanel() {
 
   const filtersActive =
     assignmentFilter !== null ||
+    backupFilter !== null ||
     sensorFilter.trim().length > 0 ||
     suggestedGatewayFilter !== null ||
     recommendationFilter !== null ||
@@ -1170,6 +1232,7 @@ export function GatewayCoveragePanel() {
 
   const resetFilters = () => {
     setAssignmentFilter(null);
+    setBackupFilter(null);
     setSensorFilter("");
     setSuggestedGatewayFilter(null);
     setRecommendationFilter(null);
@@ -1524,6 +1587,20 @@ export function GatewayCoveragePanel() {
                 </Text>
                 {" / "}{allSensorUids.length}
                 {" · "}
+                Backup assigned: {" "}
+                <Text
+                  span
+                  c={backupAssignedSensorCount < allSensorUids.length ? "orange" : undefined}
+                  fw={700}
+                >
+                  {backupAssignedSensorCount}
+                </Text>
+                {" / "}{allSensorUids.length}
+                {" · No backup: "}
+                <Text span c={noBackupSensorCount > 0 ? "orange" : undefined} fw={700}>
+                  {noBackupSensorCount}
+                </Text>
+                {" · "}
                 Match: {" "}
                 <Text
                   span
@@ -1566,6 +1643,25 @@ export function GatewayCoveragePanel() {
                   { value: "UNASSIGNED", label: "Not assigned" }
                 ]}
                 aria-label="Filter sensors by gateway assignment"
+              />
+              <Select
+                size="xs"
+                label="Backup"
+                placeholder="All"
+                clearable
+                value={backupFilter}
+                onChange={value =>
+                  setBackupFilter(
+                    value === "ASSIGNED" || value === "UNASSIGNED"
+                      ? value
+                      : null
+                  )
+                }
+                data={[
+                  { value: "ASSIGNED", label: "Assigned" },
+                  { value: "UNASSIGNED", label: "Not assigned" }
+                ]}
+                aria-label="Filter sensors by backup gateway assignment"
               />
               <TextInput
                 size="xs"
@@ -2088,8 +2184,32 @@ export function GatewayCoveragePanel() {
                         )
                       : undefined;
 
+                  const sensor =
+                    sensorByUid.get(sensorUid);
+
                   const assignedGateway =
-                    sensorByUid.get(sensorUid)?.gateway ?? null;
+                    sensor?.gateway
+                      ? {
+                          name: sensor.gateway.name,
+                          gatewayId: sensor.gateway.gatewayId,
+                          locationName:
+                            functionalGatewayByGatewayId.get(
+                              sensor.gateway.gatewayId
+                            )?.location?.name ?? null
+                        }
+                      : null;
+
+                  const backupGateway =
+                    sensor?.backupGateway
+                      ? {
+                          name: sensor.backupGateway.name,
+                          gatewayId: sensor.backupGateway.gatewayId,
+                          locationName:
+                            functionalGatewayByGatewayId.get(
+                              sensor.backupGateway.gatewayId
+                            )?.location?.name ?? null
+                        }
+                      : null;
 
                   const assignmentStatus =
                     assignmentMatchStatus(sensorUid);
@@ -2269,7 +2389,7 @@ export function GatewayCoveragePanel() {
                             fw={500}
                             title={
                               assignedGateway
-                                ? `${assignedGateway.name} · ${assignedGateway.gatewayId}${assignedGateway.location?.name ? ` · ${assignedGateway.location.name}` : ""}`
+                                ? `${assignedGateway.name} · ${assignedGateway.gatewayId}${assignedGateway.locationName ? ` · ${assignedGateway.locationName}` : ""}`
                                 : "No primary gateway assigned"
                             }
                           >
@@ -2278,11 +2398,11 @@ export function GatewayCoveragePanel() {
                                 ? (
                                     <>
                                       {assignedGateway.name} · {assignedGateway.gatewayId}
-                                      {assignedGateway.location?.name && (
+                                      {assignedGateway.locationName && (
                                         <>
                                           {" · "}
                                           <Text span c="blue" inherit>
-                                            {assignedGateway.location.name}
+                                            {assignedGateway.locationName}
                                           </Text>
                                         </>
                                       )}
@@ -2291,14 +2411,14 @@ export function GatewayCoveragePanel() {
                                 : "—"
                             }
                           </Text>
-                          {sensorByUid.get(sensorUid)?.backupGateway && (
+                          {backupGateway && (
                             <Text size="xs" c="teal" fw={500} lh={1.1}>
-                              Backup: {sensorByUid.get(sensorUid)?.backupGateway?.name} · {sensorByUid.get(sensorUid)?.backupGateway?.gatewayId}
-                              {sensorByUid.get(sensorUid)?.backupGateway?.location?.name && (
+                              Backup: {backupGateway.name} · {backupGateway.gatewayId}
+                              {backupGateway.locationName && (
                                 <>
                                   {" · "}
                                   <Text span c="blue" inherit>
-                                    {sensorByUid.get(sensorUid)?.backupGateway?.location?.name}
+                                    {backupGateway.locationName}
                                   </Text>
                                 </>
                               )}
