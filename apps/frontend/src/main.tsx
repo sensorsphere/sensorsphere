@@ -1558,6 +1558,11 @@ function Dashboard() {
             }
           />
 
+
+
+        </Stack>
+
+        <Stack gap="xs" mt="auto" pt="md">
           <NavLink
             label={
               navbarCollapsed
@@ -1593,13 +1598,9 @@ function Dashboard() {
             }
           />
 
-        </Stack>
-
-        {
-          !navbarCollapsed && (
+          {!navbarCollapsed && (
             <Stack
               gap={2}
-              mt="auto"
               pt="md"
               style={{
                 borderTop:
@@ -1631,8 +1632,8 @@ function Dashboard() {
                 </Text>
               </Group>
             </Stack>
-          )
-        }
+          )}
+        </Stack>
       </AppShell.Navbar>
 
       <AppShell.Main>

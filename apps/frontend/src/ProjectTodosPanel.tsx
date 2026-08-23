@@ -29,6 +29,7 @@ import {
   updateProjectTodo,
   updateProjectTodoSection
 } from "./api";
+import { BadgeSelect } from "./BadgeSelect";
 import { NavigationIcon } from "./NavigationIcon";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 import { activeFilterStyles } from "./filterStyles";
@@ -385,12 +386,21 @@ export function ProjectTodosPanel() {
       {message && <Card withBorder padding="xs"><Text size="sm">{message}</Text></Card>}
 
       <SimpleGrid cols={{ base: 2, md: 4 }}>
-        <Card withBorder><Text size="xs" c="dimmed">OPEN</Text><Text size="xl" fw={700}>{data?.summary.open ?? 0}</Text></Card>
-        <Card withBorder><Text size="xs" c="dimmed">IN PROGRESS</Text><Text size="xl" fw={700} c="blue">{data?.summary.inProgress ?? 0}</Text></Card>
-        <Card withBorder><Text size="xs" c="dimmed">COMPLETED</Text><Text size="xl" fw={700} c="green">{data?.summary.done ?? 0}</Text></Card>
+        <Card withBorder style={{ borderLeft: `4px solid var(--mantine-color-${statusColor("OPEN")}-6)` }}>
+          <Badge size="sm" variant="light" color={statusColor("OPEN")}>OPEN</Badge>
+          <Text size="xl" fw={700} c={statusColor("OPEN")}>{data?.summary.open ?? 0}</Text>
+        </Card>
+        <Card withBorder style={{ borderLeft: `4px solid var(--mantine-color-${statusColor("IN_PROGRESS")}-6)` }}>
+          <Badge size="sm" variant="light" color={statusColor("IN_PROGRESS")}>IN PROGRESS</Badge>
+          <Text size="xl" fw={700} c={statusColor("IN_PROGRESS")}>{data?.summary.inProgress ?? 0}</Text>
+        </Card>
+        <Card withBorder style={{ borderLeft: `4px solid var(--mantine-color-${statusColor("DONE")}-6)` }}>
+          <Badge size="sm" variant="light" color={statusColor("DONE")}>COMPLETED</Badge>
+          <Text size="xl" fw={700} c={statusColor("DONE")}>{data?.summary.done ?? 0}</Text>
+        </Card>
         <Card withBorder>
           <Group justify="space-between"><Text size="xs" c="dimmed">PROGRESS</Text><Text fw={700}>{data?.summary.progressPercent ?? 0}%</Text></Group>
-          <Progress mt="xs" value={data?.summary.progressPercent ?? 0} />
+          <Progress mt="xs" color="violet" value={data?.summary.progressPercent ?? 0} />
         </Card>
       </SimpleGrid>
 
@@ -404,25 +414,27 @@ export function ProjectTodosPanel() {
               onChange={event => setSearch(event.currentTarget.value)}
               styles={activeFilterStyles(Boolean(search.trim()))}
             />
-            <Select
+            <BadgeSelect
               label="Status"
               placeholder="All statuses"
               clearable
               data={STATUS_OPTIONS}
               value={statusFilter}
               onChange={setStatusFilter}
+              badgeColor={value => statusColor(value as ProjectTodoStatus)}
               styles={activeFilterStyles(Boolean(statusFilter))}
             />
-            <Select
+            <BadgeSelect
               label="Priority"
               placeholder="All priorities"
               clearable
               data={PRIORITY_OPTIONS}
               value={priorityFilter}
               onChange={setPriorityFilter}
+              badgeColor={value => priorityColor(value as ProjectTodoPriority)}
               styles={activeFilterStyles(Boolean(priorityFilter))}
             />
-            <Select
+            <BadgeSelect
               label="Section"
               placeholder="All sections"
               clearable
@@ -430,6 +442,7 @@ export function ProjectTodosPanel() {
               data={sections.map(section => ({ value: section.id, label: section.name }))}
               value={sectionFilter}
               onChange={setSectionFilter}
+              badgeColor={value => sectionColor(value, sections)}
               styles={activeFilterStyles(Boolean(sectionFilter))}
             />
             <ResetFiltersAction active={filtersActive} onReset={resetFilters} />
