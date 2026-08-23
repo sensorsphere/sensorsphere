@@ -103,11 +103,11 @@ il faut ameliorer le Simulator
 * [ ] il faut une icone "Reset filters" pour le tableau Publication Log
 
 
-## ESPHome
+### ESPHome
 * [ ] Tenter de remonter les infos d'un capteur par MQTT afin d'alimenter automatiquement les infos d'un Sensor : quel serait le meme chemin pour les topics ?
 * [ ] est-il possible d'écrire un petit programme (ex: python) permettant de se connecter a un ESPhome afin de recuperer les logs et pouvoir les filtrer ?
 
-## Hardware
+### Hardware
 * [X] Flasher 4 ESP32 relais
   * [X] 1 garage
   * [X] 1 first floor (dressing F)
