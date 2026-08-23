@@ -506,6 +506,16 @@ export function SensorCatalog() {
   const locations =
     locationsQuery.data ?? [];
 
+  const locationsById =
+    new Map(
+      locations.map(
+        location => [
+          location.id,
+          location
+        ]
+      )
+    );
+
   const locationOptions =
     [...locations]
       .sort(
@@ -1128,7 +1138,17 @@ export function SensorCatalog() {
                       <Table.Td>{sensor.uid}</Table.Td>
                       <Table.Td>{sensor.manufacturer ?? "—"}</Table.Td>
                       <Table.Td>{sensor.model ?? "—"}</Table.Td>
-                      <Table.Td>{asset?.location?.name ?? "—"}</Table.Td>
+                      <Table.Td>
+                        {asset?.location ? (
+                          <Group gap={5} wrap="nowrap">
+                            <LocationIcon
+                              name={getLocationIconName(asset.location)}
+                              size={16}
+                            />
+                            <Text size="sm">{asset.location.name}</Text>
+                          </Group>
+                        ) : "—"}
+                      </Table.Td>
                       <Table.Td>{sensor.gateway?.name ?? "—"}</Table.Td>
                       <Table.Td>
                         <Badge
@@ -1271,6 +1291,23 @@ export function SensorCatalog() {
                 form.locationId || null
               }
               data={locationOptions}
+              leftSection={
+                form.locationId ? (
+                  <LocationIcon
+                    name={getLocationIconName(locationsById.get(form.locationId))}
+                    size={17}
+                  />
+                ) : undefined
+              }
+              renderOption={({ option }) => (
+                <Group gap="xs" wrap="nowrap">
+                  <LocationIcon
+                    name={getLocationIconName(locationsById.get(option.value))}
+                    size={17}
+                  />
+                  <Text size="sm">{option.label}</Text>
+                </Group>
+              )}
               onChange={
                 value =>
                   setForm({
@@ -1292,6 +1329,29 @@ export function SensorCatalog() {
               data={gatewayOptions.filter(option =>
                 option.value !== form.backupGatewayId
               )}
+              leftSection={(() => {
+                const gateway = gateways.find(current => current.id === form.gatewayId);
+                return gateway?.location ? (
+                  <LocationIcon
+                    name={getLocationIconName(locationsById.get(gateway.location.id))}
+                    size={17}
+                  />
+                ) : undefined;
+              })()}
+              renderOption={({ option }) => {
+                const gateway = gateways.find(current => current.id === option.value);
+                return (
+                  <Group gap="xs" wrap="nowrap">
+                    {gateway?.location && (
+                      <LocationIcon
+                        name={getLocationIconName(locationsById.get(gateway.location.id))}
+                        size={17}
+                      />
+                    )}
+                    <Text size="sm">{option.label}</Text>
+                  </Group>
+                );
+              }}
               onChange={
                 value =>
                   setForm({
@@ -1313,6 +1373,29 @@ export function SensorCatalog() {
               data={gatewayOptions.filter(option =>
                 option.value !== form.gatewayId
               )}
+              leftSection={(() => {
+                const gateway = gateways.find(current => current.id === form.backupGatewayId);
+                return gateway?.location ? (
+                  <LocationIcon
+                    name={getLocationIconName(locationsById.get(gateway.location.id))}
+                    size={17}
+                  />
+                ) : undefined;
+              })()}
+              renderOption={({ option }) => {
+                const gateway = gateways.find(current => current.id === option.value);
+                return (
+                  <Group gap="xs" wrap="nowrap">
+                    {gateway?.location && (
+                      <LocationIcon
+                        name={getLocationIconName(locationsById.get(gateway.location.id))}
+                        size={17}
+                      />
+                    )}
+                    <Text size="sm">{option.label}</Text>
+                  </Group>
+                );
+              }}
               onChange={
                 value =>
                   setForm({

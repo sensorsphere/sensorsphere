@@ -784,6 +784,23 @@ export function GatewayCatalog() {
             clearable
             searchable
             value={form.locationId || null}
+            leftSection={
+              form.locationId ? (
+                <LocationIcon
+                  name={getLocationIconName(locationsById.get(form.locationId))}
+                  size={17}
+                />
+              ) : undefined
+            }
+            renderOption={({ option }) => (
+              <Group gap="xs" wrap="nowrap">
+                <LocationIcon
+                  name={getLocationIconName(locationsById.get(option.value))}
+                  size={17}
+                />
+                <Text size="sm">{option.label}</Text>
+              </Group>
+            )}
             onChange={value => setForm({ ...form, locationId: value ?? "" })}
             data={locationOptions}
           />

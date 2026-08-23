@@ -1757,7 +1757,25 @@ export function InventoryPanel() {
                         <Group gap="xs"><Text>{gateway.name}</Text><Badge size="xs" variant="light" color="violet">Gateway</Badge></Group>
                       </Table.Td>
                       <Table.Td>{gateway.gatewayId}</Table.Td>
-                      <Table.Td><Text size="sm">{gateway.location?.name ?? "Unassigned"}</Text></Table.Td>
+                      <Table.Td>
+                        {gateway.location ? (
+                          <Group gap={5} wrap="nowrap">
+                            <LocationIcon
+                              name={
+                                getLocationIconName(
+                                  locations.find(
+                                    location => location.id === gateway.location?.id
+                                  )
+                                )
+                              }
+                              size={16}
+                            />
+                            <Text size="sm">{gateway.location.name}</Text>
+                          </Group>
+                        ) : (
+                          <Text size="sm">Unassigned</Text>
+                        )}
+                      </Table.Td>
                       <Table.Td>{gateway.type.name}</Table.Td>
                       <Table.Td>MQTT</Table.Td>
                       <Table.Td><Badge color={gatewayIsOnline(gateway) ? "green" : "red"} variant="light">{gatewayIsOnline(gateway) ? "online" : "offline"}</Badge></Table.Td>
@@ -1882,6 +1900,35 @@ export function InventoryPanel() {
             value={
               locationForm.parentId
             }
+            leftSection={
+              locationForm.parentId ? (
+                <LocationIcon
+                  name={
+                    getLocationIconName(
+                      locations.find(
+                        location => location.id === locationForm.parentId
+                      )
+                    )
+                  }
+                  size={17}
+                />
+              ) : undefined
+            }
+            renderOption={({ option }) => (
+              <Group gap="xs" wrap="nowrap">
+                <LocationIcon
+                  name={
+                    getLocationIconName(
+                      locations.find(
+                        location => location.id === option.value
+                      )
+                    )
+                  }
+                  size={17}
+                />
+                <Text size="sm">{option.label}</Text>
+              </Group>
+            )}
             onChange={
               value =>
                 setLocationForm({

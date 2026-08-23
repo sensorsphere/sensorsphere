@@ -4,6 +4,7 @@ import { activeFilterControlStyle } from "./filterStyles";
 import { BadgeSelect } from "./BadgeSelect";
 
 import { NavigationIcon } from "./NavigationIcon";
+import { LocationIcon, getLocationIconName } from "./LocationIcon";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 
 import {
@@ -455,6 +456,15 @@ export function AlertPanel() {
 
   const [historySortKey, setHistorySortKey] = usePersistentState<string>("alerts.history.sortKey", "opened");
   const [historySortDirection, setHistorySortDirection] = usePersistentState<SortDirection>("alerts.history.sortDirection", "desc");
+
+  const [rulesViewMode, setRulesViewMode] =
+    usePersistentState<"cards" | "compact">(
+      "alerts.rules.viewMode",
+      "cards",
+      value =>
+        value === "cards" ||
+        value === "compact"
+    );
 
   const rulesQuery =
     useQuery({
@@ -1241,6 +1251,21 @@ export function AlertPanel() {
             </div>
 
             <Group gap="xs">
+              <SegmentedControl
+                size="xs"
+                value={rulesViewMode}
+                onChange={
+                  value =>
+                    setRulesViewMode(
+                      value as "cards" | "compact"
+                    )
+                }
+                data={[
+                  { value: "cards", label: "Card" },
+                  { value: "compact", label: "Compact" }
+                ]}
+              />
+
               <Badge variant="light">
                 {rules.length} rules
               </Badge>
@@ -1270,6 +1295,8 @@ export function AlertPanel() {
                 </Alert>
               )
               : (
+                rulesViewMode === "cards"
+                  ? (
                 <SimpleGrid
                   cols={{
                     base: 1,
@@ -1366,20 +1393,34 @@ export function AlertPanel() {
 
                                 return (
                                   <>
-                                    <Text
-                                      size="xs"
-                                      c="dimmed"
-                                    >
-                                      Asset:{" "}
-                                      {
-                                        asset
-                                          ? assetLabel(
-                                              asset
-                                            )
-                                          : rule.assetId
-                                            ?? "—"
-                                      }
-                                    </Text>
+                                    <Group gap={5} wrap="nowrap">
+                                      <Text
+                                        size="xs"
+                                        c="dimmed"
+                                      >
+                                        Asset:{" "}
+                                        {
+                                          asset
+                                            ? assetLabel(
+                                                asset
+                                              )
+                                            : rule.assetId
+                                              ?? "—"
+                                        }
+                                      </Text>
+                                      {asset?.location && (
+                                        <>
+                                          <Text size="xs" c="dimmed">·</Text>
+                                          <LocationIcon
+                                            name={getLocationIconName(asset.location)}
+                                            size={14}
+                                          />
+                                          <Text size="xs" c="dimmed">
+                                            {asset.location.name}
+                                          </Text>
+                                        </>
+                                      )}
+                                    </Group>
 
                                     {
                                       rule.assetMetricId && (
@@ -1499,6 +1540,145 @@ export function AlertPanel() {
                     )
                   }
                 </SimpleGrid>
+                  )
+                  : (
+                    <Stack gap="xs">
+                      {sortedRules.map(rule => {
+                        const asset =
+                          assets.find(
+                            current =>
+                              current.id === rule.assetId
+                          );
+
+                        const metric =
+                          asset?.metrics.find(
+                            current =>
+                              current.id === rule.assetMetricId
+                          );
+
+                        return (
+                          <Card
+                            key={rule.id}
+                            withBorder
+                            radius="md"
+                            padding="sm"
+                          >
+                            <Group
+                              justify="space-between"
+                              align="center"
+                              wrap="nowrap"
+                            >
+                              <div style={{ minWidth: 220, flex: "1 1 280px" }}>
+                                <Text fw={700} size="sm">
+                                  {rule.name}
+                                </Text>
+                                <Group gap={6} wrap="wrap">
+                                  <Text size="xs" c="dimmed">
+                                    {conditionLabel(rule.conditionType, rule)}
+                                  </Text>
+                                  {asset?.location && (
+                                    <>
+                                      <Text size="xs" c="dimmed">·</Text>
+                                      <Group gap={4} wrap="nowrap">
+                                        <LocationIcon
+                                          name={getLocationIconName(asset.location)}
+                                          size={14}
+                                        />
+                                        <Text size="xs" c="dimmed">
+                                          {asset.location.name}
+                                        </Text>
+                                      </Group>
+                                    </>
+                                  )}
+                                </Group>
+                              </div>
+
+                              <div style={{ minWidth: 190, flex: "1 1 240px" }}>
+                                <Text size="xs" c="dimmed">
+                                  {asset ? assetLabel(asset) : rule.assetId ?? "—"}
+                                </Text>
+                                {rule.assetMetricId && (
+                                  <Text size="xs" c="dimmed">
+                                    {metric ? metric.displayName : rule.assetMetricId}
+                                  </Text>
+                                )}
+                              </div>
+
+                              <Group gap="xs" wrap="nowrap">
+                                <Badge color={severityColor(rule.severity)} size="sm">
+                                  {rule.severity}
+                                </Badge>
+                                <Badge
+                                  color={rule.enabled ? "green" : "gray"}
+                                  variant="light"
+                                  size="sm"
+                                >
+                                  {rule.enabled ? "Enabled" : "Disabled"}
+                                </Badge>
+                              </Group>
+
+                              <Group gap={4} wrap="nowrap">
+                                <Button
+                                  size="compact-xs"
+                                  variant="default"
+                                  loading={
+                                    toggleMutation.isPending &&
+                                    toggleMutation.variables?.id === rule.id
+                                  }
+                                  onClick={() =>
+                                    toggleMutation.mutate({
+                                      id: rule.id,
+                                      enabled: !rule.enabled
+                                    })
+                                  }
+                                >
+                                  {rule.enabled ? "Disable" : "Enable"}
+                                </Button>
+                                <Button
+                                  size="compact-xs"
+                                  variant="default"
+                                  onClick={() => {
+                                    const copy = ruleToForm(rule);
+                                    setRuleForm({
+                                      ...copy,
+                                      id: null,
+                                      name: `Copy of ${rule.name}`,
+                                      enabled: false
+                                    });
+                                  }}
+                                >
+                                  Copy
+                                </Button>
+                                <Button
+                                  size="compact-xs"
+                                  variant="light"
+                                  onClick={() => setRuleForm(ruleToForm(rule))}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  size="compact-xs"
+                                  color="red"
+                                  variant="light"
+                                  loading={
+                                    deleteMutation.isPending &&
+                                    deleteMutation.variables === rule.id
+                                  }
+                                  onClick={() => {
+                                    if (window.confirm(`Delete alert rule "${rule.name}"?`)) {
+                                      deleteMutation.mutate(rule.id);
+                                    }
+                                  }}
+                                >
+                                  Delete
+                                </Button>
+                              </Group>
+                            </Group>
+                          </Card>
+                        );
+                      })}
+                    </Stack>
+                  )
               )
           }
 
@@ -1660,6 +1840,32 @@ export function AlertPanel() {
                   ruleForm.assetId
                   || null
                 }
+                leftSection={
+                  selectedAsset?.location ? (
+                    <LocationIcon
+                      name={getLocationIconName(selectedAsset.location)}
+                      size={17}
+                    />
+                  ) : undefined
+                }
+                renderOption={({ option }) => {
+                  const optionAsset =
+                    assets.find(
+                      asset => asset.id === option.value
+                    );
+
+                  return (
+                    <Group gap="xs" wrap="nowrap">
+                      {optionAsset?.location && (
+                        <LocationIcon
+                          name={getLocationIconName(optionAsset.location)}
+                          size={17}
+                        />
+                      )}
+                      <Text size="sm">{option.label}</Text>
+                    </Group>
+                  );
+                }}
                 data={
                   sortedAssets.map(
                     asset => ({
