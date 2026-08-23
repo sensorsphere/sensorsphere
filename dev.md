@@ -88,3 +88,9 @@ scp ubuntu@100.64.0.8:/tmp/PR-XXX-sources.tar.gz C:\Users\fabri\Downloads
 
 ```
 
+# MQTT Topics
+
+```txt
+sensors/ble_gateway/{gateway_id}/sensor/{metric}_{sensor_uid}/state
+
+```
