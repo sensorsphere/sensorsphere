@@ -19,7 +19,8 @@ import {
   Stack,
   Table,
   Text,
-  Title
+  Title,
+  useComputedColorScheme
 } from "@mantine/core";
 
 import {
@@ -487,6 +488,7 @@ function recommendationInfo(
 }
 
 export function GatewayCoveragePanel() {
+  const colorScheme = useComputedColorScheme("dark");
   const queryClient =
     useQueryClient();
 
@@ -1399,6 +1401,10 @@ export function GatewayCoveragePanel() {
         </div>
 
         <Group gap="sm">
+          <Text size="xs" c="dimmed" fw={500}>
+            Minimum samples for suggestion: {minimumSamplesForPeriod(hours)}
+          </Text>
+
           <SegmentedControl
             value={hours}
             onChange={setHours}
@@ -1482,7 +1488,7 @@ export function GatewayCoveragePanel() {
                   {sensors.length}
                 </Text>
                 {filtersActive && (
-                  <Text span c="dimmed" fw={500}>
+                  <Text span c="blue" fw={500}>
                     {" "}(filtered)
                   </Text>
                 )}
@@ -1626,8 +1632,7 @@ export function GatewayCoveragePanel() {
           <Table.ScrollContainer
             minWidth={720}
             style={{
-              maxHeight: "calc(100vh - 300px)",
-              overflowY: "auto"
+              overflowY: "visible"
             }}
           >
             <Table
@@ -1642,10 +1647,12 @@ export function GatewayCoveragePanel() {
             >
               <Table.Thead
                 style={{
-                  position: "sticky",
-                  top: 0,
-                  zIndex: 3,
-                  background: "var(--mantine-color-default-hover)"
+                  display: "table",
+                  width: "100%",
+                  tableLayout: "fixed",
+                  background: colorScheme === "dark"
+                    ? "var(--mantine-color-dark-8)"
+                    : "var(--mantine-color-gray-2)"
                 }}
               >
                 <Table.Tr>
@@ -2011,15 +2018,19 @@ export function GatewayCoveragePanel() {
                         ]}
                         aria-label="Filter by gateway assignment match"
                       />
-                      <Text size="xs" c="dimmed">
-                        Minimum samples for suggestion: {minimumSamplesForPeriod(hours)}
-                      </Text>
                     </Stack>
                   </Table.Th>
                 </Table.Tr>
               </Table.Thead>
 
-              <Table.Tbody>
+              <Table.Tbody
+                style={{
+                  display: "block",
+                  maxHeight: "calc(100vh - 420px)",
+                  overflowY: "auto",
+                  scrollbarGutter: "stable"
+                }}
+              >
                 {sensors.map(sensorUid => {
                   const sensorRows =
                     rowsBySensor.get(sensorUid) ?? [];
@@ -2055,7 +2066,14 @@ export function GatewayCoveragePanel() {
                           : "gray";
 
                   return (
-                    <Table.Tr key={sensorUid}>
+                    <Table.Tr
+                      key={sensorUid}
+                      style={{
+                        display: "table",
+                        width: "100%",
+                        tableLayout: "fixed"
+                      }}
+                    >
                       <Table.Td
                         style={{
                           width: 176,
@@ -2223,10 +2241,22 @@ export function GatewayCoveragePanel() {
                                 : "—"
                             }
                           </Text>
-                          {sensorByUid.get(sensorUid)?.backupGateway && (
-                            <Text size="xs" c="teal" fw={500} lh={1.1}>
-                              Backup: {sensorByUid.get(sensorUid)?.backupGateway?.name} · {sensorByUid.get(sensorUid)?.backupGateway?.gatewayId}
+                          {assignedGateway?.location?.name && (
+                            <Text size="xs" c="blue" fw={500} lh={1.1}>
+                              {assignedGateway.location.name}
                             </Text>
+                          )}
+                          {sensorByUid.get(sensorUid)?.backupGateway && (
+                            <>
+                              <Text size="xs" c="teal" fw={500} lh={1.1}>
+                                Backup: {sensorByUid.get(sensorUid)?.backupGateway?.name} · {sensorByUid.get(sensorUid)?.backupGateway?.gatewayId}
+                              </Text>
+                              {sensorByUid.get(sensorUid)?.backupGateway?.location?.name && (
+                                <Text size="xs" c="blue" fw={500} lh={1.1}>
+                                  {sensorByUid.get(sensorUid)?.backupGateway?.location?.name}
+                                </Text>
+                              )}
+                            </>
                           )}
                           <Group gap={4} wrap="nowrap">
                             <Button
@@ -2475,9 +2505,20 @@ export function GatewayCoveragePanel() {
                             </Button>
                           )}
                           {suggestion.backupCandidateGatewayId && (
-                            <Text size="xs" c="teal" lh={1.25}>
-                              Backup candidate: {suggestion.backupCandidateGatewayId}
-                            </Text>
+                            <>
+                              <Text size="xs" c="teal" lh={1.25}>
+                                Backup candidate: {suggestion.backupCandidateGatewayId}
+                              </Text>
+                              {functionalGatewayByGatewayId.get(
+                                suggestion.backupCandidateGatewayId
+                              )?.location?.name && (
+                                <Text size="xs" c="blue" fw={500} lh={1.25}>
+                                  {functionalGatewayByGatewayId.get(
+                                    suggestion.backupCandidateGatewayId
+                                  )?.location?.name}
+                                </Text>
+                              )}
+                            </>
                           )}
                           {suggestion.detailLines.map(
                             (line, index) => (
