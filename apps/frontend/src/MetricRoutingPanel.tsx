@@ -29,6 +29,7 @@ import {
 import { NavigationIcon } from "./NavigationIcon";
 import { GatewayTrafficPanel } from "./GatewayTrafficPanel";
 import { ResetFiltersAction } from "./ResetFiltersAction";
+import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import {
   clearMetricRoutingEvents,
   getLocations,
@@ -75,6 +76,8 @@ export function MetricRoutingPanel() {
   const [gatewayFilter, setGatewayFilter] = usePersistentState("metricRouting.gateway", "");
   const [locationId, setLocationId] = usePersistentState<string | null>("metricRouting.location", null);
   const [metricFilter, setMetricFilter] = usePersistentState("metricRouting.metric", "");
+  const [tableSortKey, setTableSortKey] = usePersistentState<string>("metricRouting.tableSortKey", "time");
+  const [tableSortDirection, setTableSortDirection] = usePersistentState<SortDirection>("metricRouting.tableSortDirection", "desc");
 
   const statusQuery = useQuery({
     queryKey: ["metric-routing-status"],
@@ -157,6 +160,31 @@ export function MetricRoutingPanel() {
 
     return true;
   });
+
+  const sortedEvents = [...events].sort((left, right) => {
+    const value = (event: (typeof events)[number]) => {
+      switch (tableSortKey) {
+        case "sensor": return event.sensorName ?? event.sensorUid;
+        case "metric": return event.metric;
+        case "value": return event.value;
+        case "gateway": return event.gatewayId;
+        case "assigned": return event.assignedGatewayId;
+        case "decision": return event.decision;
+        case "reason": return event.reason;
+        default: return new Date(event.occurredAt).getTime();
+      }
+    };
+    return compareTableValues(value(left), value(right), tableSortDirection);
+  });
+
+  const toggleTableSort = (key: string): void => {
+    if (tableSortKey === key) {
+      setTableSortDirection(tableSortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setTableSortKey(key);
+      setTableSortDirection(key === "time" ? "desc" : "asc");
+    }
+  };
 
   const locationOptions = (locationsQuery.data ?? [])
     .slice()
@@ -452,18 +480,15 @@ export function MetricRoutingPanel() {
               >
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>Time</Table.Th>
-                    <Table.Th>Sensor</Table.Th>
-                    <Table.Th>Metric</Table.Th>
-                    <Table.Th>Value</Table.Th>
-                    <Table.Th>Gateway</Table.Th>
-                    <Table.Th>Assigned gateway</Table.Th>
-                    <Table.Th>Decision</Table.Th>
-                    <Table.Th>Reason</Table.Th>
+                    {[["time", "Time"], ["sensor", "Sensor"], ["metric", "Metric"], ["value", "Value"], ["gateway", "Gateway"], ["assigned", "Assigned gateway"], ["decision", "Decision"], ["reason", "Reason"]].map(([key, label]) => (
+                      <SortableTableHeader key={key} active={tableSortKey === key} direction={tableSortDirection} onClick={() => toggleTableSort(key)}>
+                        {label}
+                      </SortableTableHeader>
+                    ))}
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {events.map(event => (
+                  {sortedEvents.map(event => (
                     <Table.Tr key={event.id} title={event.sourceTopic}>
                       <Table.Td>{timeLabel(event.occurredAt)}</Table.Td>
                       <Table.Td>

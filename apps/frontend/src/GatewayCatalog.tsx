@@ -55,6 +55,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
+import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 
 interface GatewayFormState {
   gatewayId: string;
@@ -164,6 +165,9 @@ function qualityColor(rssi: number): string {
 
 export function GatewayCatalog() {
   const queryClient = useQueryClient();
+
+  const [tableSortKey, setTableSortKey] = usePersistentState<string>("gateways.tableSortKey", "name");
+  const [tableSortDirection, setTableSortDirection] = usePersistentState<SortDirection>("gateways.tableSortDirection", "asc");
 
   const [viewMode, setViewMode] =
     usePersistentState<"cards" | "compact">(
@@ -382,10 +386,38 @@ export function GatewayCatalog() {
           ? gateway.enabled
           : !gateway.enabled)
       )
-    )
-    .sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
     );
+
+  const sortedTableGateways = [...filteredGateways].sort((left, right) => {
+    const value = (gateway: Gateway) => {
+      switch (tableSortKey) {
+        case "gatewayId": return gateway.gatewayId;
+        case "type": return gateway.type.name;
+        case "version": return gateway.version;
+        case "mac": return gateway.macAddress;
+        case "ssid": return gateway.wifiSsid;
+        case "ip": return gateway.ipAddress;
+        case "location": return gateway.location?.name;
+        case "status": return isOnline(gateway.lastSeenAt);
+        case "wifiRssi": return gateway.wifiRssi;
+        case "enabled": return gateway.enabled;
+        case "sensors": return gateway.sensorCount;
+        case "assets": return gateway.assetCount;
+        case "lastSeen": return gateway.lastSeenAt ? new Date(gateway.lastSeenAt).getTime() : null;
+        default: return gateway.name;
+      }
+    };
+    return compareTableValues(value(left), value(right), tableSortDirection);
+  });
+
+  const toggleTableSort = (key: string): void => {
+    if (tableSortKey === key) {
+      setTableSortDirection(tableSortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setTableSortKey(key);
+      setTableSortDirection("asc");
+    }
+  };
 
   const filtersActive =
     nameSearch.trim().length > 0 ||
@@ -601,25 +633,21 @@ export function GatewayCatalog() {
             <Table striped highlightOnHover verticalSpacing="xs">
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Name</Table.Th>
-                  <Table.Th>Gateway ID</Table.Th>
-                  <Table.Th>Type</Table.Th>
-                  <Table.Th>Version</Table.Th>
-                  <Table.Th>MAC</Table.Th>
-                  <Table.Th>SSID</Table.Th>
-                  <Table.Th>IP</Table.Th>
-                  <Table.Th>Location</Table.Th>
-                  <Table.Th>Status</Table.Th>
-                  <Table.Th>WiFi RSSI</Table.Th>
-                  <Table.Th>Enabled</Table.Th>
-                  <Table.Th>Sensors</Table.Th>
-                  <Table.Th>Assets</Table.Th>
-                  <Table.Th>Last seen</Table.Th>
+                  {[
+                    ["name", "Name"], ["gatewayId", "Gateway ID"], ["type", "Type"], ["version", "Version"],
+                    ["mac", "MAC"], ["ssid", "SSID"], ["ip", "IP"], ["location", "Location"],
+                    ["status", "Status"], ["wifiRssi", "WiFi RSSI"], ["enabled", "Enabled"],
+                    ["sensors", "Sensors"], ["assets", "Assets"], ["lastSeen", "Last seen"]
+                  ].map(([key, label]) => (
+                    <SortableTableHeader key={key} active={tableSortKey === key} direction={tableSortDirection} onClick={() => toggleTableSort(key)}>
+                      {label}
+                    </SortableTableHeader>
+                  ))}
                   <Table.Th>Actions</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {filteredGateways.map(gateway => (
+                {sortedTableGateways.map(gateway => (
                   <Table.Tr key={gateway.id}>
                     <Table.Td fw={600}>{gateway.name}</Table.Td>
                     <Table.Td>{gateway.gatewayId}</Table.Td>

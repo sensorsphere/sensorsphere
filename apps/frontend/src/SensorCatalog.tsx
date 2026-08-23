@@ -60,6 +60,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
+import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 
 interface SensorFormState {
   name: string;
@@ -203,6 +204,11 @@ export function SensorCatalog() {
       value =>
         typeof value === "string"
     );
+
+  const [tableSortKey, setTableSortKey] =
+    usePersistentState<string>("sensors.tableSortKey", "name");
+  const [tableSortDirection, setTableSortDirection] =
+    usePersistentState<SortDirection>("sensors.tableSortDirection", "asc");
 
   const [viewMode, setViewMode] =
     usePersistentState<"cards" | "compact">(
@@ -671,6 +677,33 @@ export function SensorCatalog() {
             )
       );
 
+  const sortedTableSensors = [...filteredSensors].sort((left, right) => {
+    const leftAsset = assetsBySensorUid.get(left.uid);
+    const rightAsset = assetsBySensorUid.get(right.uid);
+    const value = (sensor: Sensor, asset: Asset | undefined) => {
+      switch (tableSortKey) {
+        case "uid": return sensor.uid;
+        case "manufacturer": return sensor.manufacturer;
+        case "model": return sensor.model;
+        case "location": return asset?.location?.name;
+        case "gateway": return sensor.gateway?.name;
+        case "status": return asset?.health.status ?? "offline";
+        case "enabled": return sensor.enabled;
+        default: return sensor.name ?? sensor.uid;
+      }
+    };
+    return compareTableValues(value(left, leftAsset), value(right, rightAsset), tableSortDirection);
+  });
+
+  const toggleTableSort = (key: string): void => {
+    if (tableSortKey === key) {
+      setTableSortDirection(tableSortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setTableSortKey(key);
+      setTableSortDirection("asc");
+    }
+  };
+
   const filtersActive =
     nameSearch.trim().length > 0 ||
     manufacturerFilter !== null ||
@@ -1067,19 +1100,21 @@ export function SensorCatalog() {
             >
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Name</Table.Th>
-                  <Table.Th>UID</Table.Th>
-                  <Table.Th>Manufacturer</Table.Th>
-                  <Table.Th>Model</Table.Th>
-                  <Table.Th>Location</Table.Th>
-                  <Table.Th>Gateway</Table.Th>
-                  <Table.Th>Status</Table.Th>
-                  <Table.Th>Enabled</Table.Th>
+                  {[["name", "Name"], ["uid", "UID"], ["manufacturer", "Manufacturer"], ["model", "Model"], ["location", "Location"], ["gateway", "Gateway"], ["status", "Status"], ["enabled", "Enabled"]].map(([key, label]) => (
+                    <SortableTableHeader
+                      key={key}
+                      active={tableSortKey === key}
+                      direction={tableSortDirection}
+                      onClick={() => toggleTableSort(key)}
+                    >
+                      {label}
+                    </SortableTableHeader>
+                  ))}
                   <Table.Th>Actions</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {filteredSensors.map(sensor => {
+                {sortedTableSensors.map(sensor => {
                   const asset =
                     assetsBySensorUid.get(sensor.uid);
                   const status =

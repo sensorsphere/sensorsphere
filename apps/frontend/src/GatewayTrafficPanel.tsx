@@ -26,6 +26,7 @@ import {
 
 import { NavigationIcon } from "./NavigationIcon";
 import { ResetFiltersAction } from "./ResetFiltersAction";
+import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import {
   clearGatewayTrafficEvents,
   getGatewayTrafficEvents,
@@ -59,6 +60,8 @@ export function GatewayTrafficPanel() {
   const [sensorFilter, setSensorFilter] = usePersistentState("gatewayTraffic.sensor", "");
   const [metricFilter, setMetricFilter] = usePersistentState("gatewayTraffic.metric", "");
   const [topicFilter, setTopicFilter] = usePersistentState("gatewayTraffic.topic", "");
+  const [tableSortKey, setTableSortKey] = usePersistentState<string>("gatewayTraffic.tableSortKey", "time");
+  const [tableSortDirection, setTableSortDirection] = usePersistentState<SortDirection>("gatewayTraffic.tableSortDirection", "desc");
 
   const summaryQuery = useQuery({
     queryKey: ["gateway-traffic-summary", hours],
@@ -103,6 +106,30 @@ export function GatewayTrafficPanel() {
   });
 
   const events = eventsQuery.data?.pages.flatMap(page => page.events) ?? [];
+  const sortedEvents = [...events].sort((left, right) => {
+    const value = (event: (typeof events)[number]) => {
+      switch (tableSortKey) {
+        case "gateway": return event.gatewayId;
+        case "type": return event.messageType;
+        case "sensor": return event.sensorUid;
+        case "metric": return event.metric;
+        case "payload": return event.payload;
+        case "topic": return event.sourceTopic;
+        default: return new Date(event.occurredAt).getTime();
+      }
+    };
+    return compareTableValues(value(left), value(right), tableSortDirection);
+  });
+
+  const toggleTableSort = (key: string): void => {
+    if (tableSortKey === key) {
+      setTableSortDirection(tableSortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setTableSortKey(key);
+      setTableSortDirection(key === "time" ? "desc" : "asc");
+    }
+  };
+
   const summary = summaryQuery.data;
   const filtersActive =
     messageType !== null ||
@@ -277,17 +304,15 @@ export function GatewayTrafficPanel() {
               <Table striped highlightOnHover verticalSpacing={3} style={{ minWidth: 1180 }}>
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>Time</Table.Th>
-                    <Table.Th>Gateway</Table.Th>
-                    <Table.Th>Type</Table.Th>
-                    <Table.Th>Sensor</Table.Th>
-                    <Table.Th>Metric</Table.Th>
-                    <Table.Th>Payload</Table.Th>
-                    <Table.Th>Topic</Table.Th>
+                    {[["time", "Time"], ["gateway", "Gateway"], ["type", "Type"], ["sensor", "Sensor"], ["metric", "Metric"], ["payload", "Payload"], ["topic", "Topic"]].map(([key, label]) => (
+                      <SortableTableHeader key={key} active={tableSortKey === key} direction={tableSortDirection} onClick={() => toggleTableSort(key)}>
+                        {label}
+                      </SortableTableHeader>
+                    ))}
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {events.map(event => (
+                  {sortedEvents.map(event => (
                     <Table.Tr key={event.id}>
                       <Table.Td>{timeLabel(event.occurredAt)}</Table.Td>
                       <Table.Td>

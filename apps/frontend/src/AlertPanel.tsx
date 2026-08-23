@@ -4,6 +4,7 @@ import { activeFilterControlStyle } from "./filterStyles";
 import { BadgeSelect } from "./BadgeSelect";
 
 import { NavigationIcon } from "./NavigationIcon";
+import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 
 import {
   Alert,
@@ -452,6 +453,9 @@ export function AlertPanel() {
         value === 100
     );
 
+  const [historySortKey, setHistorySortKey] = usePersistentState<string>("alerts.history.sortKey", "opened");
+  const [historySortDirection, setHistorySortDirection] = usePersistentState<SortDirection>("alerts.history.sortDirection", "desc");
+
   const rulesQuery =
     useQuery({
       queryKey:
@@ -658,6 +662,31 @@ export function AlertPanel() {
   const alertHistory =
     alertHistoryQuery.data
     ?? [];
+
+  const sortedAlertHistory = [...alertHistory].sort((left, right) => {
+    const value = (event: AlertEvent) => {
+      const asset = assets.find(current => current.id === event.assetId);
+      const rule = rules.find(current => current.id === event.ruleId);
+      switch (historySortKey) {
+        case "asset": return asset ? assetLabel(asset) : event.assetId;
+        case "rule": return rule?.name ?? event.ruleId;
+        case "severity": return event.severity;
+        case "status": return event.status;
+        case "value": return event.currentValue ?? event.triggerValue;
+        default: return new Date(event.openedAt).getTime();
+      }
+    };
+    return compareTableValues(value(left), value(right), historySortDirection);
+  });
+
+  const toggleHistorySort = (key: string): void => {
+    if (historySortKey === key) {
+      setHistorySortDirection(historySortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setHistorySortKey(key);
+      setHistorySortDirection(key === "opened" ? "desc" : "asc");
+    }
+  };
 
   const selectedAsset =
     ruleForm
@@ -1068,30 +1097,17 @@ export function AlertPanel() {
                   >
                     <Table.Thead>
                       <Table.Tr>
-                        <Table.Th>
-                          Opened
-                        </Table.Th>
-                        <Table.Th>
-                          Asset
-                        </Table.Th>
-                        <Table.Th>
-                          Rule
-                        </Table.Th>
-                        <Table.Th>
-                          Severity
-                        </Table.Th>
-                        <Table.Th>
-                          Status
-                        </Table.Th>
-                        <Table.Th>
-                          Value
-                        </Table.Th>
+                        {[["opened", "Opened"], ["asset", "Asset"], ["rule", "Rule"], ["severity", "Severity"], ["status", "Status"], ["value", "Value"]].map(([key, label]) => (
+                          <SortableTableHeader key={key} active={historySortKey === key} direction={historySortDirection} onClick={() => toggleHistorySort(key)}>
+                            {label}
+                          </SortableTableHeader>
+                        ))}
                       </Table.Tr>
                     </Table.Thead>
 
                     <Table.Tbody>
                       {
-                        alertHistory.map(
+                        sortedAlertHistory.map(
                           event => {
 
                             const asset =

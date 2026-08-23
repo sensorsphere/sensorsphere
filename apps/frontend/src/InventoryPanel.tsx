@@ -1,6 +1,7 @@
 import React from "react";
 
 import { activeFilterStyles } from "./filterStyles";
+import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import { BadgeSelect } from "./BadgeSelect";
 
 import { NavigationIcon } from "./NavigationIcon";
@@ -625,6 +626,9 @@ export function InventoryPanel() {
       "name"
     );
 
+  const [tableSortKey, setTableSortKey] = React.useState("item");
+  const [tableSortDirection, setTableSortDirection] = React.useState<SortDirection>("asc");
+
   const assetsQuery =
     useQuery({
       queryKey:
@@ -1156,6 +1160,51 @@ export function InventoryPanel() {
         }
       );
 
+  const tableValue = (item: Asset | Gateway, kind: "asset" | "gateway") => {
+    if (kind === "asset") {
+      const asset = item as Asset;
+      switch (tableSortKey) {
+        case "identifier": return asset.sensor?.uid ?? asset.externalId;
+        case "location": return asset.location?.name;
+        case "type": return asset.sensor ? "Sensor" : asset.assetType;
+        case "protocol": return asset.protocol;
+        case "health": return asset.health.status;
+        case "status": return assetIsEnabled(asset, sensorsByUid);
+        default: return asset.sensor?.name ?? asset.name ?? asset.externalId;
+      }
+    }
+    const gateway = item as Gateway;
+    switch (tableSortKey) {
+      case "identifier": return gateway.gatewayId;
+      case "location": return gateway.location?.name;
+      case "type": return gateway.type.name;
+      case "protocol": return "MQTT";
+      case "health": return gatewayIsOnline(gateway) ? "online" : "offline";
+      case "status": return gateway.enabled;
+      default: return gateway.name;
+    }
+  };
+
+  const sortedTableRows = [
+    ...filteredAssets.map(asset => ({ kind: "asset" as const, item: asset })),
+    ...filteredGateways.map(gateway => ({ kind: "gateway" as const, item: gateway }))
+  ].sort((left, right) =>
+    compareTableValues(
+      tableValue(left.item, left.kind),
+      tableValue(right.item, right.kind),
+      tableSortDirection
+    )
+  );
+
+  const toggleTableSort = (key: string): void => {
+    if (tableSortKey === key) {
+      setTableSortDirection(tableSortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setTableSortKey(key);
+      setTableSortDirection("asc");
+    }
+  };
+
   const rootLocations =
     locations.filter(
       location =>
@@ -1661,167 +1710,61 @@ export function InventoryPanel() {
             >
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Item</Table.Th>
-                  <Table.Th>Identifier</Table.Th>
-                  <Table.Th>Location</Table.Th>
-                  <Table.Th>Type</Table.Th>
-                  <Table.Th>Protocol</Table.Th>
-                  <Table.Th>Health</Table.Th>
-                  <Table.Th>Status</Table.Th>
+                  {[["item", "Item"], ["identifier", "Identifier"], ["location", "Location"], ["type", "Type"], ["protocol", "Protocol"], ["health", "Health"], ["status", "Status"]].map(([key, label]) => (
+                    <SortableTableHeader key={key} active={tableSortKey === key} direction={tableSortDirection} onClick={() => toggleTableSort(key)}>
+                      {label}
+                    </SortableTableHeader>
+                  ))}
                 </Table.Tr>
               </Table.Thead>
 
               <Table.Tbody>
-                {filteredAssets.map(
-                  asset => (
-                    <Table.Tr
-                      key={asset.id}
-                    >
-                      <Table.Td>
-                        {
-                          asset.sensor?.name
-                          ?? asset.name
-                          ?? asset.externalId
-                        }
-                      </Table.Td>
-
-                      <Table.Td>
-                        {
-                          asset.sensor?.uid
-                          ?? "—"
-                        }
-                      </Table.Td>
-
-                      <Table.Td>
-                        <Group gap={4}>
-                          <LocationIcon
-                            name={
-                              getLocationIconName(
-                                asset.location
-                              )
-                            }
-                            size={16}
-                          />
-
-                          <Text size="sm">
-                            {
-                              asset.location?.name
-                              ?? "Unassigned"
-                            }
-                          </Text>
-                        </Group>
-                      </Table.Td>
-
-                      <Table.Td>
-                        {asset.sensor ? (
-                          <Badge
-                            size="sm"
-                            variant="light"
-                            color="blue"
-                          >
-                            Sensor
+                {sortedTableRows.map(row => {
+                  if (row.kind === "asset") {
+                    const asset = row.item;
+                    return (
+                      <Table.Tr key={asset.id}>
+                        <Table.Td>{asset.sensor?.name ?? asset.name ?? asset.externalId}</Table.Td>
+                        <Table.Td>{asset.sensor?.uid ?? "—"}</Table.Td>
+                        <Table.Td>
+                          <Group gap={4}>
+                            <LocationIcon name={getLocationIconName(asset.location)} size={16} />
+                            <Text size="sm">{asset.location?.name ?? "Unassigned"}</Text>
+                          </Group>
+                        </Table.Td>
+                        <Table.Td>
+                          {asset.sensor ? <Badge size="sm" variant="light" color="blue">Sensor</Badge> : asset.assetType}
+                        </Table.Td>
+                        <Table.Td>{asset.protocol ?? "—"}</Table.Td>
+                        <Table.Td>
+                          <Badge color={asset.health.status === "online" ? "green" : asset.health.status === "warning" ? "yellow" : "red"} variant="light">
+                            {asset.health.status}
                           </Badge>
-                        ) : (
-                          asset.assetType
-                        )}
-                      </Table.Td>
-
-                      <Table.Td>
-                        {
-                          asset.protocol
-                          ?? "—"
-                        }
-                      </Table.Td>
-
-                      <Table.Td>
-                        <Badge
-                          color={
-                            asset.health.status ===
-                              "online"
-                              ? "green"
-                              : asset.health.status ===
-                                  "warning"
-                                ? "yellow"
-                                : "red"
-                          }
-                          variant="light"
-                        >
-                          {asset.health.status}
-                        </Badge>
-                      </Table.Td>
-
-                      <Table.Td>
-                        <Badge
-                          color={
-                            assetIsEnabled(asset, sensorsByUid)
-                              ? "green"
-                              : "orange"
-                          }
-                          variant="light"
-                        >
-                          {
-                            assetIsEnabled(asset, sensorsByUid)
-                              ? "Enabled"
-                              : "Disabled"
-                          }
-                        </Badge>
-                      </Table.Td>
-                    </Table.Tr>
-                  )
-                )}
-
-                {filteredGateways.map(
-                  gateway => (
-                    <Table.Tr
-                      key={`gateway-${gateway.id}`}
-                    >
-                      <Table.Td>
-                        <Group gap="xs">
-                          <Text>{gateway.name}</Text>
-                          <Badge size="xs" variant="light" color="violet">
-                            Gateway
+                        </Table.Td>
+                        <Table.Td>
+                          <Badge color={assetIsEnabled(asset, sensorsByUid) ? "green" : "orange"} variant="light">
+                            {assetIsEnabled(asset, sensorsByUid) ? "Enabled" : "Disabled"}
                           </Badge>
-                        </Group>
-                      </Table.Td>
+                        </Table.Td>
+                      </Table.Tr>
+                    );
+                  }
 
+                  const gateway = row.item;
+                  return (
+                    <Table.Tr key={`gateway-${gateway.id}`}>
                       <Table.Td>
-                        {gateway.gatewayId}
+                        <Group gap="xs"><Text>{gateway.name}</Text><Badge size="xs" variant="light" color="violet">Gateway</Badge></Group>
                       </Table.Td>
-
-                      <Table.Td>
-                        <Text size="sm">
-                          {gateway.location?.name ?? "Unassigned"}
-                        </Text>
-                      </Table.Td>
-
-                      <Table.Td>
-                        {gateway.type.name}
-                      </Table.Td>
-
-                      <Table.Td>
-                        MQTT
-                      </Table.Td>
-
-                      <Table.Td>
-                        <Badge
-                          color={gatewayIsOnline(gateway) ? "green" : "red"}
-                          variant="light"
-                        >
-                          {gatewayIsOnline(gateway) ? "online" : "offline"}
-                        </Badge>
-                      </Table.Td>
-
-                      <Table.Td>
-                        <Badge
-                          color={gateway.enabled ? "green" : "orange"}
-                          variant="light"
-                        >
-                          {gateway.enabled ? "Enabled" : "Disabled"}
-                        </Badge>
-                      </Table.Td>
+                      <Table.Td>{gateway.gatewayId}</Table.Td>
+                      <Table.Td><Text size="sm">{gateway.location?.name ?? "Unassigned"}</Text></Table.Td>
+                      <Table.Td>{gateway.type.name}</Table.Td>
+                      <Table.Td>MQTT</Table.Td>
+                      <Table.Td><Badge color={gatewayIsOnline(gateway) ? "green" : "red"} variant="light">{gatewayIsOnline(gateway) ? "online" : "offline"}</Badge></Table.Td>
+                      <Table.Td><Badge color={gateway.enabled ? "green" : "orange"} variant="light">{gateway.enabled ? "Enabled" : "Disabled"}</Badge></Table.Td>
                     </Table.Tr>
-                  )
-                )}
+                  );
+                })}
               </Table.Tbody>
             </Table>
           </Card>
