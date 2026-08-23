@@ -40,6 +40,7 @@ import {
   getAssets,
   getLatestObservations,
   getRuntimeConfig,
+  getFrontendBuildDate,
   getSensors
 } from "./api";
 
@@ -100,6 +101,28 @@ import "./styles.css";
 
 const queryClient =
   new QueryClient();
+
+function formatBuildDate(
+  value: string | null | undefined
+): string {
+  if (!value) {
+    return "Unavailable";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(
+    undefined,
+    {
+      dateStyle: "short",
+      timeStyle: "short"
+    }
+  ).format(date);
+}
 
 const favicon =
   document.querySelector<HTMLLinkElement>(
@@ -322,11 +345,33 @@ function Dashboard() {
         Infinity
     });
 
+  const frontendBuildQuery =
+    useQuery({
+      queryKey:
+        ["frontend-build-date"],
+
+      queryFn:
+        getFrontendBuildDate,
+
+      staleTime:
+        Infinity
+    });
+
   const instanceName =
     runtimeConfigQuery.data
       ?.instanceName
       ?.trim()
     || "SensorSphere";
+
+  const apiBuildDate =
+    runtimeConfigQuery.data
+      ?.builds
+      ?.api;
+
+  const ingestionBuildDate =
+    runtimeConfigQuery.data
+      ?.builds
+      ?.ingestion;
 
   const [
     activePage,
@@ -1181,7 +1226,11 @@ function Dashboard() {
         }
         style={{
           overflow:
-            "visible"
+            "visible",
+          display:
+            "flex",
+          flexDirection:
+            "column"
         }}
       >
         <button
@@ -1489,6 +1538,45 @@ function Dashboard() {
           />
 
         </Stack>
+
+        {
+          !navbarCollapsed && (
+            <Stack
+              gap={2}
+              mt="auto"
+              pt="md"
+              style={{
+                borderTop:
+                  "1px solid var(--mantine-color-default-border)"
+              }}
+            >
+              <Text size="xs" fw={600} c="dimmed">
+                Build information
+              </Text>
+
+              <Group justify="space-between" gap="xs" wrap="nowrap">
+                <Text size="xs" c="dimmed">Frontend</Text>
+                <Text size="xs" c="dimmed" ta="right">
+                  {formatBuildDate(frontendBuildQuery.data)}
+                </Text>
+              </Group>
+
+              <Group justify="space-between" gap="xs" wrap="nowrap">
+                <Text size="xs" c="dimmed">API</Text>
+                <Text size="xs" c="dimmed" ta="right">
+                  {formatBuildDate(apiBuildDate)}
+                </Text>
+              </Group>
+
+              <Group justify="space-between" gap="xs" wrap="nowrap">
+                <Text size="xs" c="dimmed">Ingestion</Text>
+                <Text size="xs" c="dimmed" ta="right">
+                  {formatBuildDate(ingestionBuildDate)}
+                </Text>
+              </Group>
+            </Stack>
+          )
+        }
       </AppShell.Navbar>
 
       <AppShell.Main>

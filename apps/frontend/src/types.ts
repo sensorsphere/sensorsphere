@@ -1,5 +1,9 @@
 export interface RuntimeConfig {
   instanceName: string;
+  builds?: {
+    api: string | null;
+    ingestion: string | null;
+  };
 }
 
 export type MetricQualityStatus =

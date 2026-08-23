@@ -82,9 +82,63 @@ const instanceName =
   process.env.INSTANCE_NAME?.trim()
   || "SensorSphere";
 
-app.get("/api/v1/config", async () => ({
-  instanceName
-}));
+const readBuildDate = async (
+  path: string
+): Promise<string | null> => {
+  try {
+    const value = (
+      await readFile(path, "utf8")
+    ).trim();
+
+    return value || null;
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+app.get("/api/v1/config", async () => {
+  const [
+    apiBuildDate,
+    componentBuildResult
+  ] = await Promise.all([
+    readBuildDate(
+      "/app/apps/api/build-date.txt"
+    ),
+    pool.query<{
+      component: string;
+      buildDate: Date;
+    }>(
+      `
+      SELECT
+        component,
+        build_date AS "buildDate"
+      FROM component_build_info
+      WHERE component = 'ingestion-service'
+      `
+    )
+  ]);
+
+  const ingestionBuildDate =
+    componentBuildResult.rows[0]?.buildDate
+      ?.toISOString()
+    ?? null;
+
+  return {
+    instanceName,
+    builds: {
+      api: apiBuildDate,
+      ingestion: ingestionBuildDate
+    }
+  };
+});
 
 app.get("/sensors", async () => {
   const result = await pool.query(

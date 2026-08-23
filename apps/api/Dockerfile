@@ -17,6 +17,7 @@ COPY apps/api apps/api
 RUN pnpm --filter @sensorsphere/shared-types build
 RUN pnpm --filter @sensorsphere/shared-config build
 RUN pnpm --filter @sensorsphere/api build
+RUN date -u +%Y-%m-%dT%H:%M:%SZ > /app/apps/api/build-date.txt
 
 FROM node:22-alpine
 

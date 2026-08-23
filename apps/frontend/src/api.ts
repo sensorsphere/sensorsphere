@@ -62,6 +62,24 @@ Promise<RuntimeConfig> {
   );
 }
 
+export async function getFrontendBuildDate():
+Promise<string | null> {
+  const response =
+    await fetch(
+      "/build-date.txt",
+      { cache: "no-store" }
+    );
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const value =
+    (await response.text()).trim();
+
+  return value || null;
+}
+
 export async function getGatewayTypes():
 Promise<GatewayType[]> {
 

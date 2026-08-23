@@ -44,6 +44,26 @@ implements MeasurementRepository {
     );
   }
 
+  async reportComponentBuild(
+    component: string,
+    buildDate: string
+  ): Promise<void> {
+    await this.pool.query(
+      `
+      INSERT INTO component_build_info (
+        component, build_date, started_at, updated_at
+      )
+      VALUES ($1, $2::timestamptz, NOW(), NOW())
+      ON CONFLICT (component) DO UPDATE
+      SET
+        build_date = EXCLUDED.build_date,
+        started_at = NOW(),
+        updated_at = NOW()
+      `,
+      [component, buildDate]
+    );
+  }
+
 
 
   async saveGatewayTrafficEvent(input: {

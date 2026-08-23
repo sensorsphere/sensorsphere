@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import {
     createLogger
 } from "@sensorsphere/shared-logger";
@@ -86,6 +88,27 @@ Promise<void> {
   logger.info(
     "Database connection established"
   );
+
+  try {
+    const buildDate = (
+      await readFile(
+        "/app/apps/ingestion-service/build-date.txt",
+        "utf8"
+      )
+    ).trim();
+
+    if (buildDate) {
+      await repository.reportComponentBuild(
+        "ingestion-service",
+        buildDate
+      );
+    }
+  } catch (error) {
+    logger.warn(
+      { error },
+      "Unable to report ingestion build information"
+    );
+  }
 
   const purgedGatewayTraffic =
     await repository.purgeGatewayTrafficEvents(48);

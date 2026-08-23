@@ -23,6 +23,7 @@ RUN pnpm --filter @sensorsphere/shared-types build
 RUN pnpm --filter @sensorsphere/shared-config build
 RUN pnpm --filter @sensorsphere/shared-logger build
 RUN pnpm --filter @sensorsphere/ingestion-service build
+RUN date -u +%Y-%m-%dT%H:%M:%SZ > /app/apps/ingestion-service/build-date.txt
 
 FROM node:22-alpine
 
