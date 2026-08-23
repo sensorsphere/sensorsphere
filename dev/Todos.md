@@ -64,6 +64,10 @@
 * [X] dans Gateway Coverage, conserver la valeur du filtre "Sensor filter"
 * [X] dans Gateway Coverage, ajouter un filtre sur le "Recommandation". le mettre sous "Suggested Gateway"
 
+# Metric Routing
+* [X] trop d'élement sur la ligne de filtres. comment reorganiser, peut etre mettre le selecteur de periode a gauche du badge "DRY RUN"
+* [X] quelque soit le periode selectionnee: 2m, 10m, 48h, c'est 3mins de logs qui sont affiches. est-ce normal ?
+* [X] pour le scroll, il faut que l'ascenseur soit dans le tableau et les lignes de valeur et non sur le navigateur afin de conserver le vue sur le header + info de filtre au dessus du tableau
 
 ### Specif
 
@@ -80,6 +84,10 @@ Avoir des progressions de valeur par heure: ex augmentation de 5 degres durant l
 ### Simulator
 
 * [X] il faudrait pouvoir "collapser" les "basic injections". idem pour les scenarios
+il faut ameliorer le Simulator
+* [ ] preparer un mecanisme d'export/import des basic injection / scenarios
+* [ ] il faudrait pouvoir "ranger" des groupes de "basic injection" dans des dossiers. mettre une nav sur la guche avec un systee d'arbre qui correspondra a l'arborescence de rangement. il faut donc une gestion de ces dossiers (creation, renommage, suppression). afficher le nombre d'elements avec le nom du dossier. IDEM pour les scenarios
+* [ ] preparer un fichier d'import de basic injection avec le nouveau format de topic pour 2 gateways appellee "BLE Gateway MQTT T<index>" avec gateway_id "ble-gateway-t<index>", Wifi SSID: WifiTest. pour les autres valeurs, je te laisse le libre choix, excepte si ca pose question. et leur associer chacune les memes 3 sensors mais avec des valeurs differentes pour les RSSI afin d'avoir des suggested gateway differentes au final
 
 
 # ESPHome
