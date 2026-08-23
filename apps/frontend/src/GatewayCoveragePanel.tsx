@@ -1625,44 +1625,6 @@ export function GatewayCoveragePanel() {
               </Text>
             </Stack>
             <Group gap="xs" align="flex-end">
-              <Select
-                size="xs"
-                label="Assignment"
-                placeholder="All"
-                clearable
-                value={assignmentFilter}
-                onChange={value =>
-                  setAssignmentFilter(
-                    value === "ASSIGNED" || value === "UNASSIGNED"
-                      ? value
-                      : null
-                  )
-                }
-                data={[
-                  { value: "ASSIGNED", label: "Assigned" },
-                  { value: "UNASSIGNED", label: "Not assigned" }
-                ]}
-                aria-label="Filter sensors by gateway assignment"
-              />
-              <Select
-                size="xs"
-                label="Backup"
-                placeholder="All"
-                clearable
-                value={backupFilter}
-                onChange={value =>
-                  setBackupFilter(
-                    value === "ASSIGNED" || value === "UNASSIGNED"
-                      ? value
-                      : null
-                  )
-                }
-                data={[
-                  { value: "ASSIGNED", label: "Assigned" },
-                  { value: "UNASSIGNED", label: "Not assigned" }
-                ]}
-                aria-label="Filter sensors by backup gateway assignment"
-              />
               <TextInput
                 size="xs"
                 label="Sensor filter"
@@ -1687,6 +1649,98 @@ export function GatewayCoveragePanel() {
                     )
                     : undefined
                 }
+              />
+              <Select
+                size="xs"
+                label="Primary Assignment"
+                placeholder="All"
+                clearable
+                value={assignmentFilter}
+                onChange={value =>
+                  setAssignmentFilter(
+                    value === "ASSIGNED" || value === "UNASSIGNED"
+                      ? value
+                      : null
+                  )
+                }
+                data={[
+                  { value: "ASSIGNED", label: "Assigned" },
+                  { value: "UNASSIGNED", label: "Not assigned" }
+                ]}
+                aria-label="Filter sensors by primary gateway assignment"
+              />
+              <Select
+                size="xs"
+                label="Backup Assignment"
+                placeholder="All"
+                clearable
+                value={backupFilter}
+                onChange={value =>
+                  setBackupFilter(
+                    value === "ASSIGNED" || value === "UNASSIGNED"
+                      ? value
+                      : null
+                  )
+                }
+                data={[
+                  { value: "ASSIGNED", label: "Assigned" },
+                  { value: "UNASSIGNED", label: "Not assigned" }
+                ]}
+                aria-label="Filter sensors by backup gateway assignment"
+              />
+              <Select
+                size="xs"
+                label="Recommendation"
+                value={recommendationFilter}
+                onChange={setRecommendationFilter}
+                placeholder="All recommendations"
+                clearable
+                data={[
+                  "STRONG",
+                  "PREFERRED",
+                  "AMBIGUOUS",
+                  "ONLY ELIGIBLE GATEWAY",
+                  "NO RELIABLE SUGGESTION",
+                  "NO SUGGESTION"
+                ]}
+                renderOption={({ option }) => (
+                  <Badge
+                    size="sm"
+                    variant="light"
+                    color={recommendationFilterColor(option.value)}
+                  >
+                    {option.label}
+                  </Badge>
+                )}
+                aria-label="Filter by recommendation"
+              />
+              <Select
+                size="xs"
+                label="Assignment match"
+                value={assignmentMatchFilter}
+                onChange={value =>
+                  setAssignmentMatchFilter(
+                    value as AssignmentMatchStatus | null
+                  )
+                }
+                placeholder="All assignment states"
+                clearable
+                data={[
+                  "MATCH",
+                  "MISMATCH",
+                  "UNASSIGNED",
+                  "NO RECOMMENDATION"
+                ]}
+                renderOption={({ option }) => (
+                  <Badge
+                    size="sm"
+                    variant="light"
+                    color={assignmentMatchFilterColor(option.value)}
+                  >
+                    {option.label}
+                  </Badge>
+                )}
+                aria-label="Filter by gateway assignment match"
               />
               <ResetFiltersAction
                 active={filtersActive}
@@ -2097,60 +2151,6 @@ export function GatewayCoveragePanel() {
                           }
                         ]}
                         aria-label="Filter by suggested gateway"
-                      />
-                      <Select
-                        size="xs"
-                        label="Recommendation"
-                        value={recommendationFilter}
-                        onChange={setRecommendationFilter}
-                        placeholder="All recommendations"
-                        clearable
-                        data={[
-                          "STRONG",
-                          "PREFERRED",
-                          "AMBIGUOUS",
-                          "ONLY ELIGIBLE GATEWAY",
-                          "NO RELIABLE SUGGESTION",
-                          "NO SUGGESTION"
-                        ]}
-                        renderOption={({ option }) => (
-                          <Badge
-                            size="sm"
-                            variant="light"
-                            color={recommendationFilterColor(option.value)}
-                          >
-                            {option.label}
-                          </Badge>
-                        )}
-                        aria-label="Filter by recommendation"
-                      />
-                      <Select
-                        size="xs"
-                        label="Assignment match"
-                        value={assignmentMatchFilter}
-                        onChange={value =>
-                          setAssignmentMatchFilter(
-                            value as AssignmentMatchStatus | null
-                          )
-                        }
-                        placeholder="All assignment states"
-                        clearable
-                        data={[
-                          "MATCH",
-                          "MISMATCH",
-                          "UNASSIGNED",
-                          "NO RECOMMENDATION"
-                        ]}
-                        renderOption={({ option }) => (
-                          <Badge
-                            size="sm"
-                            variant="light"
-                            color={assignmentMatchFilterColor(option.value)}
-                          >
-                            {option.label}
-                          </Badge>
-                        )}
-                        aria-label="Filter by gateway assignment match"
                       />
                     </Stack>
                   </Table.Th>
