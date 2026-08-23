@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   Group,
+  MultiSelect,
   SegmentedControl,
   Select,
   SimpleGrid,
@@ -58,7 +59,10 @@ export function MetricRoutingPanel() {
   const queryClient = useQueryClient();
   const [hours, setHours] = usePersistentState("metricRouting.period", "1");
   const [paused, setPaused] = React.useState(false);
-  const [decision, setDecision] = usePersistentState<string | null>("metricRouting.decision", null);
+  const [hiddenDecisions, setHiddenDecisions] = usePersistentState<MetricRoutingDecision[]>(
+    "metricRouting.hiddenDecisions",
+    []
+  );
   const [sensorFilter, setSensorFilter] = usePersistentState("metricRouting.sensor", "");
   const [gatewayFilter, setGatewayFilter] = usePersistentState("metricRouting.gateway", "");
   const [locationId, setLocationId] = usePersistentState<string | null>("metricRouting.location", null);
@@ -114,7 +118,7 @@ export function MetricRoutingPanel() {
     metricFilter.trim().toLocaleLowerCase();
 
   const events = (eventsQuery.data ?? []).filter(event => {
-    if (decision && event.decision !== decision) return false;
+    if (hiddenDecisions.includes(event.decision)) return false;
 
     if (normalizedSensorFilter) {
       const uid = event.sensorUid.toLocaleLowerCase();
@@ -148,14 +152,14 @@ export function MetricRoutingPanel() {
     }));
 
   const filtersActive =
-    decision !== null ||
+    hiddenDecisions.length > 0 ||
     sensorFilter.trim().length > 0 ||
     gatewayFilter.trim().length > 0 ||
     locationId !== null ||
     metricFilter.trim().length > 0;
 
   const resetFilters = (): void => {
-    setDecision(null);
+    setHiddenDecisions([]);
     setSensorFilter("");
     setGatewayFilter("");
     setLocationId(null);
@@ -269,14 +273,30 @@ export function MetricRoutingPanel() {
               value={metricFilter}
               onChange={e => setMetricFilter(e.currentTarget.value)}
             />
-            <Select
-              label="Decision"
-              placeholder="All"
+            <MultiSelect
+              label="Hide decisions"
+              placeholder="None hidden"
               clearable
-              value={decision}
-              onChange={setDecision}
+              value={hiddenDecisions}
+              onChange={values =>
+                setHiddenDecisions(values as MetricRoutingDecision[])
+              }
               data={DECISIONS}
             />
+            <Button
+              size="compact-sm"
+              variant={
+                hiddenDecisions.includes("ACCEPT") &&
+                hiddenDecisions.includes("IGNORE")
+                  ? "filled"
+                  : "light"
+              }
+              onClick={() =>
+                setHiddenDecisions(["ACCEPT", "IGNORE"])
+              }
+            >
+              Anomalies only
+            </Button>
             <ResetFiltersAction
               active={filtersActive}
               onReset={resetFilters}
