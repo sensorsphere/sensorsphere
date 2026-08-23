@@ -41,6 +41,7 @@ import {
   getLatestObservations,
   getRuntimeConfig,
   getFrontendBuildDate,
+  getProjectTodos,
   getSensors
 } from "./api";
 
@@ -96,6 +97,10 @@ import {
 import {
   MetricRoutingPanel
 } from "./MetricRoutingPanel";
+
+import {
+  ProjectTodosPanel
+} from "./ProjectTodosPanel";
 
 import "./styles.css";
 
@@ -210,7 +215,10 @@ Record<PageKey, string> = {
     "Metric Routing",
 
   "gateway-coverage":
-    "Gateway Coverage"
+    "Gateway Coverage",
+
+  todos:
+    "Project Todos"
 };
 
 function isPageKey(
@@ -226,7 +234,8 @@ function isPageKey(
     value === "sensors" ||
     value === "gateways" ||
     value === "metric-routing" ||
-    value === "gateway-coverage"
+    value === "gateway-coverage" ||
+    value === "todos"
   );
 }
 
@@ -355,6 +364,18 @@ function Dashboard() {
 
       staleTime:
         Infinity
+    });
+
+  const projectTodosQuery =
+    useQuery({
+      queryKey:
+        ["project-todos"],
+
+      queryFn:
+        getProjectTodos,
+
+      refetchInterval:
+        30_000
     });
 
   const instanceName =
@@ -1533,6 +1554,41 @@ function Dashboard() {
               () =>
                 navigateTo(
                   "gateway-coverage"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Project Todos"
+            }
+            leftSection={
+              <NavigationIcon
+                page="todos"
+              />
+            }
+            rightSection={
+              !navbarCollapsed &&
+              ((projectTodosQuery.data?.summary.open ?? 0) + (projectTodosQuery.data?.summary.inProgress ?? 0)) > 0
+                ? (
+                  <Badge size="xs" color="pink" variant="light">
+                    {(projectTodosQuery.data?.summary.open ?? 0) + (projectTodosQuery.data?.summary.inProgress ?? 0)}
+                  </Badge>
+                )
+                : null
+            }
+            title="Project Todos"
+            aria-label="Project Todos"
+            active={
+              activePage ===
+              "todos"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "todos"
                 )
             }
           />
@@ -3203,6 +3259,13 @@ function Dashboard() {
               activePage ===
                 "gateway-coverage" && (
                 <GatewayCoveragePanel />
+              )
+            }
+
+            {
+              activePage ===
+                "todos" && (
+                <ProjectTodosPanel />
               )
             }
 

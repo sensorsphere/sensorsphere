@@ -435,3 +435,67 @@ export interface GatewayTrafficSummary {
   unknown: number;
   gateways: number;
 }
+
+export type ProjectTodoStatus =
+  | "OPEN"
+  | "IN_PROGRESS"
+  | "DONE";
+
+export type ProjectTodoPriority =
+  | "LOW"
+  | "NORMAL"
+  | "HIGH"
+  | "CRITICAL";
+
+export interface ProjectTodoSection {
+  id: string;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectTodo {
+  id: string;
+  sectionId: string;
+  parentId: string | null;
+  title: string;
+  description: string | null;
+  status: ProjectTodoStatus;
+  priority: ProjectTodoPriority;
+  component: string | null;
+  prReference: string | null;
+  patchReference: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}
+
+export interface ProjectTodoData {
+  sections: ProjectTodoSection[];
+  tasks: ProjectTodo[];
+  summary: {
+    open: number;
+    inProgress: number;
+    done: number;
+    total: number;
+    progressPercent: number;
+  };
+}
+
+export interface CreateProjectTodoInput {
+  sectionId: string;
+  parentId?: string | null;
+  title: string;
+  description?: string | null;
+  status?: ProjectTodoStatus;
+  priority?: ProjectTodoPriority;
+  component?: string | null;
+  prReference?: string | null;
+  patchReference?: string | null;
+  sortOrder?: number;
+}
+
+export type UpdateProjectTodoInput =
+  Partial<CreateProjectTodoInput>;

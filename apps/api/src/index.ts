@@ -39,6 +39,10 @@ import {
   registerMetricRoutingFeature
 } from "./features/metric-routing/index.js";
 
+import {
+  registerProjectTodoFeature
+} from "./features/project-todos/index.js";
+
 
 import {
   loadApiConfig
@@ -854,6 +858,13 @@ await registerGatewayFeature(
 );
 
 await registerMetricRoutingFeature(
+  app,
+  {
+    pool
+  }
+);
+
+await registerProjectTodoFeature(
   app,
   {
     pool

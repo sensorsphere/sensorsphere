@@ -22,7 +22,12 @@ import type {
   MetricRoutingSummary,
   GatewayTrafficEventsPage,
   GatewayTrafficMessageType,
-  GatewayTrafficSummary
+  GatewayTrafficSummary,
+  ProjectTodoData,
+  ProjectTodoSection,
+  ProjectTodo,
+  CreateProjectTodoInput,
+  UpdateProjectTodoInput
 } from "./types";
 
 async function readJson<T>(
@@ -861,4 +866,90 @@ export async function deleteGatewayCoverageGateway(
     gatewayId: string;
     deletedSamples: number;
   }>(response);
+}
+
+
+export async function getProjectTodos():
+Promise<ProjectTodoData> {
+  return readJson<ProjectTodoData>(
+    await fetch("/api/v1/project-todos")
+  );
+}
+
+export async function createProjectTodoSection(input: {
+  name: string;
+  sortOrder?: number;
+}): Promise<ProjectTodoSection> {
+  return readJson<ProjectTodoSection>(
+    await fetch("/api/v1/project-todos/sections", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input)
+    })
+  );
+}
+
+export async function updateProjectTodoSection(
+  id: string,
+  input: { name?: string; sortOrder?: number }
+): Promise<ProjectTodoSection> {
+  return readJson<ProjectTodoSection>(
+    await fetch(`/api/v1/project-todos/sections/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input)
+    })
+  );
+}
+
+export async function deleteProjectTodoSection(id: string): Promise<void> {
+  const response = await fetch(`/api/v1/project-todos/sections/${id}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
+}
+
+export async function createProjectTodo(input: CreateProjectTodoInput): Promise<ProjectTodo> {
+  return readJson<ProjectTodo>(
+    await fetch("/api/v1/project-todos/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input)
+    })
+  );
+}
+
+export async function updateProjectTodo(
+  id: string,
+  input: UpdateProjectTodoInput
+): Promise<ProjectTodo> {
+  return readJson<ProjectTodo>(
+    await fetch(`/api/v1/project-todos/tasks/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input)
+    })
+  );
+}
+
+export async function deleteProjectTodo(id: string): Promise<void> {
+  const response = await fetch(`/api/v1/project-todos/tasks/${id}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
+}
+
+export async function exportProjectTodosMarkdown(): Promise<string> {
+  const response = await fetch("/api/v1/project-todos/export");
+  if (!response.ok) await readJson<unknown>(response);
+  return response.text();
+}
+
+export async function importProjectTodosMarkdown(markdown: string): Promise<{
+  sections: number;
+  tasks: number;
+}> {
+  return readJson<{ sections: number; tasks: number }>(
+    await fetch("/api/v1/project-todos/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ markdown, replace: true })
+    })
+  );
 }
