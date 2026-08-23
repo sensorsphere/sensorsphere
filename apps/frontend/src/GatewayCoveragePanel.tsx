@@ -245,6 +245,26 @@ function qualityColor(
   return "red";
 }
 
+function recommendationFilterColor(
+  value: string
+): string {
+  if (value === "STRONG") return "green";
+  if (value === "PREFERRED") return "teal";
+  if (value === "AMBIGUOUS") return "yellow";
+  if (value === "ONLY ELIGIBLE GATEWAY") return "blue";
+  if (value === "NO RELIABLE SUGGESTION") return "orange";
+  return "gray";
+}
+
+function assignmentMatchFilterColor(
+  value: string
+): string {
+  if (value === "MATCH") return "green";
+  if (value === "MISMATCH") return "red";
+  if (value === "NO RECOMMENDATION") return "orange";
+  return "gray";
+}
+
 function ageSeconds(
   value: string | null | undefined
 ): number | null {
@@ -1997,6 +2017,15 @@ export function GatewayCoveragePanel() {
                           "NO RELIABLE SUGGESTION",
                           "NO SUGGESTION"
                         ]}
+                        renderOption={({ option }) => (
+                          <Badge
+                            size="sm"
+                            variant="light"
+                            color={recommendationFilterColor(option.value)}
+                          >
+                            {option.label}
+                          </Badge>
+                        )}
                         aria-label="Filter by recommendation"
                       />
                       <Select
@@ -2016,6 +2045,15 @@ export function GatewayCoveragePanel() {
                           "UNASSIGNED",
                           "NO RECOMMENDATION"
                         ]}
+                        renderOption={({ option }) => (
+                          <Badge
+                            size="sm"
+                            variant="light"
+                            color={assignmentMatchFilterColor(option.value)}
+                          >
+                            {option.label}
+                          </Badge>
+                        )}
                         aria-label="Filter by gateway assignment match"
                       />
                     </Stack>
@@ -2231,32 +2269,40 @@ export function GatewayCoveragePanel() {
                             fw={500}
                             title={
                               assignedGateway
-                                ? `${assignedGateway.name} · ${assignedGateway.gatewayId}`
+                                ? `${assignedGateway.name} · ${assignedGateway.gatewayId}${assignedGateway.location?.name ? ` · ${assignedGateway.location.name}` : ""}`
                                 : "No primary gateway assigned"
                             }
                           >
                             Primary: {
                               assignedGateway
-                                ? `${assignedGateway.name} · ${assignedGateway.gatewayId}`
+                                ? (
+                                    <>
+                                      {assignedGateway.name} · {assignedGateway.gatewayId}
+                                      {assignedGateway.location?.name && (
+                                        <>
+                                          {" · "}
+                                          <Text span c="blue" inherit>
+                                            {assignedGateway.location.name}
+                                          </Text>
+                                        </>
+                                      )}
+                                    </>
+                                  )
                                 : "—"
                             }
                           </Text>
-                          {assignedGateway?.location?.name && (
-                            <Text size="xs" c="blue" fw={500} lh={1.1}>
-                              {assignedGateway.location.name}
-                            </Text>
-                          )}
                           {sensorByUid.get(sensorUid)?.backupGateway && (
-                            <>
-                              <Text size="xs" c="teal" fw={500} lh={1.1}>
-                                Backup: {sensorByUid.get(sensorUid)?.backupGateway?.name} · {sensorByUid.get(sensorUid)?.backupGateway?.gatewayId}
-                              </Text>
+                            <Text size="xs" c="teal" fw={500} lh={1.1}>
+                              Backup: {sensorByUid.get(sensorUid)?.backupGateway?.name} · {sensorByUid.get(sensorUid)?.backupGateway?.gatewayId}
                               {sensorByUid.get(sensorUid)?.backupGateway?.location?.name && (
-                                <Text size="xs" c="blue" fw={500} lh={1.1}>
-                                  {sensorByUid.get(sensorUid)?.backupGateway?.location?.name}
-                                </Text>
+                                <>
+                                  {" · "}
+                                  <Text span c="blue" inherit>
+                                    {sensorByUid.get(sensorUid)?.backupGateway?.location?.name}
+                                  </Text>
+                                </>
                               )}
-                            </>
+                            </Text>
                           )}
                           <Group gap={4} wrap="nowrap">
                             <Button
