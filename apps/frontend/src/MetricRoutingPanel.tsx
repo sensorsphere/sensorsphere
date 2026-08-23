@@ -9,7 +9,6 @@ import {
   Card,
   Group,
   MultiSelect,
-  SegmentedControl,
   Select,
   SimpleGrid,
   Stack,
@@ -20,6 +19,7 @@ import {
 } from "@mantine/core";
 
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient
@@ -82,15 +82,19 @@ export function MetricRoutingPanel() {
     refetchInterval: paused ? false : REFRESH_INTERVAL_MS
   });
 
-  const eventsQuery = useQuery({
+  const eventsQuery = useInfiniteQuery({
     queryKey: [
       "metric-routing-events",
       hours
     ],
-    queryFn: () => getMetricRoutingEvents({
+    initialPageParam: null as { occurredAt: string; id: number } | null,
+    queryFn: ({ pageParam }) => getMetricRoutingEvents({
       hours: Number(hours),
-      limit: 500
+      limit: 500,
+      beforeOccurredAt: pageParam?.occurredAt,
+      beforeId: pageParam?.id
     }),
+    getNextPageParam: lastPage => lastPage.nextCursor ?? undefined,
     refetchInterval: paused ? false : REFRESH_INTERVAL_MS
   });
 
@@ -119,7 +123,10 @@ export function MetricRoutingPanel() {
   const normalizedMetricFilter =
     metricFilter.trim().toLocaleLowerCase();
 
-  const events = (eventsQuery.data ?? []).filter(event => {
+  const loadedEvents =
+    eventsQuery.data?.pages.flatMap(page => page.events) ?? [];
+
+  const events = loadedEvents.filter(event => {
     if (hiddenDecisions.includes(event.decision)) return false;
 
     if (normalizedSensorFilter) {
@@ -180,14 +187,32 @@ export function MetricRoutingPanel() {
             Observe how gateway-qualified MQTT metrics would be routed before activation.
           </Text>
         </div>
-        <Group>
+        <Group align="flex-end" wrap="wrap">
+          <Select
+            label="Period"
+            value={hours}
+            onChange={value => value && setHours(value)}
+            allowDeselect={false}
+            w={96}
+            data={[
+              { value: String(2 / 60), label: "2m" },
+              { value: String(3 / 60), label: "3m" },
+              { value: String(5 / 60), label: "5m" },
+              { value: String(10 / 60), label: "10m" },
+              { value: "0.25", label: "15m" },
+              { value: "1", label: "1h" },
+              { value: "6", label: "6h" },
+              { value: "24", label: "24h" },
+              { value: "48", label: "48h" }
+            ]}
+          />
           <Badge
             size="lg"
             color={status?.mode === "active" ? "green" : status?.mode === "dry_run" ? "yellow" : "gray"}
           >
             {status?.mode === "dry_run" ? "DRY RUN" : (status?.mode ?? "UNKNOWN").toUpperCase()}
           </Badge>
-          <Text size="sm" c="dimmed">
+          <Text size="sm" c="dimmed" pb={6}>
             Refresh: {REFRESH_INTERVAL_MS / 1000} s
           </Text>
           <Button variant="light" onClick={() => setPaused(value => !value)}>
@@ -232,22 +257,7 @@ export function MetricRoutingPanel() {
 
       <Card withBorder padding="md">
         <Stack gap="sm">
-          <Group align="flex-end" wrap="wrap">
-            <SegmentedControl
-              value={hours}
-              onChange={setHours}
-              data={[
-                { value: String(2 / 60), label: "2m" },
-                { value: String(3 / 60), label: "3m" },
-                { value: String(5 / 60), label: "5m" },
-                { value: String(10 / 60), label: "10m" },
-                { value: "0.25", label: "15m" },
-                { value: "1", label: "1h" },
-                { value: "6", label: "6h" },
-                { value: "24", label: "24h" },
-                { value: "48", label: "48h" }
-              ]}
-            />
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
             <TextInput
               label="Sensor"
               placeholder="Name or UID"
@@ -279,15 +289,30 @@ export function MetricRoutingPanel() {
               onChange={e => setMetricFilter(e.currentTarget.value)}
               styles={activeFilterStyles(metricFilter.trim().length > 0)}
             />
+          </SimpleGrid>
+
+          <Group align="flex-end" wrap="wrap">
             <MultiSelect
               label="Hide decisions"
               placeholder="None hidden"
               clearable
+              w={360}
               value={hiddenDecisions}
               onChange={values =>
                 setHiddenDecisions(values as MetricRoutingDecision[])
               }
-              data={DECISIONS}
+              data={DECISIONS.map(decision => ({
+                value: decision,
+                label: decision
+              }))}
+              renderOption={({ option }) => (
+                <Badge
+                  color={decisionColor(option.value as MetricRoutingDecision)}
+                  variant="light"
+                >
+                  {option.label}
+                </Badge>
+              )}
               styles={activeFilterStyles(hiddenDecisions.length > 0)}
             />
             <Button
@@ -308,13 +333,38 @@ export function MetricRoutingPanel() {
               active={filtersActive}
               onReset={resetFilters}
             />
+            <Text size="xs" c="dimmed">
+              Loaded {loadedEvents.length} / {summary?.received ?? 0} events for selected period
+              {eventsQuery.hasNextPage ? " · scroll down to load older events" : ""}
+            </Text>
           </Group>
 
           {eventsQuery.isError ? (
             <Text c="red">Unable to load routing events.</Text>
           ) : (
-            <Table.ScrollContainer minWidth={1050}>
-              <Table striped highlightOnHover verticalSpacing={3}>
+            <div
+              className="metric-routing-table-scroll"
+              onScroll={event => {
+                const target = event.currentTarget;
+                const remaining =
+                  target.scrollHeight - target.scrollTop - target.clientHeight;
+
+                if (
+                  remaining < 240 &&
+                  eventsQuery.hasNextPage &&
+                  !eventsQuery.isFetchingNextPage
+                ) {
+                  void eventsQuery.fetchNextPage();
+                }
+              }}
+            >
+              <Table
+                className="metric-routing-table"
+                striped
+                highlightOnHover
+                verticalSpacing={3}
+                style={{ minWidth: 1050 }}
+              >
                 <Table.Thead>
                   <Table.Tr>
                     <Table.Th>Time</Table.Th>
@@ -360,9 +410,16 @@ export function MetricRoutingPanel() {
                       </Table.Td>
                     </Table.Tr>
                   ))}
+                  {eventsQuery.isFetchingNextPage && (
+                    <Table.Tr>
+                      <Table.Td colSpan={8}>
+                        <Text size="xs" c="dimmed" ta="center">Loading older events…</Text>
+                      </Table.Td>
+                    </Table.Tr>
+                  )}
                 </Table.Tbody>
               </Table>
-            </Table.ScrollContainer>
+            </div>
           )}
         </Stack>
       </Card>

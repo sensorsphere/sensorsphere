@@ -18,6 +18,8 @@ export class MetricRoutingController {
     const hours = Number(query.hours ?? "1");
     const limit = Number(query.limit ?? "500");
     const parsedDecision = query.decision ? decisionSchema.safeParse(query.decision) : null;
+    const beforeOccurredAt = query.beforeOccurredAt?.trim() || undefined;
+    const beforeId = query.beforeId === undefined ? undefined : Number(query.beforeId);
 
     if (!Number.isFinite(hours) || hours <= 0 || hours > 48 || !Number.isInteger(limit) || limit < 1 || limit > 2000) {
       reply.code(400).send({ error: "invalid_metric_routing_query" });
@@ -25,6 +27,12 @@ export class MetricRoutingController {
     }
     if (parsedDecision && !parsedDecision.success) {
       reply.code(400).send({ error: "invalid_metric_routing_decision" });
+      return;
+    }
+    if ((beforeOccurredAt && (!Number.isInteger(beforeId) || (beforeId ?? 0) < 1)) ||
+        (!beforeOccurredAt && beforeId !== undefined) ||
+        (beforeOccurredAt && Number.isNaN(Date.parse(beforeOccurredAt)))) {
+      reply.code(400).send({ error: "invalid_metric_routing_cursor" });
       return;
     }
 
@@ -35,7 +43,9 @@ export class MetricRoutingController {
       sensorUid: query.sensorUid?.trim() || undefined,
       gatewayId: query.gatewayId?.trim() || undefined,
       location: query.location?.trim() || undefined,
-      metric: query.metric?.trim() || undefined
+      metric: query.metric?.trim() || undefined,
+      beforeOccurredAt,
+      beforeId
     }));
   };
 

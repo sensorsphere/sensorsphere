@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import type {
   MetricRoutingDecision,
   MetricRoutingEventDto,
+  MetricRoutingEventsPageDto,
   MetricRoutingStatusDto,
   MetricRoutingSummaryDto
 } from "./dto.js";
@@ -36,6 +37,8 @@ export interface MetricRoutingFilters {
   gatewayId?: string;
   location?: string;
   metric?: string;
+  beforeOccurredAt?: string;
+  beforeId?: number;
 }
 
 export class MetricRoutingRepository {
@@ -55,22 +58,32 @@ export class MetricRoutingRepository {
     };
   }
 
-  async findEvents(filters: MetricRoutingFilters): Promise<MetricRoutingEventDto[]> {
+  async findEvents(filters: MetricRoutingFilters): Promise<MetricRoutingEventsPageDto> {
     const values: unknown[] = [filters.hours];
-    const clauses = ["occurred_at >= NOW() - ($1 * INTERVAL '1 hour')"];
+    const clauses = ["event.occurred_at >= NOW() - ($1 * INTERVAL '1 hour')"];
 
     const add = (sql: string, value: unknown): void => {
       values.push(value);
       clauses.push(sql.replace("?", `$${values.length}`));
     };
 
-    if (filters.decision) add("decision = ?", filters.decision);
-    if (filters.sensorUid) add("sensor_uid = ?", filters.sensorUid);
+    if (filters.decision) add("event.decision = ?", filters.decision);
+    if (filters.sensorUid) add("event.sensor_uid = ?", filters.sensorUid);
     if (filters.gatewayId) add("event.gateway_id = ?", filters.gatewayId);
     if (filters.location) add("location.name ILIKE ?", `%${filters.location}%`);
     if (filters.metric) add("event.metric = ?", filters.metric);
 
-    values.push(filters.limit);
+    if (filters.beforeOccurredAt && filters.beforeId !== undefined) {
+      values.push(filters.beforeOccurredAt);
+      const occurredAtIndex = values.length;
+      values.push(filters.beforeId);
+      const idIndex = values.length;
+      clauses.push(
+        `(event.occurred_at, event.id) < ($${occurredAtIndex}::timestamptz, $${idIndex}::bigint)`
+      );
+    }
+
+    values.push(filters.limit + 1);
     const result = await this.pool.query<EventRecord>(`
       SELECT
         event.id, event.occurred_at, event.gateway_id,
@@ -91,7 +104,12 @@ export class MetricRoutingRepository {
       LIMIT $${values.length}
     `, values);
 
-    return result.rows.map(row => ({
+    const hasMore = result.rows.length > filters.limit;
+    const pageRows = hasMore
+      ? result.rows.slice(0, filters.limit)
+      : result.rows;
+
+    const events = pageRows.map(row => ({
       id: Number(row.id),
       occurredAt: row.occurred_at.toISOString(),
       gatewayId: row.gateway_id,
@@ -113,6 +131,18 @@ export class MetricRoutingRepository {
       dedupKey: row.dedup_key,
       dedupAgeMs: row.dedup_age_ms
     }));
+
+    const last = pageRows[pageRows.length - 1];
+
+    return {
+      events,
+      nextCursor: hasMore && last
+        ? {
+            occurredAt: last.occurred_at.toISOString(),
+            id: Number(last.id)
+          }
+        : null
+    };
   }
 
   async getSummary(hours: number): Promise<MetricRoutingSummaryDto> {

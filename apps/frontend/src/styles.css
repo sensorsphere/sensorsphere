@@ -69,3 +69,26 @@ body { background: var(--ss-page-bg); }
   background: #17191c;
   border-color: var(--ss-border);
 }
+
+.metric-routing-table-scroll {
+  max-height: calc(100vh - 430px);
+  min-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-sm);
+}
+
+.metric-routing-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+.metric-routing-table thead th {
+  background: var(--mantine-color-gray-2);
+  box-shadow: inset 0 -1px 0 var(--mantine-color-default-border);
+}
+
+[data-mantine-color-scheme="dark"] .metric-routing-table thead th {
+  background: var(--mantine-color-dark-7);
+}

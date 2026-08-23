@@ -379,6 +379,14 @@ export interface MetricRoutingEvent {
   dedupAgeMs: number | null;
 }
 
+export interface MetricRoutingEventsPage {
+  events: MetricRoutingEvent[];
+  nextCursor: {
+    occurredAt: string;
+    id: number;
+  } | null;
+}
+
 export interface MetricRoutingSummary {
   hours: number;
   received: number;

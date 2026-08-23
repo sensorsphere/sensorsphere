@@ -17,7 +17,7 @@ import type {
   CreateGatewayInput,
   UpdateGatewayInput,
   MetricRoutingDecision,
-  MetricRoutingEvent,
+  MetricRoutingEventsPage,
   MetricRoutingStatus,
   MetricRoutingSummary
 } from "./types";
@@ -159,7 +159,9 @@ export async function getMetricRoutingEvents(input: {
   gatewayId?: string;
   location?: string;
   metric?: string;
-}): Promise<MetricRoutingEvent[]> {
+  beforeOccurredAt?: string;
+  beforeId?: number;
+}): Promise<MetricRoutingEventsPage> {
   const params = new URLSearchParams({
     hours: String(input.hours),
     limit: String(input.limit ?? 500)
@@ -170,8 +172,10 @@ export async function getMetricRoutingEvents(input: {
   if (input.gatewayId?.trim()) params.set("gatewayId", input.gatewayId.trim());
   if (input.location?.trim()) params.set("location", input.location.trim());
   if (input.metric?.trim()) params.set("metric", input.metric.trim());
+  if (input.beforeOccurredAt) params.set("beforeOccurredAt", input.beforeOccurredAt);
+  if (input.beforeId !== undefined) params.set("beforeId", String(input.beforeId));
 
-  return readJson<MetricRoutingEvent[]>(
+  return readJson<MetricRoutingEventsPage>(
     await fetch(`/api/v1/metric-routing/events?${params}`)
   );
 }

@@ -22,6 +22,15 @@ export interface MetricRoutingEventDto {
   dedupAgeMs: number | null;
 }
 
+
+export interface MetricRoutingEventsPageDto {
+  events: MetricRoutingEventDto[];
+  nextCursor: {
+    occurredAt: string;
+    id: number;
+  } | null;
+}
+
 export interface MetricRoutingStatusDto {
   mode: MetricRoutingMode;
   updatedAt: string;
