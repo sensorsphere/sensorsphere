@@ -180,10 +180,18 @@ export function ProjectTodosPanel() {
   const [view, setView] = usePersistentState<"list" | "board">(
     "projectTodos.view", "list", value => value === "list" || value === "board"
   );
-  const [search, setSearch] = React.useState("");
-  const [statusFilter, setStatusFilter] = React.useState<string | null>(null);
-  const [priorityFilter, setPriorityFilter] = React.useState<string | null>(null);
-  const [sectionFilter, setSectionFilter] = React.useState<string | null>(null);
+  const [search, setSearch] = usePersistentState<string>(
+    "projectTodos.filter.search", "", value => typeof value === "string"
+  );
+  const [statusFilter, setStatusFilter] = usePersistentState<string | null>(
+    "projectTodos.filter.status", null, value => value === null || STATUS_OPTIONS.some(option => option.value === value)
+  );
+  const [priorityFilter, setPriorityFilter] = usePersistentState<string | null>(
+    "projectTodos.filter.priority", null, value => value === null || PRIORITY_OPTIONS.some(option => option.value === value)
+  );
+  const [sectionFilter, setSectionFilter] = usePersistentState<string | null>(
+    "projectTodos.filter.section", null, value => value === null || typeof value === "string"
+  );
   const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
   const [taskModalOpen, setTaskModalOpen] = React.useState(false);
   const [sectionModalOpen, setSectionModalOpen] = React.useState(false);
@@ -197,6 +205,9 @@ export function ProjectTodosPanel() {
   const [sectionName, setSectionName] = React.useState("");
   const [importMarkdown, setImportMarkdown] = React.useState("");
   const [message, setMessage] = React.useState<string | null>(null);
+  const [draggedTaskId, setDraggedTaskId] = React.useState<string | null>(null);
+  const [dragOverStatus, setDragOverStatus] = React.useState<ProjectTodoStatus | null>(null);
+  const [dragOverTaskId, setDragOverTaskId] = React.useState<string | null>(null);
 
   const data = query.data;
   const sections = data?.sections ?? [];
@@ -272,6 +283,39 @@ export function ProjectTodosPanel() {
     setStatusFilter(null);
     setPriorityFilter(null);
     setSectionFilter(null);
+  };
+
+  const boardRows = (status: ProjectTodoStatus) => filteredTasks
+    .filter(task => task.status === status)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
+
+  const completeBoardDrop = async (targetStatus: ProjectTodoStatus, targetTaskId?: string | null) => {
+    if (!draggedTaskId) return;
+    const dragged = tasks.find(task => task.id === draggedTaskId);
+    if (!dragged) return;
+
+    const target = targetTaskId ? tasks.find(task => task.id === targetTaskId) : null;
+    const updates: Array<Promise<ProjectTodo>> = [];
+
+    if (target && target.id !== dragged.id) {
+      const sameSiblingScope = target.sectionId === dragged.sectionId && target.parentId === dragged.parentId;
+      if (sameSiblingScope) {
+        updates.push(updateProjectTodo(dragged.id, { status: targetStatus, sortOrder: target.sortOrder }));
+        updates.push(updateProjectTodo(target.id, { sortOrder: dragged.sortOrder }));
+      } else {
+        updates.push(updateProjectTodo(dragged.id, { status: targetStatus, sortOrder: target.sortOrder }));
+      }
+    } else {
+      const targetRows = tasks.filter(task => task.status === targetStatus && task.id !== dragged.id);
+      const lastSortOrder = targetRows.reduce((max, task) => Math.max(max, task.sortOrder), -1);
+      updates.push(updateProjectTodo(dragged.id, { status: targetStatus, sortOrder: lastSortOrder + 1 }));
+    }
+
+    await Promise.all(updates);
+    setDraggedTaskId(null);
+    setDragOverStatus(null);
+    setDragOverTaskId(null);
+    await refresh();
   };
   const filtersActive = Boolean(search.trim() || statusFilter || priorityFilter || sectionFilter);
 
@@ -464,9 +508,30 @@ export function ProjectTodosPanel() {
       ) : (
         <SimpleGrid cols={{ base: 1, lg: 3 }}>
           {(["OPEN", "IN_PROGRESS", "DONE"] as ProjectTodoStatus[]).map(status => {
-            const rows = filteredTasks.filter(task => task.status === status);
+            const rows = boardRows(status);
+            const isDropTarget = draggedTaskId !== null && dragOverStatus === status && dragOverTaskId === null;
             return (
-              <Card key={status} withBorder padding="sm">
+              <Card
+                key={status}
+                withBorder
+                padding="sm"
+                onDragOver={event => {
+                  if (!draggedTaskId) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setDragOverStatus(status);
+                  setDragOverTaskId(null);
+                }}
+                onDrop={async event => {
+                  event.preventDefault();
+                  await completeBoardDrop(status, null);
+                }}
+                style={{
+                  minHeight: 220,
+                  outline: isDropTarget ? "2px solid var(--mantine-color-blue-5)" : undefined,
+                  outlineOffset: isDropTarget ? -2 : undefined
+                }}
+              >
                 <Group justify="space-between" mb="sm">
                   <Badge color={statusColor(status)}>{status.replace("_", " ")}</Badge>
                   <Text size="sm" c="dimmed">{rows.length}</Text>
@@ -474,9 +539,50 @@ export function ProjectTodosPanel() {
                 <Stack gap="xs">
                   {rows.map(task => {
                     const section = sections.find(item => item.id === task.sectionId);
+                    const isDragged = draggedTaskId === task.id;
+                    const isCardDropTarget = draggedTaskId !== null && dragOverTaskId === task.id;
                     return (
-                      <Card key={task.id} withBorder padding="sm" onClick={() => openEditTask(task)} style={{ cursor: "pointer" }}>
-                        <Text fw={600}>{task.title}</Text>
+                      <Card
+                        key={task.id}
+                        withBorder
+                        padding="sm"
+                        draggable
+                        onDragStart={event => {
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData("text/plain", task.id);
+                          setDraggedTaskId(task.id);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedTaskId(null);
+                          setDragOverStatus(null);
+                          setDragOverTaskId(null);
+                        }}
+                        onDragOver={event => {
+                          if (!draggedTaskId || draggedTaskId === task.id) return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          event.dataTransfer.dropEffect = "move";
+                          setDragOverStatus(status);
+                          setDragOverTaskId(task.id);
+                        }}
+                        onDrop={async event => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          if (draggedTaskId === task.id) return;
+                          await completeBoardDrop(status, task.id);
+                        }}
+                        onClick={() => { if (!draggedTaskId) openEditTask(task); }}
+                        style={{
+                          cursor: isDragged ? "grabbing" : "grab",
+                          opacity: isDragged ? 0.45 : 1,
+                          outline: isCardDropTarget ? "2px solid var(--mantine-color-blue-5)" : undefined,
+                          outlineOffset: isCardDropTarget ? -2 : undefined
+                        }}
+                      >
+                        <Group justify="space-between" gap="xs" wrap="nowrap">
+                          <Text fw={600} style={{ minWidth: 0 }}>{task.title}</Text>
+                          <Text size="xs" c="dimmed" title="Drag to move task">⋮⋮</Text>
+                        </Group>
                         <Group gap="xs" mt={6}>
                           {section && <Badge size="sm" variant="outline">{section.name}</Badge>}
                           <Badge size="sm" variant="light" color={priorityColor(task.priority)}>{task.priority}</Badge>
@@ -485,7 +591,7 @@ export function ProjectTodosPanel() {
                       </Card>
                     );
                   })}
-                  {rows.length === 0 && <Text size="sm" c="dimmed">No tasks</Text>}
+                  {rows.length === 0 && <Text size="sm" c="dimmed">Drop a task here</Text>}
                 </Stack>
               </Card>
             );
