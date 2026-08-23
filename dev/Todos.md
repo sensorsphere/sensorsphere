@@ -40,18 +40,22 @@
 * [X] dans History, faire en sorte que les couleurs des differents types de metriques soient toujours de la meme couleur et que'on puisse les changer par configuration sauvegardee dans la base
 * [X] pour l'icone du menu history, mettre quelque chose qui ressemble a un graphe
 * [X] dans history, il faudrait pouvoir mettre 2 graphes cote a cote, et conserver le fait d'en avoir qu'un seul aussi. que me proposes tu
-
-# Run
-* [X] Comment puis-je mettre en place une sauvagarde complete de toutes les donnees afin de pouvoir les restaurer facilement en cas de crash
-* [X] il faudrait faire un arret de tous le modules ainsi qu un rebuild complet de tous ces modules, sans perte de donnees, afin de voir si ca se construit correctement et ensuite si ca se fait correctement tenter tout un build sur un autre environnement/machine
 * [X] mettre une couleur sur les icones du mnu de navigation verticale, et toutes differentes les unes des autres et reporter l'icone sur le titre de la page
 * [X] pour les gateways, ajouter une Location (lien avec la table Location), et pour "Last seen" mettre "... ago" devant la date/heure. mettre "Online/Offline" , la badge de niveau pour le RSSI
 * [X] dans l'history, mettre les valeurs des metriques au dessus des graphes en bleu plutot qu'en blanc
-* [ ] badge RSSI n'est pas le meme partout. Pendre celui du currentreadings avec le petit point devant
-* [ ] faire apparaitre les gateways dans l'inventory
+* [X] faire apparaitre les gateways dans l'inventory
+* [X] lors de la suppression d'un graphe, demander une confirmation
+* [X] les sensor vont envoyes 3 attributs/topics supplementaires: manufacturer, model et firmware afin qu'ils puissent alimenter les champs correspondants au niveau des objets dans la table correspondante
+* [X] il faut pouvoir trier sur les differentes colonnes sur les differents tableaux
+* [-] dans les listes de choix finis dans les boities de dialogue, ajouter l'icone de la location si existante
+* [-] dans les tableaux, ajouter l'icone de la location dans les colonnes Location (ex; vue table d'Inventory, vue compact pou les sensors)
+* [-] creer une vue compact pour les Alert Rules
 * [ ] pourrais tu creer un genre de schema de liaison entre les pieces/gateways/sensors
-* [ ] lors de la suppression d'un graphe, demander une confirmation
+* [ ] badge RSSI n'est pas le meme partout. Pendre celui du currentreadings avec le petit point devant
 
+### Run
+* [X] Comment puis-je mettre en place une sauvagarde complete de toutes les donnees afin de pouvoir les restaurer facilement en cas de crash
+* [X] il faudrait faire un arret de tous le modules ainsi qu un rebuild complet de tous ces modules, sans perte de donnees, afin de voir si ca se construit correctement et ensuite si ca se fait correctement tenter tout un build sur un autre environnement/machine
 
 ### Gateway Coverage
 * [X] ajouter les periodes : 5minutes, 10m, 15m, 30m
@@ -68,7 +72,7 @@
 * [X] dans Gateway Coverage, conserver la valeur du filtre "Sensor filter"
 * [X] dans Gateway Coverage, ajouter un filtre sur le "Recommandation". le mettre sous "Suggested Gateway"
 
-# Metric Routing
+### Metric Routing
 * [X] trop d'élement sur la ligne de filtres. comment reorganiser, peut etre mettre le selecteur de periode a gauche du badge "DRY RUN"
 * [X] quelque soit le periode selectionnee: 2m, 10m, 48h, c'est 3mins de logs qui sont affiches. est-ce normal ?
 * [X] pour le scroll, il faut que l'ascenseur soit dans le tableau et les lignes de valeur et non sur le navigateur afin de conserver le vue sur le header + info de filtre au dessus du tableau
@@ -96,13 +100,14 @@ il faut ameliorer le Simulator
 * [X] au passage, prendre toute la largeur de la fenetre
 * [X] et comment deplace-t-on un dossier dans un autre ?
 * [X] il faudra avoir des stats sur les basic injection/scenario demarres. peut etre mettre des petites cartes en haut a droite de la page (sous le header)
+* [ ] il faut une icone "Reset filters" pour le tableau Publication Log
 
 
-# ESPHome
-* Tenter de remonter les infos d'un capteur par MQTT afin d'alimenter automatiquement les infos d'un Sensor : quel serait le meme chemin pour les topics ?
-* est-il possible d'écrire un petit programme (ex: python) permettant de se connecter a un ESPhome afin de recuperer les logs et pouvoir les filtrer ?
+## ESPHome
+* [ ] Tenter de remonter les infos d'un capteur par MQTT afin d'alimenter automatiquement les infos d'un Sensor : quel serait le meme chemin pour les topics ?
+* [ ] est-il possible d'écrire un petit programme (ex: python) permettant de se connecter a un ESPhome afin de recuperer les logs et pouvoir les filtrer ?
 
-# Global
+## Hardware
 * [X] Flasher 4 ESP32 relais
   * [X] 1 garage
   * [X] 1 first floor (dressing F)
