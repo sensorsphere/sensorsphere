@@ -19,7 +19,10 @@ import type {
   MetricRoutingDecision,
   MetricRoutingEventsPage,
   MetricRoutingStatus,
-  MetricRoutingSummary
+  MetricRoutingSummary,
+  GatewayTrafficEventsPage,
+  GatewayTrafficMessageType,
+  GatewayTrafficSummary
 } from "./types";
 
 async function readJson<T>(
@@ -198,6 +201,58 @@ export async function clearMetricRoutingEvents(): Promise<{
   }>(
     await fetch(
       "/api/v1/metric-routing/events",
+      { method: "DELETE" }
+    )
+  );
+}
+
+export async function getGatewayTrafficEvents(input: {
+  hours: number;
+  limit?: number;
+  messageType?: GatewayTrafficMessageType | null;
+  gatewayId?: string;
+  sensorUid?: string;
+  metric?: string;
+  topic?: string;
+  beforeOccurredAt?: string;
+  beforeId?: number;
+}): Promise<GatewayTrafficEventsPage> {
+  const params = new URLSearchParams({
+    hours: String(input.hours),
+    limit: String(input.limit ?? 500)
+  });
+
+  if (input.messageType) params.set("messageType", input.messageType);
+  if (input.gatewayId?.trim()) params.set("gatewayId", input.gatewayId.trim());
+  if (input.sensorUid?.trim()) params.set("sensorUid", input.sensorUid.trim());
+  if (input.metric?.trim()) params.set("metric", input.metric.trim());
+  if (input.topic?.trim()) params.set("topic", input.topic.trim());
+  if (input.beforeOccurredAt) params.set("beforeOccurredAt", input.beforeOccurredAt);
+  if (input.beforeId !== undefined) params.set("beforeId", String(input.beforeId));
+
+  return readJson<GatewayTrafficEventsPage>(
+    await fetch(`/api/v1/gateway-traffic/events?${params}`)
+  );
+}
+
+export async function getGatewayTrafficSummary(
+  hours: number
+): Promise<GatewayTrafficSummary> {
+  return readJson<GatewayTrafficSummary>(
+    await fetch(`/api/v1/gateway-traffic/summary?hours=${encodeURIComponent(String(hours))}`)
+  );
+}
+
+export async function clearGatewayTrafficEvents(): Promise<{
+  status: string;
+  deletedEvents: number;
+}> {
+  return readJson<{
+    status: string;
+    deletedEvents: number;
+  }>(
+    await fetch(
+      "/api/v1/gateway-traffic/events",
       { method: "DELETE" }
     )
   );

@@ -44,3 +44,36 @@ export interface MetricRoutingSummaryDto {
   deduplicated: number;
   errors: number;
 }
+
+
+export type GatewayTrafficMessageType = "METADATA" | "SENSOR" | "UNKNOWN";
+
+export interface GatewayTrafficEventDto {
+  id: number;
+  occurredAt: string;
+  gatewayId: string | null;
+  gatewayLocationId: string | null;
+  gatewayLocationName: string | null;
+  messageType: GatewayTrafficMessageType;
+  sensorUid: string | null;
+  metric: string | null;
+  payload: string;
+  sourceTopic: string;
+}
+
+export interface GatewayTrafficEventsPageDto {
+  events: GatewayTrafficEventDto[];
+  nextCursor: {
+    occurredAt: string;
+    id: number;
+  } | null;
+}
+
+export interface GatewayTrafficSummaryDto {
+  hours: number;
+  received: number;
+  metadata: number;
+  sensor: number;
+  unknown: number;
+  gateways: number;
+}

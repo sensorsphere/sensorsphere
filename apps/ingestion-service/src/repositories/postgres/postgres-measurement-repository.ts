@@ -46,6 +46,45 @@ implements MeasurementRepository {
 
 
 
+  async saveGatewayTrafficEvent(input: {
+    occurredAt: Date;
+    gatewayId: string | null;
+    messageType: "METADATA" | "SENSOR" | "UNKNOWN";
+    sensorUid: string | null;
+    metric: string | null;
+    payload: string;
+    sourceTopic: string;
+  }): Promise<void> {
+    await this.pool.query(
+      `
+      INSERT INTO gateway_traffic_events (
+        occurred_at, gateway_id, message_type, sensor_uid, metric, payload, source_topic
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `,
+      [
+        input.occurredAt,
+        input.gatewayId,
+        input.messageType,
+        input.sensorUid,
+        input.metric,
+        input.payload,
+        input.sourceTopic
+      ]
+    );
+  }
+
+  async purgeGatewayTrafficEvents(
+    retentionHours = 48
+  ): Promise<number> {
+    const result = await this.pool.query(
+      `DELETE FROM gateway_traffic_events
+       WHERE occurred_at < NOW() - ($1 * INTERVAL '1 hour')`,
+      [retentionHours]
+    );
+    return result.rowCount ?? 0;
+  }
+
   async setMetricRoutingMode(
     mode: "legacy" | "dry_run" | "active"
   ): Promise<void> {

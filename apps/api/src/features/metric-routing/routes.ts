@@ -5,6 +5,10 @@ export async function registerMetricRoutingRoutes(
   app: FastifyInstance,
   options: { controller: MetricRoutingController }
 ): Promise<void> {
+  app.get("/gateway-traffic/events", options.controller.gatewayTrafficEvents);
+  app.get("/gateway-traffic/summary", options.controller.gatewayTrafficSummary);
+  app.delete("/gateway-traffic/events", options.controller.clearGatewayTraffic);
+
   app.get("/metric-routing/status", options.controller.status);
   app.get("/metric-routing/events", options.controller.events);
   app.get("/metric-routing/summary", options.controller.summary);

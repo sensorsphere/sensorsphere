@@ -27,6 +27,7 @@ import {
 } from "@tanstack/react-query";
 
 import { NavigationIcon } from "./NavigationIcon";
+import { GatewayTrafficPanel } from "./GatewayTrafficPanel";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 import {
   clearMetricRoutingEvents,
@@ -60,6 +61,10 @@ function timeLabel(value: string): string {
 
 export function MetricRoutingPanel() {
   const queryClient = useQueryClient();
+  const [view, setView] = usePersistentState<"routing" | "traffic">(
+    "metricRouting.view",
+    "routing"
+  );
   const [hours, setHours] = usePersistentState("metricRouting.period", "1");
   const [paused, setPaused] = React.useState(false);
   const [hiddenDecisions, setHiddenDecisions] = usePersistentState<MetricRoutingDecision[]>(
@@ -176,8 +181,34 @@ export function MetricRoutingPanel() {
     setMetricFilter("");
   };
 
+  if (view === "traffic") {
+    return (
+      <Stack gap="lg">
+        <SegmentedControl
+          value={view}
+          onChange={value => setView(value as "routing" | "traffic")}
+          data={[
+            { value: "routing", label: "Routing decisions" },
+            { value: "traffic", label: "Gateway Traffic" }
+          ]}
+          style={{ alignSelf: "flex-start" }}
+        />
+        <GatewayTrafficPanel />
+      </Stack>
+    );
+  }
+
   return (
     <Stack gap="lg">
+      <SegmentedControl
+        value={view}
+        onChange={value => setView(value as "routing" | "traffic")}
+        data={[
+          { value: "routing", label: "Routing decisions" },
+          { value: "traffic", label: "Gateway Traffic" }
+        ]}
+        style={{ alignSelf: "flex-start" }}
+      />
       <Group justify="space-between" align="flex-end">
         <div>
           <Group gap="xs">

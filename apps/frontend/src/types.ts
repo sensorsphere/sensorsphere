@@ -395,3 +395,39 @@ export interface MetricRoutingSummary {
   deduplicated: number;
   errors: number;
 }
+
+
+export type GatewayTrafficMessageType =
+  | "METADATA"
+  | "SENSOR"
+  | "UNKNOWN";
+
+export interface GatewayTrafficEvent {
+  id: number;
+  occurredAt: string;
+  gatewayId: string | null;
+  gatewayLocationId: string | null;
+  gatewayLocationName: string | null;
+  messageType: GatewayTrafficMessageType;
+  sensorUid: string | null;
+  metric: string | null;
+  payload: string;
+  sourceTopic: string;
+}
+
+export interface GatewayTrafficEventsPage {
+  events: GatewayTrafficEvent[];
+  nextCursor: {
+    occurredAt: string;
+    id: number;
+  } | null;
+}
+
+export interface GatewayTrafficSummary {
+  hours: number;
+  received: number;
+  metadata: number;
+  sensor: number;
+  unknown: number;
+  gateways: number;
+}

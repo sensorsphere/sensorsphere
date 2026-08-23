@@ -87,6 +87,34 @@ Promise<void> {
     "Database connection established"
   );
 
+  const purgedGatewayTraffic =
+    await repository.purgeGatewayTrafficEvents(48);
+
+  logger.info(
+    {
+      purgedGatewayTraffic,
+      retentionHours: 48
+    },
+    "Gateway traffic monitor initialized"
+  );
+
+  const gatewayTrafficRetentionTimer =
+    setInterval(
+      () => {
+        void repository
+          .purgeGatewayTrafficEvents(48)
+          .catch(error => {
+            logger.error(
+              { error },
+              "Unable to purge gateway traffic events"
+            );
+          });
+      },
+      60 * 60 * 1000
+    );
+
+  gatewayTrafficRetentionTimer.unref();
+
   await repository.setMetricRoutingMode(
     metricRoutingMode
   );
@@ -147,23 +175,70 @@ Promise<void> {
           /^sensors\/ble_gateway\/([^/]+)\/sensor\/([^/]+)\/state$/
         );
 
+      const trafficGatewayId =
+        gatewayTopicMatch?.[1] ?? null;
+      const trafficObjectId =
+        gatewayTopicMatch?.[2] ?? null;
+
+      const metadataMetrics =
+        new Set([
+          "friendly_name",
+          "board_id",
+          "mac_address",
+          "wifi_rssi",
+          "wifi_ssid",
+          "build_date",
+          "ip_address"
+        ]);
+
+      const gatewayTrafficMeasurements =
+        gatewayTopicMatch &&
+        trafficObjectId &&
+        !metadataMetrics.has(trafficObjectId)
+          ? esphomeParser.parse(message)
+          : [];
+
+      const trafficMeasurement =
+        gatewayTrafficMeasurements[0];
+
+      const trafficMessageType:
+        "METADATA" | "SENSOR" | "UNKNOWN" =
+          trafficObjectId && metadataMetrics.has(trafficObjectId)
+            ? "METADATA"
+            : trafficMeasurement
+              ? "SENSOR"
+              : "UNKNOWN";
+
       if (gatewayTopicMatch) {
+        void repository
+          .saveGatewayTrafficEvent({
+            occurredAt: message.receivedAt,
+            gatewayId: trafficGatewayId,
+            messageType: trafficMessageType,
+            sensorUid: trafficMeasurement?.sensorUid ?? null,
+            metric:
+              trafficMessageType === "METADATA"
+                ? trafficObjectId
+                : trafficMeasurement?.metric ?? null,
+            payload: message.payload.toString(),
+            sourceTopic: message.topic
+          })
+          .catch(error => {
+            logger.error(
+              {
+                error,
+                topic: message.topic
+              },
+              "Unable to persist gateway traffic event"
+            );
+          });
+
+
         const gatewayId =
           gatewayTopicMatch[1];
 
         const objectId =
           gatewayTopicMatch[2];
-
-        const metadataMetrics =
-          new Set([
-            "friendly_name",
-            "board_id",
-            "mac_address",
-            "wifi_rssi",
-            "wifi_ssid",
-            "build_date",
-            "ip_address"
-          ]);
 
         if (
           gatewayId &&
@@ -289,7 +364,7 @@ Promise<void> {
         }
 
         const qualifiedMeasurements =
-          esphomeParser.parse(message);
+          gatewayTrafficMeasurements;
 
         for (const measurement of qualifiedMeasurements) {
           const assignment =

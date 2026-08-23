@@ -1,10 +1,11 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
-import type { MetricRoutingDecision } from "./dto.js";
+import type { GatewayTrafficMessageType, MetricRoutingDecision } from "./dto.js";
 import type { MetricRoutingRepository } from "./repository.js";
 
 const decisionSchema = z.enum(["ACCEPT", "IGNORE", "DEDUPLICATE", "ERROR"]);
+const trafficTypeSchema = z.enum(["METADATA", "SENSOR", "UNKNOWN"]);
 
 export class MetricRoutingController {
   constructor(private readonly repository: MetricRoutingRepository) {}
@@ -47,6 +48,56 @@ export class MetricRoutingController {
       beforeOccurredAt,
       beforeId
     }));
+  };
+
+  gatewayTrafficEvents = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const query = request.query as Record<string, string | undefined>;
+    const hours = Number(query.hours ?? "1");
+    const limit = Number(query.limit ?? "500");
+    const parsedType = query.messageType ? trafficTypeSchema.safeParse(query.messageType) : null;
+    const beforeOccurredAt = query.beforeOccurredAt?.trim() || undefined;
+    const beforeId = query.beforeId === undefined ? undefined : Number(query.beforeId);
+
+    if (!Number.isFinite(hours) || hours <= 0 || hours > 48 || !Number.isInteger(limit) || limit < 1 || limit > 2000) {
+      reply.code(400).send({ error: "invalid_gateway_traffic_query" });
+      return;
+    }
+    if (parsedType && !parsedType.success) {
+      reply.code(400).send({ error: "invalid_gateway_traffic_type" });
+      return;
+    }
+    if ((beforeOccurredAt && (!Number.isInteger(beforeId) || (beforeId ?? 0) < 1)) ||
+        (!beforeOccurredAt && beforeId !== undefined) ||
+        (beforeOccurredAt && Number.isNaN(Date.parse(beforeOccurredAt)))) {
+      reply.code(400).send({ error: "invalid_gateway_traffic_cursor" });
+      return;
+    }
+
+    reply.send(await this.repository.findGatewayTrafficEvents({
+      hours,
+      limit,
+      messageType: parsedType?.data as GatewayTrafficMessageType | undefined,
+      gatewayId: query.gatewayId?.trim() || undefined,
+      sensorUid: query.sensorUid?.trim() || undefined,
+      metric: query.metric?.trim() || undefined,
+      topic: query.topic?.trim() || undefined,
+      beforeOccurredAt,
+      beforeId
+    }));
+  };
+
+  gatewayTrafficSummary = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const query = request.query as { hours?: string };
+    const hours = Number(query.hours ?? "1");
+    if (!Number.isFinite(hours) || hours <= 0 || hours > 48) {
+      reply.code(400).send({ error: "invalid_hours" });
+      return;
+    }
+    reply.send(await this.repository.getGatewayTrafficSummary(hours));
+  };
+
+  clearGatewayTraffic = async (_request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    reply.send({ status: "cleared", deletedEvents: await this.repository.clearGatewayTraffic() });
   };
 
   summary = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
