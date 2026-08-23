@@ -48,6 +48,10 @@
 * [X] pour les gateways, ajouter une Location (lien avec la table Location), et pour "Last seen" mettre "... ago" devant la date/heure. mettre "Online/Offline" , la badge de niveau pour le RSSI
 * [X] dans l'history, mettre les valeurs des metriques au dessus des graphes en bleu plutot qu'en blanc
 * [ ] badge RSSI n'est pas le meme partout. Pendre celui du currentreadings avec le petit point devant
+* [ ] faire apparaitre les gateways dans l'inventory
+* [ ] pourrais tu creer un genre de schema de liaison entre les pieces/gateways/sensors
+* [ ] lors de la suppression d'un graphe, demander une confirmation
+
 
 ### Gateway Coverage
 * [X] ajouter les periodes : 5minutes, 10m, 15m, 30m
@@ -85,9 +89,13 @@ Avoir des progressions de valeur par heure: ex augmentation de 5 degres durant l
 
 * [X] il faudrait pouvoir "collapser" les "basic injections". idem pour les scenarios
 il faut ameliorer le Simulator
-* [ ] preparer un mecanisme d'export/import des basic injection / scenarios
-* [ ] il faudrait pouvoir "ranger" des groupes de "basic injection" dans des dossiers. mettre une nav sur la guche avec un systee d'arbre qui correspondra a l'arborescence de rangement. il faut donc une gestion de ces dossiers (creation, renommage, suppression). afficher le nombre d'elements avec le nom du dossier. IDEM pour les scenarios
-* [ ] preparer un fichier d'import de basic injection avec le nouveau format de topic pour 2 gateways appellee "BLE Gateway MQTT T<index>" avec gateway_id "ble-gateway-t<index>", Wifi SSID: WifiTest. pour les autres valeurs, je te laisse le libre choix, excepte si ca pose question. et leur associer chacune les memes 3 sensors mais avec des valeurs differentes pour les RSSI afin d'avoir des suggested gateway differentes au final
+* [X] preparer un mecanisme d'export/import des basic injection / scenarios
+* [X] il faudrait pouvoir "ranger" des groupes de "basic injection" dans des dossiers. mettre une nav sur la guche avec un systee d'arbre qui correspondra a l'arborescence de rangement. il faut donc une gestion de ces dossiers (creation, renommage, suppression). afficher le nombre d'elements avec le nom du dossier. IDEM pour les scenarios
+* [X] preparer un fichier d'import de basic injection avec le nouveau format de topic pour 2 gateways appellee "BLE Gateway MQTT T<index>" avec gateway_id "ble-gateway-t<index>", Wifi SSID: WifiTest. pour les autres valeurs, je te laisse le libre choix, excepte si ca pose question. et leur associer chacune les memes 3 sensors mais avec des valeurs differentes pour les RSSI afin d'avoir des suggested gateway differentes au final
+* [X] peux tu me trouver un theme un peu sympa type SynthWave'84 pour le  simulator
+* [X] au passage, prendre toute la largeur de la fenetre
+* [X] et comment deplace-t-on un dossier dans un autre ?
+* [X] il faudra avoir des stats sur les basic injection/scenario demarres. peut etre mettre des petites cartes en haut a droite de la page (sous le header)
 
 
 # ESPHome
