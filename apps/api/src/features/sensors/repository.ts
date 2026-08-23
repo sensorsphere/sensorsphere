@@ -22,6 +22,10 @@ export interface SensorRecord {
   gateway_name: string | null;
   gateway_mqtt_id: string | null;
   gateway_type: string | null;
+  backup_gateway_id: string | null;
+  backup_gateway_name: string | null;
+  backup_gateway_mqtt_id: string | null;
+  backup_gateway_type: string | null;
   last_measurement_at: Date | null;
   online: boolean;
   measurements_today: number;
@@ -52,6 +56,10 @@ const SENSOR_SELECT = `
       g.gateway_id AS gateway_mqtt_id,
       g.name AS gateway_name,
       gt.name AS gateway_type,
+      bg.id AS backup_gateway_id,
+      bg.gateway_id AS backup_gateway_mqtt_id,
+      bg.name AS backup_gateway_name,
+      bgt.name AS backup_gateway_type,
       latest.time AS last_measurement_at,
       CASE
           WHEN latest.time IS NULL THEN FALSE
@@ -63,6 +71,12 @@ const SENSOR_SELECT = `
   LEFT JOIN rooms r ON r.id = s.room_id
   LEFT JOIN gateways g ON g.id = s.gateway_id
   LEFT JOIN gateway_types gt ON gt.id = g.gateway_type_id
+  LEFT JOIN sensor_gateway_assignments sga
+    ON sga.sensor_id = s.id
+   AND sga.priority = 2
+   AND sga.enabled = TRUE
+  LEFT JOIN gateways bg ON bg.id = sga.gateway_id
+  LEFT JOIN gateway_types bgt ON bgt.id = bg.gateway_type_id
   LEFT JOIN LATERAL (
       SELECT m.time
       FROM measurements m
@@ -117,64 +131,77 @@ implements SensorRepository {
     id: string,
     input: UpdateSensorDto
   ): Promise<boolean> {
+    const client =
+      await this.pool.connect();
 
-    const updates: string[] = [];
-    const values: unknown[] = [];
+    try {
+      await client.query("BEGIN");
 
-    const addUpdate = (
-      column: string,
-      value: unknown
-    ): void => {
-      values.push(value);
-      updates.push(`${column} = $${values.length}`);
-    };
+      const updates: string[] = [];
+      const values: unknown[] = [];
 
-    if ("name" in input) {
-      addUpdate("name", input.name ?? null);
+      const addUpdate = (
+        column: string,
+        value: unknown
+      ): void => {
+        values.push(value);
+        updates.push(`${column} = $${values.length}`);
+      };
+
+      if ("name" in input) addUpdate("name", input.name ?? null);
+      if ("description" in input) addUpdate("description", input.description ?? null);
+      if ("manufacturer" in input) addUpdate("manufacturer", input.manufacturer ?? null);
+      if ("model" in input) addUpdate("model", input.model ?? null);
+      if ("firmwareVersion" in input) addUpdate("firmware_version", input.firmwareVersion ?? null);
+      if ("gatewayId" in input) addUpdate("gateway_id", input.gatewayId ?? null);
+      if ("enabled" in input) addUpdate("enabled", input.enabled);
+
+      if (updates.length > 0) {
+        values.push(id);
+        await client.query(
+          `
+          UPDATE sensors
+          SET ${updates.join(", ")}, updated_at = NOW()
+          WHERE uuid = $${values.length}
+          `,
+          values
+        );
+      }
+
+      if ("backupGatewayId" in input) {
+        const sensorResult = await client.query<{ id: string }>(
+          `SELECT id::text AS id FROM sensors WHERE uuid = $1 LIMIT 1`,
+          [id]
+        );
+        const sensorId = sensorResult.rows[0]?.id;
+        if (!sensorId) {
+          await client.query("ROLLBACK");
+          return false;
+        }
+
+        await client.query(
+          `DELETE FROM sensor_gateway_assignments WHERE sensor_id = $1::bigint AND priority = 2`,
+          [sensorId]
+        );
+
+        if (input.backupGatewayId) {
+          await client.query(
+            `
+            INSERT INTO sensor_gateway_assignments (sensor_id, gateway_id, priority, enabled)
+            VALUES ($1::bigint, $2::uuid, 2, TRUE)
+            `,
+            [sensorId, input.backupGatewayId]
+          );
+        }
+      }
+
+      await client.query("COMMIT");
+      return true;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
     }
-
-    if ("description" in input) {
-      addUpdate("description", input.description ?? null);
-    }
-
-    if ("manufacturer" in input) {
-      addUpdate("manufacturer", input.manufacturer ?? null);
-    }
-
-    if ("model" in input) {
-      addUpdate("model", input.model ?? null);
-    }
-
-    if ("firmwareVersion" in input) {
-      addUpdate("firmware_version", input.firmwareVersion ?? null);
-    }
-
-    if ("gatewayId" in input) {
-      addUpdate("gateway_id", input.gatewayId ?? null);
-    }
-
-    if ("enabled" in input) {
-      addUpdate("enabled", input.enabled);
-    }
-
-    if (updates.length == 0) {
-      return false;
-    }
-
-    values.push(id);
-
-    const result =
-      await this.pool.query(
-        `
-        UPDATE sensors
-        SET
-          ${updates.join(", ")},
-          updated_at = NOW()
-        WHERE uuid = $${values.length}
-        `,
-        values
-      );
-
-    return result.rowCount === 1;
   }
 }

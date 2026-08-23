@@ -54,6 +54,19 @@ export function mapSensorToDto(
           }
         : null,
 
+    backupGateway:
+      sensor.backup_gateway_id &&
+      sensor.backup_gateway_name &&
+      sensor.backup_gateway_mqtt_id &&
+      sensor.backup_gateway_type
+        ? {
+            id: sensor.backup_gateway_id,
+            gatewayId: sensor.backup_gateway_mqtt_id,
+            name: sensor.backup_gateway_name,
+            type: sensor.backup_gateway_type
+          }
+        : null,
+
     lastMeasurementAt:
       sensor.last_measurement_at
         ? sensor.last_measurement_at.toISOString()

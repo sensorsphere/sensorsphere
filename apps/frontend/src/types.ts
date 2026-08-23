@@ -60,6 +60,13 @@ export interface Sensor {
     type: string;
   } | null;
 
+  backupGateway: {
+    id: string;
+    gatewayId: string;
+    name: string;
+    type: string;
+  } | null;
+
   lastMeasurementAt: string | null;
 
   online: boolean;
@@ -76,6 +83,7 @@ export interface UpdateSensor {
   model?: string | null;
   firmwareVersion?: string | null;
   gatewayId?: string | null;
+  backupGatewayId?: string | null;
   enabled?: boolean;
 }
 
@@ -363,6 +371,8 @@ export interface MetricRoutingEvent {
   decision: MetricRoutingDecision;
   reason: string;
   assignedGatewayId: string | null;
+  backupGatewayId: string | null;
+  primaryGatewayLastSeenAt: string | null;
   mode: "dry_run" | "active";
   sourceTopic: string;
   dedupKey: string | null;

@@ -20,6 +20,8 @@ interface EventRecord {
   decision: MetricRoutingDecision;
   reason: string;
   assigned_gateway_id: string | null;
+  backup_gateway_id: string | null;
+  primary_gateway_last_seen_at: Date | null;
   mode: "dry_run" | "active";
   source_topic: string;
   dedup_key: string | null;
@@ -75,7 +77,9 @@ export class MetricRoutingRepository {
         gateway.location_id AS gateway_location_id,
         location.name AS gateway_location_name,
         event.sensor_uid, event.sensor_name, event.metric, event.value,
-        event.decision, event.reason, event.assigned_gateway_id, event.mode, event.source_topic,
+        event.decision, event.reason, event.assigned_gateway_id,
+        event.backup_gateway_id, event.primary_gateway_last_seen_at,
+        event.mode, event.source_topic,
         event.dedup_key, event.dedup_age_ms
       FROM metric_routing_events event
       LEFT JOIN gateways gateway
@@ -100,6 +104,10 @@ export class MetricRoutingRepository {
       decision: row.decision,
       reason: row.reason,
       assignedGatewayId: row.assigned_gateway_id,
+      backupGatewayId: row.backup_gateway_id,
+      primaryGatewayLastSeenAt: row.primary_gateway_last_seen_at
+        ? row.primary_gateway_last_seen_at.toISOString()
+        : null,
       mode: row.mode,
       sourceTopic: row.source_topic,
       dedupKey: row.dedup_key,

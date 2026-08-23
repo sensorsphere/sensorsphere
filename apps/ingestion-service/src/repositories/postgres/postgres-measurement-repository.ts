@@ -65,18 +65,28 @@ implements MeasurementRepository {
   ): Promise<{
     sensorName: string | null;
     assignedGatewayId: string | null;
+    backupGatewayId: string | null;
+    primaryGatewayLastSeenAt: Date | null;
   }> {
     const result = await this.pool.query<{
       sensor_name: string | null;
       assigned_gateway_id: string | null;
+      backup_gateway_id: string | null;
+      primary_gateway_last_seen_at: Date | null;
     }>(
       `
       SELECT
         s.name AS sensor_name,
-        g.gateway_id AS assigned_gateway_id
+        g.gateway_id AS assigned_gateway_id,
+        bg.gateway_id AS backup_gateway_id,
+        g.last_seen_at AS primary_gateway_last_seen_at
       FROM sensors s
-      LEFT JOIN gateways g
-        ON g.id = s.gateway_id
+      LEFT JOIN gateways g ON g.id = s.gateway_id
+      LEFT JOIN sensor_gateway_assignments sga
+        ON sga.sensor_id = s.id
+       AND sga.priority = 2
+       AND sga.enabled = TRUE
+      LEFT JOIN gateways bg ON bg.id = sga.gateway_id
       WHERE LOWER(s.sensor_uid) = LOWER($1)
       LIMIT 1
       `,
@@ -85,7 +95,9 @@ implements MeasurementRepository {
 
     return {
       sensorName: result.rows[0]?.sensor_name ?? null,
-      assignedGatewayId: result.rows[0]?.assigned_gateway_id ?? null
+      assignedGatewayId: result.rows[0]?.assigned_gateway_id ?? null,
+      backupGatewayId: result.rows[0]?.backup_gateway_id ?? null,
+      primaryGatewayLastSeenAt: result.rows[0]?.primary_gateway_last_seen_at ?? null
     };
   }
 
@@ -99,6 +111,8 @@ implements MeasurementRepository {
     decision: "ACCEPT" | "IGNORE" | "DEDUPLICATE" | "ERROR";
     reason: string;
     assignedGatewayId: string | null;
+    backupGatewayId: string | null;
+    primaryGatewayLastSeenAt: Date | null;
     mode: "dry_run" | "active";
     sourceTopic: string;
     dedupKey?: string | null;
@@ -108,15 +122,16 @@ implements MeasurementRepository {
       `
       INSERT INTO metric_routing_events (
         occurred_at, gateway_id, sensor_uid, sensor_name, metric, value,
-        decision, reason, assigned_gateway_id, mode, source_topic,
-        dedup_key, dedup_age_ms
+        decision, reason, assigned_gateway_id, backup_gateway_id,
+        primary_gateway_last_seen_at, mode, source_topic, dedup_key, dedup_age_ms
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       `,
       [
         input.occurredAt, input.gatewayId, input.sensorUid, input.sensorName,
         input.metric, input.value, input.decision, input.reason,
-        input.assignedGatewayId, input.mode, input.sourceTopic,
+        input.assignedGatewayId, input.backupGatewayId,
+        input.primaryGatewayLastSeenAt, input.mode, input.sourceTopic,
         input.dedupKey ?? null, input.dedupAgeMs ?? null
       ]
     );

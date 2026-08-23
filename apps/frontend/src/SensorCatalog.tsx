@@ -66,6 +66,7 @@ interface SensorFormState {
   firmwareVersion: string;
   locationId: string;
   gatewayId: string;
+  backupGatewayId: string;
   enabled: boolean;
 }
 
@@ -95,6 +96,9 @@ function sensorToForm(
 
     gatewayId:
       sensor.gateway?.id ?? "",
+
+    backupGatewayId:
+      sensor.backupGateway?.id ?? "",
 
     enabled:
       sensor.enabled
@@ -407,6 +411,9 @@ export function SensorCatalog() {
 
           gatewayId:
             form.gatewayId || null,
+
+          backupGatewayId:
+            form.backupGatewayId || null,
 
           enabled:
             form.enabled
@@ -1228,19 +1235,42 @@ export function SensorCatalog() {
             />
 
             <Select
-              label="Gateway"
+              label="Primary gateway"
               searchable
               clearable
               placeholder="Unassigned"
               value={
                 form.gatewayId || null
               }
-              data={gatewayOptions}
+              data={gatewayOptions.filter(option =>
+                option.value !== form.backupGatewayId
+              )}
               onChange={
                 value =>
                   setForm({
                     ...form,
                     gatewayId:
+                      value ?? ""
+                  })
+              }
+            />
+
+            <Select
+              label="Backup gateway"
+              searchable
+              clearable
+              placeholder="No backup"
+              value={
+                form.backupGatewayId || null
+              }
+              data={gatewayOptions.filter(option =>
+                option.value !== form.gatewayId
+              )}
+              onChange={
+                value =>
+                  setForm({
+                    ...form,
+                    backupGatewayId:
                       value ?? ""
                   })
               }

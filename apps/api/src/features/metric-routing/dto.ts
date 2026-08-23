@@ -14,6 +14,8 @@ export interface MetricRoutingEventDto {
   decision: MetricRoutingDecision;
   reason: string;
   assignedGatewayId: string | null;
+  backupGatewayId: string | null;
+  primaryGatewayLastSeenAt: string | null;
   mode: "dry_run" | "active";
   sourceTopic: string;
   dedupKey: string | null;

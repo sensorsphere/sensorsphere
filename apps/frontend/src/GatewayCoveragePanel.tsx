@@ -349,6 +349,7 @@ function recommendationInfo(
   selectedPeriod: string
 ): {
   gatewayId: string | null;
+  backupCandidateGatewayId: string | null;
   status: string;
   detailLines: string[];
   color: string;
@@ -380,6 +381,7 @@ function recommendationInfo(
   if (candidates.length === 0) {
     return {
       gatewayId: null,
+      backupCandidateGatewayId: null,
       status: "NO SUGGESTION",
       detailLines: [
         `No RSSI data in last ${period}`,
@@ -420,6 +422,7 @@ function recommendationInfo(
 
     return {
       gatewayId: null,
+      backupCandidateGatewayId: null,
       status: "NO RELIABLE SUGGESTION",
       detailLines: [
         `Best data so far: ${bestSoFar.gatewayId}`,
@@ -444,6 +447,7 @@ function recommendationInfo(
   if (!runnerUp) {
     return {
       gatewayId: winner.gatewayId,
+      backupCandidateGatewayId: null,
       status: "ONLY ELIGIBLE GATEWAY",
       detailLines: commonDetails,
       color: "blue"
@@ -456,6 +460,7 @@ function recommendationInfo(
   if (leadDb < 3) {
     return {
       gatewayId: winner.gatewayId,
+      backupCandidateGatewayId: runnerUp.gatewayId,
       status: `AMBIGUOUS · +${leadDb.toFixed(1)} dB`,
       detailLines: commonDetails,
       color: "yellow"
@@ -465,6 +470,7 @@ function recommendationInfo(
   if (leadDb < 8) {
     return {
       gatewayId: winner.gatewayId,
+      backupCandidateGatewayId: runnerUp.gatewayId,
       status: `PREFERRED · +${leadDb.toFixed(1)} dB`,
       detailLines: commonDetails,
       color: "teal"
@@ -473,6 +479,7 @@ function recommendationInfo(
 
   return {
     gatewayId: winner.gatewayId,
+    backupCandidateGatewayId: runnerUp.gatewayId,
     status: `STRONG · +${leadDb.toFixed(1)} dB`,
     detailLines: commonDetails,
     color: "green"
@@ -2126,15 +2133,20 @@ export function GatewayCoveragePanel() {
                             title={
                               assignedGateway
                                 ? `${assignedGateway.name} · ${assignedGateway.gatewayId}`
-                                : "No gateway assigned"
+                                : "No primary gateway assigned"
                             }
                           >
-                            Assigned: {
+                            Primary: {
                               assignedGateway
                                 ? `${assignedGateway.name} · ${assignedGateway.gatewayId}`
                                 : "—"
                             }
                           </Text>
+                          {sensorByUid.get(sensorUid)?.backupGateway && (
+                            <Text size="xs" c="teal" fw={500} lh={1.1}>
+                              Backup: {sensorByUid.get(sensorUid)?.backupGateway?.name} · {sensorByUid.get(sensorUid)?.backupGateway?.gatewayId}
+                            </Text>
+                          )}
                           <Button
                             size="compact-xs"
                             variant="light"
@@ -2381,6 +2393,11 @@ export function GatewayCoveragePanel() {
                             >
                               Assign suggested
                             </Button>
+                          )}
+                          {suggestion.backupCandidateGatewayId && (
+                            <Text size="xs" c="teal" lh={1.25}>
+                              Backup candidate: {suggestion.backupCandidateGatewayId}
+                            </Text>
                           )}
                           {suggestion.detailLines.map(
                             (line, index) => (

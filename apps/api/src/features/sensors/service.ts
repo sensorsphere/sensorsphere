@@ -49,6 +49,24 @@ export class SensorService {
       return null;
     }
 
+    const primaryGatewayId =
+      "gatewayId" in input
+        ? input.gatewayId ?? null
+        : exists.gateway_id;
+
+    const backupGatewayId =
+      "backupGatewayId" in input
+        ? input.backupGatewayId ?? null
+        : exists.backup_gateway_id;
+
+    if (
+      primaryGatewayId &&
+      backupGatewayId &&
+      primaryGatewayId === backupGatewayId
+    ) {
+      throw new Error("Primary and backup gateway must be different");
+    }
+
     await this.repository.updateMetadata(
       id,
       input

@@ -54,6 +54,7 @@ const metricRoutingMode:
       : "dry_run";
 
 const METRIC_ROUTING_DEDUP_WINDOW_MS = 5_000;
+const PRIMARY_GATEWAY_FAILOVER_AFTER_MS = 2 * 60 * 1000;
 
 interface DedupEntry {
   gatewayId: string;
@@ -304,10 +305,21 @@ Promise<void> {
           let dedupAgeMs: number | null = null;
 
           if (assignment.assignedGatewayId) {
-            if (
-              assignment.assignedGatewayId === gatewayId
-            ) {
-              reason = "assigned_gateway";
+            if (assignment.assignedGatewayId === gatewayId) {
+              reason = "assigned_primary";
+            } else if (assignment.backupGatewayId === gatewayId) {
+              const primaryAgeMs =
+                assignment.primaryGatewayLastSeenAt
+                  ? measurement.receivedAt.getTime() -
+                    assignment.primaryGatewayLastSeenAt.getTime()
+                  : Number.POSITIVE_INFINITY;
+
+              if (primaryAgeMs >= PRIMARY_GATEWAY_FAILOVER_AFTER_MS) {
+                reason = "backup_failover";
+              } else {
+                decision = "IGNORE";
+                reason = "primary_healthy";
+              }
             } else {
               decision = "IGNORE";
               reason = "not_assigned_gateway";
@@ -355,6 +367,10 @@ Promise<void> {
             reason,
             assignedGatewayId:
               assignment.assignedGatewayId,
+            backupGatewayId:
+              assignment.backupGatewayId,
+            primaryGatewayLastSeenAt:
+              assignment.primaryGatewayLastSeenAt,
             mode: metricRoutingMode,
             sourceTopic: measurement.sourceTopic,
             dedupKey,
@@ -372,6 +388,10 @@ Promise<void> {
               reason,
               assignedGatewayId:
                 assignment.assignedGatewayId,
+              backupGatewayId:
+                assignment.backupGatewayId,
+              primaryGatewayLastSeenAt:
+                assignment.primaryGatewayLastSeenAt?.toISOString() ?? null,
               dedupAgeMs
             },
             "Metric routing decision"

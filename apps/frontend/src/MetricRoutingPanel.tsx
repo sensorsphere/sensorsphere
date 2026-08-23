@@ -336,7 +336,10 @@ export function MetricRoutingPanel() {
                           {event.gatewayLocationName ?? "[No location]"}
                         </Text>
                       </Table.Td>
-                      <Table.Td>{event.assignedGatewayId ?? "—"}</Table.Td>
+                      <Table.Td>
+                        <Text size="sm" fw={600}>Primary: {event.assignedGatewayId ?? "—"}</Text>
+                        <Text size="xs" c="dimmed">Backup: {event.backupGatewayId ?? "—"}</Text>
+                      </Table.Td>
                       <Table.Td>
                         <Badge color={decisionColor(event.decision)} variant="light">
                           {event.decision}

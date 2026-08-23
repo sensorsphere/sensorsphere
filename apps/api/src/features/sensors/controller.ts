@@ -38,6 +38,9 @@ const updateSensorSchema =
     gatewayId:
       z.string().uuid().nullable().optional(),
 
+    backupGatewayId:
+      z.string().uuid().nullable().optional(),
+
     enabled:
       z.boolean().optional()
   })
@@ -149,11 +152,25 @@ export class SensorController {
         return;
       }
 
-      const sensor =
-        await this.service.updateSensor(
-          parsedId.data,
-          parsedBody.data
-        );
+      let sensor;
+
+      try {
+        sensor =
+          await this.service.updateSensor(
+            parsedId.data,
+            parsedBody.data
+          );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === "Primary and backup gateway must be different"
+        ) {
+          await badRequest(reply, error.message);
+          return;
+        }
+
+        throw error;
+      }
 
       if (!sensor) {
         await notFound(
