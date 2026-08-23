@@ -1,5 +1,7 @@
 import React from "react";
 
+import { activeFilterStyles } from "./filterStyles";
+
 import { NavigationIcon } from "./NavigationIcon";
 
 import {
@@ -755,6 +757,7 @@ export function SensorCatalog() {
                   event.currentTarget.value
                 )
             }
+            styles={activeFilterStyles(nameSearch.trim().length > 0)}
           />
 
           <Select
@@ -765,6 +768,7 @@ export function SensorCatalog() {
             value={manufacturerFilter}
             onChange={setManufacturerFilter}
             data={manufacturerOptions}
+            styles={activeFilterStyles(manufacturerFilter !== null)}
           />
 
           <Select
@@ -775,6 +779,7 @@ export function SensorCatalog() {
             value={modelFilter}
             onChange={setModelFilter}
             data={modelOptions}
+            styles={activeFilterStyles(modelFilter !== null)}
           />
 
           <Select
@@ -785,6 +790,7 @@ export function SensorCatalog() {
             value={locationFilter}
             onChange={setLocationFilter}
             data={locationOptions}
+            styles={activeFilterStyles(locationFilter !== null)}
           />
 
           <Select
@@ -795,6 +801,7 @@ export function SensorCatalog() {
             value={gatewayFilter}
             onChange={setGatewayFilter}
             data={gatewayFilterOptions}
+            styles={activeFilterStyles(gatewayFilter !== null)}
           />
 
           <Select
@@ -812,6 +819,7 @@ export function SensorCatalog() {
               { value: "enabled", label: "Enabled" },
               { value: "disabled", label: "Disabled" }
             ]}
+            styles={activeFilterStyles(enabledFilter !== "all")}
           />
 
           <Select
@@ -830,6 +838,7 @@ export function SensorCatalog() {
               { value: "warning", label: "Warning" },
               { value: "offline", label: "Offline" }
             ]}
+            styles={activeFilterStyles(statusFilter !== "all")}
           />
         </SimpleGrid>
 

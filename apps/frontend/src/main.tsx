@@ -1,4 +1,6 @@
 import React from "react";
+
+import { activeFilterStyles } from "./filterStyles";
 import ReactDOM from "react-dom/client";
 
 import {
@@ -2010,6 +2012,7 @@ function Dashboard() {
                                 .value
                             )
                         }
+                        styles={activeFilterStyles(currentReadingSearch.trim().length > 0)}
                       />
 
                       <Select
@@ -2026,6 +2029,7 @@ function Dashboard() {
                           },
                           ...currentReadingLocationOptions
                         ]}
+                        styles={activeFilterStyles(currentReadingLocation !== null)}
                       />
 
 
@@ -2047,6 +2051,7 @@ function Dashboard() {
                           { value: "enabled", label: "Enabled" },
                           { value: "disabled", label: "Disabled" }
                         ]}
+                        styles={activeFilterStyles(currentReadingStatus !== "all")}
                       />
 
                       <Select
@@ -2069,6 +2074,7 @@ function Dashboard() {
                           { value: "warning", label: "Warning" },
                           { value: "offline", label: "Offline" }
                         ]}
+                        styles={activeFilterStyles(currentReadingHealth !== "all")}
                       />
 
                       <ResetFiltersAction
@@ -2695,6 +2701,7 @@ function Dashboard() {
                       style={{
                         flex: 1
                       }}
+                      styles={activeFilterStyles(assetSearch.trim().length > 0)}
                     />
 
                     <Select
@@ -2731,6 +2738,7 @@ function Dashboard() {
                           label: "Online"
                         }
                       ]}
+                      styles={activeFilterStyles(assetHealthFilter !== "all")}
                     />
 
                     <Select
@@ -2762,6 +2770,7 @@ function Dashboard() {
                           label: "Disabled"
                         }
                       ]}
+                      styles={activeFilterStyles(assetEnabledFilter !== "all")}
                     />
 
                     <Select
@@ -2786,6 +2795,7 @@ function Dashboard() {
                           })
                         )
                       }
+                      styles={activeFilterStyles(assetLocationFilter !== null)}
                     />
 
 

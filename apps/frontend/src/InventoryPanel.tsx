@@ -1,5 +1,7 @@
 import React from "react";
 
+import { activeFilterStyles } from "./filterStyles";
+
 import { NavigationIcon } from "./NavigationIcon";
 
 import {
@@ -938,6 +940,7 @@ export function InventoryPanel() {
                   event.currentTarget.value
                 )
             }
+            styles={activeFilterStyles(search.trim().length > 0)}
           />
 
           <Select
@@ -965,6 +968,7 @@ export function InventoryPanel() {
                 })
               )
             ]}
+            styles={activeFilterStyles(locationFilter !== null)}
           />
 
           <Select
@@ -985,6 +989,7 @@ export function InventoryPanel() {
                 label: "Disabled"
               }
             ]}
+            styles={activeFilterStyles(statusFilter !== null)}
           />
 
           <Select
@@ -998,6 +1003,7 @@ export function InventoryPanel() {
             data={
               protocolOptions
             }
+            styles={activeFilterStyles(protocolFilter !== null)}
           />
         </Group>
 

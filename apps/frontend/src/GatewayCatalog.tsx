@@ -1,5 +1,7 @@
 import React from "react";
 
+import { activeFilterStyles } from "./filterStyles";
+
 import {
   Badge,
   Button,
@@ -452,6 +454,7 @@ export function GatewayCatalog() {
             placeholder="Name, gateway ID, type, MAC, SSID or IP"
             value={nameSearch}
             onChange={event => setNameSearch(event.currentTarget.value)}
+            styles={activeFilterStyles(nameSearch.trim().length > 0)}
           />
           <Select
             label="Type"
@@ -461,6 +464,7 @@ export function GatewayCatalog() {
             value={typeFilter}
             onChange={setTypeFilter}
             data={typeOptions}
+            styles={activeFilterStyles(typeFilter !== null)}
           />
           <Select
             label="Enabled"
@@ -475,6 +479,7 @@ export function GatewayCatalog() {
               { value: "enabled", label: "Enabled" },
               { value: "disabled", label: "Disabled" }
             ]}
+            styles={activeFilterStyles(enabledFilter !== "all")}
           />
         </SimpleGrid>
 

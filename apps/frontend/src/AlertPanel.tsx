@@ -1,5 +1,7 @@
 import React from "react";
 
+import { activeFilterControlStyle } from "./filterStyles";
+
 import { NavigationIcon } from "./NavigationIcon";
 
 import {
@@ -1007,6 +1009,7 @@ export function AlertPanel() {
                   "ACKNOWLEDGED",
                   "RESOLVED"
                 ]}
+                style={activeFilterControlStyle(historyStatus !== "ALL")}
               />
 
               <Select

@@ -1,5 +1,7 @@
 import React from "react";
 
+import { activeFilterStyles } from "./filterStyles";
+
 import { NavigationIcon } from "./NavigationIcon";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 
@@ -1633,6 +1635,7 @@ export function GatewayCoveragePanel() {
                 onChange={event =>
                   setSensorFilter(event.currentTarget.value)
                 }
+                styles={activeFilterStyles(sensorFilter.trim().length > 0)}
                 rightSection={
                   sensorFilter
                     ? (
@@ -1668,6 +1671,7 @@ export function GatewayCoveragePanel() {
                   { value: "UNASSIGNED", label: "Not assigned" }
                 ]}
                 aria-label="Filter sensors by primary gateway assignment"
+                styles={activeFilterStyles(assignmentFilter !== null)}
               />
               <Select
                 size="xs"
@@ -1687,6 +1691,7 @@ export function GatewayCoveragePanel() {
                   { value: "UNASSIGNED", label: "Not assigned" }
                 ]}
                 aria-label="Filter sensors by backup gateway assignment"
+                styles={activeFilterStyles(backupFilter !== null)}
               />
               <Select
                 size="xs"
@@ -1713,6 +1718,7 @@ export function GatewayCoveragePanel() {
                   </Badge>
                 )}
                 aria-label="Filter by recommendation"
+                styles={activeFilterStyles(recommendationFilter !== null)}
               />
               <Select
                 size="xs"
@@ -1741,6 +1747,7 @@ export function GatewayCoveragePanel() {
                   </Badge>
                 )}
                 aria-label="Filter by gateway assignment match"
+                styles={activeFilterStyles(assignmentMatchFilter !== null)}
               />
               <ResetFiltersAction
                 active={filtersActive}
@@ -2151,6 +2158,7 @@ export function GatewayCoveragePanel() {
                           }
                         ]}
                         aria-label="Filter by suggested gateway"
+                        styles={activeFilterStyles(suggestedGatewayFilter !== null)}
                       />
                     </Stack>
                   </Table.Th>

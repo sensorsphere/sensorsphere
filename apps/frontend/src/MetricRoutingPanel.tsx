@@ -1,5 +1,7 @@
 import React from "react";
 
+import { activeFilterStyles } from "./filterStyles";
+
 import {
   Alert,
   Badge,
@@ -251,12 +253,14 @@ export function MetricRoutingPanel() {
               placeholder="Name or UID"
               value={sensorFilter}
               onChange={e => setSensorFilter(e.currentTarget.value)}
+              styles={activeFilterStyles(sensorFilter.trim().length > 0)}
             />
             <TextInput
               label="Gateway"
               placeholder="gateway_id"
               value={gatewayFilter}
               onChange={e => setGatewayFilter(e.currentTarget.value)}
+              styles={activeFilterStyles(gatewayFilter.trim().length > 0)}
             />
             <Select
               label="Location"
@@ -266,12 +270,14 @@ export function MetricRoutingPanel() {
               value={locationId}
               onChange={setLocationId}
               data={locationOptions}
+              styles={activeFilterStyles(locationId !== null)}
             />
             <TextInput
               label="Metric"
               placeholder="temperature"
               value={metricFilter}
               onChange={e => setMetricFilter(e.currentTarget.value)}
+              styles={activeFilterStyles(metricFilter.trim().length > 0)}
             />
             <MultiSelect
               label="Hide decisions"
@@ -282,6 +288,7 @@ export function MetricRoutingPanel() {
                 setHiddenDecisions(values as MetricRoutingDecision[])
               }
               data={DECISIONS}
+              styles={activeFilterStyles(hiddenDecisions.length > 0)}
             />
             <Button
               size="compact-sm"
