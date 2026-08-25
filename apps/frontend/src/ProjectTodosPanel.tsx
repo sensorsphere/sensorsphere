@@ -220,8 +220,9 @@ export function ProjectTodosPanel() {
   const [search, setSearch] = usePersistentState<string>(
     "projectTodos.filter.search", "", value => typeof value === "string"
   );
-  const [statusFilter, setStatusFilter] = usePersistentState<string | null>(
-    "projectTodos.filter.status", null, value => value === null || STATUS_OPTIONS.some(option => option.value === value)
+  const [statusFilter, setStatusFilter] = usePersistentState<string[]>(
+    "projectTodos.filter.status", [], value =>
+      Array.isArray(value) && value.every(item => STATUS_OPTIONS.some(option => option.value === item))
   );
   const [priorityFilter, setPriorityFilter] = usePersistentState<string | null>(
     "projectTodos.filter.priority", null, value => value === null || PRIORITY_OPTIONS.some(option => option.value === value)
@@ -326,7 +327,7 @@ export function ProjectTodosPanel() {
     const haystack = [task.title, task.description, task.component, task.prReference, task.patchReference]
       .filter(Boolean).join(" ").toLowerCase();
     return (!search.trim() || haystack.includes(search.trim().toLowerCase())) &&
-      (!statusFilter || task.status === statusFilter) &&
+      (statusFilter.length === 0 || statusFilter.includes(task.status)) &&
       (!priorityFilter || task.priority === priorityFilter) &&
       (sectionFilter.length === 0 || sectionFilter.includes(task.sectionId));
   });
@@ -338,7 +339,7 @@ export function ProjectTodosPanel() {
 
   const resetFilters = () => {
     setSearch("");
-    setStatusFilter(null);
+    setStatusFilter([]);
     setPriorityFilter(null);
     setSectionFilter([]);
   };
@@ -392,7 +393,7 @@ export function ProjectTodosPanel() {
     await copyPrompt(task, section);
   };
 
-  const filtersActive = Boolean(search.trim() || statusFilter || priorityFilter || sectionFilter.length > 0);
+  const filtersActive = Boolean(search.trim() || statusFilter.length > 0 || priorityFilter || sectionFilter.length > 0);
 
   const saveTask = React.useCallback(async () => {
     if (!taskForm.title.trim() || !taskForm.sectionId) return;
@@ -496,16 +497,62 @@ export function ProjectTodosPanel() {
               onChange={event => setSearch(event.currentTarget.value)}
               styles={activeFilterStyles(Boolean(search.trim()))}
             />
-            <BadgeSelect
-              label="Status"
-              placeholder="All statuses"
-              clearable
-              data={STATUS_OPTIONS}
-              value={statusFilter}
-              onChange={setStatusFilter}
-              badgeColor={value => statusColor(value as ProjectTodoStatus)}
-              styles={activeFilterStyles(Boolean(statusFilter))}
-            />
+            <Stack gap={4}>
+              <Text size="sm" fw={500}>Status</Text>
+              <Menu closeOnItemClick={false} withinPortal position="bottom-start">
+                <Menu.Target>
+                  <Button
+                    variant="default"
+                    justify="flex-start"
+                    style={{
+                      minWidth: 210,
+                      border: statusFilter.length > 0 ? "2px solid var(--mantine-color-blue-6)" : undefined
+                    }}
+                  >
+                    {statusFilter.length === 0 ? (
+                      <Text size="sm" c="dimmed">All statuses</Text>
+                    ) : (
+                      <Group gap={4} wrap="nowrap" style={{ overflow: "hidden" }}>
+                        {statusFilter.slice(0, 2).map(status => (
+                          <Badge key={status} size="sm" variant="light" color={statusColor(status as ProjectTodoStatus)}>
+                            {status.replace("_", " ")}
+                          </Badge>
+                        ))}
+                        {statusFilter.length > 2 && <Badge size="sm" variant="outline">+{statusFilter.length - 2}</Badge>}
+                      </Group>
+                    )}
+                  </Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  {STATUS_OPTIONS.map(option => {
+                    const checked = statusFilter.includes(option.value);
+                    return (
+                      <Menu.Item
+                        key={option.value}
+                        onClick={() => setStatusFilter(current =>
+                          current.includes(option.value)
+                            ? current.filter(value => value !== option.value)
+                            : [...current, option.value]
+                        )}
+                      >
+                        <Group gap="xs" wrap="nowrap">
+                          <Checkbox checked={checked} readOnly size="xs" tabIndex={-1} />
+                          <Badge size="sm" variant="light" color={statusColor(option.value as ProjectTodoStatus)}>
+                            {option.label}
+                          </Badge>
+                        </Group>
+                      </Menu.Item>
+                    );
+                  })}
+                  {statusFilter.length > 0 && (
+                    <>
+                      <Menu.Divider />
+                      <Menu.Item onClick={() => setStatusFilter([])}>Clear selection</Menu.Item>
+                    </>
+                  )}
+                </Menu.Dropdown>
+              </Menu>
+            </Stack>
             <BadgeSelect
               label="Priority"
               placeholder="All priorities"
@@ -828,7 +875,7 @@ export function ProjectTodosPanel() {
             required
           />
           <TextInput label="Title" value={taskForm.title} onChange={event => setTaskForm(current => ({ ...current, title: event.currentTarget.value }))} required />
-          <Textarea label="Description / notes" minRows={3} value={taskForm.description ?? ""} onChange={event => setTaskForm(current => ({ ...current, description: event.currentTarget.value || null }))} />
+          <Textarea label="Description / notes" minRows={6} autosize value={taskForm.description ?? ""} onChange={event => setTaskForm(current => ({ ...current, description: event.currentTarget.value || null }))} />
           <Group grow>
             <BadgeSelect
               label="Status"
