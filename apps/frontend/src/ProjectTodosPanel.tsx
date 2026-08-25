@@ -67,16 +67,39 @@ const sectionColor = (sectionId: string, sections: ProjectTodoSection[]) => {
 const sectionAccent = (color: string) => `var(--mantine-color-${color}-6)`;
 
 const taskPromptText = (task: ProjectTodo, section: ProjectTodoSection) => [
-  "SensorSphere Project Todo",
-  `Section: ${section.name}`,
-  `Task: ${task.title}`,
-  `Status: ${task.status}`,
+  `${section.name}:`,
+  `Title: ${task.title}`,
+  `Description: ${task.description?.trim() || "-"}`,
+  `Status: ${task.status.replace("_", " ")}`,
   `Priority: ${task.priority}`,
   task.component ? `Component: ${task.component}` : null,
   task.prReference ? `PR: ${task.prReference}` : null,
-  task.patchReference ? `Patch: ${task.patchReference}` : null,
-  task.description ? `\nNotes:\n${task.description}` : null
+  task.patchReference ? `Patch: ${task.patchReference}` : null
 ].filter(Boolean).join("\n");
+
+async function writeClipboardText(text: string) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall back for browsers/HTTP contexts where Clipboard API is unavailable or denied.
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) throw new Error("Clipboard copy failed");
+}
 
 const statusColor = (status: ProjectTodoStatus) =>
   status === "DONE" ? "green" : status === "IN_PROGRESS" ? "blue" : "gray";
@@ -97,7 +120,8 @@ function TaskRow({
   onEdit,
   onAddSubtask,
   onRefresh,
-  onMove
+  onMove,
+  onCopyPrompt
 }: {
   task: ProjectTodo;
   depth: number;
@@ -107,6 +131,7 @@ function TaskRow({
   onAddSubtask: (task: ProjectTodo) => void;
   onRefresh: () => Promise<unknown>;
   onMove: (task: ProjectTodo, direction: -1 | 1) => Promise<void>;
+  onCopyPrompt: (task: ProjectTodo, section: ProjectTodoSection) => Promise<void>;
 }) {
   const children = tasks
     .filter(candidate => candidate.parentId === task.id)
@@ -117,9 +142,6 @@ function TaskRow({
     await onRefresh();
   };
 
-  const copyPrompt = async () => {
-    await navigator.clipboard.writeText(taskPromptText(task, section));
-  };
 
   return (
     <>
@@ -154,7 +176,7 @@ function TaskRow({
               <ActionIcon variant="subtle" color="blue" title="Mark in progress" onClick={() => setStatus("IN_PROGRESS")}>◐</ActionIcon>
             )}
             <ActionIcon variant="subtle" title="Add subtask" onClick={() => onAddSubtask(task)}>＋</ActionIcon>
-            <ActionIcon variant="subtle" title="Copy as prompt" onClick={copyPrompt}>⧉</ActionIcon>
+            <ActionIcon variant="subtle" title="Copy as prompt" onClick={() => onCopyPrompt(task, section)}>⧉</ActionIcon>
             <ActionIcon variant="subtle" title="Edit" onClick={() => onEdit(task)}>✎</ActionIcon>
             <ActionIcon
               variant="subtle"
@@ -180,6 +202,7 @@ function TaskRow({
           onAddSubtask={onAddSubtask}
           onRefresh={onRefresh}
           onMove={onMove}
+          onCopyPrompt={onCopyPrompt}
         />
       ))}
     </>
@@ -219,6 +242,7 @@ export function ProjectTodosPanel() {
   const [sectionName, setSectionName] = React.useState("");
   const [importMarkdown, setImportMarkdown] = React.useState("");
   const [message, setMessage] = React.useState<string | null>(null);
+  const [copyToast, setCopyToast] = React.useState<{ text: string; error?: boolean } | null>(null);
   const [draggedTaskId, setDraggedTaskId] = React.useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = React.useState<ProjectTodoStatus | null>(null);
   const [dragOverTaskId, setDragOverTaskId] = React.useState<string | null>(null);
@@ -227,6 +251,22 @@ export function ProjectTodosPanel() {
   const sections = data?.sections ?? [];
   const tasks = data?.tasks ?? [];
   const refresh = async () => query.refetch();
+
+  const showCopyToast = React.useCallback((text: string, error = false) => {
+    setCopyToast({ text, error });
+    window.setTimeout(() => {
+      setCopyToast(current => current?.text === text ? null : current);
+    }, 2600);
+  }, []);
+
+  const copyPrompt = React.useCallback(async (task: ProjectTodo, section: ProjectTodoSection) => {
+    try {
+      await writeClipboardText(taskPromptText(task, section));
+      showCopyToast(`Prompt copied: ${task.title}`);
+    } catch {
+      showCopyToast(`Unable to copy prompt: ${task.title}`, true);
+    }
+  }, [showCopyToast]);
 
   const moveTask = async (task: ProjectTodo, direction: -1 | 1) => {
     const siblings = tasks
@@ -345,8 +385,7 @@ export function ProjectTodosPanel() {
   const copyBoardPrompt = async (task: ProjectTodo) => {
     const section = sections.find(item => item.id === task.sectionId);
     if (!section) return;
-    await navigator.clipboard.writeText(taskPromptText(task, section));
-    setMessage(`Copied prompt for “${task.title}”.`);
+    await copyPrompt(task, section);
   };
 
   const filtersActive = Boolean(search.trim() || statusFilter || priorityFilter || sectionFilter);
@@ -384,6 +423,26 @@ export function ProjectTodosPanel() {
       </Group>
 
       {message && <Card withBorder padding="xs"><Text size="sm">{message}</Text></Card>}
+
+      {copyToast && (
+        <Card
+          withBorder
+          padding="sm"
+          shadow="md"
+          style={{
+            position: "fixed",
+            right: 20,
+            bottom: 20,
+            zIndex: 10000,
+            borderColor: copyToast.error ? "var(--mantine-color-red-6)" : "var(--mantine-color-green-6)"
+          }}
+        >
+          <Group gap="xs" wrap="nowrap">
+            <Text c={copyToast.error ? "red" : "green"}>{copyToast.error ? "✕" : "✓"}</Text>
+            <Text size="sm" fw={600}>{copyToast.text}</Text>
+          </Group>
+        </Card>
+      )}
 
       <SimpleGrid cols={{ base: 2, md: 4 }}>
         <Card withBorder style={{ borderLeft: `4px solid var(--mantine-color-${statusColor("OPEN")}-6)` }}>
@@ -547,6 +606,7 @@ export function ProjectTodosPanel() {
                           onAddSubtask={parent => openNewTask(parent.sectionId, parent.id)}
                           onRefresh={refresh}
                           onMove={moveTask}
+                          onCopyPrompt={copyPrompt}
                         />
                       ))}
                       {rootTasksForSection(section.id).length === 0 && <Text size="sm" c="dimmed">No matching tasks.</Text>}
