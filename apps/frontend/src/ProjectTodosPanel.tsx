@@ -6,10 +6,10 @@ import {
   Card,
   Checkbox,
   Group,
+  Menu,
   Modal,
   Progress,
   SegmentedControl,
-  Select,
   SimpleGrid,
   Stack,
   Text,
@@ -226,8 +226,8 @@ export function ProjectTodosPanel() {
   const [priorityFilter, setPriorityFilter] = usePersistentState<string | null>(
     "projectTodos.filter.priority", null, value => value === null || PRIORITY_OPTIONS.some(option => option.value === value)
   );
-  const [sectionFilter, setSectionFilter] = usePersistentState<string | null>(
-    "projectTodos.filter.section", null, value => value === null || typeof value === "string"
+  const [sectionFilter, setSectionFilter] = usePersistentState<string[]>(
+    "projectTodos.filter.section", [], value => Array.isArray(value) && value.every(item => typeof item === "string")
   );
   const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
   const [taskModalOpen, setTaskModalOpen] = React.useState(false);
@@ -249,8 +249,12 @@ export function ProjectTodosPanel() {
 
   const data = query.data;
   const sections = data?.sections ?? [];
+  const sortedSections = React.useMemo(
+    () => [...sections].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })),
+    [sections]
+  );
   const tasks = data?.tasks ?? [];
-  const refresh = async () => query.refetch();
+  const refresh = React.useCallback(async () => query.refetch(), [query.refetch]);
 
   const showCopyToast = React.useCallback((text: string, error = false) => {
     setCopyToast({ text, error });
@@ -283,7 +287,7 @@ export function ProjectTodosPanel() {
   };
 
   const openNewTask = (sectionId?: string, parentId?: string | null) => {
-    const targetSection = sectionId ?? sectionFilter ?? sections[0]?.id ?? "";
+    const targetSection = sectionId ?? sectionFilter[0] ?? sortedSections[0]?.id ?? "";
     setEditingTask(null);
     setNewParentId(parentId ?? null);
     setTaskForm({
@@ -324,7 +328,7 @@ export function ProjectTodosPanel() {
     return (!search.trim() || haystack.includes(search.trim().toLowerCase())) &&
       (!statusFilter || task.status === statusFilter) &&
       (!priorityFilter || task.priority === priorityFilter) &&
-      (!sectionFilter || task.sectionId === sectionFilter);
+      (sectionFilter.length === 0 || sectionFilter.includes(task.sectionId));
   });
   const filteredIds = new Set(filteredTasks.map(task => task.id));
   const rootTasksForSection = (sectionId: string) => tasks
@@ -336,7 +340,7 @@ export function ProjectTodosPanel() {
     setSearch("");
     setStatusFilter(null);
     setPriorityFilter(null);
-    setSectionFilter(null);
+    setSectionFilter([]);
   };
 
   const boardRows = (status: ProjectTodoStatus) => filteredTasks
@@ -388,7 +392,26 @@ export function ProjectTodosPanel() {
     await copyPrompt(task, section);
   };
 
-  const filtersActive = Boolean(search.trim() || statusFilter || priorityFilter || sectionFilter);
+  const filtersActive = Boolean(search.trim() || statusFilter || priorityFilter || sectionFilter.length > 0);
+
+  const saveTask = React.useCallback(async () => {
+    if (!taskForm.title.trim() || !taskForm.sectionId) return;
+    if (editingTask) await updateProjectTodo(editingTask.id, taskForm);
+    else await createProjectTodo(taskForm);
+    setTaskModalOpen(false);
+    await refresh();
+  }, [editingTask, taskForm, refresh]);
+
+  React.useEffect(() => {
+    if (!taskModalOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s") return;
+      event.preventDefault();
+      void saveTask();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [taskModalOpen, saveTask]);
 
   if (query.isLoading) return <Text>Loading project todos…</Text>;
   if (query.error) return <Text c="red">{query.error instanceof Error ? query.error.message : "Unable to load todos"}</Text>;
@@ -493,17 +516,63 @@ export function ProjectTodosPanel() {
               badgeColor={value => priorityColor(value as ProjectTodoPriority)}
               styles={activeFilterStyles(Boolean(priorityFilter))}
             />
-            <BadgeSelect
-              label="Section"
-              placeholder="All sections"
-              clearable
-              searchable
-              data={sections.map(section => ({ value: section.id, label: section.name }))}
-              value={sectionFilter}
-              onChange={setSectionFilter}
-              badgeColor={value => sectionColor(value, sections)}
-              styles={activeFilterStyles(Boolean(sectionFilter))}
-            />
+            <Stack gap={4}>
+              <Text size="sm" fw={500}>Section</Text>
+              <Menu closeOnItemClick={false} withinPortal position="bottom-start">
+                <Menu.Target>
+                  <Button
+                    variant="default"
+                    justify="flex-start"
+                    style={{
+                      minWidth: 240,
+                      border: sectionFilter.length > 0 ? "2px solid var(--mantine-color-blue-6)" : undefined
+                    }}
+                  >
+                    {sectionFilter.length === 0 ? (
+                      <Text size="sm" c="dimmed">All sections</Text>
+                    ) : (
+                      <Group gap={4} wrap="nowrap" style={{ overflow: "hidden" }}>
+                        {sectionFilter.slice(0, 2).map(sectionId => {
+                          const section = sections.find(item => item.id === sectionId);
+                          return section ? (
+                            <Badge key={section.id} size="sm" variant="light" color={sectionColor(section.id, sections)}>
+                              {section.name}
+                            </Badge>
+                          ) : null;
+                        })}
+                        {sectionFilter.length > 2 && <Badge size="sm" variant="outline">+{sectionFilter.length - 2}</Badge>}
+                      </Group>
+                    )}
+                  </Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  {sortedSections.map(section => {
+                    const checked = sectionFilter.includes(section.id);
+                    return (
+                      <Menu.Item
+                        key={section.id}
+                        onClick={() => setSectionFilter(current =>
+                          current.includes(section.id)
+                            ? current.filter(id => id !== section.id)
+                            : [...current, section.id]
+                        )}
+                      >
+                        <Group gap="xs" wrap="nowrap">
+                          <Checkbox checked={checked} readOnly size="xs" tabIndex={-1} />
+                          <Badge size="sm" variant="light" color={sectionColor(section.id, sections)}>{section.name}</Badge>
+                        </Group>
+                      </Menu.Item>
+                    );
+                  })}
+                  {sectionFilter.length > 0 && (
+                    <>
+                      <Menu.Divider />
+                      <Menu.Item onClick={() => setSectionFilter([])}>Clear selection</Menu.Item>
+                    </>
+                  )}
+                </Menu.Dropdown>
+              </Menu>
+            </Stack>
             <ResetFiltersAction active={filtersActive} onReset={resetFilters} />
           </Group>
           <Group>
@@ -523,7 +592,7 @@ export function ProjectTodosPanel() {
       {view === "list" ? (
         <Stack gap="md">
           {sections
-            .filter(section => !sectionFilter || section.id === sectionFilter)
+            .filter(section => sectionFilter.length === 0 || sectionFilter.includes(section.id))
             .map((section, sectionIndex) => {
               const stats = sectionStats(section.id, tasks);
               const isCollapsed = collapsed.has(section.id);
@@ -749,19 +818,32 @@ export function ProjectTodosPanel() {
 
       <Modal opened={taskModalOpen} onClose={() => setTaskModalOpen(false)} title={editingTask ? "Edit task" : newParentId ? "New subtask" : "New task"} size="lg">
         <Stack>
-          <Select
+          <BadgeSelect
             label="Section"
             searchable
-            data={sections.map(section => ({ value: section.id, label: section.name }))}
+            data={sortedSections.map(section => ({ value: section.id, label: section.name }))}
             value={taskForm.sectionId}
             onChange={value => value && setTaskForm(current => ({ ...current, sectionId: value }))}
+            badgeColor={value => sectionColor(value, sections)}
             required
           />
           <TextInput label="Title" value={taskForm.title} onChange={event => setTaskForm(current => ({ ...current, title: event.currentTarget.value }))} required />
           <Textarea label="Description / notes" minRows={3} value={taskForm.description ?? ""} onChange={event => setTaskForm(current => ({ ...current, description: event.currentTarget.value || null }))} />
           <Group grow>
-            <Select label="Status" data={STATUS_OPTIONS} value={taskForm.status ?? "OPEN"} onChange={value => setTaskForm(current => ({ ...current, status: (value ?? "OPEN") as ProjectTodoStatus }))} />
-            <Select label="Priority" data={PRIORITY_OPTIONS} value={taskForm.priority ?? "NORMAL"} onChange={value => setTaskForm(current => ({ ...current, priority: (value ?? "NORMAL") as ProjectTodoPriority }))} />
+            <BadgeSelect
+              label="Status"
+              data={STATUS_OPTIONS}
+              value={taskForm.status ?? "OPEN"}
+              onChange={value => setTaskForm(current => ({ ...current, status: (value ?? "OPEN") as ProjectTodoStatus }))}
+              badgeColor={value => statusColor(value as ProjectTodoStatus)}
+            />
+            <BadgeSelect
+              label="Priority"
+              data={PRIORITY_OPTIONS}
+              value={taskForm.priority ?? "NORMAL"}
+              onChange={value => setTaskForm(current => ({ ...current, priority: (value ?? "NORMAL") as ProjectTodoPriority }))}
+              badgeColor={value => priorityColor(value as ProjectTodoPriority)}
+            />
           </Group>
           <TextInput label="Component" placeholder="Frontend, API, Simulator…" value={taskForm.component ?? ""} onChange={event => setTaskForm(current => ({ ...current, component: event.currentTarget.value || null }))} />
           <Group grow>
@@ -772,12 +854,7 @@ export function ProjectTodosPanel() {
             <Button variant="default" onClick={() => setTaskModalOpen(false)}>Cancel</Button>
             <Button
               disabled={!taskForm.title.trim() || !taskForm.sectionId}
-              onClick={async () => {
-                if (editingTask) await updateProjectTodo(editingTask.id, taskForm);
-                else await createProjectTodo(taskForm);
-                setTaskModalOpen(false);
-                await refresh();
-              }}
+              onClick={saveTask}
             >Save</Button>
           </Group>
         </Stack>
