@@ -9,6 +9,6 @@ packages:
   network: !include packages/network.yaml
 
   diagnostics: !include packages/diagnostics.yaml
-  
+
 logger:
   level: ${LOGGER_LEVEL}

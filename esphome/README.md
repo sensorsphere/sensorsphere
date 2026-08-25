@@ -180,7 +180,10 @@ ESP_IP=10.0.10.11
 #ESP_IP=10.0.10.12
 BOARD_ID=esp32-cam-ai-thinker
 
-./esp-build.sh generic-esp32.yaml ${BOARD_ID} ${ESP_IP}
+KIND_NAME="generic-esp32"
+KIND_DESCRIPTION="Generic ESP32"
+
+./esp-build.sh generic-esp32.yaml ${BOARD_ID} ${ESP_IP} "${KIND_NAME}" "${KIND_DESCRIPTION}"
 
 ```
 
@@ -188,6 +191,19 @@ BOARD_ID=esp32-cam-ai-thinker
 ESP_IP=
 BOARD_ID=esp32-mhetesp32minikit
 ./esp-build.sh generic-esp32.yaml ${BOARD_ID} ${ESP_IP}
+
+```
+
+### BLE Tracker
+
+```sh
+ESP_IP=10.0.10.131
+BOARD_ID=esp32-cam-ai-thinker
+
+KIND_NAME="ble-tracker-esp32"
+KIND_DESCRIPTION="BLE Tracker ESP32"
+
+./esp-build.sh ble-tracker-esp32.yaml ${BOARD_ID} ${ESP_IP} "${KIND_NAME}" "${KIND_DESCRIPTION}"
 
 ```
 

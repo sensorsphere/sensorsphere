@@ -1,0 +1,80 @@
+substitutions:
+  device_name: "${KIND_NAME}"
+  friendly_name: "${KIND_DESCRIPTION}"
+
+packages:
+  hardware: !include packages/hardware/board/${BOARD_ID}.yaml
+
+  base: !include packages/base.yaml
+  network: !include packages/network.yaml
+
+  diagnostics: !include packages/diagnostics.yaml
+
+  # ble_tracker: !include packages/ble/tracker.yaml
+  
+logger:
+  level: VERY_VERBOSE
+  logs:
+    esp32_ble_tracker: VERY_VERBOSE
+
+esp32_ble_tracker:
+  on_ble_advertise:
+    - then:
+        - lambda: |-
+            char addr[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
+
+            ESP_LOGI(
+              "ble_inspector",
+              "ADV mac=%s rssi=%d name=\"%s\"",
+              x.address_str_to(addr),
+              x.get_rssi(),
+              x.get_name().c_str()
+            );
+
+            for (const auto &data : x.get_manufacturer_datas()) {
+              std::string payload;
+
+              char byte_str[4];
+
+              for (uint8_t b : data.data) {
+                snprintf(byte_str, sizeof(byte_str), "%02X", b);
+
+                if (!payload.empty()) {
+                  payload += ":";
+                }
+
+                payload += byte_str;
+              }
+
+              ESP_LOGI(
+                "ble_inspector",
+                "MFG mac=%s uuid=%s data=%s",
+                x.address_str_to(addr),
+                data.uuid.to_string().c_str(),
+                payload.c_str()
+              );
+            }
+
+            for (const auto &data : x.get_service_datas()) {
+              std::string payload;
+
+              char byte_str[4];
+
+              for (uint8_t b : data.data) {
+                snprintf(byte_str, sizeof(byte_str), "%02X", b);
+
+                if (!payload.empty()) {
+                  payload += ":";
+                }
+
+                payload += byte_str;
+              }
+
+              ESP_LOGI(
+                "ble_inspector",
+                "SERVICE mac=%s uuid=%s data=%s",
+                x.address_str_to(addr),
+                data.uuid.to_string().c_str(),
+                payload.c_str()
+              );
+            }
