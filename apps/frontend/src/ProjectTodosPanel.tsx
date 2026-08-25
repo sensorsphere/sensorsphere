@@ -121,7 +121,8 @@ function TaskRow({
   onAddSubtask,
   onRefresh,
   onMove,
-  onCopyPrompt
+  onCopyPrompt,
+  onAdvanceStatus
 }: {
   task: ProjectTodo;
   depth: number;
@@ -132,6 +133,7 @@ function TaskRow({
   onRefresh: () => Promise<unknown>;
   onMove: (task: ProjectTodo, direction: -1 | 1) => Promise<void>;
   onCopyPrompt: (task: ProjectTodo, section: ProjectTodoSection) => Promise<void>;
+  onAdvanceStatus: (task: ProjectTodo) => Promise<void>;
 }) {
   const children = tasks
     .filter(candidate => candidate.parentId === task.id)
@@ -160,7 +162,15 @@ function TaskRow({
                 <Text fw={600} td={task.status === "DONE" ? "line-through" : undefined}>
                   {task.title}
                 </Text>
-                <Badge size="sm" color={statusColor(task.status)}>{task.status.replace("_", " ")}</Badge>
+                <Badge
+                  size="sm"
+                  color={statusColor(task.status)}
+                  style={{ cursor: task.status === "DONE" ? "default" : "pointer" }}
+                  title={task.status === "DONE" ? "Task is done" : "Advance status"}
+                  onClick={() => { if (task.status !== "DONE") void onAdvanceStatus(task); }}
+                >
+                  {task.status.replace("_", " ")}
+                </Badge>
                 <Badge size="sm" variant="light" color={priorityColor(task.priority)}>{task.priority}</Badge>
                 {task.component && <Badge size="sm" variant="outline">{task.component}</Badge>}
                 {task.prReference && <Badge size="sm" variant="outline" color="violet">{task.prReference}</Badge>}
@@ -203,6 +213,7 @@ function TaskRow({
           onRefresh={onRefresh}
           onMove={onMove}
           onCopyPrompt={onCopyPrompt}
+          onAdvanceStatus={onAdvanceStatus}
         />
       ))}
     </>
@@ -272,6 +283,18 @@ export function ProjectTodosPanel() {
       showCopyToast(`Unable to copy prompt: ${task.title}`, true);
     }
   }, [showCopyToast]);
+
+  const advanceTaskStatus = React.useCallback(async (task: ProjectTodo) => {
+    const currentIndex = STATUS_ORDER.indexOf(task.status);
+    const nextStatus = STATUS_ORDER[currentIndex + 1];
+    if (!nextStatus) return;
+    await updateProjectTodo(task.id, { status: nextStatus });
+    setCopyToast({ text: `Status changed to ${nextStatus.replace("_", " ")}` });
+    window.setTimeout(() => {
+      setCopyToast(current => current?.text === `Status changed to ${nextStatus.replace("_", " ")}` ? null : current);
+    }, 2600);
+    await refresh();
+  }, [refresh]);
 
   const moveTask = async (task: ProjectTodo, direction: -1 | 1) => {
     const siblings = tasks
@@ -723,6 +746,7 @@ export function ProjectTodosPanel() {
                           onRefresh={refresh}
                           onMove={moveTask}
                           onCopyPrompt={copyPrompt}
+                          onAdvanceStatus={advanceTaskStatus}
                         />
                       ))}
                       {rootTasksForSection(section.id).length === 0 && <Text size="sm" c="dimmed">No matching tasks.</Text>}
@@ -849,6 +873,19 @@ export function ProjectTodosPanel() {
                         </Group>
                         <Group gap="xs" mt={6}>
                           {section && <Badge size="sm" variant="light" color={color}>{section.name}</Badge>}
+                          <Badge
+                            size="sm"
+                            variant="light"
+                            color={statusColor(task.status)}
+                            style={{ cursor: task.status === "DONE" ? "default" : "pointer" }}
+                            title={task.status === "DONE" ? "Task is done" : "Advance status"}
+                            onClick={event => {
+                              event.stopPropagation();
+                              if (task.status !== "DONE") void advanceTaskStatus(task);
+                            }}
+                          >
+                            {task.status.replace("_", " ")}
+                          </Badge>
                           <Badge size="sm" variant="light" color={priorityColor(task.priority)}>{task.priority}</Badge>
                           {task.prReference && <Badge size="sm" color="violet" variant="outline">{task.prReference}</Badge>}
                         </Group>
