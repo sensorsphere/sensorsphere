@@ -81,6 +81,7 @@ export class MetricRoutingController {
       sensorUid: query.sensorUid?.trim() || undefined,
       metric: query.metric?.trim() || undefined,
       topic: query.topic?.trim() || undefined,
+      payload: query.payload?.trim() || undefined,
       beforeOccurredAt,
       beforeId
     }));

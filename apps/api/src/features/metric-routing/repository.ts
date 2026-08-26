@@ -66,6 +66,7 @@ export interface GatewayTrafficFilters {
   sensorUid?: string;
   metric?: string;
   topic?: string;
+  payload?: string;
   beforeOccurredAt?: string;
   beforeId?: number;
 }
@@ -190,6 +191,7 @@ export class MetricRoutingRepository {
     if (filters.sensorUid) add("event.sensor_uid ILIKE ?", `%${filters.sensorUid}%`);
     if (filters.metric) add("event.metric ILIKE ?", `%${filters.metric}%`);
     if (filters.topic) add("event.source_topic ILIKE ?", `%${filters.topic}%`);
+    if (filters.payload) add("event.payload ILIKE ?", `%${filters.payload}%`);
 
     if (filters.beforeOccurredAt && filters.beforeId !== undefined) {
       values.push(filters.beforeOccurredAt);

@@ -237,6 +237,7 @@ export async function getGatewayTrafficEvents(input: {
   sensorUid?: string;
   metric?: string;
   topic?: string;
+  payload?: string;
   beforeOccurredAt?: string;
   beforeId?: number;
 }): Promise<GatewayTrafficEventsPage> {
@@ -250,6 +251,7 @@ export async function getGatewayTrafficEvents(input: {
   if (input.sensorUid?.trim()) params.set("sensorUid", input.sensorUid.trim());
   if (input.metric?.trim()) params.set("metric", input.metric.trim());
   if (input.topic?.trim()) params.set("topic", input.topic.trim());
+  if (input.payload?.trim()) params.set("payload", input.payload.trim());
   if (input.beforeOccurredAt) params.set("beforeOccurredAt", input.beforeOccurredAt);
   if (input.beforeId !== undefined) params.set("beforeId", String(input.beforeId));
 
