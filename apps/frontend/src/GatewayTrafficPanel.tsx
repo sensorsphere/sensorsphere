@@ -53,10 +53,8 @@ export function GatewayTrafficPanel() {
   const queryClient = useQueryClient();
   const [hours, setHours] = usePersistentState("gatewayTraffic.period", "1");
   const [paused, setPaused] = React.useState(false);
-  const [messageType, setMessageType] = usePersistentState<GatewayTrafficMessageType | null>(
-    "gatewayTraffic.messageType",
-    null
-  );
+  const [messageTypeFilter, setMessageTypeFilter] = usePersistentState("gatewayTraffic.messageTypes", "");
+  const messageTypes = messageTypeFilter.split(",").map(value => value.trim()).filter(Boolean) as GatewayTrafficMessageType[];
   const [gatewayFilter, setGatewayFilter] = usePersistentState("gatewayTraffic.gateway", "");
   const [sensorFilter, setSensorFilter] = usePersistentState("gatewayTraffic.sensor", "");
   const [metricFilter, setMetricFilter] = usePersistentState("gatewayTraffic.metric", "");
@@ -75,7 +73,7 @@ export function GatewayTrafficPanel() {
     queryKey: [
       "gateway-traffic-events",
       hours,
-      messageType,
+      messageTypeFilter,
       gatewayFilter,
       sensorFilter,
       metricFilter,
@@ -86,7 +84,7 @@ export function GatewayTrafficPanel() {
     queryFn: ({ pageParam }) => getGatewayTrafficEvents({
       hours: Number(hours),
       limit: 500,
-      messageType,
+      messageType: messageTypeFilter,
       gatewayId: gatewayFilter,
       sensorUid: sensorFilter,
       metric: metricFilter,
@@ -136,7 +134,7 @@ export function GatewayTrafficPanel() {
 
   const summary = summaryQuery.data;
   const filtersActive =
-    messageType !== null ||
+    messageTypes.length > 0 ||
     gatewayFilter.trim().length > 0 ||
     sensorFilter.trim().length > 0 ||
     metricFilter.trim().length > 0 ||
@@ -144,7 +142,7 @@ export function GatewayTrafficPanel() {
     payloadFilter.trim().length > 0;
 
   const resetFilters = (): void => {
-    setMessageType(null);
+    setMessageTypeFilter("");
     setGatewayFilter("");
     setSensorFilter("");
     setMetricFilter("");
@@ -157,6 +155,19 @@ export function GatewayTrafficPanel() {
     textDecoration: "underline",
     textDecorationStyle: "dotted",
     textUnderlineOffset: 3
+  };
+
+  const setOrAppendFilter = (current: string, value: string, append: boolean, setter: (value: string) => void): void => {
+    if (!append) { setter(value); return; }
+    const values = current.split(",").map(item => item.trim()).filter(Boolean);
+    if (!values.some(item => item.toLocaleLowerCase() === value.toLocaleLowerCase())) values.push(value);
+    setter(values.join(", "));
+  };
+
+  const setOrAppendType = (type: GatewayTrafficMessageType, append: boolean): void => {
+    const next = append ? [...messageTypes] : [];
+    if (!next.includes(type)) next.push(type);
+    setMessageTypeFilter(next.join(","));
   };
 
   return (
@@ -208,15 +219,15 @@ export function GatewayTrafficPanel() {
 
       <SimpleGrid cols={{ base: 2, md: 5 }}>
         {[
-          ["Received", summary?.received ?? 0],
-          ["Metadata", summary?.metadata ?? 0],
-          ["Sensor", summary?.sensor ?? 0],
-          ["Unknown", summary?.unknown ?? 0],
-          ["Gateways", summary?.gateways ?? 0]
-        ].map(([label, value]) => (
-          <Card key={String(label)} withBorder padding="sm">
-            <Text size="xs" c="dimmed">{label}</Text>
-            <Text fw={700} size="xl">{value}</Text>
+          { label: "Received", value: summary?.received ?? 0, color: "violet" },
+          { label: "Metadata", value: summary?.metadata ?? 0, color: "grape" },
+          { label: "Sensor", value: summary?.sensor ?? 0, color: "blue" },
+          { label: "Unknown", value: summary?.unknown ?? 0, color: "orange" },
+          { label: "Gateways", value: summary?.gateways ?? 0, color: "teal" }
+        ].map(stat => (
+          <Card key={stat.label} withBorder padding="sm" style={{ borderLeft: `4px solid var(--mantine-color-${stat.color}-6)` }}>
+            <Badge size="xs" color={stat.color} variant="light">{stat.label}</Badge>
+            <Text fw={700} size="xl" c={`${stat.color}.6`}>{stat.value}</Text>
           </Card>
         ))}
       </SimpleGrid>
@@ -226,7 +237,7 @@ export function GatewayTrafficPanel() {
           <SimpleGrid cols={{ base: 1, sm: 2, lg: 6 }}>
             <TextInput
               label="Gateway"
-              placeholder="gateway_id"
+              placeholder="gateway-01, gateway-02"
               value={gatewayFilter}
               onChange={event => setGatewayFilter(event.currentTarget.value)}
               styles={activeFilterStyles(gatewayFilter.trim().length > 0)}
@@ -236,7 +247,7 @@ export function GatewayTrafficPanel() {
             />
             <TextInput
               label="Sensor"
-              placeholder="sensor UID"
+              placeholder="uid-1, uid-2"
               value={sensorFilter}
               onChange={event => setSensorFilter(event.currentTarget.value)}
               styles={activeFilterStyles(sensorFilter.trim().length > 0)}
@@ -246,7 +257,7 @@ export function GatewayTrafficPanel() {
             />
             <TextInput
               label="Metric"
-              placeholder="rssi"
+              placeholder="rssi, temperature"
               value={metricFilter}
               onChange={event => setMetricFilter(event.currentTarget.value)}
               styles={activeFilterStyles(metricFilter.trim().length > 0)}
@@ -256,7 +267,7 @@ export function GatewayTrafficPanel() {
             />
             <TextInput
               label="Topic"
-              placeholder="topic contains..."
+              placeholder="topic A, topic B"
               value={topicFilter}
               onChange={event => setTopicFilter(event.currentTarget.value)}
               styles={activeFilterStyles(topicFilter.trim().length > 0)}
@@ -266,7 +277,7 @@ export function GatewayTrafficPanel() {
             />
             <TextInput
               label="Payload"
-              placeholder="payload contains..."
+              placeholder="value A, value B"
               value={payloadFilter}
               onChange={event => setPayloadFilter(event.currentTarget.value)}
               styles={activeFilterStyles(payloadFilter.trim().length > 0)}
@@ -277,37 +288,17 @@ export function GatewayTrafficPanel() {
             <Stack gap={4}>
               <Text size="sm" fw={500}>Type</Text>
               <Group gap={4} wrap="nowrap">
-                <Menu withinPortal>
+                <Menu withinPortal closeOnItemClick={false}>
                   <Menu.Target>
-                    <Button
-                      variant="default"
-                      justify="flex-start"
-                      style={{ flex: 1 }}
-                      styles={{
-                        root: messageType
-                          ? { border: "2px solid var(--mantine-color-blue-6)" }
-                          : undefined
-                      }}
-                    >
-                      {messageType ? (
-                        <Badge color={trafficTypeColor(messageType)} variant="light">{messageType}</Badge>
-                      ) : (
-                        <Text size="sm" c="dimmed" fw={400}>All types</Text>
-                      )}
+                    <Button variant="default" justify="flex-start" style={{ flex: 1 }} styles={{ root: messageTypes.length ? { border: "2px solid var(--mantine-color-blue-6)" } : undefined }}>
+                      {messageTypes.length ? <Group gap={4}>{messageTypes.map(type => <Badge key={type} color={trafficTypeColor(type)} variant="light">{type}</Badge>)}</Group> : <Text size="sm" c="dimmed" fw={400}>All types</Text>}
                     </Button>
                   </Menu.Target>
                   <Menu.Dropdown>
-                    <Menu.Item onClick={() => setMessageType(null)}>All types</Menu.Item>
-                    {TRAFFIC_TYPES.map(type => (
-                      <Menu.Item key={type} onClick={() => setMessageType(type)}>
-                        <Badge color={trafficTypeColor(type)} variant="light">{type}</Badge>
-                      </Menu.Item>
-                    ))}
+                    {TRAFFIC_TYPES.map(type => <Menu.Item key={type} leftSection={messageTypes.includes(type) ? "✓" : undefined} onClick={() => setMessageTypeFilter(messageTypes.includes(type) ? messageTypes.filter(value => value !== type).join(",") : [...messageTypes, type].join(","))}><Badge color={trafficTypeColor(type)} variant="light">{type}</Badge></Menu.Item>)}
                   </Menu.Dropdown>
                 </Menu>
-                {messageType && (
-                  <ActionIcon variant="subtle" aria-label="Reset Type filter" onClick={() => setMessageType(null)}>×</ActionIcon>
-                )}
+                {messageTypes.length > 0 && <ActionIcon variant="subtle" aria-label="Reset Type filter" onClick={() => setMessageTypeFilter("")}>×</ActionIcon>}
               </Group>
             </Stack>
           </SimpleGrid>
@@ -318,6 +309,7 @@ export function GatewayTrafficPanel() {
               <Text size="xs" c="dimmed">
                 Loaded {events.length} events
                 {eventsQuery.hasNextPage ? " · scroll down to load older events" : ""}
+                {" · Ctrl/Cmd+click a table value to add an OR filter"}
               </Text>
             </Group>
             <Text size="xs" c="dimmed">
@@ -357,7 +349,7 @@ export function GatewayTrafficPanel() {
                     <Table.Tr key={event.id}>
                       <Table.Td>{timeLabel(event.occurredAt)}</Table.Td>
                       <Table.Td>
-                        <Text size="sm" fw={600} style={event.gatewayId ? filterValueStyle : undefined} onClick={() => event.gatewayId && setGatewayFilter(event.gatewayId)}>{event.gatewayId ?? "—"}</Text>
+                        <Text size="sm" fw={600} style={event.gatewayId ? filterValueStyle : undefined} onClick={click => event.gatewayId && setOrAppendFilter(gatewayFilter, event.gatewayId, click.ctrlKey || click.metaKey, setGatewayFilter)}>{event.gatewayId ?? "—"}</Text>
                         {event.gatewayLocationName && (
                           <Text size="xs" c="blue">{event.gatewayLocationName}</Text>
                         )}
@@ -367,18 +359,18 @@ export function GatewayTrafficPanel() {
                           color={trafficTypeColor(event.messageType)}
                           variant="light"
                           style={filterValueStyle}
-                          onClick={() => setMessageType(event.messageType)}
+                          onClick={click => setOrAppendType(event.messageType, click.ctrlKey || click.metaKey)}
                         >
                           {event.messageType}
                         </Badge>
                       </Table.Td>
-                      <Table.Td><Text size="sm" style={event.sensorUid ? filterValueStyle : undefined} onClick={() => event.sensorUid && setSensorFilter(event.sensorUid)}>{event.sensorUid ?? "—"}</Text></Table.Td>
-                      <Table.Td><Text size="sm" style={event.metric ? filterValueStyle : undefined} onClick={() => event.metric && setMetricFilter(event.metric)}>{event.metric ?? "—"}</Text></Table.Td>
+                      <Table.Td><Text size="sm" style={event.sensorUid ? filterValueStyle : undefined} onClick={click => event.sensorUid && setOrAppendFilter(sensorFilter, event.sensorUid, click.ctrlKey || click.metaKey, setSensorFilter)}>{event.sensorUid ?? "—"}</Text></Table.Td>
+                      <Table.Td><Text size="sm" style={event.metric ? filterValueStyle : undefined} onClick={click => event.metric && setOrAppendFilter(metricFilter, event.metric, click.ctrlKey || click.metaKey, setMetricFilter)}>{event.metric ?? "—"}</Text></Table.Td>
                       <Table.Td>
-                        <Text size="sm" ff="monospace" lineClamp={2} style={filterValueStyle} onClick={() => setPayloadFilter(event.payload)}>{event.payload}</Text>
+                        <Text size="sm" ff="monospace" lineClamp={2} style={filterValueStyle} onClick={click => setOrAppendFilter(payloadFilter, event.payload, click.ctrlKey || click.metaKey, setPayloadFilter)}>{event.payload}</Text>
                       </Table.Td>
                       <Table.Td>
-                        <Text size="xs" ff="monospace" style={filterValueStyle} onClick={() => setTopicFilter(event.sourceTopic)}>{event.sourceTopic}</Text>
+                        <Text size="xs" ff="monospace" style={filterValueStyle} onClick={click => setOrAppendFilter(topicFilter, event.sourceTopic, click.ctrlKey || click.metaKey, setTopicFilter)}>{event.sourceTopic}</Text>
                       </Table.Td>
                     </Table.Tr>
                   ))}

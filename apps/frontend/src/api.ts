@@ -180,11 +180,13 @@ Promise<MetricRoutingStatus> {
 export async function getMetricRoutingEvents(input: {
   hours: number;
   limit?: number;
-  decision?: MetricRoutingDecision | null;
+  decision?: MetricRoutingDecision | string | null;
   sensorUid?: string;
   gatewayId?: string;
   location?: string;
   metric?: string;
+  assignedGatewayId?: string;
+  reason?: string;
   beforeOccurredAt?: string;
   beforeId?: number;
 }): Promise<MetricRoutingEventsPage> {
@@ -198,6 +200,8 @@ export async function getMetricRoutingEvents(input: {
   if (input.gatewayId?.trim()) params.set("gatewayId", input.gatewayId.trim());
   if (input.location?.trim()) params.set("location", input.location.trim());
   if (input.metric?.trim()) params.set("metric", input.metric.trim());
+  if (input.assignedGatewayId?.trim()) params.set("assignedGatewayId", input.assignedGatewayId.trim());
+  if (input.reason?.trim()) params.set("reason", input.reason.trim());
   if (input.beforeOccurredAt) params.set("beforeOccurredAt", input.beforeOccurredAt);
   if (input.beforeId !== undefined) params.set("beforeId", String(input.beforeId));
 
@@ -232,7 +236,7 @@ export async function clearMetricRoutingEvents(): Promise<{
 export async function getGatewayTrafficEvents(input: {
   hours: number;
   limit?: number;
-  messageType?: GatewayTrafficMessageType | null;
+  messageType?: GatewayTrafficMessageType | string | null;
   gatewayId?: string;
   sensorUid?: string;
   metric?: string;

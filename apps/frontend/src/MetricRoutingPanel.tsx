@@ -3,6 +3,7 @@ import React from "react";
 import { activeFilterStyles } from "./filterStyles";
 
 import {
+  ActionIcon,
   Alert,
   Badge,
   Button,
@@ -76,6 +77,10 @@ export function MetricRoutingPanel() {
   const [gatewayFilter, setGatewayFilter] = usePersistentState("metricRouting.gateway", "");
   const [locationId, setLocationId] = usePersistentState<string | null>("metricRouting.location", null);
   const [metricFilter, setMetricFilter] = usePersistentState("metricRouting.metric", "");
+  const [assignedGatewayFilter, setAssignedGatewayFilter] = usePersistentState("metricRouting.assignedGateway", "");
+  const [reasonFilter, setReasonFilter] = usePersistentState("metricRouting.reason", "");
+  const [decisionFilter, setDecisionFilter] = usePersistentState("metricRouting.decisions", "");
+  const decisionFilters = decisionFilter.split(",").map(value => value.trim()).filter(Boolean) as MetricRoutingDecision[];
   const [tableSortKey, setTableSortKey] = usePersistentState<string>("metricRouting.tableSortKey", "time");
   const [tableSortDirection, setTableSortDirection] = usePersistentState<SortDirection>("metricRouting.tableSortDirection", "desc");
 
@@ -93,13 +98,20 @@ export function MetricRoutingPanel() {
 
   const eventsQuery = useInfiniteQuery({
     queryKey: [
-      "metric-routing-events",
-      hours
+      "metric-routing-events", hours, sensorFilter, gatewayFilter, locationId, metricFilter,
+      assignedGatewayFilter, reasonFilter, decisionFilter
     ],
     initialPageParam: null as { occurredAt: string; id: number } | null,
     queryFn: ({ pageParam }) => getMetricRoutingEvents({
       hours: Number(hours),
       limit: 500,
+      sensorUid: sensorFilter,
+      gatewayId: gatewayFilter,
+      location: locationId ?? undefined,
+      metric: metricFilter,
+      assignedGatewayId: assignedGatewayFilter,
+      reason: reasonFilter,
+      decision: decisionFilter,
       beforeOccurredAt: pageParam?.occurredAt,
       beforeId: pageParam?.id
     }),
@@ -125,41 +137,10 @@ export function MetricRoutingPanel() {
   const status = statusQuery.data;
   const summary = summaryQuery.data;
 
-  const normalizedSensorFilter =
-    sensorFilter.trim().toLocaleLowerCase();
-  const normalizedGatewayFilter =
-    gatewayFilter.trim().toLocaleLowerCase();
-  const normalizedMetricFilter =
-    metricFilter.trim().toLocaleLowerCase();
-
   const loadedEvents =
     eventsQuery.data?.pages.flatMap(page => page.events) ?? [];
 
-  const events = loadedEvents.filter(event => {
-    if (hiddenDecisions.includes(event.decision)) return false;
-
-    if (normalizedSensorFilter) {
-      const uid = event.sensorUid.toLocaleLowerCase();
-      const name = (event.sensorName ?? "").toLocaleLowerCase();
-      if (!uid.includes(normalizedSensorFilter) && !name.includes(normalizedSensorFilter)) {
-        return false;
-      }
-    }
-
-    if (normalizedGatewayFilter &&
-        !event.gatewayId.toLocaleLowerCase().includes(normalizedGatewayFilter)) {
-      return false;
-    }
-
-    if (locationId && event.gatewayLocationId !== locationId) return false;
-
-    if (normalizedMetricFilter &&
-        !event.metric.toLocaleLowerCase().includes(normalizedMetricFilter)) {
-      return false;
-    }
-
-    return true;
-  });
+  const events = loadedEvents.filter(event => !hiddenDecisions.includes(event.decision));
 
   const sortedEvents = [...events].sort((left, right) => {
     const value = (event: (typeof events)[number]) => {
@@ -199,7 +180,10 @@ export function MetricRoutingPanel() {
     sensorFilter.trim().length > 0 ||
     gatewayFilter.trim().length > 0 ||
     locationId !== null ||
-    metricFilter.trim().length > 0;
+    metricFilter.trim().length > 0 ||
+    assignedGatewayFilter.trim().length > 0 ||
+    reasonFilter.trim().length > 0 ||
+    decisionFilters.length > 0;
 
   const resetFilters = (): void => {
     setHiddenDecisions([]);
@@ -207,6 +191,26 @@ export function MetricRoutingPanel() {
     setGatewayFilter("");
     setLocationId(null);
     setMetricFilter("");
+    setAssignedGatewayFilter("");
+    setReasonFilter("");
+    setDecisionFilter("");
+  };
+
+  const filterValueStyle: React.CSSProperties = {
+    cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 3
+  };
+
+  const setOrAppendFilter = (current: string, value: string, append: boolean, setter: (value: string) => void): void => {
+    if (!append) { setter(value); return; }
+    const values = current.split(",").map(item => item.trim()).filter(Boolean);
+    if (!values.some(item => item.toLocaleLowerCase() === value.toLocaleLowerCase())) values.push(value);
+    setter(values.join(", "));
+  };
+
+  const setOrAppendDecision = (decision: MetricRoutingDecision, append: boolean): void => {
+    const next = append ? [...decisionFilters] : [];
+    if (!next.includes(decision)) next.push(decision);
+    setDecisionFilter(next.join(","));
   };
 
   if (view === "traffic") {
@@ -303,15 +307,15 @@ export function MetricRoutingPanel() {
 
       <SimpleGrid cols={{ base: 2, md: 5 }}>
         {[
-          ["Received", summary?.received ?? 0],
-          ["Would accept", summary?.accepted ?? 0],
-          ["Would ignore", summary?.ignored ?? 0],
-          ["Duplicates", summary?.deduplicated ?? 0],
-          ["Errors", summary?.errors ?? 0]
-        ].map(([label, value]) => (
-          <Card key={String(label)} withBorder padding="sm">
-            <Text size="xs" c="dimmed">{label}</Text>
-            <Text fw={700} size="xl">{value}</Text>
+          { label: "Received", value: summary?.received ?? 0, color: "violet" },
+          { label: "Would accept", value: summary?.accepted ?? 0, color: "green" },
+          { label: "Would ignore", value: summary?.ignored ?? 0, color: "orange" },
+          { label: "Duplicates", value: summary?.deduplicated ?? 0, color: "blue" },
+          { label: "Errors", value: summary?.errors ?? 0, color: "red" }
+        ].map(stat => (
+          <Card key={stat.label} withBorder padding="sm" style={{ borderLeft: `4px solid var(--mantine-color-${stat.color}-6)` }}>
+            <Badge size="xs" color={stat.color} variant="light">{stat.label}</Badge>
+            <Text fw={700} size="xl" c={`${stat.color}.6`}>{stat.value}</Text>
           </Card>
         ))}
       </SimpleGrid>
@@ -321,17 +325,19 @@ export function MetricRoutingPanel() {
           <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
             <TextInput
               label="Sensor"
-              placeholder="Name or UID"
+              placeholder="Name/UID A, Name/UID B"
               value={sensorFilter}
               onChange={e => setSensorFilter(e.currentTarget.value)}
               styles={activeFilterStyles(sensorFilter.trim().length > 0)}
+              rightSection={sensorFilter ? <ActionIcon size="sm" variant="subtle" onClick={() => setSensorFilter("")}>×</ActionIcon> : null}
             />
             <TextInput
               label="Gateway"
-              placeholder="gateway_id"
+              placeholder="gateway-01, gateway-02"
               value={gatewayFilter}
               onChange={e => setGatewayFilter(e.currentTarget.value)}
               styles={activeFilterStyles(gatewayFilter.trim().length > 0)}
+              rightSection={gatewayFilter ? <ActionIcon size="sm" variant="subtle" onClick={() => setGatewayFilter("")}>×</ActionIcon> : null}
             />
             <Select
               label="Location"
@@ -345,11 +351,27 @@ export function MetricRoutingPanel() {
             />
             <TextInput
               label="Metric"
-              placeholder="temperature"
+              placeholder="temperature, humidity"
               value={metricFilter}
               onChange={e => setMetricFilter(e.currentTarget.value)}
               styles={activeFilterStyles(metricFilter.trim().length > 0)}
+              rightSection={metricFilter ? <ActionIcon size="sm" variant="subtle" onClick={() => setMetricFilter("")}>×</ActionIcon> : null}
             />
+          </SimpleGrid>
+
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
+            <TextInput label="Assigned gateway" placeholder="gateway-01, gateway-02" value={assignedGatewayFilter} onChange={e => setAssignedGatewayFilter(e.currentTarget.value)} styles={activeFilterStyles(assignedGatewayFilter.trim().length > 0)} rightSection={assignedGatewayFilter ? <ActionIcon size="sm" variant="subtle" onClick={() => setAssignedGatewayFilter("")}>×</ActionIcon> : null} />
+            <TextInput label="Reason" placeholder="assigned_primary, backup_failover" value={reasonFilter} onChange={e => setReasonFilter(e.currentTarget.value)} styles={activeFilterStyles(reasonFilter.trim().length > 0)} rightSection={reasonFilter ? <ActionIcon size="sm" variant="subtle" onClick={() => setReasonFilter("")}>×</ActionIcon> : null} />
+            <Stack gap={4}>
+              <Text size="sm" fw={500}>Decision</Text>
+              <Group gap={4} wrap="nowrap">
+                <Menu withinPortal closeOnItemClick={false}>
+                  <Menu.Target><Button variant="default" justify="flex-start" style={{ flex: 1 }} styles={{ root: decisionFilters.length ? { border: "2px solid var(--mantine-color-blue-6)" } : undefined }}>{decisionFilters.length ? <Group gap={4}>{decisionFilters.map(value => <Badge key={value} color={decisionColor(value)} variant="light">{value}</Badge>)}</Group> : <Text size="sm" c="dimmed" fw={400}>All decisions</Text>}</Button></Menu.Target>
+                  <Menu.Dropdown>{DECISIONS.map(value => <Menu.Item key={value} leftSection={decisionFilters.includes(value) ? "✓" : undefined} onClick={() => setDecisionFilter(decisionFilters.includes(value) ? decisionFilters.filter(item => item !== value).join(",") : [...decisionFilters, value].join(","))}><Badge color={decisionColor(value)} variant="light">{value}</Badge></Menu.Item>)}</Menu.Dropdown>
+                </Menu>
+                {decisionFilters.length > 0 && <ActionIcon variant="subtle" onClick={() => setDecisionFilter("")}>×</ActionIcon>}
+              </Group>
+            </Stack>
           </SimpleGrid>
 
           <Group align="flex-end" wrap="wrap">
@@ -449,6 +471,7 @@ export function MetricRoutingPanel() {
             <Text size="xs" c="dimmed">
               Loaded {loadedEvents.length} / {summary?.received ?? 0} events for selected period
               {eventsQuery.hasNextPage ? " · scroll down to load older events" : ""}
+              {" · Ctrl/Cmd+click a table value to add an OR filter"}
             </Text>
           </Group>
 
@@ -492,20 +515,20 @@ export function MetricRoutingPanel() {
                     <Table.Tr key={event.id} title={event.sourceTopic}>
                       <Table.Td>{timeLabel(event.occurredAt)}</Table.Td>
                       <Table.Td>
-                        <Text size="sm" fw={600}>{event.sensorName ?? event.sensorUid}</Text>
+                        <Text size="sm" fw={600} style={filterValueStyle} onClick={click => setOrAppendFilter(sensorFilter, event.sensorUid, click.ctrlKey || click.metaKey, setSensorFilter)}>{event.sensorName ?? event.sensorUid}</Text>
                         {event.sensorName && <Text size="xs" c="dimmed">{event.sensorUid}</Text>}
                       </Table.Td>
-                      <Table.Td>{event.metric}</Table.Td>
+                      <Table.Td><Text size="sm" style={filterValueStyle} onClick={click => setOrAppendFilter(metricFilter, event.metric, click.ctrlKey || click.metaKey, setMetricFilter)}>{event.metric}</Text></Table.Td>
                       <Table.Td>{event.value}</Table.Td>
                       <Table.Td>
-                        <Text size="sm" fw={600}>{event.gatewayId}</Text>
-                        <Text size="xs" c={event.gatewayLocationName ? "dimmed" : "gray"}>
+                        <Text size="sm" fw={600} style={filterValueStyle} onClick={click => setOrAppendFilter(gatewayFilter, event.gatewayId, click.ctrlKey || click.metaKey, setGatewayFilter)}>{event.gatewayId}</Text>
+                        <Text size="xs" c={event.gatewayLocationName ? "blue" : "gray"} style={event.gatewayLocationName ? filterValueStyle : undefined} onClick={() => event.gatewayLocationId && setLocationId(event.gatewayLocationId)}>
                           {event.gatewayLocationName ?? "[No location]"}
                         </Text>
                       </Table.Td>
                       <Table.Td>
-                        <Text size="sm" fw={600}>Primary: {event.assignedGatewayId ?? "—"}</Text>
-                        <Text size="xs" c="dimmed">Backup: {event.backupGatewayId ?? "—"}</Text>
+                        <Text size="sm" fw={600} style={event.assignedGatewayId ? filterValueStyle : undefined} onClick={click => event.assignedGatewayId && setOrAppendFilter(assignedGatewayFilter, event.assignedGatewayId, click.ctrlKey || click.metaKey, setAssignedGatewayFilter)}>Primary: {event.assignedGatewayId ?? "—"}</Text>
+                        <Text size="xs" c="dimmed" style={event.backupGatewayId ? filterValueStyle : undefined} onClick={click => event.backupGatewayId && setOrAppendFilter(assignedGatewayFilter, event.backupGatewayId, click.ctrlKey || click.metaKey, setAssignedGatewayFilter)}>Backup: {event.backupGatewayId ?? "—"}</Text>
                       </Table.Td>
                       <Table.Td>
                         <Badge color={decisionColor(event.decision)} variant="light">

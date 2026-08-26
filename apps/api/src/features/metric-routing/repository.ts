@@ -36,11 +36,13 @@ interface EventRecord {
 export interface MetricRoutingFilters {
   hours: number;
   limit: number;
-  decision?: MetricRoutingDecision;
+  decision?: string;
   sensorUid?: string;
   gatewayId?: string;
   location?: string;
   metric?: string;
+  assignedGatewayId?: string;
+  reason?: string;
   beforeOccurredAt?: string;
   beforeId?: number;
 }
@@ -61,7 +63,7 @@ interface GatewayTrafficRecord {
 export interface GatewayTrafficFilters {
   hours: number;
   limit: number;
-  messageType?: GatewayTrafficMessageType;
+  messageType?: string;
   gatewayId?: string;
   sensorUid?: string;
   metric?: string;
@@ -92,16 +94,28 @@ export class MetricRoutingRepository {
     const values: unknown[] = [filters.hours];
     const clauses = ["event.occurred_at >= NOW() - ($1 * INTERVAL '1 hour')"];
 
-    const add = (sql: string, value: unknown): void => {
-      values.push(value);
-      clauses.push(sql.replace("?", `$${values.length}`));
+    const splitValues = (value?: string): string[] => value?.split(",").map(item => item.trim()).filter(Boolean) ?? [];
+    const addIlikeAny = (columns: string[], value?: string): void => {
+      const items = splitValues(value);
+      if (!items.length) return;
+      values.push(items.map(item => `%${item}%`));
+      const index = values.length;
+      clauses.push(`(${columns.map(column => `${column} ILIKE ANY($${index}::text[])`).join(" OR ")})`);
+    };
+    const addExactAny = (column: string, value?: string): void => {
+      const items = splitValues(value);
+      if (!items.length) return;
+      values.push(items);
+      clauses.push(`${column} = ANY($${values.length}::text[])`);
     };
 
-    if (filters.decision) add("event.decision = ?", filters.decision);
-    if (filters.sensorUid) add("event.sensor_uid = ?", filters.sensorUid);
-    if (filters.gatewayId) add("event.gateway_id = ?", filters.gatewayId);
-    if (filters.location) add("location.name ILIKE ?", `%${filters.location}%`);
-    if (filters.metric) add("event.metric = ?", filters.metric);
+    addExactAny("event.decision", filters.decision);
+    addIlikeAny(["event.sensor_uid", "COALESCE(event.sensor_name, '')"], filters.sensorUid);
+    addIlikeAny(["event.gateway_id"], filters.gatewayId);
+    addExactAny("gateway.location_id::text", filters.location);
+    addIlikeAny(["event.metric"], filters.metric);
+    addIlikeAny(["COALESCE(event.assigned_gateway_id, '')", "COALESCE(event.backup_gateway_id, '')"], filters.assignedGatewayId);
+    addIlikeAny(["event.reason"], filters.reason);
 
     if (filters.beforeOccurredAt && filters.beforeId !== undefined) {
       values.push(filters.beforeOccurredAt);
@@ -181,17 +195,26 @@ export class MetricRoutingRepository {
     const values: unknown[] = [filters.hours];
     const clauses = ["event.occurred_at >= NOW() - ($1 * INTERVAL '1 hour')"];
 
-    const add = (sql: string, value: unknown): void => {
-      values.push(value);
-      clauses.push(sql.replace("?", `$${values.length}`));
+    const splitValues = (value?: string): string[] => value?.split(",").map(item => item.trim()).filter(Boolean) ?? [];
+    const addIlikeAny = (column: string, value?: string): void => {
+      const items = splitValues(value);
+      if (!items.length) return;
+      values.push(items.map(item => `%${item}%`));
+      clauses.push(`${column} ILIKE ANY($${values.length}::text[])`);
+    };
+    const addExactAny = (column: string, value?: string): void => {
+      const items = splitValues(value);
+      if (!items.length) return;
+      values.push(items);
+      clauses.push(`${column} = ANY($${values.length}::text[])`);
     };
 
-    if (filters.messageType) add("event.message_type = ?", filters.messageType);
-    if (filters.gatewayId) add("event.gateway_id ILIKE ?", `%${filters.gatewayId}%`);
-    if (filters.sensorUid) add("event.sensor_uid ILIKE ?", `%${filters.sensorUid}%`);
-    if (filters.metric) add("event.metric ILIKE ?", `%${filters.metric}%`);
-    if (filters.topic) add("event.source_topic ILIKE ?", `%${filters.topic}%`);
-    if (filters.payload) add("event.payload ILIKE ?", `%${filters.payload}%`);
+    addExactAny("event.message_type", filters.messageType);
+    addIlikeAny("COALESCE(event.gateway_id, '')", filters.gatewayId);
+    addIlikeAny("COALESCE(event.sensor_uid, '')", filters.sensorUid);
+    addIlikeAny("COALESCE(event.metric, '')", filters.metric);
+    addIlikeAny("event.source_topic", filters.topic);
+    addIlikeAny("event.payload", filters.payload);
 
     if (filters.beforeOccurredAt && filters.beforeId !== undefined) {
       values.push(filters.beforeOccurredAt);
