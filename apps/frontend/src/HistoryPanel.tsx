@@ -817,30 +817,47 @@ function HistoryGraph({
             dataQueries[index]?.data
             ?? [];
 
+          const series:
+            HistoryChartSeries = {
+              id:
+                target.id,
+
+              name:
+                target.name,
+
+              unit:
+                target.metric.unit,
+
+              color:
+                target.color,
+
+              history:
+                useAggregates
+                  ? []
+                  : data as
+                      ObservationHistoryPoint[],
+
+              aggregates:
+                useAggregates
+                  ? data as
+                      ObservationAggregatePoint[]
+                  : []
+            };
+
+          const currentValue =
+            latestNumericSeriesValue(
+              series
+            );
+
           return {
-            id:
-              target.id,
-
+            ...series,
             name:
-              target.name,
-
-            unit:
-              target.metric.unit,
-
-            color:
-              target.color,
-
-            history:
-              useAggregates
-                ? []
-                : data as
-                    ObservationHistoryPoint[],
-
-            aggregates:
-              useAggregates
-                ? data as
-                    ObservationAggregatePoint[]
-                : []
+              currentValue !== null
+                ? `${target.name} (${formatCurrentValue(
+                    currentValue,
+                    target.metric.unit
+                  )})`
+                : target.name
           };
         }
       );
@@ -1119,53 +1136,6 @@ function HistoryGraph({
               {graphSubtitle}
             </Text>
 
-            {chartSeries.length > 0 && (
-              <Group
-                gap="md"
-                mt={4}
-                wrap="wrap"
-              >
-                {chartSeries.map(
-                  item => {
-
-                    const currentValue =
-                      latestNumericSeriesValue(
-                        item
-                      );
-
-                    return (
-                      <Text
-                        key={item.id}
-                        size="xs"
-                      >
-                        <Text
-                          span
-                          c="dimmed"
-                        >
-                          {item.name}:{" "}
-                        </Text>
-
-                        <Text
-                          span
-                          c="blue"
-                          fw={600}
-                        >
-                          {
-                            currentValue !==
-                              null
-                              ? formatCurrentValue(
-                                  currentValue,
-                                  item.unit
-                                )
-                              : "—"
-                          }
-                        </Text>
-                      </Text>
-                    );
-                  }
-                )}
-              </Group>
-            )}
           </div>
 
           <Group
