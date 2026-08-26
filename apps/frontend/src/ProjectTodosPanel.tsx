@@ -70,8 +70,6 @@ const taskPromptText = (task: ProjectTodo, section: ProjectTodoSection) => [
   `${section.name}:`,
   `Title: ${task.title}`,
   `Description: ${task.description?.trim() || "-"}`,
-  `Status: ${task.status.replace("_", " ")}`,
-  `Priority: ${task.priority}`,
   task.component ? `Component: ${task.component}` : null,
   task.prReference ? `PR: ${task.prReference}` : null,
   task.patchReference ? `Patch: ${task.patchReference}` : null
@@ -519,6 +517,15 @@ export function ProjectTodosPanel() {
               value={search}
               onChange={event => setSearch(event.currentTarget.value)}
               styles={activeFilterStyles(Boolean(search.trim()))}
+              rightSection={search.trim() ? (
+                <ActionIcon
+                  size="sm"
+                  variant="subtle"
+                  aria-label="Clear search filter"
+                  title="Clear search filter"
+                  onClick={() => setSearch("")}
+                >×</ActionIcon>
+              ) : undefined}
             />
             <Stack gap={4}>
               <Text size="sm" fw={500}>Status</Text>
@@ -535,13 +542,31 @@ export function ProjectTodosPanel() {
                     {statusFilter.length === 0 ? (
                       <Text size="sm" c="dimmed">All statuses</Text>
                     ) : (
-                      <Group gap={4} wrap="nowrap" style={{ overflow: "hidden" }}>
-                        {statusFilter.slice(0, 2).map(status => (
-                          <Badge key={status} size="sm" variant="light" color={statusColor(status as ProjectTodoStatus)}>
+                      <Group gap={4} wrap="wrap">
+                        {statusFilter.map(status => (
+                          <Badge
+                            key={status}
+                            size="sm"
+                            variant="light"
+                            color={statusColor(status as ProjectTodoStatus)}
+                            rightSection={
+                              <span
+                                role="button"
+                                aria-label={`Remove ${status.replace("_", " ")} filter`}
+                                title="Remove filter"
+                                style={{ cursor: "pointer", fontWeight: 700 }}
+                                onMouseDown={event => event.preventDefault()}
+                                onClick={event => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  setStatusFilter(current => current.filter(value => value !== status));
+                                }}
+                              >×</span>
+                            }
+                          >
                             {status.replace("_", " ")}
                           </Badge>
                         ))}
-                        {statusFilter.length > 2 && <Badge size="sm" variant="outline">+{statusFilter.length - 2}</Badge>}
                       </Group>
                     )}
                   </Button>
@@ -601,16 +626,34 @@ export function ProjectTodosPanel() {
                     {sectionFilter.length === 0 ? (
                       <Text size="sm" c="dimmed">All sections</Text>
                     ) : (
-                      <Group gap={4} wrap="nowrap" style={{ overflow: "hidden" }}>
-                        {sectionFilter.slice(0, 2).map(sectionId => {
+                      <Group gap={4} wrap="wrap">
+                        {sectionFilter.map(sectionId => {
                           const section = sections.find(item => item.id === sectionId);
                           return section ? (
-                            <Badge key={section.id} size="sm" variant="light" color={sectionColor(section.id, sections)}>
+                            <Badge
+                              key={section.id}
+                              size="sm"
+                              variant="light"
+                              color={sectionColor(section.id, sections)}
+                              rightSection={
+                                <span
+                                  role="button"
+                                  aria-label={`Remove ${section.name} filter`}
+                                  title="Remove filter"
+                                  style={{ cursor: "pointer", fontWeight: 700 }}
+                                  onMouseDown={event => event.preventDefault()}
+                                  onClick={event => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setSectionFilter(current => current.filter(id => id !== section.id));
+                                  }}
+                                >×</span>
+                              }
+                            >
                               {section.name}
                             </Badge>
                           ) : null;
                         })}
-                        {sectionFilter.length > 2 && <Badge size="sm" variant="outline">+{sectionFilter.length - 2}</Badge>}
                       </Group>
                     )}
                   </Button>
