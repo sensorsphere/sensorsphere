@@ -100,9 +100,45 @@ body { background: var(--ss-page-bg); }
   overflow: hidden;
 }
 
+.metric-routing-tabs,
+.metric-routing-header,
+.metric-routing-mode-alert,
+.metric-routing-kpis {
+  flex: 0 0 auto;
+}
+
 .metric-routing-traffic-panel {
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
+}
+
+.gateway-traffic-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gateway-traffic-header,
+.gateway-traffic-kpis {
+  flex: 0 0 auto;
+}
+
+.gateway-traffic-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.gateway-traffic-card-stack {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.metric-routing-card-stack > :not(.metric-routing-table-scroll),
+.gateway-traffic-card-stack > :not(.metric-routing-table-scroll) {
+  flex: 0 0 auto;
 }
 
 .metric-routing-card {

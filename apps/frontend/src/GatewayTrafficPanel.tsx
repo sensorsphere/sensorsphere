@@ -210,8 +210,8 @@ export function GatewayTrafficPanel() {
   };
 
   return (
-    <Stack gap="lg">
-      <Group justify="space-between" align="flex-end">
+    <Stack gap="lg" className="gateway-traffic-panel">
+      <Group className="gateway-traffic-header" justify="space-between" align="flex-end">
         <div>
           <Group gap="xs">
             <NavigationIcon page="gateways" size={24} />
@@ -256,7 +256,7 @@ export function GatewayTrafficPanel() {
         </Group>
       </Group>
 
-      <SimpleGrid cols={{ base: 2, md: 5 }}>
+      <SimpleGrid className="gateway-traffic-kpis" cols={{ base: 2, md: 5 }}>
         {[
           { label: "Received", value: summary?.received ?? 0, color: "violet" },
           { label: "Metadata", value: summary?.metadata ?? 0, color: "grape" },
@@ -271,9 +271,9 @@ export function GatewayTrafficPanel() {
         ))}
       </SimpleGrid>
 
-      <Card withBorder padding="md">
-        <Stack gap="sm">
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 7 }}>
+      <Card withBorder padding="md" className="gateway-traffic-card">
+        <Stack gap="sm" className="gateway-traffic-card-stack">
+          <SimpleGrid className="gateway-traffic-filters" cols={{ base: 1, sm: 2, lg: 7 }}>
             <TextInput
               label="Gateway"
               placeholder="gateway-01, gateway-02"
@@ -358,7 +358,7 @@ export function GatewayTrafficPanel() {
             </Stack>
           </SimpleGrid>
 
-          <Group justify="space-between" wrap="wrap">
+          <Group className="gateway-traffic-table-meta" justify="space-between" wrap="wrap">
             <Group>
               <ResetFiltersAction active={filtersActive} onReset={resetFilters} />
               <Text size="xs" c="dimmed">
@@ -389,7 +389,7 @@ export function GatewayTrafficPanel() {
                 }
               }}
             >
-              <Table striped highlightOnHover verticalSpacing={3} style={{ minWidth: 1380 }}>
+              <Table className="metric-routing-table" striped highlightOnHover verticalSpacing={3} style={{ minWidth: 1380 }}>
                 <Table.Thead>
                   <Table.Tr>
                     {[["time", "Time"], ["gateway", "Gateway"], ["type", "Type"], ["processing", "Processing"], ["sensor", "Sensor"], ["metric", "Metric"], ["payload", "Payload"], ["topic", "Topic"]].map(([key, label]) => (

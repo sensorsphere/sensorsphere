@@ -217,6 +217,7 @@ export function MetricRoutingPanel() {
     return (
       <Stack gap="lg" className="metric-routing-panel metric-routing-traffic-panel">
         <SegmentedControl
+          className="metric-routing-tabs"
           value={view}
           onChange={value => setView(value as "routing" | "traffic")}
           data={[
@@ -233,6 +234,7 @@ export function MetricRoutingPanel() {
   return (
     <Stack gap="lg" className="metric-routing-panel">
       <SegmentedControl
+        className="metric-routing-tabs"
         value={view}
         onChange={value => setView(value as "routing" | "traffic")}
         data={[
@@ -241,7 +243,7 @@ export function MetricRoutingPanel() {
         ]}
         style={{ alignSelf: "flex-start" }}
       />
-      <Group justify="space-between" align="flex-end">
+      <Group className="metric-routing-header" justify="space-between" align="flex-end">
         <div>
           <Group gap="xs">
             <NavigationIcon page="metric-routing" size={24} />
@@ -271,12 +273,11 @@ export function MetricRoutingPanel() {
               ]}
             />
           </Stack>
-          <Badge
-            size="lg"
-            color={status?.mode === "active" ? "green" : status?.mode === "dry_run" ? "yellow" : "gray"}
-          >
-            {status?.mode === "dry_run" ? "DRY RUN" : (status?.mode ?? "UNKNOWN").toUpperCase()}
-          </Badge>
+          {status?.mode === "dry_run" && (
+            <Badge size="lg" color="yellow">
+              DRY RUN
+            </Badge>
+          )}
           <Text size="sm" c="dimmed" pb={6}>
             Refresh: {REFRESH_INTERVAL_MS / 1000} s
           </Text>
@@ -294,18 +295,13 @@ export function MetricRoutingPanel() {
         </Group>
       </Group>
 
-      {status?.mode === "active" && (
-        <Alert color="green" title="Active routing">
-          Accepted gateway-qualified metrics are currently fed into the normal measurement pipeline.
-        </Alert>
-      )}
       {status?.mode === "dry_run" && (
-        <Alert color="yellow" title="Dry-run mode">
+        <Alert className="metric-routing-mode-alert" color="yellow" title="Dry-run mode">
           Decisions are logged only. Gateway-qualified metrics do not modify normal measurements.
         </Alert>
       )}
 
-      <SimpleGrid cols={{ base: 2, md: 5 }}>
+      <SimpleGrid className="metric-routing-kpis" cols={{ base: 2, md: 5 }}>
         {[
           { label: "Received", value: summary?.received ?? 0, color: "violet" },
           { label: status?.mode === "active" ? "Accepted" : "Would accept", value: summary?.accepted ?? 0, color: "green" },
