@@ -1746,7 +1746,6 @@ function Dashboard() {
 
 
 
-
         </Stack>
 
         <Stack gap="xs" mt="auto" pt="md">
@@ -1851,7 +1850,9 @@ function Dashboard() {
             className={
               activePage === "gateway-coverage"
                 ? "gateway-coverage-page-stack"
-                : undefined
+                : activePage === "metric-routing"
+                  ? "metric-routing-page-stack"
+                  : undefined
             }
           >
 
@@ -3424,7 +3425,6 @@ function Dashboard() {
                         }
                       }
                     />                  </Group>
-                  </div>
 
                   <Text
                     size="xs"
@@ -3437,6 +3437,7 @@ function Dashboard() {
                       assets.length
                     } assets
                   </Text>
+                  </div>
 
                   {
                     filteredAssets.length ===

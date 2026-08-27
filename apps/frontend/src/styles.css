@@ -70,10 +70,61 @@ body { background: var(--ss-page-bg); }
   border-color: var(--ss-border);
 }
 
+.metric-routing-main {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.metric-routing-page-container {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.metric-routing-page-stack {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.metric-routing-panel {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.metric-routing-traffic-panel {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.metric-routing-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.metric-routing-card-stack {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .metric-routing-table-scroll {
-  max-height: calc(100vh - 430px);
-  min-height: 260px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   border: 1px solid var(--mantine-color-default-border);
   border-radius: var(--mantine-radius-sm);
 }
@@ -91,6 +142,32 @@ body { background: var(--ss-page-bg); }
 
 [data-mantine-color-scheme="dark"] .metric-routing-table thead th {
   background: var(--mantine-color-dark-7);
+}
+
+.page-sticky-controls {
+  position: sticky;
+  top: var(--app-shell-header-height, 64px);
+  z-index: 6;
+  background: var(--ss-page-bg);
+  padding-bottom: var(--mantine-spacing-sm);
+  box-shadow: 0 8px 10px -10px rgba(0, 0, 0, 0.45);
+}
+
+
+.page-sticky-controls-gap-md {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+}
+
+.page-sticky-controls-gap-lg {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-lg);
+}
+
+:root[data-mantine-color-scheme="light"] .page-sticky-controls {
+  box-shadow: 0 8px 10px -10px rgba(31, 75, 125, 0.35);
 }
 
 
@@ -139,71 +216,4 @@ body { background: var(--ss-page-bg); }
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-}
-
-
-/* Keep high-value page controls visible while content scrolls. */
-.page-sticky-controls {
-  position: sticky;
-  top: 64px;
-  z-index: 12;
-  background: var(--ss-page-bg);
-  padding-block: 4px 10px;
-  border-bottom: 1px solid var(--ss-border);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
-}
-
-/* Metric Routing owns its table scrolling, matching Gateway Coverage. */
-.metric-routing-main {
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
-  box-sizing: border-box;
-}
-
-.metric-routing-page-container {
-  flex: 1 1 auto;
-  height: 100%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-sizing: border-box;
-}
-
-.metric-routing-page-stack,
-.metric-routing-page {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.metric-routing-results-card,
-.metric-routing-results-stack {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.metric-routing-table-scroll {
-  flex: 1 1 auto;
-  max-height: none;
-  min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-}
-
-.history-tabs-sticky {
-  position: sticky;
-  top: 64px;
-  z-index: 14;
-  background: var(--ss-page-bg);
-  padding-block: 6px;
-}
-
-.history-global-controls {
-  top: 106px;
 }

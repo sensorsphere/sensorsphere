@@ -479,7 +479,7 @@ export function GatewayCatalog() {
   return (
     <>
       <Stack gap="md">
-        <div className="page-sticky-controls">
+        <div className="page-sticky-controls page-sticky-controls-gap-md">
         <Group justify="space-between">
           <div>
             <Group gap="xs">
@@ -551,7 +551,6 @@ export function GatewayCatalog() {
             styles={activeFilterStyles(enabledFilter !== "all")}
           />
         </SimpleGrid>
-
         </div>
 
         {viewMode === "cards" ? (

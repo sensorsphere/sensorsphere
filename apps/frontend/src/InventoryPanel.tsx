@@ -1228,7 +1228,7 @@ export function InventoryPanel() {
     <>
       <Stack gap="md">
 
-      <div className="page-sticky-controls">
+      <div className="page-sticky-controls page-sticky-controls-gap-md">
       <Group
         justify="space-between"
       >

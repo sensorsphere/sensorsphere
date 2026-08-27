@@ -4130,11 +4130,11 @@ export function HistoryPanel() {
   return (
     <Stack gap="lg">
 
+      <div className="page-sticky-controls page-sticky-controls-gap-lg history-sticky-controls">
       <Group
         gap="xs"
         align="center"
         wrap="wrap"
-        className="history-tabs-sticky"
       >
         {
           tabs.map(
@@ -4715,7 +4715,6 @@ export function HistoryPanel() {
         </Stack>
       </Modal>
 
-      <div className="page-sticky-controls history-global-controls">
       <Group
         justify="space-between"
         align="flex-end"
