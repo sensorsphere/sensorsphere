@@ -322,6 +322,40 @@ export function GatewayCatalog() {
     }
   });
 
+  React.useEffect(
+    () => {
+      const gatewayId =
+        window.sessionStorage.getItem(
+          "dashboard.edit.gateway"
+        );
+
+      if (!gatewayId) {
+        return;
+      }
+
+      const gateway =
+        gatewaysQuery.data?.find(
+          current =>
+            current.id === gatewayId
+        );
+
+      if (!gateway) {
+        return;
+      }
+
+      window.sessionStorage.removeItem(
+        "dashboard.edit.gateway"
+      );
+
+      setEditingGateway(gateway);
+      setForm(gatewayToForm(gateway));
+      setCreating(false);
+    },
+    [
+      gatewaysQuery.data
+    ]
+  );
+
   if (
     gatewaysQuery.isLoading ||
     gatewayTypesQuery.isLoading ||
@@ -435,40 +469,6 @@ export function GatewayCatalog() {
     setForm(gatewayToForm(gateway));
     setCreating(false);
   };
-
-  React.useEffect(
-    () => {
-      const gatewayId =
-        window.sessionStorage.getItem(
-          "dashboard.edit.gateway"
-        );
-
-      if (!gatewayId) {
-        return;
-      }
-
-      const gateway =
-        gateways.find(
-          current =>
-            current.id === gatewayId
-        );
-
-      if (!gateway) {
-        return;
-      }
-
-      window.sessionStorage.removeItem(
-        "dashboard.edit.gateway"
-      );
-
-      openEdit(
-        gateway
-      );
-    },
-    [
-      gateways
-    ]
-  );
 
   const closeEditor = (): void => {
     setEditingGateway(null);
