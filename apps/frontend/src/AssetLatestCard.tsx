@@ -45,6 +45,7 @@ interface Props {
   observations: LatestObservation[];
   enabled: boolean;
   onEdit?: (asset: Asset) => void;
+  onAddMetricToDashboard?: (asset: Asset, metricId: string) => void;
 }
 
 function formatAge(
@@ -200,7 +201,8 @@ export function AssetLatestCard({
   asset,
   observations,
   enabled,
-  onEdit
+  onEdit,
+  onAddMetricToDashboard
 }: Props) {
 
   const queryClient =
@@ -614,9 +616,18 @@ export function AssetLatestCard({
               {sortedObservations.map(
                 observation => (
                   <div
-                    key={
-                      observation.metricId
-                    }
+                    key={observation.metricId}
+                    role={onAddMetricToDashboard ? "button" : undefined}
+                    tabIndex={onAddMetricToDashboard ? 0 : undefined}
+                    title={onAddMetricToDashboard ? "Add this metric to a dashboard" : undefined}
+                    onClick={onAddMetricToDashboard ? () => onAddMetricToDashboard(asset, observation.metricId) : undefined}
+                    onKeyDown={onAddMetricToDashboard ? event => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onAddMetricToDashboard(asset, observation.metricId);
+                      }
+                    } : undefined}
+                    style={onAddMetricToDashboard ? { cursor: "pointer" } : undefined}
                   >
                     <Text
                       size="xs"

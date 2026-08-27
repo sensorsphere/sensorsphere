@@ -176,6 +176,10 @@ export function SimpleDashboardPanel() {
   const [editingSectionId, setEditingSectionId] = React.useState<string | null>(null);
   const [sectionName, setSectionName] = React.useState("");
   const [selectedSectionId, setSelectedSectionId] = React.useState<string | null>(null);
+  const dashboardNameInputRef = React.useRef<HTMLInputElement>(null);
+  const sectionNameInputRef = React.useRef<HTMLInputElement>(null);
+  const dropCommittedRef = React.useRef(false);
+
   const [deleteTarget, setDeleteTarget] = React.useState<
     | { type: "dashboard"; id: string; name: string }
     | { type: "card"; dashboardId: string; cardId: string; label: string }
@@ -299,6 +303,85 @@ export function SimpleDashboardPanel() {
     setSelectedSectionId(null);
   }, [activeDashboard?.id]);
 
+  React.useEffect(() => {
+    if (!dashboardModalMode) return;
+    const timer = window.setTimeout(() => dashboardNameInputRef.current?.focus(), 80);
+    return () => window.clearTimeout(timer);
+  }, [dashboardModalMode]);
+
+  React.useEffect(() => {
+    if (!sectionModalMode) return;
+    const timer = window.setTimeout(() => sectionNameInputRef.current?.focus(), 80);
+    return () => window.clearTimeout(timer);
+  }, [sectionModalMode]);
+
+  React.useEffect(() => {
+    if (!dashboardModalMode && !sectionModalMode && !cardEditorMode) return;
+
+    const handleSaveShortcut = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s") return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (dashboardModalMode) {
+        const name = dashboardName.trim();
+        if (!name || createDashboardMutation.isPending || renameDashboardMutation.isPending) return;
+        if (dashboardModalMode === "create") {
+          createDashboardMutation.mutate(name);
+        } else if (activeDashboard) {
+          renameDashboardMutation.mutate({ id: activeDashboard.id, name });
+        }
+        return;
+      }
+
+      if (sectionModalMode) {
+        if (!activeDashboard || !sectionName.trim() || createSectionMutation.isPending || renameSectionMutation.isPending) return;
+        if (sectionModalMode === "create") {
+          createSectionMutation.mutate({ dashboardId: activeDashboard.id, name: sectionName.trim() });
+        } else if (editingSectionId) {
+          renameSectionMutation.mutate({ dashboardId: activeDashboard.id, sectionId: editingSectionId, name: sectionName.trim() });
+        }
+        return;
+      }
+
+      if (!activeDashboard || !selectedMetricId || addCardMutation.isPending || updateCardMutation.isPending) return;
+      if (cardEditorMode === "edit" && editingCardId) {
+        updateCardMutation.mutate({
+          dashboardId: activeDashboard.id,
+          cardId: editingCardId,
+          assetMetricId: selectedMetricId,
+          sectionId: selectedSectionId
+        });
+      } else if (cardEditorMode === "add") {
+        addCardMutation.mutate({
+          dashboardId: activeDashboard.id,
+          assetMetricId: selectedMetricId,
+          sectionId: selectedSectionId
+        });
+      }
+    };
+
+    window.addEventListener("keydown", handleSaveShortcut, true);
+    return () => window.removeEventListener("keydown", handleSaveShortcut, true);
+  }, [
+    activeDashboard,
+    addCardMutation,
+    cardEditorMode,
+    createDashboardMutation,
+    createSectionMutation,
+    dashboardModalMode,
+    dashboardName,
+    editingCardId,
+    editingSectionId,
+    renameDashboardMutation,
+    renameSectionMutation,
+    sectionModalMode,
+    sectionName,
+    selectedMetricId,
+    selectedSectionId,
+    updateCardMutation
+  ]);
+
   if (dashboardsQuery.isLoading || assetsQuery.isLoading || observationsQuery.isLoading) {
     return <Loader />;
   }
@@ -395,6 +478,7 @@ export function SimpleDashboardPanel() {
     dragSectionByCardId?.[card.id] ?? card.sectionId;
 
   const beginCardDrag = (cardId: string) => {
+    dropCommittedRef.current = false;
     setDraggedCardId(cardId);
     setDragOrder(activeCards.map(item => item.card.id));
     setDragSectionByCardId(
@@ -448,9 +532,26 @@ export function SimpleDashboardPanel() {
       }
       await invalidate();
     } finally {
+      setDraggedCardId(null);
       setDragOrder(null);
       setDragSectionByCardId(null);
     }
+  };
+
+  const commitCardDrop = () => {
+    if (!draggedCardId || dropCommittedRef.current) return;
+    dropCommittedRef.current = true;
+    setDraggedCardId(null);
+    void persistDragOrder();
+  };
+
+  const finishCardDrag = () => {
+    if (!dropCommittedRef.current) {
+      setDraggedCardId(null);
+      setDragOrder(null);
+      setDragSectionByCardId(null);
+    }
+    dropCommittedRef.current = false;
   };
 
   const selectAssetForCard = (assetId: string | null) => {
@@ -635,6 +736,7 @@ export function SimpleDashboardPanel() {
                 gap="sm"
                 onDragEnter={() => { if (draggedCardId) previewMoveCardToSection(draggedCardId, section.id); }}
                 onDragOver={event => event.preventDefault()}
+                onDrop={event => { event.preventDefault(); commitCardDrop(); }}
               >
                 <Group gap="xs" align="center" wrap="nowrap">
                   <Text size="sm" fw={700} c="dimmed">{section.name}</Text>
@@ -660,9 +762,9 @@ export function SimpleDashboardPanel() {
                             event.stopPropagation();
                             if (draggedCardId) previewMoveCard(draggedCardId, card.id, section.id);
                           }}
-                          onDragEnd={() => { void persistDragOrder(); setDraggedCardId(null); }}
+                          onDragEnd={finishCardDrag}
                           onDragOver={event => event.preventDefault()}
-                          onDrop={event => event.preventDefault()}
+                          onDrop={event => { event.preventDefault(); event.stopPropagation(); commitCardDrop(); }}
                           style={{ borderLeft: `4px solid ${color}`, cursor: "grab", opacity: draggedCardId === card.id ? 0.55 : 1 }}
                         >
                           <Stack gap={4}>
@@ -713,9 +815,9 @@ export function SimpleDashboardPanel() {
         <Stack>
           <TextInput
             label="Name"
+            ref={dashboardNameInputRef}
             value={dashboardName}
             onChange={event => setDashboardName(event.currentTarget.value)}
-            autoFocus
           />
           <Group justify="flex-end">
             <Button variant="light" color="gray" onClick={() => setDashboardModalMode(null)}>Cancel</Button>
@@ -745,15 +847,8 @@ export function SimpleDashboardPanel() {
         onClose={() => setSectionModalMode(null)}
         title={sectionModalMode === "create" ? "New section" : "Rename section"}
       >
-        <Stack
-          onKeyDown={event => {
-            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
-              event.preventDefault();
-              saveSectionEditor();
-            }
-          }}
-        >
-          <TextInput label="Name" value={sectionName} onChange={event => setSectionName(event.currentTarget.value)} autoFocus />
+        <Stack>
+          <TextInput ref={sectionNameInputRef} label="Name" value={sectionName} onChange={event => setSectionName(event.currentTarget.value)} />
           <Group justify="flex-end">
             <Button variant="light" color="gray" onClick={() => setSectionModalMode(null)}>Cancel</Button>
             <Button
@@ -825,14 +920,7 @@ export function SimpleDashboardPanel() {
         }}
         title={cardEditorMode === "edit" ? "Edit metric card" : "Add metric card"}
       >
-        <Stack
-          onKeyDown={event => {
-            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
-              event.preventDefault();
-              saveCardEditor();
-            }
-          }}
-        >
+        <Stack>
           <Select
             label="Asset"
             autoFocus

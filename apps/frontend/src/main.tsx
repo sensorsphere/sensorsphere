@@ -72,6 +72,10 @@ import {
 } from "./AssetLatestCard";
 
 import {
+  AddMetricToDashboardModal
+} from "./AddMetricToDashboardModal";
+
+import {
   SensorCatalog
 } from "./SensorCatalog";
 
@@ -105,6 +109,7 @@ import {
 
 import type {
   Asset,
+  AssetMetric,
   AssetTypeMetadata,
   CreateAssetInput,
   Location,
@@ -734,6 +739,16 @@ function Dashboard() {
     assetPendingDelete,
     setAssetPendingDelete
   ] = React.useState<Asset | null>(null);
+
+  const [
+    dashboardMetricTarget,
+    setDashboardMetricTarget
+  ] = React.useState<{ asset: Asset; metric: AssetMetric } | null>(null);
+
+  const openDashboardMetricTarget = React.useCallback((asset: Asset, metricId: string) => {
+    const metric = asset.metrics.find(item => item.id === metricId);
+    if (metric) setDashboardMetricTarget({ asset, metric });
+  }, []);
 
   const [
     classificationManagerOpen,
@@ -3992,6 +4007,7 @@ function Dashboard() {
                                           )
                                         )
                                     }
+                                    onAddMetricToDashboard={openDashboardMetricTarget}
                                   />
                                 )
                               )
@@ -4075,13 +4091,55 @@ function Dashboard() {
                                         ) : "—"}
                                       </Table.Td>
                                       <Table.Td>
-                                        {temperature !== null ? `${temperature} °C` : "—"}
+                                        {temperature !== null ? (
+                                          <Button
+                                            size="compact-xs"
+                                            variant="subtle"
+                                            color="gray"
+                                            px={0}
+                                            title="Add Temperature to a dashboard"
+                                            onClick={() => {
+                                              const metric = asset.metrics.find(item => item.key === "temperature");
+                                              if (metric) openDashboardMetricTarget(asset, metric.id);
+                                            }}
+                                          >
+                                            {temperature} °C
+                                          </Button>
+                                        ) : "—"}
                                       </Table.Td>
                                       <Table.Td>
-                                        {humidity !== null ? `${humidity} %` : "—"}
+                                        {humidity !== null ? (
+                                          <Button
+                                            size="compact-xs"
+                                            variant="subtle"
+                                            color="gray"
+                                            px={0}
+                                            title="Add Humidity to a dashboard"
+                                            onClick={() => {
+                                              const metric = asset.metrics.find(item => item.key === "humidity");
+                                              if (metric) openDashboardMetricTarget(asset, metric.id);
+                                            }}
+                                          >
+                                            {humidity} %
+                                          </Button>
+                                        ) : "—"}
                                       </Table.Td>
                                       <Table.Td>
-                                        {battery !== null ? `${battery} %` : "—"}
+                                        {battery !== null ? (
+                                          <Button
+                                            size="compact-xs"
+                                            variant="subtle"
+                                            color="gray"
+                                            px={0}
+                                            title="Add Battery to a dashboard"
+                                            onClick={() => {
+                                              const metric = asset.metrics.find(item => item.key === "battery" || item.key === "battery_level");
+                                              if (metric) openDashboardMetricTarget(asset, metric.id);
+                                            }}
+                                          >
+                                            {battery} %
+                                          </Button>
+                                        ) : "—"}
                                       </Table.Td>
                                       <Table.Td>
                                         <Badge
@@ -4127,6 +4185,13 @@ function Dashboard() {
                 </div>
               )
             }
+
+            <AddMetricToDashboardModal
+              opened={dashboardMetricTarget !== null}
+              asset={dashboardMetricTarget?.asset ?? null}
+              metric={dashboardMetricTarget?.metric ?? null}
+              onClose={() => setDashboardMetricTarget(null)}
+            />
 
             <Modal
               opened={classificationManagerOpen}
