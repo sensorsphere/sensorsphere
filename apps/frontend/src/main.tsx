@@ -84,6 +84,10 @@ import {
 } from "./InventoryPanel";
 
 import {
+  TopologyPanel
+} from "./TopologyPanel";
+
+import {
   AlertPanel
 } from "./AlertPanel";
 
@@ -239,6 +243,9 @@ Record<PageKey, string> = {
   inventory:
     "Inventory",
 
+  topology:
+    "Topology",
+
   sensors:
     "Sensors",
 
@@ -265,6 +272,7 @@ function isPageKey(
     value === "history" ||
     value === "alerts" ||
     value === "inventory" ||
+    value === "topology" ||
     value === "sensors" ||
     value === "gateways" ||
     value === "metric-routing" ||
@@ -2072,6 +2080,31 @@ function Dashboard() {
               () =>
                 navigateTo(
                   "inventory"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Topology"
+            }
+            leftSection={
+              <NavigationIcon
+                page="topology"
+              />
+            }
+            title="Topology"
+            aria-label="Topology"
+            active={
+              activePage ===
+              "topology"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "topology"
                 )
             }
           />
@@ -4649,6 +4682,13 @@ function Dashboard() {
               activePage ===
                 "inventory" && (
                 <InventoryPanel />
+              )
+            }
+
+            {
+              activePage ===
+                "topology" && (
+                <TopologyPanel />
               )
             }
 
