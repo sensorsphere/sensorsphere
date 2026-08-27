@@ -1582,6 +1582,7 @@ function HistoryGraph({
 
             <Button
               color="red"
+              variant="light"
               onClick={
                 () => {
                   setRemoveConfirmOpened(false);
@@ -1877,7 +1878,8 @@ function HistoryGraph({
                 : (
                   <Button
                     size="xs"
-                    variant="default"
+                    color="blue"
+                    variant="light"
                     onClick={beginEditing}
                   >
                     Edit
@@ -4379,6 +4381,8 @@ export function HistoryPanel() {
 
         <Button
           size="xs"
+          color="green"
+          variant="light"
           onClick={
             addTab
           }
@@ -4838,6 +4842,9 @@ export function HistoryPanel() {
           </Button>
 
           <Button
+            size="xs"
+            color="green"
+            variant="light"
             onClick={
               () => {
                 const graph =

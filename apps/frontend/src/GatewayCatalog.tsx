@@ -505,7 +505,7 @@ export function GatewayCatalog() {
             <Badge variant="light">
               {filteredGateways.length} / {gateways.length} gateways
             </Badge>
-            <Button onClick={openCreate}>Add gateway</Button>
+            <Button size="xs" color="green" variant="light" onClick={openCreate}>Add gateway</Button>
             <SegmentedControl
               value={viewMode}
               onChange={value =>
@@ -665,10 +665,11 @@ export function GatewayCatalog() {
                   </SimpleGrid>
 
                   <Group justify="flex-end">
-                    <Button size="xs" variant="default" onClick={() => openEdit(gateway)}>
+                    <Button size="xs" color="blue" variant="light" onClick={() => openEdit(gateway)}>
                       Edit
                     </Button>
                     <Button
+                      size="xs"
                       color="red"
                       variant="light"
                       onClick={() => setDeleteTarget(gateway)}
@@ -759,13 +760,14 @@ export function GatewayCatalog() {
                       <Group gap={4} wrap="nowrap">
                         <Button
                           size="compact-xs"
-                          variant="default"
+                          color="blue"
+                          variant="light"
                           onClick={() => openEdit(gateway)}
                         >
                           Edit
                         </Button>
                         <Button
-                          size="compact-sm"
+                          size="compact-xs"
                           color="red"
                           variant="light"
                           onClick={() => setDeleteTarget(gateway)}
@@ -919,6 +921,7 @@ export function GatewayCatalog() {
             </Button>
             <Button
               color="red"
+              variant="light"
               loading={deleteMutation.isPending}
               onClick={() =>
                 deleteTarget && deleteMutation.mutate(deleteTarget.id)

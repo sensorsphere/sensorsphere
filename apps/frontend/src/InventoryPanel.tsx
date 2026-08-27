@@ -301,7 +301,8 @@ function LocationNode({
 
             <Button
               size="compact-xs"
-              variant="default"
+              color="blue"
+              variant="light"
               onClick={
                 event => {
 
@@ -1268,6 +1269,9 @@ export function InventoryPanel() {
           </Badge>
 
           <Button
+            size="xs"
+            color="green"
+            variant="light"
             onClick={
               () =>
                 setLocationForm({

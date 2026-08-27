@@ -682,7 +682,8 @@ export function AssetLatestCard({
           {onEdit && (
             <Button
               size="xs"
-              variant="default"
+              color="blue"
+              variant="light"
               onClick={() => onEdit(asset)}
             >
               Edit

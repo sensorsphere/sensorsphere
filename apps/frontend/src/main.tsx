@@ -3461,6 +3461,9 @@ function Dashboard() {
                       </Badge>
 
                       <Button
+                        size="xs"
+                        color="green"
+                        variant="light"
                         onClick={() =>
                           setAssetForm(
                             emptyAssetForm()
@@ -3795,7 +3798,8 @@ function Dashboard() {
                                       <Table.Td>
                                         <Button
                                           size="compact-xs"
-                                          variant="default"
+                                          color="blue"
+                                          variant="light"
                                           onClick={() =>
                                             setAssetForm(
                                               assetFormFromAsset(asset)
@@ -4086,6 +4090,7 @@ function Dashboard() {
                   </Button>
                   <Button
                     color="red"
+                    variant="light"
                     loading={deleteAssetMutation.isPending}
                     disabled={!assetPendingDelete}
                     onClick={() => {

@@ -1206,7 +1206,8 @@ export function SensorCatalog() {
                   >
                     <Button
                       size="xs"
-                      variant="default"
+                      color="blue"
+                      variant="light"
                       onClick={
                         () =>
                           openEditor(
@@ -1218,6 +1219,7 @@ export function SensorCatalog() {
                     </Button>
                     {sensor.blacklisted ? (
                       <Button
+                        size="xs"
                         color="green"
                         variant="light"
                         onClick={() =>
@@ -1228,6 +1230,7 @@ export function SensorCatalog() {
                       </Button>
                     ) : (
                       <Button
+                        size="xs"
                         color="red"
                         variant="light"
                         onClick={() => setBlacklistTarget(sensor)}
@@ -1325,14 +1328,15 @@ export function SensorCatalog() {
                         <Group gap={4} wrap="nowrap">
                         <Button
                           size="compact-xs"
-                          variant="default"
+                          color="blue"
+                          variant="light"
                           onClick={() => openEditor(sensor)}
                         >
                           Edit
                         </Button>
                           {sensor.blacklisted ? (
                             <Button
-                              size="compact-sm"
+                              size="compact-xs"
                               color="green"
                               variant="light"
                               onClick={() =>
@@ -1343,7 +1347,7 @@ export function SensorCatalog() {
                             </Button>
                           ) : (
                             <Button
-                              size="compact-sm"
+                              size="compact-xs"
                               color="red"
                               variant="light"
                               onClick={() => setBlacklistTarget(sensor)}
@@ -1673,6 +1677,7 @@ export function SensorCatalog() {
             </Button>
             <Button
               color="red"
+              variant="light"
               loading={blacklistMutation.isPending}
               onClick={() =>
                 blacklistTarget && blacklistMutation.mutate({
