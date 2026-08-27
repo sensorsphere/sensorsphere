@@ -25,9 +25,9 @@ body {
   --ss-shell-bg: #17191c;
   --ss-card-bg: #1d2024;
   --ss-border: #2b2f35;
-  --ss-accent: #ff7043;
-  --ss-active-bg: rgba(255, 112, 67, 0.12);
-  --ss-active-text: #ff8a65;
+  --ss-accent: #1677e8;
+  --ss-active-bg: rgba(22, 119, 232, 0.16);
+  --ss-active-text: #5aa7ff;
   --ss-shadow: 0 10px 30px rgba(0, 0, 0, 0.24);
 }
 

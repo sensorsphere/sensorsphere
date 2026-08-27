@@ -35,7 +35,7 @@ export type HistorySmoothingMethod =
 
 export interface HistorySmoothingConfig {
   method: HistorySmoothingMethod;
-  window: 3 | 5 | 7;
+  window: 3 | 5 | 7 | 9 | 11;
 }
 
 export interface HistoryChartSeries {
@@ -322,8 +322,8 @@ export function HistoryChart({
   yAxes = {},
   curveStyle = "smooth",
   smoothing = {
-    method: "none",
-    window: 3
+    method: "moving_average",
+    window: 7
   }
 }: Props) {
 
@@ -481,7 +481,13 @@ export function HistoryChart({
         name: item.name,
         type: "line",
         smooth:
-          curveStyle === "smooth",
+          curveStyle === "smooth"
+            ? 0.35
+            : false,
+        smoothMonotone:
+          curveStyle === "smooth"
+            ? "x"
+            : undefined,
         showSymbol: false,
         lineStyle: {
           width: 2.5,

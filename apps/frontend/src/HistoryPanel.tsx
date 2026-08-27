@@ -68,7 +68,7 @@ type HistoryGraphLayout =
   | "full"
   | "half";
 
-type HistorySmoothingWindow = 3 | 5 | 7;
+type HistorySmoothingWindow = 3 | 5 | 7 | 9 | 11;
 
 interface HistoryGraphVersion {
   savedAt: string;
@@ -336,7 +336,9 @@ function isHistorySmoothingConfig(
     (
       config.window === 3 ||
       config.window === 5 ||
-      config.window === 7
+      config.window === 7 ||
+      config.window === 9 ||
+      config.window === 11
     )
   );
 }
@@ -694,8 +696,8 @@ function newGraph(): HistoryGraphConfig {
     yAxes: {},
     curveStyle: "smooth",
     smoothing: {
-      method: "none",
-      window: 3
+      method: "moving_average",
+      window: 7
     },
     savedAt:
       new Date().toISOString(),
@@ -1466,9 +1468,14 @@ function HistoryGraph({
         )
       : (
           seriesTargets.length > 0
-            ? `${seriesTargets.length} sensor${seriesTargets.length === 1 ? "" : "s"} · Metric → Sensors`
+            ? null
             : "Select a metric and one or more sensors"
         );
+
+  const graphSelectionSummary =
+    mode === "metric_sensors"
+      ? `${seriesTargets.length} sensor${seriesTargets.length === 1 ? "" : "s"}`
+      : null;
 
   const comparisonNeedsMetric =
     mode === "metric_sensors" &&
@@ -1729,6 +1736,18 @@ function HistoryGraph({
                         {graphTitle}
                       </Text>
 
+                      {
+                        graphSelectionSummary && (
+                          <Text
+                            size="xs"
+                            c="dimmed"
+                            fw={500}
+                          >
+                            · {graphSelectionSummary}
+                          </Text>
+                        )
+                      }
+
                       <Tooltip label="Rename graph">
                         <ActionIcon
                           size="sm"
@@ -1765,54 +1784,16 @@ function HistoryGraph({
               }
             </Group>
 
-            <Text
-              size="xs"
-              c="dimmed"
-            >
-              {graphSubtitle}
-            </Text>
-
-            <Group gap="xs" mt={6}>
-              <Badge
-                size="sm"
-                variant="light"
-                color={
-                  restoredSavedAt
-                    ? "violet"
-                    : hasUnsavedChanges
-                      ? "orange"
-                      : editing
-                        ? "blue"
-                        : "green"
-                }
-              >
-                {
-                  restoredSavedAt
-                    ? "RESTORED PREVIEW"
-                    : hasUnsavedChanges
-                      ? "UNSAVED CHANGES"
-                      : editing
-                        ? "EDITING"
-                        : "SAVED"
-                }
-              </Badge>
-
-              {
-                graph.savedAt &&
-                !editing && (
-                  <Text
-                    size="xs"
-                    c="dimmed"
-                  >
-                    Saved {
-                      new Date(
-                        graph.savedAt
-                      ).toLocaleString()
-                    }
-                  </Text>
-                )
-              }
-            </Group>
+            {
+              graphSubtitle && (
+                <Text
+                  size="xs"
+                  c="dimmed"
+                >
+                  {graphSubtitle}
+                </Text>
+              )
+            }
 
           </div>
 
@@ -1866,6 +1847,38 @@ function HistoryGraph({
                   </Button>
                 )
             }
+
+            <Tooltip
+              label={
+                graph.savedAt && !editing
+                  ? `Saved ${new Date(graph.savedAt).toLocaleString()}`
+                  : undefined
+              }
+            >
+              <Badge
+                size="sm"
+                variant="light"
+                color={
+                  restoredSavedAt
+                    ? "violet"
+                    : hasUnsavedChanges
+                      ? "blue"
+                      : editing
+                        ? "cyan"
+                        : "green"
+                }
+              >
+                {
+                  restoredSavedAt
+                    ? "RESTORED PREVIEW"
+                    : hasUnsavedChanges
+                      ? "UNSAVED CHANGES"
+                      : editing
+                        ? "EDITING"
+                        : "SAVED"
+                }
+              </Badge>
+            </Tooltip>
 
             <Button
               size="xs"
@@ -2233,7 +2246,7 @@ function HistoryGraph({
                           flex:
                             layout === "half"
                               ? "1 1 auto"
-                              : "1 1 260px",
+                              : "0 1 30%",
                           width:
                             layout === "half"
                               ? "100%"
@@ -2279,7 +2292,7 @@ function HistoryGraph({
                           flex:
                             layout === "half"
                               ? "1 1 auto"
-                              : "1 1 300px",
+                              : "1 1 68%",
                           width:
                             layout === "half"
                               ? "100%"
@@ -2359,7 +2372,7 @@ function HistoryGraph({
                           flex:
                             layout === "half"
                               ? "1 1 auto"
-                              : "1 1 260px",
+                              : "0 1 30%",
                           width:
                             layout === "half"
                               ? "100%"
@@ -2416,7 +2429,7 @@ function HistoryGraph({
                           flex:
                             layout === "half"
                               ? "1 1 auto"
-                              : "1 1 340px",
+                              : "1 1 68%",
                           width:
                             layout === "half"
                               ? "100%"
@@ -2506,7 +2519,7 @@ function HistoryGraph({
                   value={
                     workingGraph.smoothing
                       ?.method ??
-                    "none"
+                    "moving_average"
                   }
                   data={[
                     {
@@ -2528,10 +2541,10 @@ function HistoryGraph({
                         ...workingGraph,
                         smoothing: {
                           method:
-                            (value ?? "none") as HistorySmoothingMethod,
+                            (value ?? "moving_average") as HistorySmoothingMethod,
                           window:
                             workingGraph.smoothing
-                              ?.window ?? 3
+                              ?.window ?? 7
                         }
                       })
                   }
@@ -2542,14 +2555,14 @@ function HistoryGraph({
                   (
                     workingGraph.smoothing
                       ?.method ??
-                    "none"
+                    "moving_average"
                   ) !== "none" && (
                     <SegmentedControl
                       size="xs"
                       value={
                         String(
                           workingGraph.smoothing
-                            ?.window ?? 3
+                            ?.window ?? 7
                         )
                       }
                       onChange={
@@ -2560,7 +2573,7 @@ function HistoryGraph({
                               method:
                                 workingGraph.smoothing
                                   ?.method ??
-                                "none",
+                                "moving_average",
                               window:
                                 Number(value) as HistorySmoothingWindow
                             }
@@ -2569,7 +2582,9 @@ function HistoryGraph({
                       data={[
                         { label: "3", value: "3" },
                         { label: "5", value: "5" },
-                        { label: "7", value: "7" }
+                        { label: "7", value: "7" },
+                        { label: "9", value: "9" },
+                        { label: "11", value: "11" }
                       ]}
                     />
                   )
