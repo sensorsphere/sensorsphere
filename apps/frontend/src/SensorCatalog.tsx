@@ -869,11 +869,6 @@ export function SensorCatalog() {
                 { value: "compact", label: "Compact" }
               ]}
             />
-
-            <ResetFiltersAction
-              active={filtersActive}
-              onReset={clearFilters}
-            />
           </Group>
         </Group>
 
@@ -1007,6 +1002,13 @@ export function SensorCatalog() {
             styles={activeFilterStyles(showBlacklistedOnly)}
             mt="xl"
           />
+
+          <Group align="flex-end" h="100%">
+            <ResetFiltersAction
+              active={filtersActive}
+              onReset={clearFilters}
+            />
+          </Group>
         </SimpleGrid>
         </div>
 
@@ -1203,7 +1205,8 @@ export function SensorCatalog() {
                     justify="flex-end"
                   >
                     <Button
-                      variant="light"
+                      size="xs"
+                      variant="default"
                       onClick={
                         () =>
                           openEditor(
@@ -1321,8 +1324,8 @@ export function SensorCatalog() {
                       <Table.Td>
                         <Group gap={4} wrap="nowrap">
                         <Button
-                          size="compact-sm"
-                          variant="light"
+                          size="compact-xs"
+                          variant="default"
                           onClick={() => openEditor(sensor)}
                         >
                           Edit

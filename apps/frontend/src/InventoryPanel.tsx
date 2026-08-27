@@ -301,7 +301,7 @@ function LocationNode({
 
             <Button
               size="compact-xs"
-              variant="subtle"
+              variant="default"
               onClick={
                 event => {
 

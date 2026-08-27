@@ -1877,7 +1877,7 @@ function HistoryGraph({
                 : (
                   <Button
                     size="xs"
-                    variant="light"
+                    variant="default"
                     onClick={beginEditing}
                   >
                     Edit
@@ -4379,7 +4379,6 @@ export function HistoryPanel() {
 
         <Button
           size="xs"
-          variant="light"
           onClick={
             addTab
           }

@@ -505,6 +505,7 @@ export function GatewayCatalog() {
             <Badge variant="light">
               {filteredGateways.length} / {gateways.length} gateways
             </Badge>
+            <Button onClick={openCreate}>Add gateway</Button>
             <SegmentedControl
               value={viewMode}
               onChange={value =>
@@ -515,15 +516,6 @@ export function GatewayCatalog() {
                 { value: "compact", label: "Compact" }
               ]}
             />
-            <ResetFiltersAction
-              active={filtersActive}
-              onReset={() => {
-                setNameSearch("");
-                setTypeFilter(null);
-                setEnabledFilter("all");
-              }}
-            />
-            <Button onClick={openCreate}>Add gateway</Button>
           </Group>
         </Group>
 
@@ -561,6 +553,16 @@ export function GatewayCatalog() {
             ]}
             styles={activeFilterStyles(enabledFilter !== "all")}
           />
+          <Group align="flex-end" h="100%">
+            <ResetFiltersAction
+              active={filtersActive}
+              onReset={() => {
+                setNameSearch("");
+                setTypeFilter(null);
+                setEnabledFilter("all");
+              }}
+            />
+          </Group>
         </SimpleGrid>
         </div>
 
@@ -663,7 +665,7 @@ export function GatewayCatalog() {
                   </SimpleGrid>
 
                   <Group justify="flex-end">
-                    <Button variant="light" onClick={() => openEdit(gateway)}>
+                    <Button size="xs" variant="default" onClick={() => openEdit(gateway)}>
                       Edit
                     </Button>
                     <Button
@@ -756,8 +758,8 @@ export function GatewayCatalog() {
                     <Table.Td>
                       <Group gap={4} wrap="nowrap">
                         <Button
-                          size="compact-sm"
-                          variant="light"
+                          size="compact-xs"
+                          variant="default"
                           onClick={() => openEdit(gateway)}
                         >
                           Edit

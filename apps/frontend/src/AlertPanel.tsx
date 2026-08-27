@@ -1515,7 +1515,7 @@ export function AlertPanel({
 
                               <Button
                                 size="xs"
-                                variant="light"
+                                variant="default"
                                 onClick={
                                   () =>
                                     setRuleForm(
@@ -1673,7 +1673,7 @@ export function AlertPanel({
                                 </Button>
                                 <Button
                                   size="compact-xs"
-                                  variant="light"
+                                  variant="default"
                                   onClick={() => setRuleForm(ruleToForm(rule))}
                                 >
                                   Edit
