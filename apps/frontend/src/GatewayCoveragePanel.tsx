@@ -70,6 +70,9 @@ const GATEWAY_SORT_STORAGE_KEY =
 const SUGGESTED_GATEWAY_FILTER_STORAGE_KEY =
   `${STORAGE_PREFIX}.suggestedGatewayFilter`;
 
+const GATEWAY_COLUMNS_FILTER_STORAGE_KEY =
+  `${STORAGE_PREFIX}.gatewayColumnsFilter`;
+
 const SENSOR_FILTER_STORAGE_KEY =
   `${STORAGE_PREFIX}.sensorFilter`;
 
@@ -550,6 +553,14 @@ export function GatewayCoveragePanel() {
   const [sensorFilter, setSensorFilter] =
     React.useState(loadSensorFilter);
 
+  const [gatewayColumnsFilter, setGatewayColumnsFilter] =
+    React.useState<string>(() => {
+      if (typeof window === "undefined") return "";
+      return window.localStorage.getItem(
+        GATEWAY_COLUMNS_FILTER_STORAGE_KEY
+      ) ?? "";
+    });
+
   const [suggestedGatewayFilter, setSuggestedGatewayFilter] =
     React.useState<string | null>(() => {
       if (typeof window === "undefined") return null;
@@ -661,6 +672,22 @@ export function GatewayCoveragePanel() {
       }
     },
     [sensorFilter]
+  );
+
+  React.useEffect(
+    () => {
+      if (gatewayColumnsFilter.trim()) {
+        window.localStorage.setItem(
+          GATEWAY_COLUMNS_FILTER_STORAGE_KEY,
+          gatewayColumnsFilter
+        );
+      } else {
+        window.localStorage.removeItem(
+          GATEWAY_COLUMNS_FILTER_STORAGE_KEY
+        );
+      }
+    },
+    [gatewayColumnsFilter]
   );
 
   React.useEffect(
@@ -918,6 +945,27 @@ export function GatewayCoveragePanel() {
           ? result
           : left.localeCompare(right);
       });
+
+  const normalizedGatewayColumnsFilter =
+    gatewayColumnsFilter.trim().toLocaleLowerCase();
+
+  const displayedGateways =
+    normalizedGatewayColumnsFilter
+      ? gateways.filter(gateway => {
+          const summary = gatewayById.get(gateway);
+          const haystack = [
+            gateway,
+            summary?.name ?? "",
+            summary?.locationName ?? ""
+          ]
+            .join(" ")
+            .toLocaleLowerCase();
+
+          return haystack.includes(
+            normalizedGatewayColumnsFilter
+          );
+        })
+      : gateways;
 
   const normalizedSensorFilter =
     sensorFilter.trim().toLocaleLowerCase();
@@ -1235,6 +1283,7 @@ export function GatewayCoveragePanel() {
     assignmentFilter !== null ||
     backupFilter !== null ||
     sensorFilter.trim().length > 0 ||
+    gatewayColumnsFilter.trim().length > 0 ||
     suggestedGatewayFilter !== null ||
     recommendationFilter !== null ||
     assignmentMatchFilter !== null;
@@ -1243,6 +1292,7 @@ export function GatewayCoveragePanel() {
     setAssignmentFilter(null);
     setBackupFilter(null);
     setSensorFilter("");
+    setGatewayColumnsFilter("");
     setSuggestedGatewayFilter(null);
     setRecommendationFilter(null);
     setAssignmentMatchFilter(null);
@@ -1694,6 +1744,35 @@ export function GatewayCoveragePanel() {
                     : undefined
                 }
               />
+              <TextInput
+                size="xs"
+                label="Gateway columns"
+                placeholder="Name, ID or location"
+                value={gatewayColumnsFilter}
+                onChange={event =>
+                  setGatewayColumnsFilter(event.currentTarget.value)
+                }
+                styles={activeFilterStyles(
+                  gatewayColumnsFilter.trim().length > 0
+                )}
+                rightSection={
+                  gatewayColumnsFilter
+                    ? (
+                      <Button
+                        size="compact-xs"
+                        variant="subtle"
+                        color="gray"
+                        px={4}
+                        onClick={() => setGatewayColumnsFilter("")}
+                        aria-label="Clear gateway columns filter"
+                      >
+                        ×
+                      </Button>
+                    )
+                    : undefined
+                }
+                rightSectionPointerEvents="all"
+              />
               <BadgeSelect
                 badgeColor={value => value === "ASSIGNED" ? "blue" : "gray"}
                 size="xs"
@@ -1846,7 +1925,7 @@ export function GatewayCoveragePanel() {
               style={{
                 tableLayout: "fixed",
                 width: "100%",
-                minWidth: `${176 + gateways.length * 208 + 157}px`
+                minWidth: `${176 + 157 + displayedGateways.length * 208}px`
               }}
             >
               <Table.Thead
@@ -1949,7 +2028,40 @@ export function GatewayCoveragePanel() {
                       )}
                     </Stack>
                   </Table.Th>
-                  {gateways.map(gateway => {
+                  <Table.Th
+                    style={{
+                      width: 157,
+                      minWidth: 157
+                    }}
+                  >
+                    <Stack gap={4}>
+                      <Text fw={600}>Suggested gateway</Text>
+                      <Select
+                        size="xs"
+                        value={suggestedGatewayFilter}
+                        onChange={setSuggestedGatewayFilter}
+                        placeholder="All gateways"
+                        clearable
+                        data={[
+                          ...gateways.map(gateway => ({
+                            value: gateway,
+                            label: gateway
+                          })),
+                          {
+                            value: "__no_reliable__",
+                            label: "No reliable suggestion"
+                          },
+                          {
+                            value: "__no_suggestion__",
+                            label: "No suggestion"
+                          }
+                        ]}
+                        aria-label="Filter by suggested gateway"
+                        styles={activeFilterStyles(suggestedGatewayFilter !== null)}
+                      />
+                    </Stack>
+                  </Table.Th>
+                  {displayedGateways.map(gateway => {
                     const summary =
                       gatewayById.get(gateway);
 
@@ -2156,39 +2268,7 @@ export function GatewayCoveragePanel() {
                       </Table.Th>
                     );
                   })}
-                  <Table.Th
-                    style={{
-                      width: 157,
-                      minWidth: 157
-                    }}
-                  >
-                    <Stack gap={4}>
-                      <Text fw={600}>Suggested gateway</Text>
-                      <Select
-                        size="xs"
-                        value={suggestedGatewayFilter}
-                        onChange={setSuggestedGatewayFilter}
-                        placeholder="All gateways"
-                        clearable
-                        data={[
-                          ...gateways.map(gateway => ({
-                            value: gateway,
-                            label: gateway
-                          })),
-                          {
-                            value: "__no_reliable__",
-                            label: "No reliable suggestion"
-                          },
-                          {
-                            value: "__no_suggestion__",
-                            label: "No suggestion"
-                          }
-                        ]}
-                        aria-label="Filter by suggested gateway"
-                        styles={activeFilterStyles(suggestedGatewayFilter !== null)}
-                      />
-                    </Stack>
-                  </Table.Th>
+
                 </Table.Tr>
               </Table.Thead>
 
@@ -2500,72 +2580,6 @@ export function GatewayCoveragePanel() {
                         </Stack>
                       </Table.Td>
 
-                      {gateways.map(gateway => {
-                        const row =
-                          bySensorGateway.get(
-                            `${sensorUid}\u0000${gateway}`
-                          );
-
-                        if (!row) {
-                          return (
-                            <Table.Td
-                              key={gateway}
-                              style={{
-                                width: 208,
-                                minWidth: 208
-                              }}
-                            >
-                              —
-                            </Table.Td>
-                          );
-                        }
-
-                        return (
-                          <Table.Td
-                            key={gateway}
-                            style={{
-                              width: 208,
-                              minWidth: 208
-                            }}
-                          >
-                            <Stack gap={2}>
-                              <Group gap="xs">
-                                <Text fw={row.rank === 1 ? 700 : 500}>
-                                  {row.avgRssi.toFixed(1)} dBm
-                                </Text>
-                                <Badge
-                                  size="xs"
-                                  variant="light"
-                                  color={qualityColor(row.avgRssi)}
-                                >
-                                  {qualityLabel(row.avgRssi)}
-                                </Badge>
-                              </Group>
-                              <Text size="xs" c="dimmed">
-                                min {row.minRssi.toFixed(0)} · max {row.maxRssi.toFixed(0)} · σ {row.stddevRssi.toFixed(1)}
-                              </Text>
-                              <Text size="xs" c="dimmed">
-                                {row.sampleCount} samples in last {periodLabel(hours)}
-                              </Text>
-                              <Text
-                                size="xs"
-                                c={ageColor(row.lastSeenAt)}
-                                style={{
-                                  whiteSpace: "nowrap"
-                                }}
-                                title={
-                                  exactDate(
-                                    row.lastSeenAt
-                                  )
-                                }
-                              >
-                                {relativeSince(row.lastSeenAt)}
-                              </Text>
-                            </Stack>
-                          </Table.Td>
-                        );
-                      })}
-
                       <Table.Td
                         style={{
                           width: 157,
@@ -2738,6 +2752,73 @@ export function GatewayCoveragePanel() {
                           )}
                         </Stack>
                       </Table.Td>
+
+                      {displayedGateways.map(gateway => {
+                        const row =
+                          bySensorGateway.get(
+                            `${sensorUid}\u0000${gateway}`
+                          );
+
+                        if (!row) {
+                          return (
+                            <Table.Td
+                              key={gateway}
+                              style={{
+                                width: 208,
+                                minWidth: 208
+                              }}
+                            >
+                              —
+                            </Table.Td>
+                          );
+                        }
+
+                        return (
+                          <Table.Td
+                            key={gateway}
+                            style={{
+                              width: 208,
+                              minWidth: 208
+                            }}
+                          >
+                            <Stack gap={2}>
+                              <Group gap="xs">
+                                <Text fw={row.rank === 1 ? 700 : 500}>
+                                  {row.avgRssi.toFixed(1)} dBm
+                                </Text>
+                                <Badge
+                                  size="xs"
+                                  variant="light"
+                                  color={qualityColor(row.avgRssi)}
+                                >
+                                  {qualityLabel(row.avgRssi)}
+                                </Badge>
+                              </Group>
+                              <Text size="xs" c="dimmed">
+                                min {row.minRssi.toFixed(0)} · max {row.maxRssi.toFixed(0)} · σ {row.stddevRssi.toFixed(1)}
+                              </Text>
+                              <Text size="xs" c="dimmed">
+                                {row.sampleCount} samples in last {periodLabel(hours)}
+                              </Text>
+                              <Text
+                                size="xs"
+                                c={ageColor(row.lastSeenAt)}
+                                style={{
+                                  whiteSpace: "nowrap"
+                                }}
+                                title={
+                                  exactDate(
+                                    row.lastSeenAt
+                                  )
+                                }
+                              >
+                                {relativeSince(row.lastSeenAt)}
+                              </Text>
+                            </Stack>
+                          </Table.Td>
+                        );
+                      })}
+
                     </Table.Tr>
                   );
                 })}
