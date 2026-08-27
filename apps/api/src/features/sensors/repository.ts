@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 
 import type {
+  CreateSensorDto,
   UpdateSensorDto
 } from "./dto.js";
 
@@ -34,6 +35,7 @@ export interface SensorRecord {
 export interface SensorRepository {
   findAll(): Promise<SensorRecord[]>;
   findById(id: string): Promise<SensorRecord | null>;
+  createAndAssign(input: CreateSensorDto): Promise<SensorRecord>;
   updateMetadata(id: string, input: UpdateSensorDto): Promise<boolean>;
 }
 
@@ -125,6 +127,106 @@ implements SensorRepository {
       );
 
     return result.rows[0] ?? null;
+  }
+
+  async createAndAssign(
+    input: CreateSensorDto
+  ): Promise<SensorRecord> {
+    const client =
+      await this.pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const inserted =
+        await client.query<{
+          id: string;
+          uuid: string;
+        }>(
+          `
+          INSERT INTO sensors (
+            sensor_uid,
+            gateway_id
+          )
+          VALUES ($1, $2::uuid)
+          ON CONFLICT (sensor_uid) DO UPDATE
+          SET
+            gateway_id = COALESCE(
+              sensors.gateway_id,
+              EXCLUDED.gateway_id
+            ),
+            updated_at = NOW()
+          RETURNING
+            id::text AS id,
+            uuid::text AS uuid
+          `,
+          [
+            input.uid,
+            input.gatewayId ?? null
+          ]
+        );
+
+      const sensorRow =
+        inserted.rows[0];
+
+      if (!sensorRow) {
+        throw new Error(
+          "Unable to create sensor"
+        );
+      }
+
+      if (input.backupGatewayId) {
+        await client.query(
+          `
+          DELETE FROM sensor_gateway_assignments
+          WHERE sensor_id = $1::bigint
+            AND priority = 2
+          `,
+          [sensorRow.id]
+        );
+
+        await client.query(
+          `
+          INSERT INTO sensor_gateway_assignments (
+            sensor_id,
+            gateway_id,
+            priority,
+            enabled
+          )
+          VALUES (
+            $1::bigint,
+            $2::uuid,
+            2,
+            TRUE
+          )
+          `,
+          [
+            sensorRow.id,
+            input.backupGatewayId
+          ]
+        );
+      }
+
+      await client.query("COMMIT");
+
+      const created =
+        await this.findById(
+          sensorRow.uuid
+        );
+
+      if (!created) {
+        throw new Error(
+          "Created sensor could not be reloaded"
+        );
+      }
+
+      return created;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async updateMetadata(

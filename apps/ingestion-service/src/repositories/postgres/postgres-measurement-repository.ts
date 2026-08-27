@@ -355,6 +355,19 @@ implements MeasurementRepository {
     );
   }
 
+  async ensureSensorExists(
+    sensorUid: string
+  ): Promise<void> {
+    await this.pool.query(
+      `
+      INSERT INTO sensors (sensor_uid)
+      VALUES ($1)
+      ON CONFLICT (sensor_uid) DO NOTHING
+      `,
+      [sensorUid]
+    );
+  }
+
   async saveSensorMetadata(
     sensorUid: string,
     metric: "manufacturer" | "model" | "firmware",

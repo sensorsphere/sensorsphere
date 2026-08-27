@@ -80,6 +80,12 @@ export interface Sensor {
   updatedAt: string;
 }
 
+export interface CreateSensorInput {
+  uid: string;
+  gatewayId?: string | null;
+  backupGatewayId?: string | null;
+}
+
 export interface UpdateSensor {
   name?: string | null;
   description?: string | null;

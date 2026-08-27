@@ -1705,17 +1705,18 @@ function Dashboard() {
                   withBorder
                   radius="md"
                   padding="lg"
+                  style={{
+                    borderLeft: "4px solid var(--mantine-color-blue-6)"
+                  }}
                 >
-                  <Text
-                    size="xs"
-                    c="dimmed"
-                  >
+                  <Badge size="xs" color="blue" variant="light">
                     Assets
-                  </Text>
+                  </Badge>
 
                   <Text
                     size="xl"
                     fw={700}
+                    c="blue.6"
                   >
                     {assets.length}
                   </Text>
@@ -1732,17 +1733,18 @@ function Dashboard() {
                   withBorder
                   radius="md"
                   padding="lg"
+                  style={{
+                    borderLeft: "4px solid var(--mantine-color-violet-6)"
+                  }}
                 >
-                  <Text
-                    size="xs"
-                    c="dimmed"
-                  >
+                  <Badge size="xs" color="violet" variant="light">
                     Locations
-                  </Text>
+                  </Badge>
 
                   <Text
                     size="xl"
                     fw={700}
+                    c="violet.6"
                   >
                     {assignedLocations}
                   </Text>
@@ -1760,25 +1762,29 @@ function Dashboard() {
                     label: "Temperature Min",
                     extreme:
                       temperatureExtremes.min,
-                    unit: "°C"
+                    unit: "°C",
+                    color: "cyan"
                   },
                   {
                     label: "Temperature Max",
                     extreme:
                       temperatureExtremes.max,
-                    unit: "°C"
+                    unit: "°C",
+                    color: "orange"
                   },
                   {
                     label: "Humidity Min",
                     extreme:
                       humidityExtremes.min,
-                    unit: "%"
+                    unit: "%",
+                    color: "teal"
                   },
                   {
                     label: "Humidity Max",
                     extreme:
                       humidityExtremes.max,
-                    unit: "%"
+                    unit: "%",
+                    color: "grape"
                   }
                 ].map(item => (
                   <Card
@@ -1786,17 +1792,18 @@ function Dashboard() {
                     withBorder
                     radius="md"
                     padding="lg"
+                    style={{
+                      borderLeft: `4px solid var(--mantine-color-${item.color}-6)`
+                    }}
                   >
-                    <Text
-                      size="xs"
-                      c="dimmed"
-                    >
+                    <Badge size="xs" color={item.color} variant="light">
                       {item.label}
-                    </Text>
+                    </Badge>
 
                     <Text
                       size="xl"
                       fw={700}
+                      c={`${item.color}.6`}
                     >
                       {
                         item.extreme
@@ -2846,6 +2853,22 @@ function Dashboard() {
                               .value
                           )
                       }
+                      rightSectionPointerEvents="all"
+                      rightSection={
+                        assetSearch.trim().length > 0
+                          ? (
+                            <ActionIcon
+                              size="sm"
+                              variant="subtle"
+                              aria-label="Clear asset search filter"
+                              title="Clear asset search filter"
+                              onClick={() => setAssetSearch("")}
+                            >
+                              ×
+                            </ActionIcon>
+                          )
+                          : null
+                      }
                       style={{
                         flex: 1
                       }}
@@ -2855,14 +2878,14 @@ function Dashboard() {
                     <BadgeSelect
                       badgeColor={value => value === "online" ? "green" : value === "warning" ? "yellow" : value === "offline" ? "red" : "gray"}
                       label="Health"
+                      clearable
                       value={
                         assetHealthFilter
                       }
                       onChange={
                         value =>
-                          value &&
                           setAssetHealthFilter(
-                            value as
+                            (value ?? "all") as
                               "all"
                               | "online"
                               | "warning"
@@ -2893,14 +2916,14 @@ function Dashboard() {
                     <BadgeSelect
                       badgeColor={value => value === "enabled" ? "blue" : value === "disabled" ? "gray" : "gray"}
                       label="Status"
+                      clearable
                       value={
                         assetEnabledFilter
                       }
                       onChange={
                         value =>
-                          value &&
                           setAssetEnabledFilter(
-                            value as
+                            (value ?? "all") as
                               "all"
                               | "enabled"
                               | "disabled"

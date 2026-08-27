@@ -1,3 +1,9 @@
+export interface CreateSensorDto {
+  uid: string;
+  gatewayId?: string | null;
+  backupGatewayId?: string | null;
+}
+
 export interface SensorDto {
   id: string;
   uid: string;

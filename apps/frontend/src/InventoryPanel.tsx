@@ -7,6 +7,7 @@ import { BadgeSelect } from "./BadgeSelect";
 import { NavigationIcon } from "./NavigationIcon";
 
 import {
+  ActionIcon,
   Badge,
   Button,
   Card,
@@ -1293,6 +1294,22 @@ export function InventoryPanel() {
                 setSearch(
                   event.currentTarget.value
                 )
+            }
+            rightSectionPointerEvents="all"
+            rightSection={
+              search.trim().length > 0
+                ? (
+                  <ActionIcon
+                    size="sm"
+                    variant="subtle"
+                    aria-label="Clear search filter"
+                    title="Clear search filter"
+                    onClick={() => setSearch("")}
+                  >
+                    ×
+                  </ActionIcon>
+                )
+                : null
             }
             styles={activeFilterStyles(search.trim().length > 0)}
           />

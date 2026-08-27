@@ -6,6 +6,7 @@ import { BadgeSelect } from "./BadgeSelect";
 import { NavigationIcon } from "./NavigationIcon";
 
 import {
+  ActionIcon,
   Badge,
   Button,
   Card,
@@ -801,6 +802,22 @@ export function SensorCatalog() {
                   event.currentTarget.value
                 )
             }
+            rightSectionPointerEvents="all"
+            rightSection={
+              nameSearch.trim().length > 0
+                ? (
+                  <ActionIcon
+                    size="sm"
+                    variant="subtle"
+                    aria-label="Clear name filter"
+                    title="Clear name filter"
+                    onClick={() => setNameSearch("")}
+                  >
+                    ×
+                  </ActionIcon>
+                )
+                : null
+            }
             styles={activeFilterStyles(nameSearch.trim().length > 0)}
           />
 
@@ -851,11 +868,11 @@ export function SensorCatalog() {
           <BadgeSelect
             badgeColor={value => value === "enabled" ? "blue" : value === "disabled" ? "gray" : "gray"}
             label="Enabled"
+            clearable
             value={enabledFilter}
             onChange={value =>
-              value &&
               setEnabledFilter(
-                value as
+                (value ?? "all") as
                   "all" | "enabled" | "disabled"
               )
             }
@@ -870,11 +887,11 @@ export function SensorCatalog() {
           <BadgeSelect
             badgeColor={value => value === "online" ? "green" : value === "warning" ? "yellow" : value === "offline" ? "red" : "gray"}
             label="Status"
+            clearable
             value={statusFilter}
             onChange={value =>
-              value &&
               setStatusFilter(
-                value as
+                (value ?? "all") as
                   "all" | "online" | "warning" | "offline"
               )
             }

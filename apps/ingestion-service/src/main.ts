@@ -396,6 +396,23 @@ Promise<void> {
             });
         }
 
+        if (trafficMeasurement) {
+          try {
+            await repository.ensureSensorExists(
+              trafficMeasurement.sensorUid
+            );
+          } catch (error) {
+            logger.error(
+              {
+                error,
+                gatewayId,
+                sensorUid: trafficMeasurement.sensorUid
+              },
+              "Unable to auto-discover functional sensor"
+            );
+          }
+        }
+
         if (sensorMetadata) {
           const value =
             message.payload

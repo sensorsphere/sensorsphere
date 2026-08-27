@@ -36,6 +36,7 @@ import {
   deleteAllGatewayCoverageGateways,
   deleteGatewayCoverageGateway,
   deleteGatewayCoverageSensor,
+  createSensor,
   getAssets,
   getGatewayCoverage,
   getGateways,
@@ -1473,6 +1474,40 @@ export function GatewayCoveragePanel() {
         }
     });
 
+  const createSensorAssignmentMutation =
+    useMutation({
+      mutationFn: ({
+        sensorUid,
+        gatewayId,
+        backupGatewayId
+      }: {
+        sensorUid: string;
+        gatewayId: string;
+        backupGatewayId: string | null;
+      }) =>
+        createSensor({
+          uid: sensorUid,
+          gatewayId,
+          backupGatewayId
+        }),
+
+      onSuccess:
+        async () => {
+          setAssignmentSensorUid(null);
+          setAssignmentGatewayIdDraft(null);
+          setAssignmentBackupGatewayIdDraft(null);
+
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: ["sensors"]
+            }),
+            queryClient.invalidateQueries({
+              queryKey: ["gateway-coverage"]
+            })
+          ]);
+        }
+    });
+
   return (
     <Stack gap="lg">
       <Group justify="space-between" align="flex-end">
@@ -2751,6 +2786,12 @@ export function GatewayCoveragePanel() {
                   : "Unassigned"}
               </Text>
 
+              {!sensor && assignmentSensorUid && (
+                <Alert color="yellow" title="Sensor not registered">
+                  {assignmentSensorUid} is observed by Gateway Coverage but does not yet exist in the SensorSphere sensor registry. Create & Assign will register it without automatically changing Gateway Coverage data.
+                </Alert>
+              )}
+
               <Text size="sm">
                 Suggested: {suggestedGateway
                   ? `${suggestedGateway.name} · ${suggestedGateway.gatewayId} · ${suggestedGateway.location?.name ?? "[No location]"}`
@@ -2801,6 +2842,14 @@ export function GatewayCoveragePanel() {
                 </Alert>
               )}
 
+              {createSensorAssignmentMutation.isError && (
+                <Alert color="red" title="Unable to create sensor assignment">
+                  {createSensorAssignmentMutation.error instanceof Error
+                    ? createSensorAssignmentMutation.error.message
+                    : "Create & Assign failed."}
+                </Alert>
+              )}
+
               <Text size="xs" c="dimmed">
                 Saving changes the functional SensorSphere sensor/gateway assignment only. Gateway Coverage data is not modified.
               </Text>
@@ -2837,18 +2886,31 @@ export function GatewayCoveragePanel() {
                   </Button>
                   <Button
                     color="blue"
-                    loading={updateSensorAssignmentMutation.isPending}
+                    loading={
+                      updateSensorAssignmentMutation.isPending ||
+                      createSensorAssignmentMutation.isPending
+                    }
                     disabled={
-                      !sensor ||
+                      !assignmentSensorUid ||
                       !assignmentGatewayIdDraft ||
                       assignmentGatewayIdDraft === assignmentBackupGatewayIdDraft ||
                       (
-                        assignmentGatewayIdDraft === sensor.gateway?.id &&
-                        assignmentBackupGatewayIdDraft === (sensor.backupGateway?.id ?? null)
+                        Boolean(sensor) &&
+                        assignmentGatewayIdDraft === sensor?.gateway?.id &&
+                        assignmentBackupGatewayIdDraft === (sensor?.backupGateway?.id ?? null)
                       )
                     }
                     onClick={() => {
-                      if (!sensor || !assignmentGatewayIdDraft) return;
+                      if (!assignmentSensorUid || !assignmentGatewayIdDraft) return;
+
+                      if (!sensor) {
+                        createSensorAssignmentMutation.mutate({
+                          sensorUid: assignmentSensorUid,
+                          gatewayId: assignmentGatewayIdDraft,
+                          backupGatewayId: assignmentBackupGatewayIdDraft
+                        });
+                        return;
+                      }
 
                       updateSensorAssignmentMutation.mutate({
                         sensorId: sensor.id,
@@ -2857,7 +2919,7 @@ export function GatewayCoveragePanel() {
                       });
                     }}
                   >
-                    Assign
+                    {sensor ? "Assign" : "Create & Assign"}
                   </Button>
                 </Group>
               </Group>

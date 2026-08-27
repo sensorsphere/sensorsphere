@@ -20,6 +20,11 @@ export async function registerSensorRoutes(
     options.controller.listSensors
   );
 
+  app.post(
+    "/sensors",
+    options.controller.createSensor
+  );
+
   app.get(
     "/sensors/:id",
     options.controller.getSensor

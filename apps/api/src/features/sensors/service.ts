@@ -3,6 +3,7 @@ import type {
 } from "./repository.js";
 
 import type {
+  CreateSensorDto,
   SensorDto,
   UpdateSensorDto
 } from "./dto.js";
@@ -23,6 +24,27 @@ export class SensorService {
       await this.repository.findAll();
 
     return sensors.map(mapSensorToDto);
+  }
+
+  async createSensor(
+    input: CreateSensorDto
+  ): Promise<SensorDto> {
+    if (
+      input.gatewayId &&
+      input.backupGatewayId &&
+      input.gatewayId === input.backupGatewayId
+    ) {
+      throw new Error(
+        "Primary and backup gateway must be different"
+      );
+    }
+
+    const sensor =
+      await this.repository.createAndAssign(
+        input
+      );
+
+    return mapSensorToDto(sensor);
   }
 
   async getSensor(

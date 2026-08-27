@@ -18,6 +18,19 @@ import {
 const sensorIdSchema =
   z.string().uuid();
 
+const createSensorSchema =
+  z.object({
+    uid:
+      z.string().trim().min(1).max(200),
+
+    gatewayId:
+      z.string().uuid().nullable().optional(),
+
+    backupGatewayId:
+      z.string().uuid().nullable().optional()
+  })
+  .strict();
+
 const updateSensorSchema =
   z.object({
     name:
@@ -75,6 +88,53 @@ export class SensorController {
         await this.service.listSensors();
 
       await ok(reply, sensors);
+    };
+
+  createSensor =
+    async (
+      request:
+        FastifyRequest<{
+          Body: unknown;
+        }>,
+      reply: FastifyReply
+    ): Promise<void> => {
+
+      const parsedBody =
+        createSensorSchema.safeParse(
+          request.body
+        );
+
+      if (!parsedBody.success) {
+        await badRequest(
+          reply,
+          parsedBody.error.issues[0]?.message
+            ?? "Invalid sensor payload"
+        );
+        return;
+      }
+
+      try {
+        const sensor =
+          await this.service.createSensor(
+            parsedBody.data
+          );
+
+        await ok(reply, sensor);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message ===
+            "Primary and backup gateway must be different"
+        ) {
+          await badRequest(
+            reply,
+            error.message
+          );
+          return;
+        }
+
+        throw error;
+      }
     };
 
   getSensor =

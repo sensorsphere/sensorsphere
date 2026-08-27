@@ -11,6 +11,7 @@ import type {
   ObservationHistoryPoint,
   RuntimeConfig,
   Sensor,
+  CreateSensorInput,
   UpdateSensor,
   Gateway,
   GatewayType,
@@ -296,6 +297,29 @@ Promise<Sensor[]> {
     );
 
   return readJson<Sensor[]>(
+    response
+  );
+}
+
+export async function createSensor(
+  input: CreateSensorInput
+): Promise<Sensor> {
+
+  const response =
+    await fetch(
+      "/api/v1/sensors",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+        body:
+          JSON.stringify(input)
+      }
+    );
+
+  return readJson<Sensor>(
     response
   );
 }
