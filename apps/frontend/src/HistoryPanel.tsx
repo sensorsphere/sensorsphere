@@ -5,6 +5,7 @@ import { NavigationIcon } from "./NavigationIcon";
 import {
   ActionIcon,
   Alert,
+  Badge,
   Button,
   Card,
   ColorInput,
@@ -43,6 +44,9 @@ import {
   computeHistoryYAxisBounds,
   historyYAxisKey,
   type HistoryChartSeries,
+  type HistoryCurveStyle,
+  type HistorySmoothingConfig,
+  type HistorySmoothingMethod,
   type HistoryYAxisConfig,
   type HistoryYAxisMode
 } from "./HistoryChart";
@@ -64,6 +68,13 @@ type HistoryGraphLayout =
   | "full"
   | "half";
 
+type HistorySmoothingWindow = 3 | 5 | 7;
+
+interface HistoryGraphVersion {
+  savedAt: string;
+  config: HistoryGraphSnapshotConfig;
+}
+
 interface HistoryGraphConfig {
   id: string;
   name?: string;
@@ -76,7 +87,14 @@ interface HistoryGraphConfig {
   hours: number;
   collapsed?: boolean;
   yAxes?: Record<string, HistoryYAxisConfig>;
+  curveStyle?: HistoryCurveStyle;
+  smoothing?: HistorySmoothingConfig;
+  savedAt?: string;
+  versions?: HistoryGraphVersion[];
 }
+
+type HistoryGraphSnapshotConfig =
+  Omit<HistoryGraphConfig, "versions">;
 
 interface HistoryTabConfig {
   id: string;
@@ -287,6 +305,130 @@ function isHistoryYAxisMap(
   );
 }
 
+function isHistoryCurveStyle(
+  value: unknown
+): value is HistoryCurveStyle {
+  return (
+    value === "raw" ||
+    value === "smooth"
+  );
+}
+
+function isHistorySmoothingConfig(
+  value: unknown
+): value is HistorySmoothingConfig {
+  if (
+    typeof value !== "object" ||
+    value === null
+  ) {
+    return false;
+  }
+
+  const config =
+    value as Partial<HistorySmoothingConfig>;
+
+  return (
+    (
+      config.method === "none" ||
+      config.method === "moving_average" ||
+      config.method === "median"
+    ) &&
+    (
+      config.window === 3 ||
+      config.window === 5 ||
+      config.window === 7
+    )
+  );
+}
+
+function isHistoryGraphSnapshotConfig(
+  value: unknown
+): value is HistoryGraphSnapshotConfig {
+  if (
+    typeof value !== "object" ||
+    value === null
+  ) {
+    return false;
+  }
+
+  const graph =
+    value as Partial<HistoryGraphSnapshotConfig>;
+
+  return (
+    typeof graph.id === "string" &&
+    typeof graph.assetId === "string" &&
+    Array.isArray(graph.metricIds) &&
+    graph.metricIds.every(
+      metricId =>
+        typeof metricId === "string"
+    ) &&
+    typeof graph.hours === "number" &&
+    VALID_HOURS.has(graph.hours) &&
+    (
+      graph.mode === undefined ||
+      graph.mode === "sensor_metrics" ||
+      graph.mode === "metric_sensors"
+    ) &&
+    (
+      graph.layout === undefined ||
+      graph.layout === "full" ||
+      graph.layout === "half"
+    ) &&
+    (
+      graph.metricKey === undefined ||
+      typeof graph.metricKey === "string"
+    ) &&
+    (
+      graph.assetIds === undefined ||
+      (
+        Array.isArray(graph.assetIds) &&
+        graph.assetIds.every(
+          assetId =>
+            typeof assetId === "string"
+        )
+      )
+    ) &&
+    (
+      graph.yAxes === undefined ||
+      isHistoryYAxisMap(graph.yAxes)
+    ) &&
+    (
+      graph.curveStyle === undefined ||
+      isHistoryCurveStyle(graph.curveStyle)
+    ) &&
+    (
+      graph.smoothing === undefined ||
+      isHistorySmoothingConfig(
+        graph.smoothing
+      )
+    )
+  );
+}
+
+function isHistoryGraphVersion(
+  value: unknown
+): value is HistoryGraphVersion {
+  if (
+    typeof value !== "object" ||
+    value === null
+  ) {
+    return false;
+  }
+
+  const version =
+    value as Partial<HistoryGraphVersion>;
+
+  return (
+    typeof version.savedAt === "string" &&
+    Number.isFinite(
+      Date.parse(version.savedAt)
+    ) &&
+    isHistoryGraphSnapshotConfig(
+      version.config
+    )
+  );
+}
+
 const VALID_HOURS =
   new Set(
     PERIODS.map(
@@ -357,6 +499,37 @@ function isHistoryGraphs(
           isHistoryYAxisMap(
             graph.yAxes
           )
+        ) &&
+        (
+          graph.curveStyle === undefined ||
+          isHistoryCurveStyle(
+            graph.curveStyle
+          )
+        ) &&
+        (
+          graph.smoothing === undefined ||
+          isHistorySmoothingConfig(
+            graph.smoothing
+          )
+        ) &&
+        (
+          graph.savedAt === undefined ||
+          (
+            typeof graph.savedAt === "string" &&
+            Number.isFinite(
+              Date.parse(graph.savedAt)
+            )
+          )
+        ) &&
+        (
+          graph.versions === undefined ||
+          (
+            Array.isArray(graph.versions) &&
+            graph.versions.length <= 5 &&
+            graph.versions.every(
+              isHistoryGraphVersion
+            )
+          )
         )
       );
     })
@@ -420,7 +593,20 @@ function normalizeHistoryTabs(
             assetIds:
               graph.assetIds ?? [],
             yAxes:
-              graph.yAxes ?? {}
+              graph.yAxes ?? {},
+            curveStyle:
+              graph.curveStyle ??
+              "smooth",
+            smoothing:
+              graph.smoothing ?? {
+                method: "none",
+                window: 3
+              },
+            savedAt:
+              graph.savedAt,
+            versions:
+              (graph.versions ?? [])
+                .slice(0, 5)
           })
         )
     })
@@ -505,7 +691,15 @@ function newGraph(): HistoryGraphConfig {
     assetIds: [],
     hours: 24,
     collapsed: false,
-    yAxes: {}
+    yAxes: {},
+    curveStyle: "smooth",
+    smoothing: {
+      method: "none",
+      window: 3
+    },
+    savedAt:
+      new Date().toISOString(),
+    versions: []
   };
 }
 
@@ -567,6 +761,92 @@ function normalizedGraph(
   ])[0].graphs[0];
 }
 
+function graphSnapshot(
+  graph: HistoryGraphConfig
+): HistoryGraphSnapshotConfig {
+  const {
+    versions: _versions,
+    ...snapshot
+  } = normalizedGraph(graph);
+
+  return snapshot;
+}
+
+function graphConfigsEqual(
+  left: HistoryGraphConfig,
+  right: HistoryGraphConfig
+): boolean {
+  return (
+    JSON.stringify(graphSnapshot(left)) ===
+    JSON.stringify(graphSnapshot(right))
+  );
+}
+
+function savedGraph(
+  previous: HistoryGraphConfig,
+  next: HistoryGraphConfig
+): HistoryGraphConfig {
+  const now =
+    new Date().toISOString();
+  const previousSavedAt =
+    previous.savedAt ?? now;
+
+  return normalizedGraph({
+    ...next,
+    id: previous.id,
+    savedAt: now,
+    versions: [
+      {
+        savedAt: previousSavedAt,
+        config: graphSnapshot(previous)
+      },
+      ...(previous.versions ?? [])
+    ].slice(0, 5)
+  });
+}
+
+function restoreGraphVersion(
+  current: HistoryGraphConfig,
+  version: HistoryGraphVersion
+): HistoryGraphConfig {
+  return normalizedGraph({
+    ...version.config,
+    id: current.id,
+    savedAt: current.savedAt,
+    versions: current.versions ?? []
+  });
+}
+
+function graphVersionSummary(
+  graph: HistoryGraphSnapshotConfig
+): string {
+  const mode =
+    graph.mode ?? "sensor_metrics";
+  const selectionCount =
+    mode === "metric_sensors"
+      ? (graph.assetIds ?? []).length
+      : graph.metricIds.length;
+  const smoothing =
+    graph.smoothing ?? {
+      method: "none" as const,
+      window: 3 as const
+    };
+
+  return [
+    mode === "metric_sensors"
+      ? `Metric: ${graph.metricKey || "—"}`
+      : `Metrics: ${selectionCount}`,
+    mode === "metric_sensors"
+      ? `Sensors: ${selectionCount}`
+      : `Sensor: ${graph.assetId ? "selected" : "—"}`,
+    `Period: ${graph.hours} h`,
+    `Curve: ${graph.curveStyle ?? "smooth"}`,
+    smoothing.method === "none"
+      ? "Filter: none"
+      : `Filter: ${smoothing.method} ${smoothing.window}`
+  ].join(" · ");
+}
+
 function importedGraphId(
   suffix = ""
 ): string {
@@ -625,18 +905,122 @@ function HistoryGraph({
   onMoveBottom: () => void;
 }) {
 
+  const [
+    draftGraph,
+    setDraftGraph
+  ] =
+    React.useState<HistoryGraphConfig | null>(
+      null
+    );
+
+  const [
+    historyOpened,
+    setHistoryOpened
+  ] =
+    React.useState(false);
+
+  const [
+    restoredSavedAt,
+    setRestoredSavedAt
+  ] =
+    React.useState<string | null>(
+      null
+    );
+
+  const [
+    selectionNotice,
+    setSelectionNotice
+  ] =
+    React.useState<string | null>(
+      null
+    );
+
+  const workingGraph =
+    draftGraph ?? graph;
+
+  const editing =
+    draftGraph !== null;
+
+  const hasUnsavedChanges =
+    draftGraph !== null &&
+    !graphConfigsEqual(
+      graph,
+      draftGraph
+    );
+
+  const updateDraft =
+    (next: HistoryGraphConfig): void => {
+      setDraftGraph(
+        normalizedGraph(next)
+      );
+      setRestoredSavedAt(null);
+    };
+
+  const beginEditing =
+    (): void => {
+      setDraftGraph(
+        normalizedGraph(graph)
+      );
+      setRestoredSavedAt(null);
+      setSelectionNotice(null);
+    };
+
+  const cancelEditing =
+    (): void => {
+      setDraftGraph(null);
+      setRestoredSavedAt(null);
+      setSelectionNotice(null);
+      setEditingGraphName(false);
+    };
+
+  const saveEditing =
+    (): void => {
+      if (
+        !draftGraph ||
+        !hasUnsavedChanges
+      ) {
+        return;
+      }
+
+      onChange(
+        savedGraph(
+          graph,
+          draftGraph
+        )
+      );
+      setDraftGraph(null);
+      setRestoredSavedAt(null);
+      setSelectionNotice(null);
+      setEditingGraphName(false);
+    };
+
+  const restoreVersion =
+    (version: HistoryGraphVersion): void => {
+      setDraftGraph(
+        restoreGraphVersion(
+          graph,
+          version
+        )
+      );
+      setRestoredSavedAt(
+        version.savedAt
+      );
+      setSelectionNotice(null);
+      setHistoryOpened(false);
+    };
+
   const mode: HistoryGraphMode =
-    graph.mode ??
+    workingGraph.mode ??
     "sensor_metrics";
 
   const layout: HistoryGraphLayout =
-    graph.layout ??
+    workingGraph.layout ??
     "full";
 
   const asset =
     assets.find(
       current =>
-        current.id === graph.assetId
+        current.id === workingGraph.assetId
     );
 
   const metrics =
@@ -653,7 +1037,7 @@ function HistoryGraph({
   const selectedMetrics =
     metrics.filter(
       metric =>
-        graph.metricIds.includes(
+        workingGraph.metricIds.includes(
           metric.id
         )
     );
@@ -702,7 +1086,7 @@ function HistoryGraph({
       }));
 
   const selectedMetricKey =
-    graph.metricKey ?? "";
+    workingGraph.metricKey ?? "";
 
   const selectedMetricDefinition =
     metricDefinitions.get(
@@ -731,7 +1115,7 @@ function HistoryGraph({
       : [];
 
   const comparisonAssetIds =
-    graph.assetIds ?? [];
+    workingGraph.assetIds ?? [];
 
   const seriesTargets:
     HistorySeriesTarget[] =
@@ -797,10 +1181,10 @@ function HistoryGraph({
             );
 
   const useAggregates =
-    graph.hours > 24;
+    workingGraph.hours > 24;
 
   const aggregateBucket =
-    graph.hours <= 168
+    workingGraph.hours <= 168
       ? "15 minutes" as const
       : "1 hour" as const;
 
@@ -814,13 +1198,13 @@ function HistoryGraph({
                 ? [
                     "observation-aggregate",
                     target.metric.id,
-                    graph.hours,
+                    workingGraph.hours,
                     aggregateBucket
                   ]
                 : [
                     "observation-history",
                     target.metric.id,
-                    graph.hours
+                    workingGraph.hours
                   ],
 
             queryFn:
@@ -828,16 +1212,16 @@ function HistoryGraph({
                 useAggregates
                   ? getObservationAggregates(
                       target.metric.id,
-                      graph.hours,
+                      workingGraph.hours,
                       aggregateBucket
                     )
                   : getObservationHistory(
                       target.metric.id,
-                      graph.hours
+                      workingGraph.hours
                     ),
 
             enabled:
-              !graph.collapsed,
+              !workingGraph.collapsed,
 
             refetchInterval:
               refreshIntervalMs > 0
@@ -943,15 +1327,15 @@ function HistoryGraph({
     );
 
   const yAxes =
-    graph.yAxes ?? {};
+    workingGraph.yAxes ?? {};
 
   const updateYAxis =
     (
       unit: string,
       next: HistoryYAxisConfig
     ): void => {
-      onChange({
-        ...graph,
+      updateDraft({
+        ...workingGraph,
         yAxes: {
           ...yAxes,
           [unit]: next
@@ -1012,7 +1396,7 @@ function HistoryGraph({
         );
 
   const graphTitle =
-    graph.name?.trim() ||
+    workingGraph.name?.trim() ||
     automaticGraphTitle;
 
   const [
@@ -1026,7 +1410,7 @@ function HistoryGraph({
     setGraphNameDraft
   ] =
     React.useState(
-      graph.name ?? ""
+      workingGraph.name ?? ""
     );
 
   const [
@@ -1039,20 +1423,20 @@ function HistoryGraph({
     () => {
       if (!editingGraphName) {
         setGraphNameDraft(
-          graph.name ?? ""
+          workingGraph.name ?? ""
         );
       }
     },
     [
       editingGraphName,
-      graph.name
+      workingGraph.name
     ]
   );
 
   const saveGraphName =
     (): void => {
-      onChange({
-        ...graph,
+      updateDraft({
+        ...workingGraph,
         name:
           graphNameDraft.trim()
       });
@@ -1063,7 +1447,7 @@ function HistoryGraph({
   const cancelGraphName =
     (): void => {
       setGraphNameDraft(
-        graph.name ?? ""
+        workingGraph.name ?? ""
       );
       setEditingGraphName(false);
     };
@@ -1099,14 +1483,14 @@ function HistoryGraph({
     (): void => {
 
       downloadJson(
-        `sensorsphere-history-graph-${graph.id}.json`,
+        `sensorsphere-history-graph-${workingGraph.id}.json`,
         {
           type:
             "sensorsphere-history-graph",
           version: 1,
           graph:
             normalizedGraph(
-              graph
+              workingGraph
             )
         }
       );
@@ -1114,8 +1498,8 @@ function HistoryGraph({
 
   return (
     <Card
-      id={`history-graph-${graph.id}`}
-      data-history-graph-id={graph.id}
+      id={`history-graph-${workingGraph.id}`}
+      data-history-graph-id={workingGraph.id}
       withBorder
       radius="md"
       padding="lg"
@@ -1164,6 +1548,125 @@ function HistoryGraph({
               Delete
             </Button>
           </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={historyOpened}
+        onClose={
+          () =>
+            setHistoryOpened(false)
+        }
+        title="Graph save history"
+        size="lg"
+        centered
+      >
+        <Stack gap="sm">
+          <Card withBorder padding="sm">
+            <Group
+              justify="space-between"
+              align="flex-start"
+            >
+              <div>
+                <Group gap="xs">
+                  <Badge
+                    color="green"
+                    variant="light"
+                  >
+                    CURRENT
+                  </Badge>
+                  <Text fw={600}>
+                    {
+                      graph.savedAt
+                        ? new Date(
+                            graph.savedAt
+                          ).toLocaleString()
+                        : "Current configuration"
+                    }
+                  </Text>
+                </Group>
+                <Text
+                  size="xs"
+                  c="dimmed"
+                  mt={4}
+                >
+                  {
+                    graphVersionSummary(
+                      graphSnapshot(graph)
+                    )
+                  }
+                </Text>
+              </div>
+            </Group>
+          </Card>
+
+          {(graph.versions ?? []).length === 0 ? (
+            <Alert color="blue">
+              No previous saved versions yet. The last five saved states will appear here.
+            </Alert>
+          ) : (
+            (graph.versions ?? []).map(
+              (version, index) => (
+                <Card
+                  key={`${version.savedAt}-${index}`}
+                  withBorder
+                  padding="sm"
+                >
+                  <Group
+                    justify="space-between"
+                    align="flex-start"
+                    wrap="nowrap"
+                  >
+                    <div>
+                      <Group gap="xs">
+                        <Badge
+                          variant="light"
+                          color="gray"
+                        >
+                          #{index + 1}
+                        </Badge>
+                        <Text fw={600}>
+                          {
+                            new Date(
+                              version.savedAt
+                            ).toLocaleString()
+                          }
+                        </Text>
+                      </Group>
+                      <Text
+                        size="xs"
+                        c="dimmed"
+                        mt={4}
+                      >
+                        {
+                          graphVersionSummary(
+                            version.config
+                          )
+                        }
+                      </Text>
+                    </div>
+
+                    <Button
+                      size="xs"
+                      variant="light"
+                      onClick={
+                        () =>
+                          restoreVersion(
+                            version
+                          )
+                      }
+                    >
+                      Restore
+                    </Button>
+                  </Group>
+                </Card>
+              )
+            )
+          )}
+
+          <Text size="xs" c="dimmed">
+            Restore loads the selected version as a preview. Use Save to make it current or Cancel to keep the current graph.
+          </Text>
         </Stack>
       </Modal>
 
@@ -1235,7 +1738,7 @@ function HistoryGraph({
                           onClick={
                             () => {
                               setGraphNameDraft(
-                                graph.name ??
+                                workingGraph.name ??
                                   graphTitle
                               );
                               setEditingGraphName(
@@ -1269,6 +1772,48 @@ function HistoryGraph({
               {graphSubtitle}
             </Text>
 
+            <Group gap="xs" mt={6}>
+              <Badge
+                size="sm"
+                variant="light"
+                color={
+                  restoredSavedAt
+                    ? "violet"
+                    : hasUnsavedChanges
+                      ? "orange"
+                      : editing
+                        ? "blue"
+                        : "green"
+                }
+              >
+                {
+                  restoredSavedAt
+                    ? "RESTORED PREVIEW"
+                    : hasUnsavedChanges
+                      ? "UNSAVED CHANGES"
+                      : editing
+                        ? "EDITING"
+                        : "SAVED"
+                }
+              </Badge>
+
+              {
+                graph.savedAt &&
+                !editing && (
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                  >
+                    Saved {
+                      new Date(
+                        graph.savedAt
+                      ).toLocaleString()
+                    }
+                  </Text>
+                )
+              }
+            </Group>
+
           </div>
 
           <Group
@@ -1291,6 +1836,48 @@ function HistoryGraph({
                   : undefined
             }}
           >
+            {
+              editing
+                ? (
+                  <>
+                    <Button
+                      size="xs"
+                      variant="default"
+                      onClick={cancelEditing}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="xs"
+                      onClick={saveEditing}
+                      disabled={!hasUnsavedChanges}
+                    >
+                      Save
+                    </Button>
+                  </>
+                )
+                : (
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={beginEditing}
+                  >
+                    Edit
+                  </Button>
+                )
+            }
+
+            <Button
+              size="xs"
+              variant="subtle"
+              onClick={
+                () =>
+                  setHistoryOpened(true)
+              }
+            >
+              History ({(graph.versions ?? []).length})
+            </Button>
+
             <Group gap={4} align="center">
               <Text
                 size="xs"
@@ -1304,15 +1891,15 @@ function HistoryGraph({
                 value={mode}
                 onChange={
                   value =>
-                    onChange({
-                      ...graph,
+                    updateDraft({
+                      ...workingGraph,
                       mode:
                         value as
                           HistoryGraphMode,
                       metricKey:
-                        graph.metricKey ?? "",
+                        workingGraph.metricKey ?? "",
                       assetIds:
-                        graph.assetIds ?? []
+                        workingGraph.assetIds ?? []
                     })
                 }
                 data={[
@@ -1443,8 +2030,8 @@ function HistoryGraph({
                 }
                 onClick={
                   () =>
-                    onChange({
-                      ...graph,
+                    updateDraft({
+                      ...workingGraph,
                       layout:
                         layout === "full"
                           ? "half"
@@ -1503,7 +2090,7 @@ function HistoryGraph({
 
             <Tooltip
               label={
-                graph.collapsed
+                workingGraph.collapsed
                   ? "Expand graph"
                   : "Collapse graph"
               }
@@ -1511,21 +2098,21 @@ function HistoryGraph({
               <ActionIcon
                 variant="subtle"
                 aria-label={
-                  graph.collapsed
+                  workingGraph.collapsed
                     ? "Expand graph"
                     : "Collapse graph"
                 }
                 onClick={
                   () =>
-                    onChange({
-                      ...graph,
+                    updateDraft({
+                      ...workingGraph,
                       collapsed:
-                        !graph.collapsed
+                        !workingGraph.collapsed
                     })
                 }
               >
                 {
-                  graph.collapsed
+                  workingGraph.collapsed
                     ? (
                       <svg
                         width="16"
@@ -1584,7 +2171,7 @@ function HistoryGraph({
         </Group>
 
         {
-          !graph.collapsed && (
+          !workingGraph.collapsed && (
             <>
               {
                 mode === "sensor_metrics"
@@ -1608,7 +2195,7 @@ function HistoryGraph({
                         searchable
                         placeholder="Select a sensor"
                         value={
-                          graph.assetId || null
+                          workingGraph.assetId || null
                         }
                         data={
                           assets
@@ -1633,8 +2220,8 @@ function HistoryGraph({
                         }
                         onChange={
                           value =>
-                            onChange({
-                              ...graph,
+                            updateDraft({
+                              ...workingGraph,
                               mode:
                                 "sensor_metrics",
                               assetId:
@@ -1665,7 +2252,7 @@ function HistoryGraph({
                         }
                         disabled={!asset}
                         value={
-                          graph.metricIds
+                          workingGraph.metricIds
                         }
                         data={
                           metrics.map(
@@ -1681,8 +2268,8 @@ function HistoryGraph({
                         }
                         onChange={
                           metricIds =>
-                            onChange({
-                              ...graph,
+                            updateDraft({
+                              ...workingGraph,
                               mode:
                                 "sensor_metrics",
                               metricIds
@@ -1728,15 +2315,45 @@ function HistoryGraph({
                           metricOptions
                         }
                         onChange={
-                          value =>
-                            onChange({
-                              ...graph,
+                          value => {
+                            const nextMetricKey =
+                              value ?? "";
+                            const previousIds =
+                              workingGraph.assetIds ?? [];
+                            const compatibleIds =
+                              previousIds.filter(
+                                assetId =>
+                                  assets.some(
+                                    current =>
+                                      current.id === assetId &&
+                                      current.sensor !== null &&
+                                      current.metrics.some(
+                                        metric =>
+                                          metric.enabled &&
+                                          metric.key === nextMetricKey
+                                      )
+                                  )
+                              );
+                            const removed =
+                              previousIds.length -
+                              compatibleIds.length;
+
+                            setSelectionNotice(
+                              removed > 0
+                                ? `${removed} sensor${removed === 1 ? "" : "s"} removed because ${removed === 1 ? "it does" : "they do"} not expose ${nextMetricKey || "the selected metric"}.`
+                                : null
+                            );
+
+                            updateDraft({
+                              ...workingGraph,
                               mode:
                                 "metric_sensors",
                               metricKey:
-                                value ?? "",
-                              assetIds: []
-                            })
+                                nextMetricKey,
+                              assetIds:
+                                compatibleIds
+                            });
+                          }
                         }
                         style={{
                           flex:
@@ -1788,8 +2405,8 @@ function HistoryGraph({
                         }
                         onChange={
                           assetIds =>
-                            onChange({
-                              ...graph,
+                            updateDraft({
+                              ...workingGraph,
                               mode:
                                 "metric_sensors",
                               assetIds
@@ -1810,6 +2427,17 @@ function HistoryGraph({
                   )
               }
 
+              {
+                selectionNotice && (
+                  <Alert
+                    color="yellow"
+                    title="Sensor selection adjusted"
+                  >
+                    {selectionNotice}
+                  </Alert>
+                )
+              }
+
               <div>
                 <Text
                   size="sm"
@@ -1820,11 +2448,11 @@ function HistoryGraph({
                 </Text>
 
                 <SegmentedControl
-                  value={String(graph.hours)}
+                  value={String(workingGraph.hours)}
                   onChange={
                     value =>
-                      onChange({
-                        ...graph,
+                      updateDraft({
+                        ...workingGraph,
                         hours:
                           Number(value)
                       })
@@ -1832,6 +2460,121 @@ function HistoryGraph({
                   data={PERIODS}
                 />
               </div>
+
+              <Group
+                gap="lg"
+                align="flex-end"
+                wrap="wrap"
+              >
+                <div>
+                  <Text
+                    size="sm"
+                    fw={500}
+                    mb={3}
+                  >
+                    Curve
+                  </Text>
+                  <SegmentedControl
+                    size="xs"
+                    value={
+                      workingGraph.curveStyle ??
+                      "smooth"
+                    }
+                    onChange={
+                      value =>
+                        updateDraft({
+                          ...workingGraph,
+                          curveStyle:
+                            value as HistoryCurveStyle
+                        })
+                    }
+                    data={[
+                      {
+                        label: "Raw",
+                        value: "raw"
+                      },
+                      {
+                        label: "Smooth",
+                        value: "smooth"
+                      }
+                    ]}
+                  />
+                </div>
+
+                <Select
+                  label="Smoothing"
+                  value={
+                    workingGraph.smoothing
+                      ?.method ??
+                    "none"
+                  }
+                  data={[
+                    {
+                      label: "None",
+                      value: "none"
+                    },
+                    {
+                      label: "Moving average",
+                      value: "moving_average"
+                    },
+                    {
+                      label: "Median",
+                      value: "median"
+                    }
+                  ]}
+                  onChange={
+                    value =>
+                      updateDraft({
+                        ...workingGraph,
+                        smoothing: {
+                          method:
+                            (value ?? "none") as HistorySmoothingMethod,
+                          window:
+                            workingGraph.smoothing
+                              ?.window ?? 3
+                        }
+                      })
+                  }
+                  w={180}
+                />
+
+                {
+                  (
+                    workingGraph.smoothing
+                      ?.method ??
+                    "none"
+                  ) !== "none" && (
+                    <SegmentedControl
+                      size="xs"
+                      value={
+                        String(
+                          workingGraph.smoothing
+                            ?.window ?? 3
+                        )
+                      }
+                      onChange={
+                        value =>
+                          updateDraft({
+                            ...workingGraph,
+                            smoothing: {
+                              method:
+                                workingGraph.smoothing
+                                  ?.method ??
+                                "none",
+                              window:
+                                Number(value) as HistorySmoothingWindow
+                            }
+                          })
+                      }
+                      data={[
+                        { label: "3", value: "3" },
+                        { label: "5", value: "5" },
+                        { label: "7", value: "7" }
+                      ]}
+                    />
+                  )
+                }
+              </Group>
 
               {
                 yAxisUnits.length > 0 && (
@@ -2016,13 +2759,19 @@ function HistoryGraph({
                             : (
                               <HistoryChart
                                 hours={
-                                  graph.hours
+                                  workingGraph.hours
                                 }
                                 series={
                                   chartSeries
                                 }
                                 yAxes={
                                   yAxes
+                                }
+                                curveStyle={
+                                  workingGraph.curveStyle
+                                }
+                                smoothing={
+                                  workingGraph.smoothing
                                 }
                               />
                             )
@@ -2065,13 +2814,19 @@ function HistoryGraph({
 
                               <HistoryChart
                                 hours={
-                                  graph.hours
+                                  workingGraph.hours
                                 }
                                 series={
                                   chartSeries
                                 }
                                 yAxes={
                                   yAxes
+                                }
+                                curveStyle={
+                                  workingGraph.curveStyle
+                                }
+                                smoothing={
+                                  workingGraph.smoothing
                                 }
                               />
                             </>

@@ -24,6 +24,20 @@ export interface HistoryYAxisBounds {
   max: number;
 }
 
+export type HistoryCurveStyle =
+  | "raw"
+  | "smooth";
+
+export type HistorySmoothingMethod =
+  | "none"
+  | "moving_average"
+  | "median";
+
+export interface HistorySmoothingConfig {
+  method: HistorySmoothingMethod;
+  window: 3 | 5 | 7;
+}
+
 export interface HistoryChartSeries {
   id: string;
   name: string;
@@ -37,6 +51,8 @@ interface Props {
   hours: number;
   series: HistoryChartSeries[];
   yAxes?: Record<string, HistoryYAxisConfig>;
+  curveStyle?: HistoryCurveStyle;
+  smoothing?: HistorySmoothingConfig;
 }
 
 function rawSeries(
@@ -69,6 +85,66 @@ function aggregateSeries(
         observation.avg
       ]
     );
+}
+
+
+function smoothPoints(
+  points: Array<[string, number]>,
+  config: HistorySmoothingConfig
+): Array<[string, number]> {
+  if (
+    config.method === "none" ||
+    points.length < 2
+  ) {
+    return points;
+  }
+
+  const radius =
+    Math.floor(config.window / 2);
+
+  return points.map(
+    ([time, value], index) => {
+      const start =
+        Math.max(0, index - radius);
+      const end =
+        Math.min(
+          points.length,
+          index + radius + 1
+        );
+
+      const values =
+        points
+          .slice(start, end)
+          .map(point => point[1]);
+
+      if (config.method === "median") {
+        const sorted =
+          [...values].sort(
+            (left, right) => left - right
+          );
+        const middle =
+          Math.floor(sorted.length / 2);
+        const filtered =
+          sorted.length % 2 === 0
+            ? (
+                sorted[middle - 1] +
+                sorted[middle]
+              ) / 2
+            : sorted[middle];
+
+        return [time, filtered];
+      }
+
+      const average =
+        values.reduce(
+          (total, current) =>
+            total + current,
+          0
+        ) / values.length;
+
+      return [time, average];
+    }
+  );
 }
 
 export function historyYAxisKey(
@@ -243,7 +319,12 @@ export function computeHistoryYAxisBounds(
 export function HistoryChart({
   hours,
   series,
-  yAxes = {}
+  yAxes = {},
+  curveStyle = "smooth",
+  smoothing = {
+    method: "none",
+    window: 3
+  }
 }: Props) {
 
   const colorScheme =
@@ -399,7 +480,8 @@ export function HistoryChart({
         id: item.id,
         name: item.name,
         type: "line",
-        smooth: true,
+        smooth:
+          curveStyle === "smooth",
         showSymbol: false,
         lineStyle: {
           width: 2.5,
@@ -418,13 +500,16 @@ export function HistoryChart({
             )
           ),
         data:
-          item.aggregates.length > 0
-            ? aggregateSeries(
-                item.aggregates
-              )
-            : rawSeries(
-                item.history
-              )
+          smoothPoints(
+            item.aggregates.length > 0
+              ? aggregateSeries(
+                  item.aggregates
+                ) as Array<[string, number]>
+              : rawSeries(
+                  item.history
+                ) as Array<[string, number]>,
+            smoothing
+          )
       }))
   };
 
