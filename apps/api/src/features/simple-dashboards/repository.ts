@@ -58,15 +58,30 @@ export class PostgresSimpleDashboardRepository {
   }
 
   async createDashboard(name: string): Promise<SimpleDashboardRecord> {
-    const result = await this.pool.query<SimpleDashboardRecord>(`
-      INSERT INTO simple_dashboards (name, sort_order)
-      VALUES (
-        $1,
-        COALESCE((SELECT MAX(sort_order) + 1 FROM simple_dashboards), 0)
-      )
-      RETURNING id, name, sort_order, created_at, updated_at
-    `, [name]);
-    return result.rows[0]!;
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query<SimpleDashboardRecord>(`
+        INSERT INTO simple_dashboards (name, sort_order)
+        VALUES (
+          $1,
+          COALESCE((SELECT MAX(sort_order) + 1 FROM simple_dashboards), 0)
+        )
+        RETURNING id, name, sort_order, created_at, updated_at
+      `, [name]);
+      const dashboard = result.rows[0]!;
+      await client.query(`
+        INSERT INTO simple_dashboard_sections (dashboard_id, name, sort_order)
+        VALUES ($1, 'General', 0)
+      `, [dashboard.id]);
+      await client.query("COMMIT");
+      return dashboard;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async renameDashboard(id: string, name: string): Promise<SimpleDashboardRecord | null> {
@@ -123,8 +138,63 @@ export class PostgresSimpleDashboardRepository {
   }
 
   async deleteSection(dashboardId: string, sectionId: string): Promise<boolean> {
-    const result = await this.pool.query(`DELETE FROM simple_dashboard_sections WHERE id = $1 AND dashboard_id = $2`, [sectionId, dashboardId]);
-    return (result.rowCount ?? 0) > 0;
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const section = await client.query<{ id: string }>(`
+        SELECT id
+        FROM simple_dashboard_sections
+        WHERE id = $1 AND dashboard_id = $2
+        FOR UPDATE
+      `, [sectionId, dashboardId]);
+      if ((section.rowCount ?? 0) === 0) {
+        await client.query("ROLLBACK");
+        return false;
+      }
+
+      let replacement = await client.query<{ id: string }>(`
+        SELECT id
+        FROM simple_dashboard_sections
+        WHERE dashboard_id = $1 AND id <> $2
+        ORDER BY sort_order, created_at, id
+        LIMIT 1
+        FOR UPDATE
+      `, [dashboardId, sectionId]);
+
+      if ((replacement.rowCount ?? 0) === 0) {
+        await client.query(`
+          DELETE FROM simple_dashboard_sections
+          WHERE id = $1 AND dashboard_id = $2
+        `, [sectionId, dashboardId]);
+        replacement = await client.query<{ id: string }>(`
+          INSERT INTO simple_dashboard_sections (dashboard_id, name, sort_order)
+          VALUES ($1, 'General', 0)
+          RETURNING id
+        `, [dashboardId]);
+        await client.query(`
+          UPDATE simple_dashboard_cards
+          SET section_id = $2, updated_at = NOW()
+          WHERE dashboard_id = $1 AND section_id IS NULL
+        `, [dashboardId, replacement.rows[0]!.id]);
+      } else {
+        await client.query(`
+          UPDATE simple_dashboard_cards
+          SET section_id = $3, updated_at = NOW()
+          WHERE dashboard_id = $1 AND section_id = $2
+        `, [dashboardId, sectionId, replacement.rows[0]!.id]);
+        await client.query(`
+          DELETE FROM simple_dashboard_sections
+          WHERE id = $1 AND dashboard_id = $2
+        `, [sectionId, dashboardId]);
+      }
+      await client.query("COMMIT");
+      return true;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async reorderSections(dashboardId: string, sectionIds: string[]): Promise<boolean> {

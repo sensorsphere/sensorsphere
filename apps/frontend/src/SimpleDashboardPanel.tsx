@@ -169,6 +169,7 @@ export function SimpleDashboardPanel() {
   );
   const [draggedCardId, setDraggedCardId] = React.useState<string | null>(null);
   const [dragOrder, setDragOrder] = React.useState<string[] | null>(null);
+  const [dragSectionByCardId, setDragSectionByCardId] = React.useState<Record<string, string | null> | null>(null);
   const [draggedDashboardId, setDraggedDashboardId] = React.useState<string | null>(null);
   const [dashboardDragOrder, setDashboardDragOrder] = React.useState<string[] | null>(null);
   const [sectionModalMode, setSectionModalMode] = React.useState<"create" | "rename" | null>(null);
@@ -276,12 +277,6 @@ export function SimpleDashboardPanel() {
       deleteSimpleDashboardCard(dashboardId, cardId),
     onSuccess: invalidate
   });
-  const reorderMutation = useMutation({
-    mutationFn: ({ dashboardId, cardIds }: { dashboardId: string; cardIds: string[] }) =>
-      reorderSimpleDashboardCards(dashboardId, cardIds),
-    onSuccess: invalidate
-  });
-
   const dashboards = dashboardsQuery.data?.dashboards ?? [];
   const assets = assetsQuery.data ?? [];
   const observations = observationsQuery.data ?? [];
@@ -300,6 +295,7 @@ export function SimpleDashboardPanel() {
   React.useEffect(() => {
     setDraggedCardId(null);
     setDragOrder(null);
+    setDragSectionByCardId(null);
     setSelectedSectionId(null);
   }, [activeDashboard?.id]);
 
@@ -395,29 +391,66 @@ export function SimpleDashboardPanel() {
       .filter((item): item is ResolvedMetricCard => item !== undefined);
   })();
 
-  const previewMoveCard = (sourceId: string, targetId: string) => {
-    if (sourceId === targetId) return;
-    const ids = dragOrder ?? activeCards.map(item => item.card.id);
-    const sourceIndex = ids.indexOf(sourceId);
-    const targetIndex = ids.indexOf(targetId);
-    if (sourceIndex < 0 || targetIndex < 0) return;
-    const next = [...ids];
-    const [moved] = next.splice(sourceIndex, 1);
-    next.splice(targetIndex, 0, moved!);
-    setDragOrder(next);
+  const effectiveSectionId = (card: SimpleDashboardCard): string | null =>
+    dragSectionByCardId?.[card.id] ?? card.sectionId;
+
+  const beginCardDrag = (cardId: string) => {
+    setDraggedCardId(cardId);
+    setDragOrder(activeCards.map(item => item.card.id));
+    setDragSectionByCardId(
+      Object.fromEntries(activeCards.map(item => [item.card.id, item.card.sectionId]))
+    );
   };
 
-  const persistDragOrder = () => {
-    if (!activeDashboard || !dragOrder) return;
-    const originalIds = activeCards.map(item => item.card.id);
-    if (dragOrder.join("|") === originalIds.join("|")) {
-      setDragOrder(null);
-      return;
+  const previewMoveCard = (sourceId: string, targetId: string, targetSectionId: string | null) => {
+    if (sourceId !== targetId) {
+      const ids = dragOrder ?? activeCards.map(item => item.card.id);
+      const sourceIndex = ids.indexOf(sourceId);
+      const targetIndex = ids.indexOf(targetId);
+      if (sourceIndex >= 0 && targetIndex >= 0) {
+        const next = [...ids];
+        const [moved] = next.splice(sourceIndex, 1);
+        next.splice(targetIndex, 0, moved!);
+        setDragOrder(next);
+      }
     }
-    reorderMutation.mutate(
-      { dashboardId: activeDashboard.id, cardIds: dragOrder },
-      { onSettled: () => setDragOrder(null) }
-    );
+    setDragSectionByCardId(current => ({
+      ...(current ?? Object.fromEntries(activeCards.map(item => [item.card.id, item.card.sectionId]))),
+      [sourceId]: targetSectionId
+    }));
+  };
+
+  const previewMoveCardToSection = (sourceId: string, sectionId: string) => {
+    setDragSectionByCardId(current => ({
+      ...(current ?? Object.fromEntries(activeCards.map(item => [item.card.id, item.card.sectionId]))),
+      [sourceId]: sectionId
+    }));
+  };
+
+  const persistDragOrder = async () => {
+    if (!activeDashboard || !dragOrder || !dragSectionByCardId || !draggedCardId) return;
+    const originalIds = activeCards.map(item => item.card.id);
+    const dragged = activeCards.find(item => item.card.id === draggedCardId);
+    const nextSectionId = dragSectionByCardId[draggedCardId] ?? dragged?.card.sectionId ?? null;
+    const sectionChanged = Boolean(dragged && nextSectionId !== dragged.card.sectionId);
+    const orderChanged = dragOrder.join("|") !== originalIds.join("|");
+    try {
+      if (sectionChanged && dragged) {
+        await updateSimpleDashboardCard(
+          activeDashboard.id,
+          dragged.card.id,
+          dragged.card.assetMetricId,
+          nextSectionId
+        );
+      }
+      if (orderChanged) {
+        await reorderSimpleDashboardCards(activeDashboard.id, dragOrder);
+      }
+      await invalidate();
+    } finally {
+      setDragOrder(null);
+      setDragSectionByCardId(null);
+    }
   };
 
   const selectAssetForCard = (assetId: string | null) => {
@@ -436,11 +469,11 @@ export function SimpleDashboardPanel() {
     setSelectedMetricId(preferredMetric?.id ?? null);
   };
 
-  const openAddCardEditor = (sectionId: string | null = null) => {
+  const openAddCardEditor = (sectionId?: string | null) => {
     setEditingCardId(null);
     setSelectedAssetId(null);
     setSelectedMetricId(null);
-    setSelectedSectionId(sectionId);
+    setSelectedSectionId(sectionId ?? activeSections[0]?.id ?? null);
     setCardEditorMode("add");
   };
 
@@ -450,6 +483,33 @@ export function SimpleDashboardPanel() {
     setSelectedMetricId(item.metric.id);
     setSelectedSectionId(item.card.sectionId);
     setCardEditorMode("edit");
+  };
+
+  const saveSectionEditor = () => {
+    if (!activeDashboard || !sectionName.trim()) return;
+    if (sectionModalMode === "create") {
+      createSectionMutation.mutate({ dashboardId: activeDashboard.id, name: sectionName.trim() });
+    } else if (editingSectionId) {
+      renameSectionMutation.mutate({ dashboardId: activeDashboard.id, sectionId: editingSectionId, name: sectionName.trim() });
+    }
+  };
+
+  const saveCardEditor = () => {
+    if (!activeDashboard || !selectedMetricId) return;
+    if (cardEditorMode === "edit" && editingCardId) {
+      updateCardMutation.mutate({
+        dashboardId: activeDashboard.id,
+        cardId: editingCardId,
+        assetMetricId: selectedMetricId,
+        sectionId: selectedSectionId
+      });
+    } else {
+      addCardMutation.mutate({
+        dashboardId: activeDashboard.id,
+        assetMetricId: selectedMetricId,
+        sectionId: selectedSectionId
+      });
+    }
   };
 
   return (
@@ -550,7 +610,7 @@ export function SimpleDashboardPanel() {
               size="xs"
               variant="light"
               color="green"
-              onClick={() => openAddCardEditor(null)}
+              onClick={() => openAddCardEditor()}
             >
               + Add card
             </Button>
@@ -565,32 +625,22 @@ export function SimpleDashboardPanel() {
             <Text size="sm" c="dimmed">Create a dashboard, then add Asset + Metric cards.</Text>
           </Stack>
         </Card>
-      ) : activeCards.length === 0 ? (
-        <Card withBorder p="xl">
-          <Stack align="center" gap="xs">
-            <Text fw={600}>No metric cards</Text>
-            <Text size="sm" c="dimmed">Use Add card to choose an Asset and one of its metrics.</Text>
-          </Stack>
-        </Card>
       ) : (
         <Stack gap="lg">
-          {[
-            { id: null as string | null, name: "General", sortOrder: -1 },
-            ...activeSections
-          ].map(section => {
-            const sectionCards = orderedActiveCards.filter(item => item.card.sectionId === section.id);
-            if (section.id === null && sectionCards.length === 0 && activeSections.length > 0) return null;
+          {activeSections.map(section => {
+            const sectionCards = orderedActiveCards.filter(item => effectiveSectionId(item.card) === section.id);
             return (
-              <Stack key={section.id ?? "general"} gap="sm">
+              <Stack
+                key={section.id}
+                gap="sm"
+                onDragEnter={() => { if (draggedCardId) previewMoveCardToSection(draggedCardId, section.id); }}
+                onDragOver={event => event.preventDefault()}
+              >
                 <Group gap="xs" align="center" wrap="nowrap">
                   <Text size="sm" fw={700} c="dimmed">{section.name}</Text>
                   <div style={{ height: 1, flex: 1, background: "var(--mantine-color-dark-4)" }} />
-                  {section.id !== null && (
-                    <>
-                      <ActionIcon size="sm" variant="light" color="blue" title="Rename section" onClick={() => { setEditingSectionId(section.id); setSectionName(section.name); setSectionModalMode("rename"); }}>✎</ActionIcon>
-                      <ActionIcon size="sm" variant="light" color="red" title="Delete section" onClick={() => setDeleteTarget({ type: "section", dashboardId: activeDashboard.id, sectionId: section.id!, name: section.name })}>×</ActionIcon>
-                    </>
-                  )}
+                  <ActionIcon size="sm" variant="light" color="blue" title="Rename section" onClick={() => { setEditingSectionId(section.id); setSectionName(section.name); setSectionModalMode("rename"); }}>✎</ActionIcon>
+                  <ActionIcon size="sm" variant="light" color="red" title="Delete section" onClick={() => setDeleteTarget({ type: "section", dashboardId: activeDashboard.id, sectionId: section.id, name: section.name })}>×</ActionIcon>
                   <Button size="compact-xs" variant="light" color="green" onClick={() => openAddCardEditor(section.id)}>+ Add card</Button>
                 </Group>
                 {sectionCards.length === 0 ? (
@@ -605,16 +655,19 @@ export function SimpleDashboardPanel() {
                           withBorder
                           p="sm"
                           draggable
-                          onDragStart={() => { setDraggedCardId(card.id); setDragOrder(activeCards.map(item => item.card.id)); }}
-                          onDragEnter={() => { if (draggedCardId) previewMoveCard(draggedCardId, card.id); }}
-                          onDragEnd={() => { persistDragOrder(); setDraggedCardId(null); }}
+                          onDragStart={() => beginCardDrag(card.id)}
+                          onDragEnter={event => {
+                            event.stopPropagation();
+                            if (draggedCardId) previewMoveCard(draggedCardId, card.id, section.id);
+                          }}
+                          onDragEnd={() => { void persistDragOrder(); setDraggedCardId(null); }}
                           onDragOver={event => event.preventDefault()}
                           onDrop={event => event.preventDefault()}
                           style={{ borderLeft: `4px solid ${color}`, cursor: "grab", opacity: draggedCardId === card.id ? 0.55 : 1 }}
                         >
                           <Stack gap={4}>
                             <Group justify="space-between" align="center" wrap="nowrap">
-                              <Text size="sm" fw={800} lineClamp={1} c={asset.health.status === "offline" ? "red" : undefined} style={{ minWidth: 0 }}>
+                              <Text size="sm" fw={600} lineClamp={1} c={asset.health.status === "offline" ? "red" : undefined} style={{ minWidth: 0 }}>
                                 {asset.name ?? asset.externalId}
                               </Text>
                               <Group gap={4} wrap="nowrap">
@@ -623,7 +676,7 @@ export function SimpleDashboardPanel() {
                               </Group>
                             </Group>
                             <Group gap={6} align="center" wrap="nowrap">
-                              <Text size="lg" fw={800} style={{ color, lineHeight: 1.05 }}>
+                              <Text size="lg" fw={600} style={{ color }}>
                                 {formatMetricValue(observation)}{metric.unit ? ` ${metric.unit}` : ""}
                               </Text>
                               <Badge variant="light" color={color} size="xs">{metric.displayName.toUpperCase()}</Badge>
@@ -692,7 +745,14 @@ export function SimpleDashboardPanel() {
         onClose={() => setSectionModalMode(null)}
         title={sectionModalMode === "create" ? "New section" : "Rename section"}
       >
-        <Stack>
+        <Stack
+          onKeyDown={event => {
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+              event.preventDefault();
+              saveSectionEditor();
+            }
+          }}
+        >
           <TextInput label="Name" value={sectionName} onChange={event => setSectionName(event.currentTarget.value)} autoFocus />
           <Group justify="flex-end">
             <Button variant="light" color="gray" onClick={() => setSectionModalMode(null)}>Cancel</Button>
@@ -701,11 +761,7 @@ export function SimpleDashboardPanel() {
               color="green"
               disabled={!sectionName.trim()}
               loading={createSectionMutation.isPending || renameSectionMutation.isPending}
-              onClick={() => {
-                if (!activeDashboard || !sectionName.trim()) return;
-                if (sectionModalMode === "create") createSectionMutation.mutate({ dashboardId: activeDashboard.id, name: sectionName.trim() });
-                else if (editingSectionId) renameSectionMutation.mutate({ dashboardId: activeDashboard.id, sectionId: editingSectionId, name: sectionName.trim() });
-              }}
+              onClick={saveSectionEditor}
             >
               {sectionModalMode === "create" ? "Add section" : "Save"}
             </Button>
@@ -724,7 +780,7 @@ export function SimpleDashboardPanel() {
             {deleteTarget?.type === "dashboard"
               ? `Delete dashboard "${deleteTarget.name}" and all of its cards?`
               : deleteTarget?.type === "section"
-                ? `Delete section "${deleteTarget.name}"? Its cards will move to General.`
+                ? `Delete section "${deleteTarget.name}"? Its cards will move to another section.`
                 : deleteTarget?.type === "card"
                   ? `Remove "${deleteTarget.label}" from this dashboard?`
                   : ""}
@@ -769,9 +825,17 @@ export function SimpleDashboardPanel() {
         }}
         title={cardEditorMode === "edit" ? "Edit metric card" : "Add metric card"}
       >
-        <Stack>
+        <Stack
+          onKeyDown={event => {
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+              event.preventDefault();
+              saveCardEditor();
+            }
+          }}
+        >
           <Select
             label="Asset"
+            autoFocus
             searchable
             value={selectedAssetId}
             onChange={selectAssetForCard}
@@ -782,12 +846,9 @@ export function SimpleDashboardPanel() {
           />
           <Select
             label="Section"
-            value={selectedSectionId ?? "__general__"}
-            onChange={value => setSelectedSectionId(value === "__general__" ? null : value)}
-            data={[
-              { value: "__general__", label: "General" },
-              ...activeSections.map(section => ({ value: section.id, label: section.name }))
-            ]}
+            value={selectedSectionId}
+            onChange={setSelectedSectionId}
+            data={activeSections.map(section => ({ value: section.id, label: section.name }))}
           />
           <Select
             label="Metric"
@@ -814,23 +875,7 @@ export function SimpleDashboardPanel() {
               color={cardEditorMode === "edit" ? "blue" : "green"}
               disabled={!activeDashboard || !selectedMetricId}
               loading={addCardMutation.isPending || updateCardMutation.isPending}
-              onClick={() => {
-                if (!activeDashboard || !selectedMetricId) return;
-                if (cardEditorMode === "edit" && editingCardId) {
-                  updateCardMutation.mutate({
-                    dashboardId: activeDashboard.id,
-                    cardId: editingCardId,
-                    assetMetricId: selectedMetricId,
-                    sectionId: selectedSectionId
-                  });
-                } else {
-                  addCardMutation.mutate({
-                    dashboardId: activeDashboard.id,
-                    assetMetricId: selectedMetricId,
-                    sectionId: selectedSectionId
-                  });
-                }
-              }}
+              onClick={saveCardEditor}
             >
               {cardEditorMode === "edit" ? "Save" : "Add card"}
             </Button>
