@@ -2036,7 +2036,8 @@ export function InventoryPanel() {
 
             <Group>
               <Button
-                variant="default"
+                variant="light"
+                color="gray"
                 onClick={
                   () =>
                     setLocationForm(

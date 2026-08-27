@@ -1571,7 +1571,8 @@ function HistoryGraph({
 
           <Group justify="flex-end">
             <Button
-              variant="default"
+              variant="light"
+              color="gray"
               onClick={
                 () =>
                   setRemoveConfirmOpened(false)
@@ -1861,7 +1862,8 @@ function HistoryGraph({
                   <>
                     <Button
                       size="xs"
-                      variant="default"
+                      variant="light"
+                      color="gray"
                       onClick={cancelEditing}
                     >
                       Cancel
@@ -4392,7 +4394,8 @@ export function HistoryPanel() {
 
         <Button
           size="xs"
-          variant="default"
+          variant="light"
+          color="gray"
           disabled={!activeTab}
           onClick={
             exportActiveTab
@@ -4545,7 +4548,8 @@ export function HistoryPanel() {
 
           <Group justify="flex-end">
             <Button
-              variant="default"
+              variant="light"
+              color="gray"
               onClick={
                 () =>
                   setImportDialogOpened(
@@ -4653,7 +4657,8 @@ export function HistoryPanel() {
             mt="sm"
           >
             <Button
-              variant="default"
+              variant="light"
+              color="gray"
               onClick={
                 () =>
                   setMetricColorDrafts(
@@ -4675,7 +4680,8 @@ export function HistoryPanel() {
 
             <Group gap="xs">
               <Button
-                variant="default"
+                variant="light"
+                color="gray"
                 onClick={
                   () =>
                     setMetricColorsOpened(
@@ -4739,7 +4745,8 @@ export function HistoryPanel() {
           align="flex-end"
         >
           <Button
-            variant="default"
+            variant="light"
+            color="gray"
             onClick={
               openMetricColors
             }
@@ -4748,7 +4755,8 @@ export function HistoryPanel() {
           </Button>
 
           <Button
-            variant="default"
+            variant="light"
+            color="gray"
             onClick={
               () =>
                 importInputRef.current?.click()
@@ -4758,7 +4766,8 @@ export function HistoryPanel() {
           </Button>
 
           <Button
-            variant="default"
+            variant="light"
+            color="gray"
             onClick={
               exportHistoryConfig
             }
@@ -4789,7 +4798,8 @@ export function HistoryPanel() {
           />
 
           <Button
-            variant="default"
+            variant="light"
+            color="gray"
             loading={
               refreshing
             }
@@ -4804,7 +4814,8 @@ export function HistoryPanel() {
           </Button>
 
           <Button
-            variant="default"
+            variant="light"
+            color="gray"
             onClick={
               () =>
                 setAllCollapsed(
@@ -4823,7 +4834,8 @@ export function HistoryPanel() {
           </Button>
 
           <Button
-            variant="default"
+            variant="light"
+            color="gray"
             onClick={
               () =>
                 setAllCollapsed(

@@ -4029,7 +4029,8 @@ function Dashboard() {
 
                     <Group>
                       <Button
-                        variant="default"
+                        variant="light"
+                        color="gray"
                         disabled={saveAssetMutation.isPending}
                         onClick={() => setAssetForm(null)}
                       >
@@ -4082,7 +4083,8 @@ function Dashboard() {
 
                 <Group justify="flex-end">
                   <Button
-                    variant="default"
+                    variant="light"
+                    color="gray"
                     disabled={deleteAssetMutation.isPending}
                     onClick={() => setAssetPendingDelete(null)}
                   >

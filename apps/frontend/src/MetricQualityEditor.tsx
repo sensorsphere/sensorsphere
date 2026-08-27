@@ -644,7 +644,8 @@ function MetricQualityCard({
         <Group justify="flex-end">
           <Button
             size="xs"
-            variant="default"
+            variant="light"
+            color="gray"
             disabled={!dirty}
             onClick={
               () => {

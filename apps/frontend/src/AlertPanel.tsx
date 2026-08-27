@@ -1469,7 +1469,8 @@ export function AlertPanel({
                             <Group justify="flex-end">
                               <Button
                                 size="xs"
-                                variant="default"
+                                variant="light"
+                                color="gray"
                                 loading={
                                   toggleMutation.isPending &&
                                   toggleMutation.variables?.id ===
@@ -1496,7 +1497,8 @@ export function AlertPanel({
 
                               <Button
                                 size="xs"
-                                variant="default"
+                                variant="light"
+                                color="gray"
                                 onClick={
                                   () => {
                                     const copy =
@@ -1645,7 +1647,8 @@ export function AlertPanel({
                               <Group gap={4} wrap="nowrap">
                                 <Button
                                   size="compact-xs"
-                                  variant="default"
+                                  variant="light"
+                                  color="gray"
                                   loading={
                                     toggleMutation.isPending &&
                                     toggleMutation.variables?.id === rule.id
@@ -1661,7 +1664,8 @@ export function AlertPanel({
                                 </Button>
                                 <Button
                                   size="compact-xs"
-                                  variant="default"
+                                  variant="light"
+                                  color="gray"
                                   onClick={() => {
                                     const copy = ruleToForm(rule);
                                     setRuleForm({
@@ -2115,7 +2119,8 @@ export function AlertPanel({
               <Group justify="flex-end">
 
                 <Button
-                  variant="default"
+                  variant="light"
+                  color="gray"
                   onClick={
                     () =>
                       setRuleForm(

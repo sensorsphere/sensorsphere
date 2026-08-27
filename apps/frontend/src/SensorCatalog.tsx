@@ -1628,7 +1628,8 @@ export function SensorCatalog() {
             >
 
               <Button
-                variant="default"
+                variant="light"
+                color="gray"
                 onClick={
                   () => {
                     setSelectedSensor(
@@ -1672,7 +1673,8 @@ export function SensorCatalog() {
             Blacklist {blacklistTarget?.name ?? blacklistTarget?.uid}? Incoming data and metadata from this sensor will be ignored until it is reactivated.
           </Text>
           <Group justify="flex-end">
-            <Button variant="default" onClick={() => setBlacklistTarget(null)}>
+            <Button variant="light" onClick={() => setBlacklistTarget(null)}>
+            color="gray"
               Cancel
             </Button>
             <Button

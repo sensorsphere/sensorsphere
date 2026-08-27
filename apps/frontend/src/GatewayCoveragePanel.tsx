@@ -3017,7 +3017,8 @@ export function GatewayCoveragePanel() {
 
                 <Group gap="sm">
                   <Button
-                    variant="default"
+                    variant="light"
+                    color="gray"
                     onClick={() => {
                       setAssignmentSensorUid(null);
                       setAssignmentGatewayIdDraft(null);
@@ -3103,7 +3104,8 @@ export function GatewayCoveragePanel() {
 
           <Group justify="flex-end">
             <Button
-              variant="default"
+              variant="light"
+              color="gray"
               onClick={() => setSensorAction(null)}
             >
               Cancel
@@ -3176,7 +3178,8 @@ export function GatewayCoveragePanel() {
 
           <Group justify="flex-end">
             <Button
-              variant="default"
+              variant="light"
+              color="gray"
               onClick={() => {
                 setLocationGatewayId(null);
                 setLocationIdDraft(null);
@@ -3240,7 +3243,8 @@ export function GatewayCoveragePanel() {
 
           <Group justify="flex-end">
             <Button
-              variant="default"
+              variant="light"
+              color="gray"
               onClick={() => setGatewayAction(null)}
             >
               Cancel
@@ -3298,7 +3302,8 @@ export function GatewayCoveragePanel() {
 
           <Group justify="flex-end">
             <Button
-              variant="default"
+              variant="light"
+              color="gray"
               onClick={
                 () => setResetOpened(false)
               }
@@ -3350,7 +3355,8 @@ export function GatewayCoveragePanel() {
 
           <Group justify="flex-end">
             <Button
-              variant="default"
+              variant="light"
+              color="gray"
               onClick={
                 () => setDeleteAllOpened(false)
               }

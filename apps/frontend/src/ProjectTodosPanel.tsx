@@ -532,7 +532,8 @@ export function ProjectTodosPanel() {
               <Menu closeOnItemClick={false} withinPortal position="bottom-start">
                 <Menu.Target>
                   <Button
-                    variant="default"
+                    variant="light"
+                    color="gray"
                     justify="flex-start"
                     style={{
                       minWidth: 210,
@@ -616,7 +617,8 @@ export function ProjectTodosPanel() {
               <Menu closeOnItemClick={false} withinPortal position="bottom-start">
                 <Menu.Target>
                   <Button
-                    variant="default"
+                    variant="light"
+                    color="gray"
                     justify="flex-start"
                     style={{
                       minWidth: 240,
@@ -978,7 +980,8 @@ export function ProjectTodosPanel() {
             <TextInput label="Patch" placeholder="PR-083-….patch" value={taskForm.patchReference ?? ""} onChange={event => setTaskForm(current => ({ ...current, patchReference: event.currentTarget.value || null }))} />
           </Group>
           <Group justify="flex-end">
-            <Button variant="default" onClick={() => setTaskModalOpen(false)}>Cancel</Button>
+            <Button variant="light" onClick={() => setTaskModalOpen(false)}>Cancel</Button>
+            color="gray"
             <Button
               disabled={!taskForm.title.trim() || !taskForm.sectionId}
               onClick={saveTask}
@@ -991,7 +994,8 @@ export function ProjectTodosPanel() {
         <Stack>
           <TextInput label="Name" value={sectionName} onChange={event => setSectionName(event.currentTarget.value)} autoFocus />
           <Group justify="flex-end">
-            <Button variant="default" onClick={() => setSectionModalOpen(false)}>Cancel</Button>
+            <Button variant="light" onClick={() => setSectionModalOpen(false)}>Cancel</Button>
+            color="gray"
             <Button disabled={!sectionName.trim()} onClick={async () => {
               if (editingSection) await updateProjectTodoSection(editingSection.id, { name: sectionName.trim() });
               else await createProjectTodoSection({ name: sectionName.trim() });
@@ -1015,7 +1019,8 @@ export function ProjectTodosPanel() {
           />
           <Textarea label="Markdown" minRows={14} value={importMarkdown} onChange={event => setImportMarkdown(event.currentTarget.value)} placeholder="## Todos\n\n### SensorSphere App\n\n* [ ] My task" />
           <Group justify="flex-end">
-            <Button variant="default" onClick={() => setImportModalOpen(false)}>Cancel</Button>
+            <Button variant="light" onClick={() => setImportModalOpen(false)}>Cancel</Button>
+            color="gray"
             <Button color="orange" disabled={!importMarkdown.trim()} onClick={async () => {
               if (!window.confirm("Replace all current Project Todos with this Markdown import?")) return;
               const result = await importProjectTodosMarkdown(importMarkdown);

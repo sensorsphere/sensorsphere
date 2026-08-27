@@ -885,7 +885,8 @@ export function GatewayCatalog() {
           )}
 
           <Group justify="flex-end">
-            <Button variant="default" onClick={closeEditor}>Cancel</Button>
+            <Button variant="light" onClick={closeEditor}>Cancel</Button>
+            color="gray"
             <Button
               loading={saveMutation.isPending}
               disabled={!form.gatewayId.trim() || !form.name.trim() || !form.gatewayTypeId}
@@ -916,7 +917,8 @@ export function GatewayCatalog() {
             </Text>
           )}
           <Group justify="flex-end">
-            <Button variant="default" onClick={() => setDeleteTarget(null)}>
+            <Button variant="light" onClick={() => setDeleteTarget(null)}>
+            color="gray"
               Cancel
             </Button>
             <Button

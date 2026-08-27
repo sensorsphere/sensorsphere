@@ -1,4 +1,7 @@
-import { Button } from "@mantine/core";
+import {
+  ActionIcon,
+  Tooltip
+} from "@mantine/core";
 
 interface Props {
   active: boolean;
@@ -10,14 +13,25 @@ export function ResetFiltersAction({
   onReset
 }: Props) {
   return (
-    <Button
-      size="xs"
-      variant="light"
-      color="blue"
-      disabled={!active}
-      onClick={onReset}
-    >
-      Reset filters
-    </Button>
+    <Tooltip label="Reset all filters">
+      <ActionIcon
+        variant="light"
+        color="blue"
+        size="lg"
+        disabled={!active}
+        aria-label="Reset all filters"
+        onClick={onReset}
+      >
+        <span
+          aria-hidden="true"
+          style={{
+            fontSize: 18,
+            lineHeight: 1
+          }}
+        >
+          ↺
+        </span>
+      </ActionIcon>
+    </Tooltip>
   );
 }
