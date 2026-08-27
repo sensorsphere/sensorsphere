@@ -366,6 +366,41 @@ export function SensorCatalog() {
       );
     };
 
+  React.useEffect(
+    () => {
+      const sensorId =
+        window.sessionStorage.getItem(
+          "dashboard.edit.sensor"
+        );
+
+      if (!sensorId) {
+        return;
+      }
+
+      const sensor =
+        sensorsQuery.data?.find(
+          current =>
+            current.id === sensorId
+        );
+
+      if (!sensor) {
+        return;
+      }
+
+      window.sessionStorage.removeItem(
+        "dashboard.edit.sensor"
+      );
+
+      openEditor(
+        sensor
+      );
+    },
+    [
+      sensorsQuery.data,
+      assetsQuery.data
+    ]
+  );
+
   const save =
     (): void => {
 

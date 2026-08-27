@@ -341,7 +341,41 @@ function latestMetricValue(
   return null;
 }
 
+function dashboardIntentKey(kind: "sensor" | "gateway"): string {
+  return `dashboard.edit.${kind}`;
+}
+
+function setDashboardEditIntent(
+  kind: "sensor" | "gateway",
+  id: string
+): void {
+  window.sessionStorage.setItem(
+    dashboardIntentKey(kind),
+    id
+  );
+}
+
+function attentionAccent(
+  color: string
+): React.CSSProperties {
+  return {
+    borderLeft: `4px solid var(--mantine-color-${color}-6)`,
+    background:
+      `linear-gradient(135deg, color-mix(in srgb, var(--mantine-color-${color}-6) 8%, transparent), transparent 45%)`
+  };
+}
+
 function Dashboard() {
+
+  const [
+    dashboardRefreshing,
+    setDashboardRefreshing
+  ] = React.useState(false);
+
+  const [
+    dashboardRefreshedAt,
+    setDashboardRefreshedAt
+  ] = React.useState<Date | null>(null);
 
   const runtimeConfigQuery =
     useQuery({
@@ -1042,6 +1076,126 @@ function Dashboard() {
         gateway.location === null
     );
 
+  const sensorsWithoutPrimaryGatewayIds =
+    new Set(
+      sensorsWithoutPrimaryGateway.map(
+        sensor => sensor.id
+      )
+    );
+
+  const configurationIncompleteAssetIds =
+    new Set(
+      assets
+        .filter(asset => {
+          if (asset.location === null) {
+            return true;
+          }
+
+          if (!asset.sensor) {
+            return false;
+          }
+
+          const sensor =
+            sensorsByUid.get(
+              asset.sensor.uid
+            );
+
+          return Boolean(
+            sensor &&
+            sensorsWithoutPrimaryGatewayIds.has(
+              sensor.id
+            )
+          );
+        })
+        .map(asset => asset.id)
+    );
+
+  const dashboardOfflineAssets =
+    offlineAssets.filter(
+      asset =>
+        !configurationIncompleteAssetIds.has(
+          asset.id
+        )
+    );
+
+  const dashboardWarningAssets =
+    warningAssets.filter(
+      asset =>
+        !configurationIncompleteAssetIds.has(
+          asset.id
+        )
+    );
+
+  const suppressedHealthCount =
+    warningAssets.length +
+    offlineAssets.length -
+    dashboardWarningAssets.length -
+    dashboardOfflineAssets.length;
+
+  const openSensorForCorrection =
+    (sensorId: string): void => {
+      setDashboardEditIntent(
+        "sensor",
+        sensorId
+      );
+      navigateTo("sensors");
+    };
+
+  const openGatewayForCorrection =
+    (gatewayId: string): void => {
+      setDashboardEditIntent(
+        "gateway",
+        gatewayId
+      );
+      navigateTo("gateways");
+    };
+
+  const openAssetForCorrection =
+    (asset: Asset): void => {
+      if (asset.sensor) {
+        const sensor =
+          sensorsByUid.get(
+            asset.sensor.uid
+          );
+
+        if (sensor) {
+          openSensorForCorrection(
+            sensor.id
+          );
+          return;
+        }
+      }
+
+      setAssetSearch(
+        asset.sensor?.name
+        ?? asset.name
+        ?? asset.externalId
+      );
+      navigateTo("assets");
+    };
+
+  const refreshDashboard =
+    async (): Promise<void> => {
+      setDashboardRefreshing(true);
+
+      try {
+        await Promise.all([
+          sensorsQuery.refetch(),
+          assetsQuery.refetch(),
+          gatewaysQuery.refetch(),
+          observationsQuery.refetch(),
+          activeAlertsQuery.refetch(),
+          projectTodosQuery.refetch()
+        ]);
+
+        setDashboardRefreshedAt(
+          new Date()
+        );
+      } finally {
+        setDashboardRefreshing(false);
+      }
+    };
+
   const assignedLocations =
     new Set(
       assets
@@ -1712,15 +1866,30 @@ function Dashboard() {
                     variant="light"
                     color="yellow"
                   >
-                    {warningAssets.length} Warning
+                    {dashboardWarningAssets.length} Warning
                   </Badge>
 
                   <Badge
                     variant="light"
                     color="red"
                   >
-                    {offlineAssets.length} Offline
+                    {dashboardOfflineAssets.length} Offline
                   </Badge>
+
+                  <Button
+                    size="xs"
+                    variant="light"
+                    loading={dashboardRefreshing}
+                    onClick={() => void refreshDashboard()}
+                  >
+                    Refresh
+                  </Button>
+
+                  <Text size="xs" c="dimmed">
+                    {dashboardRefreshedAt
+                      ? `Refreshed ${dashboardRefreshedAt.toLocaleTimeString()}`
+                      : "Auto refresh: 30 s"}
+                  </Text>
                 </Group>
               </Group>
 
@@ -1887,8 +2056,8 @@ function Dashboard() {
               activePage ===
                 "dashboard" &&
               (
-                offlineAssets.length > 0 ||
-                warningAssets.length > 0 ||
+                dashboardOfflineAssets.length > 0 ||
+                dashboardWarningAssets.length > 0 ||
                 sensorsWithoutPrimaryGateway.length > 0 ||
                 assetsWithoutLocation.length > 0 ||
                 gatewaysWithoutLocation.length > 0
@@ -1909,149 +2078,285 @@ function Dashboard() {
                     }}
                   >
 
-                    {offlineAssets.length > 0 && (
-                      <Alert
-                        color="red"
-                        title={
-                          `${offlineAssets.length} asset${
-                            offlineAssets.length > 1
-                              ? "s"
-                              : ""
-                          } offline`
-                        }
-                      >
-                        <Stack gap="xs">
-                          {offlineAssets.map(
-                            asset => (
-                              <Text
-                                key={asset.id}
-                                size="sm"
-                              >
-                                {
-                                  asset.sensor?.name
-                                  ?? asset.name
-                                  ?? asset.externalId
-                                }
-                                {" · "}
-                                {
-                                  formatAge(
-                                    asset.health.ageSeconds
-                                  )
-                                }
-                              </Text>
-                            )
-                          )}
-                        </Stack>
-                      </Alert>
-                    )}
-
-                    {warningAssets.length > 0 && (
-                      <Alert
-                        color="yellow"
-                        title={
-                          `${warningAssets.length} asset${
-                            warningAssets.length > 1
-                              ? "s"
-                              : ""
-                          } in warning state`
-                        }
-                      >
-                        <Stack gap="xs">
-                          {warningAssets.map(
-                            asset => (
-                              <Text
-                                key={asset.id}
-                                size="sm"
-                              >
-                                {
-                                  asset.sensor?.name
-                                  ?? asset.name
-                                  ?? asset.externalId
-                                }
-                                {" · "}
-                                {
-                                  formatAge(
-                                    asset.health.ageSeconds
-                                  )
-                                }
-                              </Text>
-                            )
-                          )}
-                        </Stack>
-                      </Alert>
-                    )}
-
                     {sensorsWithoutPrimaryGateway.length > 0 && (
-                      <Alert
-                        color="red"
-                        title={
-                          `${sensorsWithoutPrimaryGateway.length} sensor${
-                            sensorsWithoutPrimaryGateway.length > 1 ? "s" : ""
-                          } without a Primary Gateway`
-                        }
+                      <Card
+                        withBorder
+                        radius="md"
+                        padding="lg"
+                        style={attentionAccent("red")}
                       >
-                        <Stack gap="xs">
-                          <Text size="sm">
-                            Active routing ignores measurements from these sensors until a Primary Gateway is assigned.
+                        <Stack gap="sm">
+                          <Group justify="space-between">
+                            <Badge color="red" variant="light">
+                              CONFIGURATION
+                            </Badge>
+                            <Text fw={700} c="red.6">
+                              {sensorsWithoutPrimaryGateway.length}
+                            </Text>
+                          </Group>
+
+                          <Text fw={700}>
+                            Sensor{sensorsWithoutPrimaryGateway.length > 1 ? "s" : ""} without a Primary Gateway
                           </Text>
+
+                          <Text size="sm" c="dimmed">
+                            Active routing ignores productive measurements until a Primary Gateway is assigned.
+                          </Text>
+
                           {sensorsWithoutPrimaryGateway.map(
                             sensor => (
-                              <Text key={sensor.id} size="sm">
-                                {sensor.name ?? sensor.uid} · {sensor.uid}
-                              </Text>
+                              <Group
+                                key={sensor.id}
+                                justify="space-between"
+                                gap="sm"
+                                wrap="nowrap"
+                              >
+                                <Text size="sm">
+                                  {sensor.name ?? sensor.uid} · {sensor.uid}
+                                </Text>
+                                <Button
+                                  size="compact-xs"
+                                  variant="light"
+                                  onClick={() =>
+                                    openSensorForCorrection(
+                                      sensor.id
+                                    )
+                                  }
+                                >
+                                  Fix
+                                </Button>
+                              </Group>
                             )
                           )}
                         </Stack>
-                      </Alert>
+                      </Card>
                     )}
 
                     {assetsWithoutLocation.length > 0 && (
-                      <Alert
-                        color="yellow"
-                        title={
-                          `${assetsWithoutLocation.length} asset${
-                            assetsWithoutLocation.length > 1 ? "s" : ""
-                          } without a Location`
-                        }
+                      <Card
+                        withBorder
+                        radius="md"
+                        padding="lg"
+                        style={attentionAccent("yellow")}
                       >
-                        <Stack gap="xs">
+                        <Stack gap="sm">
+                          <Group justify="space-between">
+                            <Badge color="yellow" variant="light">
+                              LOCATION
+                            </Badge>
+                            <Text fw={700} c="yellow.7">
+                              {assetsWithoutLocation.length}
+                            </Text>
+                          </Group>
+
+                          <Text fw={700}>
+                            Asset{assetsWithoutLocation.length > 1 ? "s" : ""} without a Location
+                          </Text>
+
+                          <Text size="sm" c="dimmed">
+                            Configure the linked Sensor/Asset location before interpreting operational health.
+                          </Text>
+
                           {assetsWithoutLocation.map(
                             asset => (
-                              <Text key={asset.id} size="sm">
-                                {
-                                  asset.sensor?.name
-                                  ?? asset.name
-                                  ?? asset.externalId
-                                }
-                              </Text>
+                              <Group
+                                key={asset.id}
+                                justify="space-between"
+                                gap="sm"
+                                wrap="nowrap"
+                              >
+                                <Text size="sm">
+                                  {asset.sensor?.name
+                                    ?? asset.name
+                                    ?? asset.externalId}
+                                </Text>
+                                <Button
+                                  size="compact-xs"
+                                  variant="light"
+                                  onClick={() =>
+                                    openAssetForCorrection(
+                                      asset
+                                    )
+                                  }
+                                >
+                                  Fix
+                                </Button>
+                              </Group>
                             )
                           )}
                         </Stack>
-                      </Alert>
+                      </Card>
                     )}
 
                     {gatewaysWithoutLocation.length > 0 && (
-                      <Alert
-                        color="yellow"
-                        title={
-                          `${gatewaysWithoutLocation.length} gateway${
-                            gatewaysWithoutLocation.length > 1 ? "s" : ""
-                          } without a Location`
-                        }
+                      <Card
+                        withBorder
+                        radius="md"
+                        padding="lg"
+                        style={attentionAccent("violet")}
                       >
-                        <Stack gap="xs">
+                        <Stack gap="sm">
+                          <Group justify="space-between">
+                            <Badge color="violet" variant="light">
+                              GATEWAY LOCATION
+                            </Badge>
+                            <Text fw={700} c="violet.6">
+                              {gatewaysWithoutLocation.length}
+                            </Text>
+                          </Group>
+
+                          <Text fw={700}>
+                            Gateway{gatewaysWithoutLocation.length > 1 ? "s" : ""} without a Location
+                          </Text>
+
                           {gatewaysWithoutLocation.map(
                             gateway => (
-                              <Text key={gateway.id} size="sm">
-                                {gateway.name} · {gateway.gatewayId}
-                              </Text>
+                              <Group
+                                key={gateway.id}
+                                justify="space-between"
+                                gap="sm"
+                                wrap="nowrap"
+                              >
+                                <Text size="sm">
+                                  {gateway.name} · {gateway.gatewayId}
+                                </Text>
+                                <Button
+                                  size="compact-xs"
+                                  variant="light"
+                                  onClick={() =>
+                                    openGatewayForCorrection(
+                                      gateway.id
+                                    )
+                                  }
+                                >
+                                  Fix
+                                </Button>
+                              </Group>
                             )
                           )}
                         </Stack>
-                      </Alert>
+                      </Card>
+                    )}
+
+                    {dashboardOfflineAssets.length > 0 && (
+                      <Card
+                        withBorder
+                        radius="md"
+                        padding="lg"
+                        style={attentionAccent("red")}
+                      >
+                        <Stack gap="sm">
+                          <Group justify="space-between">
+                            <Badge color="red" variant="light">
+                              OFFLINE
+                            </Badge>
+                            <Text fw={700} c="red.6">
+                              {dashboardOfflineAssets.length}
+                            </Text>
+                          </Group>
+
+                          <Text fw={700}>
+                            Operational asset{dashboardOfflineAssets.length > 1 ? "s" : ""} offline
+                          </Text>
+
+                          <Text size="sm" c="dimmed">
+                            Only fully configured assets are included here.
+                          </Text>
+
+                          {dashboardOfflineAssets.map(
+                            asset => (
+                              <Group
+                                key={asset.id}
+                                justify="space-between"
+                                gap="sm"
+                                wrap="nowrap"
+                              >
+                                <Text size="sm">
+                                  {asset.sensor?.name
+                                    ?? asset.name
+                                    ?? asset.externalId}
+                                  {" · "}
+                                  {formatAge(asset.health.ageSeconds)}
+                                </Text>
+                                <Button
+                                  size="compact-xs"
+                                  variant="light"
+                                  onClick={() =>
+                                    openAssetForCorrection(
+                                      asset
+                                    )
+                                  }
+                                >
+                                  Open
+                                </Button>
+                              </Group>
+                            )
+                          )}
+                        </Stack>
+                      </Card>
+                    )}
+
+                    {dashboardWarningAssets.length > 0 && (
+                      <Card
+                        withBorder
+                        radius="md"
+                        padding="lg"
+                        style={attentionAccent("orange")}
+                      >
+                        <Stack gap="sm">
+                          <Group justify="space-between">
+                            <Badge color="orange" variant="light">
+                              WARNING
+                            </Badge>
+                            <Text fw={700} c="orange.6">
+                              {dashboardWarningAssets.length}
+                            </Text>
+                          </Group>
+
+                          <Text fw={700}>
+                            Operational asset{dashboardWarningAssets.length > 1 ? "s" : ""} in warning state
+                          </Text>
+
+                          {dashboardWarningAssets.map(
+                            asset => (
+                              <Group
+                                key={asset.id}
+                                justify="space-between"
+                                gap="sm"
+                                wrap="nowrap"
+                              >
+                                <Text size="sm">
+                                  {asset.sensor?.name
+                                    ?? asset.name
+                                    ?? asset.externalId}
+                                  {" · "}
+                                  {formatAge(asset.health.ageSeconds)}
+                                </Text>
+                                <Button
+                                  size="compact-xs"
+                                  variant="light"
+                                  onClick={() =>
+                                    openAssetForCorrection(
+                                      asset
+                                    )
+                                  }
+                                >
+                                  Open
+                                </Button>
+                              </Group>
+                            )
+                          )}
+                        </Stack>
+                      </Card>
                     )}
 
                   </SimpleGrid>
+
+                  {suppressedHealthCount > 0 && (
+                    <Text size="xs" c="dimmed" mt="sm">
+                      {suppressedHealthCount} health state{suppressedHealthCount > 1 ? "s" : ""} hidden from Offline/Warning because configuration must be completed first.
+                    </Text>
+                  )}
 
                 </div>
               )
@@ -2127,7 +2432,14 @@ function Dashboard() {
                                       }
                                       withBorder
                                       radius="md"
-                                      padding="sm"
+                                      padding="md"
+                                      style={attentionAccent(
+                                        alert.severity === "CRITICAL"
+                                          ? "red"
+                                          : alert.severity === "WARNING"
+                                            ? "yellow"
+                                            : "blue"
+                                      )}
                                     >
                                       <Group
                                         justify="space-between"
@@ -2179,17 +2491,43 @@ function Dashboard() {
                                           </div>
                                         </Group>
 
-                                        <Text
-                                          fw={600}
-                                          size="sm"
-                                        >
-                                          {
-                                            alert.currentValue !==
-                                              null
-                                              ? `${alert.currentValue}${alert.unit ? ` ${alert.unit}` : ""}`
-                                              : "—"
-                                          }
-                                        </Text>
+                                        <Group gap="xs">
+                                          <Text
+                                            fw={700}
+                                            size="sm"
+                                          >
+                                            {
+                                              alert.currentValue !==
+                                                null
+                                                ? `${alert.currentValue}${alert.unit ? ` ${alert.unit}` : ""}`
+                                                : "—"
+                                            }
+                                          </Text>
+
+                                          {(() => {
+                                            const asset =
+                                              assets.find(
+                                                current =>
+                                                  current.id === alert.assetId
+                                              );
+
+                                            return asset
+                                              ? (
+                                                <Button
+                                                  size="compact-xs"
+                                                  variant="light"
+                                                  onClick={() =>
+                                                    openAssetForCorrection(
+                                                      asset
+                                                    )
+                                                  }
+                                                >
+                                                  Open
+                                                </Button>
+                                              )
+                                              : null;
+                                          })()}
+                                        </Group>
                                       </Group>
                                     </Card>
                                   )
@@ -3321,7 +3659,21 @@ function Dashboard() {
             {
               activePage ===
                 "alerts" && (
-                <AlertPanel />
+                <AlertPanel
+                  onOpenAsset={assetId => {
+                    const asset =
+                      assets.find(
+                        current =>
+                          current.id === assetId
+                      );
+
+                    if (asset) {
+                      openAssetForCorrection(
+                        asset
+                      );
+                    }
+                  }}
+                />
               )
             }
 

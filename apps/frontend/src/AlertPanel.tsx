@@ -369,7 +369,11 @@ function toUpdateInput(
   );
 }
 
-export function AlertPanel() {
+export function AlertPanel({
+  onOpenAsset
+}: {
+  onOpenAsset?: (assetId: string) => void;
+}) {
 
   const queryClient =
     useQueryClient();
@@ -881,6 +885,12 @@ export function AlertPanel() {
                           withBorder
                           radius="md"
                           padding="lg"
+                          style={{
+                            borderLeft:
+                              `4px solid var(--mantine-color-${severityColor(alert.severity)}-6)`,
+                            background:
+                              `linear-gradient(135deg, color-mix(in srgb, var(--mantine-color-${severityColor(alert.severity)}-6) 8%, transparent), transparent 45%)`
+                          }}
                         >
                           <Stack gap="sm">
 
@@ -964,33 +974,45 @@ export function AlertPanel() {
                               }
                             </Text>
 
-                            {
-                              alert.status ===
+                            <Group justify="flex-end">
+                              {onOpenAsset && (
+                                <Button
+                                  size="xs"
+                                  variant="subtle"
+                                  onClick={() =>
+                                    onOpenAsset(
+                                      alert.assetId
+                                    )
+                                  }
+                                >
+                                  Open object
+                                </Button>
+                              )}
+
+                              {alert.status ===
                                 "ACTIVE" && (
-                                <Group justify="flex-end">
-                                  <Button
-                                    size="xs"
-                                    variant="light"
-                                    loading={
+                                <Button
+                                  size="xs"
+                                  variant="light"
+                                  loading={
+                                    acknowledgeMutation
+                                      .isPending &&
+                                    acknowledgeMutation
+                                      .variables ===
+                                    alert.id
+                                  }
+                                  onClick={
+                                    () =>
                                       acknowledgeMutation
-                                        .isPending &&
-                                      acknowledgeMutation
-                                        .variables ===
-                                      alert.id
-                                    }
-                                    onClick={
-                                      () =>
-                                        acknowledgeMutation
-                                          .mutate(
-                                            alert.id
-                                          )
-                                    }
-                                  >
-                                    Acknowledge
-                                  </Button>
-                                </Group>
-                              )
-                            }
+                                        .mutate(
+                                          alert.id
+                                        )
+                                  }
+                                >
+                                  Acknowledge
+                                </Button>
+                              )}
+                            </Group>
 
                           </Stack>
                         </Card>

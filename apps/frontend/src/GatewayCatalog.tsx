@@ -436,6 +436,40 @@ export function GatewayCatalog() {
     setCreating(false);
   };
 
+  React.useEffect(
+    () => {
+      const gatewayId =
+        window.sessionStorage.getItem(
+          "dashboard.edit.gateway"
+        );
+
+      if (!gatewayId) {
+        return;
+      }
+
+      const gateway =
+        gateways.find(
+          current =>
+            current.id === gatewayId
+        );
+
+      if (!gateway) {
+        return;
+      }
+
+      window.sessionStorage.removeItem(
+        "dashboard.edit.gateway"
+      );
+
+      openEdit(
+        gateway
+      );
+    },
+    [
+      gateways
+    ]
+  );
+
   const closeEditor = (): void => {
     setEditingGateway(null);
     setCreating(false);
