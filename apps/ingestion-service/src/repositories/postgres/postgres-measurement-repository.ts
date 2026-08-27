@@ -126,6 +126,22 @@ implements MeasurementRepository {
     );
   }
 
+  async isSensorBlacklisted(
+    sensorUid: string
+  ): Promise<boolean> {
+    const result = await this.pool.query<{ blacklisted: boolean }>(
+      `
+      SELECT blacklisted
+      FROM sensors
+      WHERE LOWER(sensor_uid) = LOWER($1)
+      LIMIT 1
+      `,
+      [sensorUid]
+    );
+
+    return result.rows[0]?.blacklisted ?? false;
+  }
+
   async getSensorRoutingAssignment(
     sensorUid: string
   ): Promise<{
@@ -391,6 +407,7 @@ implements MeasurementRepository {
           sensor.sensor_uid
         FROM sensors sensor
         WHERE LOWER(sensor.sensor_uid) = LOWER($1)
+          AND sensor.blacklisted = FALSE
         ON CONFLICT (source_sensor_uid) DO UPDATE
         SET
           name = COALESCE(assets.name, EXCLUDED.name),
@@ -449,6 +466,7 @@ implements MeasurementRepository {
       UPDATE sensors
       SET last_seen_at = GREATEST(last_seen_at, $2::timestamptz)
       WHERE LOWER(sensor_uid) = LOWER($1)
+        AND blacklisted = FALSE
       `,
       [sensorUid, receivedAt]
     );
@@ -494,6 +512,7 @@ implements MeasurementRepository {
             THEN NOW()
           ELSE sensors.updated_at
         END
+      WHERE sensors.blacklisted = FALSE
       `,
       [sensorUid, metric, value]
     );
@@ -666,6 +685,28 @@ implements MeasurementRepository {
       return;
     }
 
+    const blacklistedResult = await this.pool.query<{ sensor_uid: string }>(
+      `
+      SELECT LOWER(sensor_uid) AS sensor_uid
+      FROM sensors
+      WHERE blacklisted = TRUE
+        AND LOWER(sensor_uid) = ANY($1::text[])
+      `,
+      [snapshots.map(snapshot => snapshot.sensorUid.toLowerCase())]
+    );
+
+    const blacklistedSensorUids = new Set(
+      blacklistedResult.rows.map(row => row.sensor_uid)
+    );
+
+    const activeSnapshots = snapshots.filter(
+      snapshot => !blacklistedSensorUids.has(snapshot.sensorUid.toLowerCase())
+    );
+
+    if (activeSnapshots.length === 0) {
+      return;
+    }
+
     const client: PoolClient =
       await this.pool.connect();
 
@@ -677,7 +718,7 @@ implements MeasurementRepository {
 
       for (
         const snapshot
-        of snapshots
+        of activeSnapshots
       ) {
 
         await client.query(
@@ -689,6 +730,7 @@ implements MeasurementRepository {
 
           DO UPDATE
           SET updated_at = NOW()
+          WHERE sensors.blacklisted = FALSE
           `,
           [
             snapshot.sensorUid
@@ -717,6 +759,12 @@ implements MeasurementRepository {
             FROM assets
             WHERE source_sensor_uid = $1
           )
+            AND EXISTS (
+              SELECT 1
+              FROM sensors
+              WHERE sensor_uid = $1
+                AND blacklisted = FALSE
+            )
           `,
           [
             snapshot.sensorUid
@@ -787,7 +835,7 @@ implements MeasurementRepository {
       const placeholders:
         string[] = [];
 
-      snapshots.forEach(
+      activeSnapshots.forEach(
         (snapshot, index) => {
 
           const offset =
@@ -851,7 +899,7 @@ implements MeasurementRepository {
         "rssi"
       ] as const;
 
-      for (const snapshot of snapshots) {
+      for (const snapshot of activeSnapshots) {
 
         for (const metricKey of metricKeys) {
 

@@ -496,17 +496,6 @@ export function GatewayCatalog() {
           </div>
 
           <Group gap="xs">
-            <SegmentedControl
-              size="xs"
-              value={viewMode}
-              onChange={value =>
-                setViewMode(value as "cards" | "compact")
-              }
-              data={[
-                { value: "cards", label: "Card" },
-                { value: "compact", label: "Compact" }
-              ]}
-            />
             <Badge color="green" variant="light">
               {onlineGateways} Online
             </Badge>
@@ -516,6 +505,16 @@ export function GatewayCatalog() {
             <Badge variant="light">
               {filteredGateways.length} / {gateways.length} gateways
             </Badge>
+            <SegmentedControl
+              value={viewMode}
+              onChange={value =>
+                setViewMode(value as "cards" | "compact")
+              }
+              data={[
+                { value: "cards", label: "Cards" },
+                { value: "compact", label: "Compact" }
+              ]}
+            />
             <ResetFiltersAction
               active={filtersActive}
               onReset={() => {
@@ -576,7 +575,10 @@ export function GatewayCatalog() {
                       <Text size="xs" c="dimmed">{gateway.type.name}</Text>
                     </div>
                     <Group gap={4}>
-                      <Badge color={isOnline(gateway.lastSeenAt) ? "green" : "red"}>
+                      <Badge
+                        color={isOnline(gateway.lastSeenAt) ? "green" : "red"}
+                        variant="light"
+                      >
                         {isOnline(gateway.lastSeenAt) ? "ONLINE" : "OFFLINE"}
                       </Badge>
                       <Badge color={gateway.enabled ? "blue" : "orange"} variant="light">
@@ -720,7 +722,11 @@ export function GatewayCatalog() {
                       ) : "—"}
                     </Table.Td>
                     <Table.Td>
-                      <Badge size="sm" color={isOnline(gateway.lastSeenAt) ? "green" : "red"}>
+                      <Badge
+                        size="sm"
+                        color={isOnline(gateway.lastSeenAt) ? "green" : "red"}
+                        variant="light"
+                      >
                         {isOnline(gateway.lastSeenAt) ? "ONLINE" : "OFFLINE"}
                       </Badge>
                     </Table.Td>
@@ -735,7 +741,15 @@ export function GatewayCatalog() {
                         </Badge>
                       )}
                     </Table.Td>
-                    <Table.Td>{gateway.enabled ? "Yes" : "No"}</Table.Td>
+                    <Table.Td>
+                      <Badge
+                        size="sm"
+                        color={gateway.enabled ? "blue" : "orange"}
+                        variant="light"
+                      >
+                        {gateway.enabled ? "Enabled" : "Disabled"}
+                      </Badge>
+                    </Table.Td>
                     <Table.Td>{gateway.sensorCount}</Table.Td>
                     <Table.Td>{gateway.assetCount}</Table.Td>
                     <Table.Td>{lastSeenLabel(gateway.lastSeenAt)}</Table.Td>

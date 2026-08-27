@@ -198,6 +198,13 @@ export function SensorCatalog() {
         value === "offline"
     );
 
+  const [showBlacklistedOnly, setShowBlacklistedOnly] =
+    usePersistentState<boolean>(
+      "sensors.showBlacklistedOnly",
+      false,
+      value => typeof value === "boolean"
+    );
+
   const [nameSearch, setNameSearch] =
     usePersistentState<string>(
       "sensors.nameSearch",
@@ -340,6 +347,31 @@ export function SensorCatalog() {
       null
     );
   }
+    });
+
+  const [blacklistTarget, setBlacklistTarget] =
+    React.useState<Sensor | null>(null);
+
+  const blacklistMutation =
+    useMutation({
+      mutationFn: async ({
+        sensor,
+        blacklisted
+      }: {
+        sensor: Sensor;
+        blacklisted: boolean;
+      }) =>
+        updateSensor(
+          sensor.id,
+          { blacklisted }
+        ),
+
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({
+          queryKey: ["sensors"]
+        });
+        setBlacklistTarget(null);
+      }
     });
 
   const openEditor =
@@ -652,7 +684,9 @@ export function SensorCatalog() {
       .trim()
       .toLowerCase();
 
-  const sensorStatusCounts = sensors.reduce(
+  const sensorStatusCounts = sensors
+    .filter(sensor => !sensor.blacklisted)
+    .reduce(
     (counts, sensor) => {
       const status =
         assetsBySensorUid.get(sensor.uid)?.health.status ?? "offline";
@@ -666,6 +700,10 @@ export function SensorCatalog() {
   const filteredSensors =
     [...sensors]
       .filter(sensor => {
+
+        if (showBlacklistedOnly ? !sensor.blacklisted : sensor.blacklisted) {
+          return false;
+        }
 
         const asset =
           assetsBySensorUid.get(
@@ -746,6 +784,7 @@ export function SensorCatalog() {
         case "gateway": return sensor.gateway?.name;
         case "status": return asset?.health.status ?? "offline";
         case "enabled": return sensor.enabled;
+        case "blacklisted": return sensor.blacklisted;
         default: return sensor.name ?? sensor.uid;
       }
     };
@@ -768,7 +807,8 @@ export function SensorCatalog() {
     locationFilter !== null ||
     gatewayFilter !== null ||
     enabledFilter !== "all" ||
-    statusFilter !== "all";
+    statusFilter !== "all" ||
+    showBlacklistedOnly;
 
   const clearFilters =
     (): void => {
@@ -779,6 +819,7 @@ export function SensorCatalog() {
       setGatewayFilter(null);
       setEnabledFilter("all");
       setStatusFilter("all");
+      setShowBlacklistedOnly(false);
     };
 
   return (
@@ -803,20 +844,6 @@ export function SensorCatalog() {
           </div>
 
           <Group gap="xs">
-            <SegmentedControl
-              size="xs"
-              value={viewMode}
-              onChange={value =>
-                setViewMode(
-                  value as "cards" | "compact"
-                )
-              }
-              data={[
-                { value: "cards", label: "Card" },
-                { value: "compact", label: "Compact" }
-              ]}
-            />
-
             <Badge color="green" variant="light">
               {sensorStatusCounts.online} Online
             </Badge>
@@ -830,6 +857,19 @@ export function SensorCatalog() {
               {filteredSensors.length} / {sensors.length} sensors
             </Badge>
 
+            <SegmentedControl
+              value={viewMode}
+              onChange={value =>
+                setViewMode(
+                  value as "cards" | "compact"
+                )
+              }
+              data={[
+                { value: "cards", label: "Cards" },
+                { value: "compact", label: "Compact" }
+              ]}
+            />
+
             <ResetFiltersAction
               active={filtersActive}
               onReset={clearFilters}
@@ -842,7 +882,7 @@ export function SensorCatalog() {
             base: 1,
             xs: 2,
             md: 4,
-            lg: 7
+            lg: 8
           }}
           spacing="sm"
         >
@@ -957,6 +997,16 @@ export function SensorCatalog() {
             ]}
             styles={activeFilterStyles(statusFilter !== "all")}
           />
+
+          <Checkbox
+            label="Show blacklisted only"
+            checked={showBlacklistedOnly}
+            onChange={event =>
+              setShowBlacklistedOnly(event.currentTarget.checked)
+            }
+            styles={activeFilterStyles(showBlacklistedOnly)}
+            mt="xl"
+          />
         </SimpleGrid>
         </div>
 
@@ -1011,6 +1061,7 @@ export function SensorCatalog() {
                     </div>
 
                     <Badge
+                      variant="light"
                       color={
                         asset?.health.status ===
                         "online"
@@ -1162,6 +1213,25 @@ export function SensorCatalog() {
                     >
                       Edit
                     </Button>
+                    {sensor.blacklisted ? (
+                      <Button
+                        color="green"
+                        variant="light"
+                        onClick={() =>
+                          blacklistMutation.mutate({ sensor, blacklisted: false })
+                        }
+                      >
+                        Reactivate
+                      </Button>
+                    ) : (
+                      <Button
+                        color="red"
+                        variant="light"
+                        onClick={() => setBlacklistTarget(sensor)}
+                      >
+                        Blacklist
+                      </Button>
+                    )}
                   </Group>
 
                 </Stack>
@@ -1225,19 +1295,31 @@ export function SensorCatalog() {
                       <Table.Td>
                         <Badge
                           size="sm"
+                          variant="light"
                           color={
-                            status === "online"
+                            sensor.blacklisted
+                              ? "gray"
+                              : status === "online"
                               ? "green"
                               : status === "warning"
                                 ? "yellow"
                                 : "red"
                           }
                         >
-                          {status}
+                          {sensor.blacklisted ? "blacklisted" : status}
                         </Badge>
                       </Table.Td>
-                      <Table.Td>{sensor.enabled ? "Yes" : "No"}</Table.Td>
                       <Table.Td>
+                        <Badge
+                          size="sm"
+                          color={sensor.enabled ? "blue" : "orange"}
+                          variant="light"
+                        >
+                          {sensor.enabled ? "Enabled" : "Disabled"}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Group gap={4} wrap="nowrap">
                         <Button
                           size="compact-sm"
                           variant="light"
@@ -1245,6 +1327,28 @@ export function SensorCatalog() {
                         >
                           Edit
                         </Button>
+                          {sensor.blacklisted ? (
+                            <Button
+                              size="compact-sm"
+                              color="green"
+                              variant="light"
+                              onClick={() =>
+                                blacklistMutation.mutate({ sensor, blacklisted: false })
+                              }
+                            >
+                              Reactivate
+                            </Button>
+                          ) : (
+                            <Button
+                              size="compact-sm"
+                              color="red"
+                              variant="light"
+                              onClick={() => setBlacklistTarget(sensor)}
+                            >
+                              Blacklist
+                            </Button>
+                          )}
+                        </Group>
                       </Table.Td>
                     </Table.Tr>
                   );
@@ -1548,6 +1652,36 @@ export function SensorCatalog() {
 
         )}
 
+      </Modal>
+
+      <Modal
+        opened={blacklistTarget !== null}
+        onClose={() => setBlacklistTarget(null)}
+        title="Blacklist sensor"
+        centered
+      >
+        <Stack>
+          <Text>
+            Blacklist {blacklistTarget?.name ?? blacklistTarget?.uid}? Incoming data and metadata from this sensor will be ignored until it is reactivated.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setBlacklistTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              loading={blacklistMutation.isPending}
+              onClick={() =>
+                blacklistTarget && blacklistMutation.mutate({
+                  sensor: blacklistTarget,
+                  blacklisted: true
+                })
+              }
+            >
+              Blacklist
+            </Button>
+          </Group>
+        </Stack>
       </Modal>
     </>
   );

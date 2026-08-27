@@ -16,6 +16,7 @@ export interface SensorDto {
   firmwareVersion: string | null;
 
   enabled: boolean;
+  blacklisted: boolean;
 
   macAddress: string | null;
 
@@ -57,4 +58,5 @@ export interface UpdateSensorDto {
   gatewayId?: string | null;
   backupGatewayId?: string | null;
   enabled?: boolean;
+  blacklisted?: boolean;
 }

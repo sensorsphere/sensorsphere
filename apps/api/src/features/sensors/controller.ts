@@ -55,6 +55,9 @@ const updateSensorSchema =
       z.string().uuid().nullable().optional(),
 
     enabled:
+      z.boolean().optional(),
+
+    blacklisted:
       z.boolean().optional()
   })
   .strict()

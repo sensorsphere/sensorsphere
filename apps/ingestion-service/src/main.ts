@@ -415,6 +415,22 @@ Promise<void> {
             await repository.ensureSensorExists(
               trafficMeasurement.sensorUid
             );
+
+            if (
+              await repository.isSensorBlacklisted(
+                trafficMeasurement.sensorUid
+              )
+            ) {
+              logger.debug(
+                {
+                  gatewayId,
+                  sensorUid: trafficMeasurement.sensorUid
+                },
+                "Blacklisted sensor message ignored"
+              );
+              return;
+            }
+
             await repository.saveSensorActivity(
               trafficMeasurement.sensorUid,
               message.receivedAt
@@ -436,6 +452,22 @@ Promise<void> {
             await repository.ensureSensorExists(
               sensorMetadata.sensorUid
             );
+
+            if (
+              await repository.isSensorBlacklisted(
+                sensorMetadata.sensorUid
+              )
+            ) {
+              logger.debug(
+                {
+                  gatewayId,
+                  sensorUid: sensorMetadata.sensorUid
+                },
+                "Blacklisted sensor metadata ignored"
+              );
+              return;
+            }
+
             await repository.saveSensorActivity(
               sensorMetadata.sensorUid,
               message.receivedAt
@@ -688,6 +720,18 @@ Promise<void> {
         const measurement
         of measurements
       ) {
+
+        if (
+          await repository.isSensorBlacklisted(
+            measurement.sensorUid
+          )
+        ) {
+          logger.debug(
+            { sensorUid: measurement.sensorUid },
+            "Blacklisted sensor measurement ignored"
+          );
+          continue;
+        }
 
         cache.update(
           measurement.sensorUid,

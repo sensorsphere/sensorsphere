@@ -14,6 +14,7 @@ export interface SensorRecord {
   model: string | null;
   firmware_version: string | null;
   enabled: boolean;
+  blacklisted: boolean;
   mac_address: string | null;
   created_at: Date;
   updated_at: Date;
@@ -49,6 +50,7 @@ const SENSOR_SELECT = `
       s.model,
       s.firmware_version,
       s.enabled,
+      s.blacklisted,
       s.mac_address,
       s.created_at,
       s.updated_at,
@@ -257,6 +259,7 @@ implements SensorRepository {
       if ("firmwareVersion" in input) addUpdate("firmware_version", input.firmwareVersion ?? null);
       if ("gatewayId" in input) addUpdate("gateway_id", input.gatewayId ?? null);
       if ("enabled" in input) addUpdate("enabled", input.enabled);
+      if ("blacklisted" in input) addUpdate("blacklisted", input.blacklisted);
 
       if (updates.length > 0) {
         values.push(id);

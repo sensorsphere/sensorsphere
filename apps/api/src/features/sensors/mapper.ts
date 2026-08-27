@@ -29,6 +29,9 @@ export function mapSensorToDto(
     enabled:
       sensor.enabled,
 
+    blacklisted:
+      sensor.blacklisted,
+
     macAddress:
       sensor.mac_address,
 

@@ -49,6 +49,7 @@ export interface Sensor {
   firmwareVersion: string | null;
 
   enabled: boolean;
+  blacklisted: boolean;
 
   macAddress: string | null;
 
@@ -95,6 +96,7 @@ export interface UpdateSensor {
   gatewayId?: string | null;
   backupGatewayId?: string | null;
   enabled?: boolean;
+  blacklisted?: boolean;
 }
 
 export interface GatewayType {
