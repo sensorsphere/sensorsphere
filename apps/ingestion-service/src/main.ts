@@ -401,14 +401,11 @@ Promise<void> {
 
         if (gatewayId) {
           void repository
-            .saveGatewayActivity(
-              gatewayId,
-              message.receivedAt
-            )
+            .ensureGatewayExists(gatewayId)
             .catch(error => {
               logger.error(
                 { error, gatewayId },
-                "Unable to persist functional gateway activity"
+                "Unable to ensure functional gateway exists"
               );
             });
         }

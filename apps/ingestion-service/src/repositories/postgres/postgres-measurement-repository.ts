@@ -214,9 +214,8 @@ implements MeasurementRepository {
     return result.rowCount ?? 0;
   }
 
-  async saveGatewayActivity(
-    gatewayId: string,
-    receivedAt: Date
+  async ensureGatewayExists(
+    gatewayId: string
   ): Promise<void> {
     await this.pool.query(
       `
@@ -225,27 +224,19 @@ implements MeasurementRepository {
         name,
         name_manually_set,
         gateway_type_id,
-        type,
-        last_seen_at
+        type
       )
       SELECT
         $1,
         $1,
         FALSE,
         gt.id,
-        'ble_gateway',
-        $2
+        'ble_gateway'
       FROM gateway_types gt
       WHERE gt.key = 'ble_gateway'
-      ON CONFLICT (gateway_id) DO UPDATE
-      SET
-        last_seen_at = GREATEST(
-          gateways.last_seen_at,
-          EXCLUDED.last_seen_at
-        ),
-        updated_at = NOW()
+      ON CONFLICT (gateway_id) DO NOTHING
       `,
-      [gatewayId, receivedAt]
+      [gatewayId]
     );
   }
 
