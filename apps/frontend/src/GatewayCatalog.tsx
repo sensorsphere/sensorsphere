@@ -401,6 +401,12 @@ export function GatewayCatalog() {
     label: type.name
   }));
 
+  const onlineGateways = gateways.filter(
+    gateway => isOnline(gateway.lastSeenAt)
+  ).length;
+
+  const offlineGateways = gateways.length - onlineGateways;
+
   const filteredGateways = gateways
     .filter(gateway =>
       (
@@ -501,6 +507,12 @@ export function GatewayCatalog() {
                 { value: "compact", label: "Compact" }
               ]}
             />
+            <Badge color="green" variant="light">
+              {onlineGateways} Online
+            </Badge>
+            <Badge color="red" variant="light">
+              {offlineGateways} Offline
+            </Badge>
             <Badge variant="light">
               {filteredGateways.length} / {gateways.length} gateways
             </Badge>
@@ -535,7 +547,7 @@ export function GatewayCatalog() {
             styles={activeFilterStyles(typeFilter !== null)}
           />
           <BadgeSelect
-            badgeColor={value => value === "enabled" ? "blue" : value === "disabled" ? "gray" : "gray"}
+            badgeColor={value => value === "enabled" ? "blue" : value === "disabled" ? "orange" : "gray"}
             label="Enabled"
             value={enabledFilter}
             onChange={value =>
@@ -567,7 +579,7 @@ export function GatewayCatalog() {
                       <Badge color={isOnline(gateway.lastSeenAt) ? "green" : "red"}>
                         {isOnline(gateway.lastSeenAt) ? "ONLINE" : "OFFLINE"}
                       </Badge>
-                      <Badge color={gateway.enabled ? "blue" : "gray"} variant="light">
+                      <Badge color={gateway.enabled ? "blue" : "orange"} variant="light">
                         {gateway.enabled ? "Enabled" : "Disabled"}
                       </Badge>
                     </Group>

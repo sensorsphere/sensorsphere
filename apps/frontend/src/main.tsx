@@ -22,6 +22,7 @@ import {
   Select,
   SimpleGrid,
   Stack,
+  Table,
   Text,
   TextInput,
   Title,
@@ -90,6 +91,12 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
+
+import {
+  SortableTableHeader,
+  compareTableValues,
+  type SortDirection
+} from "./SortableTableHeader";
 
 import {
   GatewayCoveragePanel
@@ -561,6 +568,16 @@ function Dashboard() {
       "cards",
       isAssetView
     );
+
+  const [
+    assetTableSortKey,
+    setAssetTableSortKey
+  ] = React.useState("name");
+
+  const [
+    assetTableSortDirection,
+    setAssetTableSortDirection
+  ] = React.useState<SortDirection>("asc");
 
   const [
     currentReadingSearch,
@@ -1055,6 +1072,53 @@ function Dashboard() {
         );
       }
     );
+
+  const sortedTableAssets =
+    [...filteredAssets].sort((left, right) => {
+      const metric = (asset: Asset, key: string): number | string | null =>
+        latestMetricValue(
+          observationsByAsset.get(asset.id) ?? [],
+          key
+        );
+
+      const value = (asset: Asset): string | number | boolean | null | undefined => {
+        switch (assetTableSortKey) {
+          case "externalId":
+            return asset.externalId;
+          case "location":
+            return asset.location?.name;
+          case "temperature":
+            return metric(asset, "temperature");
+          case "humidity":
+            return metric(asset, "humidity");
+          case "battery":
+            return metric(asset, "battery");
+          case "enabled":
+            return isAssetEnabled(asset);
+          case "health":
+            return asset.health.status;
+          default:
+            return asset.sensor?.name ?? asset.name ?? asset.externalId;
+        }
+      };
+
+      return compareTableValues(
+        value(left),
+        value(right),
+        assetTableSortDirection
+      );
+    });
+
+  const toggleAssetTableSort = (key: string): void => {
+    if (assetTableSortKey === key) {
+      setAssetTableSortDirection(
+        assetTableSortDirection === "asc" ? "desc" : "asc"
+      );
+    } else {
+      setAssetTableSortKey(key);
+      setAssetTableSortDirection("asc");
+    }
+  };
 
   const assetsWithoutLocation =
     assets.filter(
@@ -1573,31 +1637,6 @@ function Dashboard() {
             label={
               navbarCollapsed
                 ? null
-                : "Assets"
-            }
-            leftSection={
-              <NavigationIcon
-                page="assets"
-              />
-            }
-            title="Assets"
-            aria-label="Assets"
-            active={
-              activePage ===
-              "assets"
-            }
-            onClick={
-              () =>
-                navigateTo(
-                  "assets"
-                )
-            }
-          />
-
-          <NavLink
-            label={
-              navbarCollapsed
-                ? null
                 : "Alerts"
             }
             leftSection={
@@ -1615,6 +1654,31 @@ function Dashboard() {
               () =>
                 navigateTo(
                   "alerts"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Assets"
+            }
+            leftSection={
+              <NavigationIcon
+                page="assets"
+              />
+            }
+            title="Assets"
+            aria-label="Assets"
+            active={
+              activePage ===
+              "assets"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "assets"
                 )
             }
           />
@@ -2623,7 +2687,7 @@ function Dashboard() {
 
 
                       <BadgeSelect
-                        badgeColor={value => value === "enabled" ? "blue" : value === "disabled" ? "gray" : "gray"}
+                        badgeColor={value => value === "enabled" ? "blue" : value === "disabled" ? "orange" : "gray"}
                         label="Status"
                         value={currentReadingStatus}
                         onChange={
@@ -3247,6 +3311,10 @@ function Dashboard() {
                         {offlineAssets.length} Offline
                       </Badge>
 
+                      <Badge variant="light">
+                        {filteredAssets.length} / {assets.length} assets
+                      </Badge>
+
                       <SegmentedControl
                         value={
                           assetView
@@ -3351,7 +3419,7 @@ function Dashboard() {
                     />
 
                     <BadgeSelect
-                      badgeColor={value => value === "enabled" ? "blue" : value === "disabled" ? "gray" : "gray"}
+                      badgeColor={value => value === "enabled" ? "blue" : value === "disabled" ? "orange" : "gray"}
                       label="Status"
                       clearable
                       value={
@@ -3426,17 +3494,6 @@ function Dashboard() {
                       }
                     />                  </Group>
 
-                  <Text
-                    size="xs"
-                    c="dimmed"
-                    mb="sm"
-                  >
-                    {
-                      filteredAssets.length
-                    } of {
-                      assets.length
-                    } assets
-                  </Text>
                   </div>
 
                   {
@@ -3484,190 +3541,99 @@ function Dashboard() {
                           </SimpleGrid>
                         )
                         : (
-                          <Stack gap="xs">
-                            {
-                              filteredAssets.map(
-                                asset => {
+                          <Table.ScrollContainer minWidth={980}>
+                            <Table striped highlightOnHover verticalSpacing="xs">
+                              <Table.Thead>
+                                <Table.Tr>
+                                  {[
+                                    ["name", "Name"],
+                                    ["externalId", "Asset ID"],
+                                    ["location", "Location"],
+                                    ["temperature", "Temperature"],
+                                    ["humidity", "Humidity"],
+                                    ["battery", "Battery"],
+                                    ["enabled", "Enabled"],
+                                    ["health", "Health"]
+                                  ].map(([key, label]) => (
+                                    <SortableTableHeader
+                                      key={key}
+                                      active={assetTableSortKey === key}
+                                      direction={assetTableSortDirection}
+                                      onClick={() => toggleAssetTableSort(key)}
+                                    >
+                                      {label}
+                                    </SortableTableHeader>
+                                  ))}
+                                </Table.Tr>
+                              </Table.Thead>
 
+                              <Table.Tbody>
+                                {sortedTableAssets.map(asset => {
                                   const assetObservations =
-                                    observationsByAsset.get(
-                                      asset.id
-                                    ) ?? [];
-
+                                    observationsByAsset.get(asset.id) ?? [];
                                   const temperature =
-                                    latestMetricValue(
-                                      assetObservations,
-                                      "temperature"
-                                    );
-
+                                    latestMetricValue(assetObservations, "temperature");
                                   const humidity =
-                                    latestMetricValue(
-                                      assetObservations,
-                                      "humidity"
-                                    );
-
+                                    latestMetricValue(assetObservations, "humidity");
                                   const battery =
-                                    latestMetricValue(
-                                      assetObservations,
-                                      "battery"
-                                    );
-
+                                    latestMetricValue(assetObservations, "battery");
                                   const healthColor =
-                                    asset.health.status ===
-                                      "online"
+                                    asset.health.status === "online"
                                       ? "green"
-                                      : asset.health.status ===
-                                          "warning"
+                                      : asset.health.status === "warning"
                                         ? "yellow"
                                         : "red";
 
                                   return (
-                                    <Card
-                                      key={
-                                        asset.id
-                                      }
-                                      withBorder
-                                      radius="md"
-                                      padding="sm"
-                                    >
-                                      <Group
-                                        justify="space-between"
-                                        align="center"
-                                      >
-
-                                        <div
-                                          style={{
-                                            minWidth: 220
-                                          }}
-                                        >
-                                          <Text fw={700}>
-                                            {
-                                              asset.sensor?.name
-                                              ?? asset.name
-                                              ?? asset.externalId
-                                            }
-                                          </Text>
-
-                                          <Group
-                                            gap={4}
-                                            wrap="nowrap"
-                                          >
+                                    <Table.Tr key={asset.id}>
+                                      <Table.Td fw={600}>
+                                        {asset.sensor?.name ?? asset.name ?? asset.externalId}
+                                      </Table.Td>
+                                      <Table.Td>{asset.externalId}</Table.Td>
+                                      <Table.Td>
+                                        {asset.location ? (
+                                          <Group gap={5} wrap="nowrap">
                                             <LocationIcon
-                                              name={
-                                                getLocationIconName(
-                                                  asset.location
-                                                )
-                                              }
-                                              size={15}
+                                              name={getLocationIconName(asset.location)}
+                                              size={16}
                                             />
-
-                                            <Text
-                                              size="xs"
-                                              c="dimmed"
-                                            >
-                                              {
-                                                asset.location?.name
-                                                ?? "Unassigned"
-                                              }
-                                              {" · "}
-                                              {
-                                                asset.externalId
-                                              }
-                                            </Text>
+                                            <Text size="sm">{asset.location.name}</Text>
                                           </Group>
-                                        </div>
-
-                                        <Group gap="xl">
-
-                                          <div>
-                                            <Text
-                                              size="xs"
-                                              c="dimmed"
-                                            >
-                                              Temperature
-                                            </Text>
-
-                                            <Text fw={600}>
-                                              {
-                                                temperature !==
-                                                  null
-                                                  ? `${temperature} °C`
-                                                  : "—"
-                                              }
-                                            </Text>
-                                          </div>
-
-                                          <div>
-                                            <Text
-                                              size="xs"
-                                              c="dimmed"
-                                            >
-                                              Humidity
-                                            </Text>
-
-                                            <Text fw={600}>
-                                              {
-                                                humidity !==
-                                                  null
-                                                  ? `${humidity} %`
-                                                  : "—"
-                                              }
-                                            </Text>
-                                          </div>
-
-                                          <div>
-                                            <Text
-                                              size="xs"
-                                              c="dimmed"
-                                            >
-                                              Battery
-                                            </Text>
-
-                                            <Text fw={600}>
-                                              {
-                                                battery !==
-                                                  null
-                                                  ? `${battery} %`
-                                                  : "—"
-                                              }
-                                            </Text>
-                                          </div>
-
-                                          <Badge
-                                            color={
-                                              isAssetEnabled(asset)
-                                                ? "green"
-                                                : "orange"
-                                            }
-                                            variant="light"
-                                          >
-                                            {
-                                              isAssetEnabled(asset)
-                                                ? "Enabled"
-                                                : "Disabled"
-                                            }
-                                          </Badge>
-
-                                          <Badge
-                                            color={
-                                              healthColor
-                                            }
-                                            variant="light"
-                                          >
-                                            {
-                                              asset.health.status
-                                            }
-                                          </Badge>
-
-                                        </Group>
-
-                                      </Group>
-                                    </Card>
+                                        ) : "—"}
+                                      </Table.Td>
+                                      <Table.Td>
+                                        {temperature !== null ? `${temperature} °C` : "—"}
+                                      </Table.Td>
+                                      <Table.Td>
+                                        {humidity !== null ? `${humidity} %` : "—"}
+                                      </Table.Td>
+                                      <Table.Td>
+                                        {battery !== null ? `${battery} %` : "—"}
+                                      </Table.Td>
+                                      <Table.Td>
+                                        <Badge
+                                          size="sm"
+                                          color={isAssetEnabled(asset) ? "blue" : "orange"}
+                                          variant="light"
+                                        >
+                                          {isAssetEnabled(asset) ? "Enabled" : "Disabled"}
+                                        </Badge>
+                                      </Table.Td>
+                                      <Table.Td>
+                                        <Badge
+                                          size="sm"
+                                          color={healthColor}
+                                          variant="light"
+                                        >
+                                          {asset.health.status}
+                                        </Badge>
+                                      </Table.Td>
+                                    </Table.Tr>
                                   );
-                                }
-                              )
-                            }
-                          </Stack>
+                                })}
+                              </Table.Tbody>
+                            </Table>
+                          </Table.ScrollContainer>
                         )
                   }
 

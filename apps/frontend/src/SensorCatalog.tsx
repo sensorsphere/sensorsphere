@@ -652,6 +652,17 @@ export function SensorCatalog() {
       .trim()
       .toLowerCase();
 
+  const sensorStatusCounts = sensors.reduce(
+    (counts, sensor) => {
+      const status =
+        assetsBySensorUid.get(sensor.uid)?.health.status ?? "offline";
+
+      counts[status] += 1;
+      return counts;
+    },
+    { online: 0, warning: 0, offline: 0 }
+  );
+
   const filteredSensors =
     [...sensors]
       .filter(sensor => {
@@ -806,9 +817,16 @@ export function SensorCatalog() {
               ]}
             />
 
-            <Badge
-              variant="light"
-            >
+            <Badge color="green" variant="light">
+              {sensorStatusCounts.online} Online
+            </Badge>
+            <Badge color="yellow" variant="light">
+              {sensorStatusCounts.warning} Warning
+            </Badge>
+            <Badge color="red" variant="light">
+              {sensorStatusCounts.offline} Offline
+            </Badge>
+            <Badge variant="light">
               {filteredSensors.length} / {sensors.length} sensors
             </Badge>
 
@@ -902,7 +920,7 @@ export function SensorCatalog() {
           />
 
           <BadgeSelect
-            badgeColor={value => value === "enabled" ? "blue" : value === "disabled" ? "gray" : "gray"}
+            badgeColor={value => value === "enabled" ? "blue" : value === "disabled" ? "orange" : "gray"}
             label="Enabled"
             clearable
             value={enabledFilter}
