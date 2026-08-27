@@ -12,6 +12,7 @@ import {
   Loader,
   Modal,
   MultiSelect,
+  NumberInput,
   SegmentedControl,
   Select,
   SimpleGrid,
@@ -39,7 +40,11 @@ import {
 
 import {
   HistoryChart,
-  type HistoryChartSeries
+  computeHistoryYAxisBounds,
+  historyYAxisKey,
+  type HistoryChartSeries,
+  type HistoryYAxisConfig,
+  type HistoryYAxisMode
 } from "./HistoryChart";
 
 import {
@@ -70,6 +75,7 @@ interface HistoryGraphConfig {
   assetIds?: string[];
   hours: number;
   collapsed?: boolean;
+  yAxes?: Record<string, HistoryYAxisConfig>;
 }
 
 interface HistoryTabConfig {
@@ -231,6 +237,56 @@ function isRefreshInterval(
   );
 }
 
+
+function isHistoryYAxisConfig(
+  value: unknown
+): value is HistoryYAxisConfig {
+  if (
+    typeof value !== "object" ||
+    value === null
+  ) {
+    return false;
+  }
+
+  const config =
+    value as Partial<HistoryYAxisConfig>;
+
+  return (
+    (
+      config.mode === "auto" ||
+      config.mode === "fixed"
+    ) &&
+    (
+      config.min === undefined ||
+      (
+        typeof config.min === "number" &&
+        Number.isFinite(config.min)
+      )
+    ) &&
+    (
+      config.max === undefined ||
+      (
+        typeof config.max === "number" &&
+        Number.isFinite(config.max)
+      )
+    )
+  );
+}
+
+function isHistoryYAxisMap(
+  value: unknown
+): value is Record<string, HistoryYAxisConfig> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Object.entries(value).every(
+      ([key, config]) =>
+        key.length > 0 &&
+        isHistoryYAxisConfig(config)
+    )
+  );
+}
+
 const VALID_HOURS =
   new Set(
     PERIODS.map(
@@ -295,6 +351,12 @@ function isHistoryGraphs(
         (
           graph.collapsed === undefined ||
           typeof graph.collapsed === "boolean"
+        ) &&
+        (
+          graph.yAxes === undefined ||
+          isHistoryYAxisMap(
+            graph.yAxes
+          )
         )
       );
     })
@@ -356,7 +418,9 @@ function normalizeHistoryTabs(
             metricKey:
               graph.metricKey ?? "",
             assetIds:
-              graph.assetIds ?? []
+              graph.assetIds ?? [],
+            yAxes:
+              graph.yAxes ?? {}
           })
         )
     })
@@ -440,7 +504,8 @@ function newGraph(): HistoryGraphConfig {
     metricKey: "",
     assetIds: [],
     hours: 24,
-    collapsed: false
+    collapsed: false,
+    yAxes: {}
   };
 }
 
@@ -861,6 +926,74 @@ function HistoryGraph({
           };
         }
       );
+
+  const yAxisUnits =
+    Array.from(
+      new Set(
+        chartSeries.map(
+          item =>
+            historyYAxisKey(item.unit)
+        )
+      )
+    );
+
+  const autoYAxisBounds =
+    computeHistoryYAxisBounds(
+      chartSeries
+    );
+
+  const yAxes =
+    graph.yAxes ?? {};
+
+  const updateYAxis =
+    (
+      unit: string,
+      next: HistoryYAxisConfig
+    ): void => {
+      onChange({
+        ...graph,
+        yAxes: {
+          ...yAxes,
+          [unit]: next
+        }
+      });
+    };
+
+  const setYAxisMode =
+    (
+      unit: string,
+      mode: HistoryYAxisMode
+    ): void => {
+      const current =
+        yAxes[unit];
+
+      if (mode === "auto") {
+        updateYAxis(
+          unit,
+          {
+            ...current,
+            mode: "auto"
+          }
+        );
+        return;
+      }
+
+      const automatic =
+        autoYAxisBounds[unit];
+
+      updateYAxis(
+        unit,
+        {
+          mode: "fixed",
+          min:
+            current?.min ??
+            automatic?.min,
+          max:
+            current?.max ??
+            automatic?.max
+        }
+      );
+    };
 
   const automaticGraphTitle =
     mode === "sensor_metrics"
@@ -1701,6 +1834,158 @@ function HistoryGraph({
               </div>
 
               {
+                yAxisUnits.length > 0 && (
+                  <Stack gap="xs">
+                    {
+                      yAxisUnits.map(unit => {
+                        const config =
+                          yAxes[unit] ?? {
+                            mode: "auto" as const
+                          };
+
+                        const automatic =
+                          autoYAxisBounds[unit];
+
+                        const fixedInvalid =
+                          config.mode === "fixed" &&
+                          (
+                            typeof config.min !== "number" ||
+                            typeof config.max !== "number" ||
+                            config.min >= config.max
+                          );
+
+                        return (
+                          <Group
+                            key={unit}
+                            gap="sm"
+                            align="flex-end"
+                            wrap="wrap"
+                          >
+                            <div>
+                              <Text
+                                size="sm"
+                                fw={500}
+                                mb={3}
+                              >
+                                Y axis {unit}
+                              </Text>
+
+                              <SegmentedControl
+                                size="xs"
+                                value={
+                                  config.mode
+                                }
+                                onChange={
+                                  value =>
+                                    setYAxisMode(
+                                      unit,
+                                      value as HistoryYAxisMode
+                                    )
+                                }
+                                data={[
+                                  {
+                                    label: "Auto",
+                                    value: "auto"
+                                  },
+                                  {
+                                    label: "Fixed",
+                                    value: "fixed"
+                                  }
+                                ]}
+                              />
+                            </div>
+
+                            {
+                              config.mode === "fixed" && (
+                                <>
+                                  <NumberInput
+                                    label="Min"
+                                    value={
+                                      config.min ?? ""
+                                    }
+                                    placeholder={
+                                      automatic
+                                        ? String(automatic.min)
+                                        : "Min"
+                                    }
+                                    onChange={
+                                      value =>
+                                        updateYAxis(
+                                          unit,
+                                          {
+                                            ...config,
+                                            min:
+                                              typeof value === "number" &&
+                                              Number.isFinite(value)
+                                                ? value
+                                                : undefined
+                                          }
+                                        )
+                                    }
+                                    error={
+                                      fixedInvalid
+                                        ? "Min must be lower than Max"
+                                        : undefined
+                                    }
+                                    w={130}
+                                  />
+
+                                  <NumberInput
+                                    label="Max"
+                                    value={
+                                      config.max ?? ""
+                                    }
+                                    placeholder={
+                                      automatic
+                                        ? String(automatic.max)
+                                        : "Max"
+                                    }
+                                    onChange={
+                                      value =>
+                                        updateYAxis(
+                                          unit,
+                                          {
+                                            ...config,
+                                            max:
+                                              typeof value === "number" &&
+                                              Number.isFinite(value)
+                                                ? value
+                                                : undefined
+                                          }
+                                        )
+                                    }
+                                    error={
+                                      fixedInvalid
+                                        ? "Min must be lower than Max"
+                                        : undefined
+                                    }
+                                    w={130}
+                                  />
+                                </>
+                              )
+                            }
+
+                            {
+                              config.mode === "auto" &&
+                              automatic && (
+                                <Text
+                                  size="xs"
+                                  c="dimmed"
+                                  pb={6}
+                                >
+                                  {automatic.min} → {automatic.max}
+                                </Text>
+                              )
+                            }
+                          </Group>
+                        );
+                      })
+                    }
+                  </Stack>
+                )
+              }
+
+              {
                 mode === "sensor_metrics"
                   ? (
                     !asset
@@ -1735,6 +2020,9 @@ function HistoryGraph({
                                 }
                                 series={
                                   chartSeries
+                                }
+                                yAxes={
+                                  yAxes
                                 }
                               />
                             )
@@ -1781,6 +2069,9 @@ function HistoryGraph({
                                 }
                                 series={
                                   chartSeries
+                                }
+                                yAxes={
+                                  yAxes
                                 }
                               />
                             </>

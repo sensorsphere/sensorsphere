@@ -9,6 +9,21 @@ import type {
   ObservationHistoryPoint
 } from "./types";
 
+export type HistoryYAxisMode =
+  | "auto"
+  | "fixed";
+
+export interface HistoryYAxisConfig {
+  mode: HistoryYAxisMode;
+  min?: number;
+  max?: number;
+}
+
+export interface HistoryYAxisBounds {
+  min: number;
+  max: number;
+}
+
 export interface HistoryChartSeries {
   id: string;
   name: string;
@@ -21,6 +36,7 @@ export interface HistoryChartSeries {
 interface Props {
   hours: number;
   series: HistoryChartSeries[];
+  yAxes?: Record<string, HistoryYAxisConfig>;
 }
 
 function rawSeries(
@@ -55,9 +71,179 @@ function aggregateSeries(
     );
 }
 
+export function historyYAxisKey(
+  unit: string | null
+): string {
+  return unit ?? "Value";
+}
+
+function numericSeriesValues(
+  item: HistoryChartSeries
+): number[] {
+  return item.aggregates.length > 0
+    ? item.aggregates
+        .filter(
+          point =>
+            point.avg !== null &&
+            Number.isFinite(point.avg)
+        )
+        .map(point => point.avg as number)
+    : item.history
+        .filter(
+          point =>
+            typeof point.value === "number" &&
+            Number.isFinite(point.value)
+        )
+        .map(point => point.value as number);
+}
+
+function niceStep(
+  span: number
+): number {
+  if (
+    !Number.isFinite(span) ||
+    span <= 0
+  ) {
+    return 1;
+  }
+
+  const roughStep =
+    span / 6;
+
+  const magnitude =
+    10 ** Math.floor(
+      Math.log10(roughStep)
+    );
+
+  const normalized =
+    roughStep / magnitude;
+
+  const niceNormalized =
+    normalized <= 1
+      ? 1
+      : normalized <= 2
+        ? 2
+        : normalized <= 5
+          ? 5
+          : 10;
+
+  return niceNormalized * magnitude;
+}
+
+function autoBounds(
+  values: number[]
+): HistoryYAxisBounds | null {
+  if (values.length === 0) {
+    return null;
+  }
+
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+  const center =
+    (minimum + maximum) / 2;
+  const dataSpan =
+    maximum - minimum;
+
+  const minimumSpan =
+    Math.max(
+      Math.abs(center) * 0.05,
+      0.1
+    );
+
+  const paddedSpan =
+    Math.max(
+      dataSpan * 1.2,
+      minimumSpan
+    );
+
+  const rawMinimum =
+    center - paddedSpan / 2;
+  const rawMaximum =
+    center + paddedSpan / 2;
+  const step =
+    niceStep(paddedSpan);
+
+  let axisMinimum =
+    Math.floor(
+      rawMinimum / step
+    ) * step;
+
+  let axisMaximum =
+    Math.ceil(
+      rawMaximum / step
+    ) * step;
+
+  if (axisMinimum === axisMaximum) {
+    axisMinimum -= step;
+    axisMaximum += step;
+  }
+
+  const precision =
+    Math.max(
+      0,
+      -Math.floor(
+        Math.log10(step)
+      ) + 2
+    );
+
+  axisMinimum = Number(
+    axisMinimum.toFixed(precision)
+  );
+
+  axisMaximum = Number(
+    axisMaximum.toFixed(precision)
+  );
+
+  return {
+    min: axisMinimum,
+    max: axisMaximum
+  };
+}
+
+export function computeHistoryYAxisBounds(
+  series: HistoryChartSeries[]
+): Record<string, HistoryYAxisBounds> {
+  const valuesByAxis =
+    new Map<string, number[]>();
+
+  series.forEach(item => {
+    const key =
+      historyYAxisKey(item.unit);
+
+    const existing =
+      valuesByAxis.get(key) ?? [];
+
+    existing.push(
+      ...numericSeriesValues(item)
+    );
+
+    valuesByAxis.set(
+      key,
+      existing
+    );
+  });
+
+  const bounds:
+    Record<string, HistoryYAxisBounds> = {};
+
+  valuesByAxis.forEach(
+    (values, key) => {
+      const current =
+        autoBounds(values);
+
+      if (current) {
+        bounds[key] = current;
+      }
+    }
+  );
+
+  return bounds;
+}
+
 export function HistoryChart({
   hours,
-  series
+  series,
+  yAxes = {}
 }: Props) {
 
   const colorScheme =
@@ -76,9 +262,15 @@ export function HistoryChart({
     Array.from(
       new Set(
         series.map(
-          item => item.unit ?? "Value"
+          item =>
+            historyYAxisKey(item.unit)
         )
       )
+    );
+
+  const autoYAxisBounds =
+    computeHistoryYAxisBounds(
+      series
     );
 
   const to = new Date();
@@ -150,31 +342,56 @@ export function HistoryChart({
 
     yAxis:
       units.map(
-        (unit, index) => ({
-          type: "value",
-          name: unit,
-          position:
-            index === 0 ? "left" : "right",
-          offset:
-            index <= 1
-              ? 0
-              : (index - 1) * 55,
-          axisLabel: {
-            color:
-              dark ? "#aeb4bc" : "#6b7280"
-          },
-          nameTextStyle: {
-            color:
-              dark ? "#aeb4bc" : "#6b7280"
-          },
-          splitLine: {
-            show: index === 0,
-            lineStyle: {
+        (unit, index) => {
+          const config =
+            yAxes[unit];
+
+          const fixedBoundsValid =
+            config?.mode === "fixed" &&
+            typeof config.min === "number" &&
+            Number.isFinite(config.min) &&
+            typeof config.max === "number" &&
+            Number.isFinite(config.max) &&
+            config.min < config.max;
+
+          const bounds =
+            fixedBoundsValid
+              ? {
+                  min: config.min,
+                  max: config.max
+                }
+              : autoYAxisBounds[unit];
+
+          return {
+            type: "value",
+            name: unit,
+            position:
+              index === 0 ? "left" : "right",
+            offset:
+              index <= 1
+                ? 0
+                : (index - 1) * 55,
+            min:
+              bounds?.min,
+            max:
+              bounds?.max,
+            axisLabel: {
               color:
-                dark ? "#292d32" : "#edf1f6"
+                dark ? "#aeb4bc" : "#6b7280"
+            },
+            nameTextStyle: {
+              color:
+                dark ? "#aeb4bc" : "#6b7280"
+            },
+            splitLine: {
+              show: index === 0,
+              lineStyle: {
+                color:
+                  dark ? "#292d32" : "#edf1f6"
+              }
             }
-          }
-        })
+          };
+        }
       ),
 
     series:
@@ -195,7 +412,9 @@ export function HistoryChart({
           Math.max(
             0,
             units.indexOf(
-              item.unit ?? "Value"
+              historyYAxisKey(
+                item.unit
+              )
             )
           ),
         data:
