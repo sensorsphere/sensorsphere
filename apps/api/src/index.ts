@@ -43,6 +43,10 @@ import {
   registerProjectTodoFeature
 } from "./features/project-todos/index.js";
 
+import {
+  registerSimpleDashboardFeature
+} from "./features/simple-dashboards/index.js";
+
 
 import {
   loadApiConfig
@@ -947,6 +951,13 @@ await registerMetricRoutingFeature(
 );
 
 await registerProjectTodoFeature(
+  app,
+  {
+    pool
+  }
+);
+
+await registerSimpleDashboardFeature(
   app,
   {
     pool

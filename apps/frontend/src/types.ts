@@ -567,3 +567,25 @@ export interface CreateProjectTodoInput {
 
 export type UpdateProjectTodoInput =
   Partial<CreateProjectTodoInput>;
+
+export interface SimpleDashboard {
+  id: string;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SimpleDashboardCard {
+  id: string;
+  dashboardId: string;
+  assetMetricId: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SimpleDashboardData {
+  dashboards: SimpleDashboard[];
+  cards: SimpleDashboardCard[];
+}

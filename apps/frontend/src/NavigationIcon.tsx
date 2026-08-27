@@ -2,6 +2,7 @@ import React from "react";
 
 export type PageKey =
   | "dashboard"
+  | "dashboards"
   | "assets"
   | "history"
   | "alerts"
@@ -15,6 +16,7 @@ export type PageKey =
 
 const PAGE_COLORS: Record<PageKey, string> = {
   dashboard: "var(--mantine-color-cyan-6)",
+  dashboards: "var(--mantine-color-orange-6)",
   assets: "var(--mantine-color-blue-6)",
   history: "var(--mantine-color-violet-6)",
   alerts: "var(--mantine-color-red-6)",
@@ -54,6 +56,20 @@ export function NavigationIcon({
           <rect x="14" y="3" width="7" height="7" rx="1" />
           <rect x="3" y="14" width="7" height="7" rx="1" />
           <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+      );
+
+    case "dashboards":
+      return (
+        <svg {...common}>
+          <rect x="3" y="4" width="8" height="7" rx="1" />
+          <rect x="13" y="4" width="8" height="7" rx="1" />
+          <rect x="3" y="13" width="8" height="7" rx="1" />
+          <rect x="13" y="13" width="8" height="7" rx="1" />
+          <path d="M5 8h4" />
+          <path d="M15 8h4" />
+          <path d="M5 17h4" />
+          <path d="M15 17h4" />
         </svg>
       );
 

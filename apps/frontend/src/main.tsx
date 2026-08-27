@@ -88,6 +88,10 @@ import {
 } from "./TopologyPanel";
 
 import {
+  SimpleDashboardPanel
+} from "./SimpleDashboardPanel";
+
+import {
   AlertPanel
 } from "./AlertPanel";
 
@@ -231,6 +235,9 @@ Record<PageKey, string> = {
   dashboard:
     "Dashboard",
 
+  dashboards:
+    "Dashboards",
+
   assets:
     "Assets",
 
@@ -268,6 +275,7 @@ function isPageKey(
 
   return (
     value === "dashboard" ||
+    value === "dashboards" ||
     value === "assets" ||
     value === "history" ||
     value === "alerts" ||
@@ -1930,6 +1938,31 @@ function Dashboard() {
               () =>
                 navigateTo(
                   "dashboard"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Dashboards"
+            }
+            leftSection={
+              <NavigationIcon
+                page="dashboards"
+              />
+            }
+            title="Dashboards"
+            aria-label="Dashboards"
+            active={
+              activePage ===
+              "dashboards"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "dashboards"
                 )
             }
           />
@@ -4649,6 +4682,13 @@ function Dashboard() {
                 </Group>
               </Stack>
             </Modal>
+
+{
+              activePage ===
+                "dashboards" && (
+                <SimpleDashboardPanel />
+              )
+            }
 
 {
               activePage ===
