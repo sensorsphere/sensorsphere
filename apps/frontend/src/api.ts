@@ -1211,6 +1211,23 @@ export async function addSimpleDashboardCard(
   );
 }
 
+export async function updateSimpleDashboardCard(
+  dashboardId: string,
+  cardId: string,
+  assetMetricId: string
+): Promise<SimpleDashboardCard> {
+  return readJson<SimpleDashboardCard>(
+    await fetch(
+      `/api/v1/simple-dashboards/${encodeURIComponent(dashboardId)}/cards/${encodeURIComponent(cardId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assetMetricId })
+      }
+    )
+  );
+}
+
 export async function deleteSimpleDashboardCard(
   dashboardId: string,
   cardId: string

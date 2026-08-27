@@ -131,6 +131,35 @@ export class SimpleDashboardController {
     }
   };
 
+  updateCard = async (
+    request: FastifyRequest<{ Params: { id: string; cardId: string }; Body: unknown }>,
+    reply: FastifyReply
+  ) => {
+    const parsedId = uuid.safeParse(request.params.id);
+    const parsedCardId = uuid.safeParse(request.params.cardId);
+    const parsed = createCardSchema.safeParse(request.body);
+    if (!parsedId.success || !parsedCardId.success || !parsed.success) {
+      return reply.code(400).send({ error: "Invalid dashboard card" });
+    }
+    if (!(await this.repository.metricExists(parsed.data.assetMetricId))) {
+      return reply.code(400).send({ error: "Asset metric not found" });
+    }
+    try {
+      const card = await this.repository.updateCard(
+        parsedId.data,
+        parsedCardId.data,
+        parsed.data.assetMetricId
+      );
+      if (!card) return reply.code(404).send({ error: "Dashboard card not found" });
+      return reply.send(mapCard(card));
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "23505") {
+        return reply.code(409).send({ error: "Metric already exists on this dashboard" });
+      }
+      throw error;
+    }
+  };
+
   deleteCard = async (
     request: FastifyRequest<{ Params: { id: string; cardId: string } }>,
     reply: FastifyReply

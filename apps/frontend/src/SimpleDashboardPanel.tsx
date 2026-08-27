@@ -31,7 +31,8 @@ import {
   getMetricDisplaySettings,
   getSimpleDashboards,
   renameSimpleDashboard,
-  reorderSimpleDashboardCards
+  reorderSimpleDashboardCards,
+  updateSimpleDashboardCard
 } from "./api";
 import type {
   Asset,
@@ -153,7 +154,8 @@ export function SimpleDashboardPanel() {
     );
   const [dashboardModalMode, setDashboardModalMode] = React.useState<"create" | "rename" | null>(null);
   const [dashboardName, setDashboardName] = React.useState("");
-  const [addCardOpened, setAddCardOpened] = React.useState(false);
+  const [cardEditorMode, setCardEditorMode] = React.useState<"add" | "edit" | null>(null);
+  const [editingCardId, setEditingCardId] = React.useState<string | null>(null);
   const [selectedAssetId, setSelectedAssetId] = React.useState<string | null>(null);
   const [selectedMetricId, setSelectedMetricId] = React.useState<string | null>(null);
   const [lastMetricKey, setLastMetricKey] = usePersistentState<string>(
@@ -207,7 +209,23 @@ export function SimpleDashboardPanel() {
       if (selectedMetric) {
         setLastMetricKey(selectedMetric.key);
       }
-      setAddCardOpened(false);
+      setCardEditorMode(null);
+      setEditingCardId(null);
+      setSelectedAssetId(null);
+      setSelectedMetricId(null);
+      await invalidate();
+    }
+  });
+  const updateCardMutation = useMutation({
+    mutationFn: ({ dashboardId, cardId, assetMetricId }: { dashboardId: string; cardId: string; assetMetricId: string }) =>
+      updateSimpleDashboardCard(dashboardId, cardId, assetMetricId),
+    onSuccess: async () => {
+      const selectedMetric = assets
+        .flatMap(asset => asset.metrics)
+        .find(metric => metric.id === selectedMetricId);
+      if (selectedMetric) setLastMetricKey(selectedMetric.key);
+      setCardEditorMode(null);
+      setEditingCardId(null);
       setSelectedAssetId(null);
       setSelectedMetricId(null);
       await invalidate();
@@ -282,9 +300,13 @@ export function SimpleDashboardPanel() {
     : [];
 
   const selectedAsset = assets.find(asset => asset.id === selectedAssetId) ?? null;
+  const editingCard = activeCards.find(item => item.card.id === editingCardId) ?? null;
   const dashboardMetricIds = new Set(activeCards.map(item => item.metric.id));
   const metricOptions = (selectedAsset?.metrics ?? [])
-    .filter(metric => metric.enabled && !dashboardMetricIds.has(metric.id))
+    .filter(metric =>
+      metric.enabled &&
+      (!dashboardMetricIds.has(metric.id) || metric.id === editingCard?.metric.id)
+    )
     .map(metric => ({
       value: metric.id,
       label: `${metric.displayName}${metric.unit ? ` (${metric.unit})` : ""}`
@@ -334,9 +356,23 @@ export function SimpleDashboardPanel() {
       metric =>
         metric.enabled &&
         metric.key === lastMetricKey &&
-        !dashboardMetricIds.has(metric.id)
+        (!dashboardMetricIds.has(metric.id) || metric.id === editingCard?.metric.id)
     );
     setSelectedMetricId(preferredMetric?.id ?? null);
+  };
+
+  const openAddCardEditor = () => {
+    setEditingCardId(null);
+    setSelectedAssetId(null);
+    setSelectedMetricId(null);
+    setCardEditorMode("add");
+  };
+
+  const openEditCardEditor = (item: ResolvedMetricCard) => {
+    setEditingCardId(item.card.id);
+    setSelectedAssetId(item.asset.id);
+    setSelectedMetricId(item.metric.id);
+    setCardEditorMode("edit");
   };
 
   return (
@@ -413,7 +449,7 @@ export function SimpleDashboardPanel() {
             size="xs"
             variant="light"
             color="green"
-            onClick={() => setAddCardOpened(true)}
+            onClick={openAddCardEditor}
           >
             + Add card
           </Button>
@@ -464,46 +500,72 @@ export function SimpleDashboardPanel() {
                   minHeight: 132
                 }}
               >
-                <Stack gap={4} h="100%">
-                  <Group justify="space-between" align="flex-start" wrap="nowrap">
-                    <Badge variant="light" color={color} size="sm">
-                      {metric.displayName.toUpperCase()}
-                    </Badge>
-                    <ActionIcon
-                      size="sm"
-                      variant="light"
-                      color="red"
-                      aria-label="Remove card"
-                      title="Remove card"
-                      onClick={() =>
-                        setDeleteTarget({
-                          type: "card",
-                          dashboardId: activeDashboard.id,
-                          cardId: card.id,
-                          label: `${asset.name ?? asset.externalId} · ${metric.displayName}`
-                        })
-                      }
-                    >
-                      ×
-                    </ActionIcon>
+                <Stack gap={6} h="100%">
+                  <Group justify="space-between" align="center" wrap="nowrap">
+                    <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
+                      <Text
+                        size="md"
+                        fw={800}
+                        lineClamp={1}
+                        c={asset.health.status === "offline" ? "red" : undefined}
+                      >
+                        {asset.name ?? asset.externalId}
+                      </Text>
+                      <Badge
+                        size="xs"
+                        variant="light"
+                        color={asset.health.status === "offline" ? "red" : "green"}
+                      >
+                        {asset.health.status === "offline" ? "OFFLINE" : "ONLINE"}
+                      </Badge>
+                    </Group>
+                    <Group gap={4} wrap="nowrap">
+                      <ActionIcon
+                        size="sm"
+                        variant="light"
+                        color="blue"
+                        aria-label="Edit card"
+                        title="Edit card"
+                        onClick={() => openEditCardEditor({ card, asset, metric, observation })}
+                      >
+                        ✎
+                      </ActionIcon>
+                      <ActionIcon
+                        size="sm"
+                        variant="light"
+                        color="red"
+                        aria-label="Remove card"
+                        title="Remove card"
+                        onClick={() =>
+                          setDeleteTarget({
+                            type: "card",
+                            dashboardId: activeDashboard.id,
+                            cardId: card.id,
+                            label: `${asset.name ?? asset.externalId} · ${metric.displayName}`
+                          })
+                        }
+                      >
+                        ×
+                      </ActionIcon>
+                    </Group>
                   </Group>
-                  <Group gap="xs" align="center" wrap="nowrap">
-                    <Text size="xl" fw={800} style={{ color }}>
+                  <Group gap={6} align="center" wrap="nowrap">
+                    <Text size="xl" fw={800} style={{ color, lineHeight: 1.1 }}>
                       {formatMetricValue(observation)}{metric.unit ? ` ${metric.unit}` : ""}
                     </Text>
+                    <Badge variant="light" color={color} size="xs">
+                      {metric.displayName.toUpperCase()}
+                    </Badge>
                     {qualityColor(observation) && (
                       <Badge
-                        size="sm"
+                        size="xs"
                         variant="light"
                         color={qualityColor(observation)!}
                       >
-                        {qualityLabel(observation)}
+                        • {qualityLabel(observation)?.toUpperCase()}
                       </Badge>
                     )}
                   </Group>
-                  <Text size="sm" fw={600} lineClamp={1}>
-                    {asset.name ?? asset.externalId}
-                  </Text>
                   <Group gap={5} wrap="nowrap">
                     {asset.location && (
                       <LocationIcon name={getLocationIconName(asset.location)} size={14} />
@@ -596,9 +658,12 @@ export function SimpleDashboardPanel() {
       </Modal>
 
       <Modal
-        opened={addCardOpened}
-        onClose={() => setAddCardOpened(false)}
-        title="Add metric card"
+        opened={cardEditorMode !== null}
+        onClose={() => {
+          setCardEditorMode(null);
+          setEditingCardId(null);
+        }}
+        title={cardEditorMode === "edit" ? "Edit metric card" : "Add metric card"}
       >
         <Stack>
           <Select
@@ -621,14 +686,30 @@ export function SimpleDashboardPanel() {
             nothingFoundMessage={selectedAsset ? "No available metric" : "Select an asset first"}
           />
           <Group justify="flex-end">
-            <Button variant="light" color="gray" onClick={() => setAddCardOpened(false)}>Cancel</Button>
             <Button
               variant="light"
-              color="green"
-              disabled={!activeDashboard || !selectedMetricId}
-              loading={addCardMutation.isPending}
+              color="gray"
               onClick={() => {
-                if (activeDashboard && selectedMetricId) {
+                setCardEditorMode(null);
+                setEditingCardId(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="light"
+              color={cardEditorMode === "edit" ? "blue" : "green"}
+              disabled={!activeDashboard || !selectedMetricId}
+              loading={addCardMutation.isPending || updateCardMutation.isPending}
+              onClick={() => {
+                if (!activeDashboard || !selectedMetricId) return;
+                if (cardEditorMode === "edit" && editingCardId) {
+                  updateCardMutation.mutate({
+                    dashboardId: activeDashboard.id,
+                    cardId: editingCardId,
+                    assetMetricId: selectedMetricId
+                  });
+                } else {
                   addCardMutation.mutate({
                     dashboardId: activeDashboard.id,
                     assetMetricId: selectedMetricId
@@ -636,7 +717,7 @@ export function SimpleDashboardPanel() {
                 }
               }}
             >
-              Add card
+              {cardEditorMode === "edit" ? "Save" : "Add card"}
             </Button>
           </Group>
         </Stack>

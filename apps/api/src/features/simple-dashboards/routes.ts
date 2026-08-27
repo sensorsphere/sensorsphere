@@ -10,6 +10,7 @@ export async function registerSimpleDashboardRoutes(
   app.patch("/simple-dashboards/:id", options.controller.renameDashboard);
   app.delete("/simple-dashboards/:id", options.controller.deleteDashboard);
   app.post("/simple-dashboards/:id/cards", options.controller.createCard);
+  app.patch("/simple-dashboards/:id/cards/:cardId", options.controller.updateCard);
   app.delete("/simple-dashboards/:id/cards/:cardId", options.controller.deleteCard);
   app.put("/simple-dashboards/:id/cards/order", options.controller.reorderCards);
 }

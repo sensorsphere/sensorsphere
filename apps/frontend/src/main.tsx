@@ -1915,21 +1915,21 @@ function Dashboard() {
           </svg>
         </button>
 
-        <Stack gap="xs">
+        <Stack gap={2}>
 
           <NavLink
             label={
               navbarCollapsed
                 ? null
-                : "Dashboard"
+                : "Overview"
             }
             leftSection={
               <NavigationIcon
                 page="dashboard"
               />
             }
-            title="Dashboard"
-            aria-label="Dashboard"
+            title="Overview"
+            aria-label="Overview"
             active={
               activePage ===
               "dashboard"

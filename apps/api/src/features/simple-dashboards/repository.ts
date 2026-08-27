@@ -108,6 +108,20 @@ export class PostgresSimpleDashboardRepository {
     return result.rows[0]!;
   }
 
+  async updateCard(
+    dashboardId: string,
+    cardId: string,
+    assetMetricId: string
+  ): Promise<SimpleDashboardCardRecord | null> {
+    const result = await this.pool.query<SimpleDashboardCardRecord>(`
+      UPDATE simple_dashboard_cards
+      SET asset_metric_id = $3, updated_at = NOW()
+      WHERE id = $1 AND dashboard_id = $2
+      RETURNING id, dashboard_id, asset_metric_id, sort_order, created_at, updated_at
+    `, [cardId, dashboardId, assetMetricId]);
+    return result.rows[0] ?? null;
+  }
+
   async deleteCard(dashboardId: string, cardId: string): Promise<boolean> {
     const result = await this.pool.query(
       `DELETE FROM simple_dashboard_cards
