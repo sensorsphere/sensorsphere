@@ -361,21 +361,69 @@ function periodLabel(
   return labels[value] ?? value;
 }
 
+const RECOMMENDATION_SAMPLE_THRESHOLDS = [
+  { hours: 5 / 60, minimumSamples: 4 },
+  { hours: 10 / 60, minimumSamples: 8 },
+  { hours: 15 / 60, minimumSamples: 12 },
+  { hours: 0.5, minimumSamples: 20 },
+  { hours: 1, minimumSamples: 40 },
+  { hours: 6, minimumSamples: 120 },
+  { hours: 24, minimumSamples: 240 },
+  { hours: 168, minimumSamples: 500 }
+] as const;
+
+function minimumSamplesForHours(
+  hours: number
+): number {
+  const threshold =
+    RECOMMENDATION_SAMPLE_THRESHOLDS.find(
+      item => hours <= item.hours
+    );
+
+  return (
+    threshold ??
+    RECOMMENDATION_SAMPLE_THRESHOLDS[
+      RECOMMENDATION_SAMPLE_THRESHOLDS.length - 1
+    ]
+  ).minimumSamples;
+}
+
 function minimumSamplesForPeriod(
   value: string
 ): number {
-  const minimums: Record<string, number> = {
-    [String(5 / 60)]: 4,
-    [String(10 / 60)]: 8,
-    [String(15 / 60)]: 12,
-    "0.5": 20,
-    "1": 40,
-    "6": 120,
-    "24": 240,
-    "168": 500
-  };
+  const hours = Number(value);
 
-  return minimums[value] ?? 4;
+  return Number.isFinite(hours) && hours > 0
+    ? minimumSamplesForHours(hours)
+    : RECOMMENDATION_SAMPLE_THRESHOLDS[0].minimumSamples;
+}
+
+function minimumSamplesForObservation(
+  row: GatewayCoverageRow,
+  selectedPeriod: string
+): number {
+  const selectedHours = Number(selectedPeriod);
+  const firstSeenAt = new Date(row.firstSeenAt).getTime();
+  const lastSeenAt = new Date(row.lastSeenAt).getTime();
+
+  if (
+    !Number.isFinite(selectedHours) ||
+    selectedHours <= 0 ||
+    !Number.isFinite(firstSeenAt) ||
+    !Number.isFinite(lastSeenAt) ||
+    lastSeenAt < firstSeenAt
+  ) {
+    return minimumSamplesForPeriod(selectedPeriod);
+  }
+
+  const observedHours = Math.max(
+    5 / 60,
+    (lastSeenAt - firstSeenAt) / (60 * 60 * 1000)
+  );
+
+  return minimumSamplesForHours(
+    Math.min(selectedHours, observedHours)
+  );
 }
 
 function recommendationInfo(
@@ -389,17 +437,16 @@ function recommendationInfo(
   detailLines: string[];
   color: string;
 } {
-  const minimumSamples =
-    minimumSamplesForPeriod(
-      selectedPeriod
-    );
-
   const candidates =
     rows
       .map(row => ({
         ...row,
         avgRssi: Number(row.avgRssi),
-        sampleCount: Number(row.sampleCount)
+        sampleCount: Number(row.sampleCount),
+        minimumSamples: minimumSamplesForObservation(
+          row,
+          selectedPeriod
+        )
       }))
       .filter(
         row =>
@@ -434,7 +481,7 @@ function recommendationInfo(
   const eligible =
     candidates.filter(
       row =>
-        row.sampleCount >= minimumSamples
+        row.sampleCount >= row.minimumSamples
     );
 
   const insufficientCount =
@@ -466,7 +513,7 @@ function recommendationInfo(
       status: "NO RELIABLE SUGGESTION",
       detailLines: [
         `Best data so far: ${bestSoFar.gatewayId}`,
-        `${bestSoFar.sampleCount} samples available`,
+        `${bestSoFar.sampleCount}/${bestSoFar.minimumSamples} samples required for observed duration`,
         ...coverageLines
       ],
       color: "orange"
@@ -477,7 +524,8 @@ function recommendationInfo(
     eligible[0];
 
   const commonDetails = [
-    `${winner.sampleCount} samples in last ${period}`,
+    `${winner.sampleCount}/${winner.minimumSamples} samples required for observed duration`,
+    `Selected period: ${period}`,
     ...coverageLines
   ];
 
@@ -1581,7 +1629,7 @@ export function GatewayCoveragePanel() {
 
         <Group gap="sm">
           <Text size="xs" c="dimmed" fw={500}>
-            Minimum samples for suggestion: {minimumSamplesForPeriod(hours)}
+            Reliability threshold: up to {minimumSamplesForPeriod(hours)} samples
           </Text>
 
           <SegmentedControl
