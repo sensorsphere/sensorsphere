@@ -8,9 +8,19 @@ export interface SimpleDashboardRecord {
   updated_at: Date;
 }
 
+export interface SimpleDashboardSectionRecord {
+  id: string;
+  dashboard_id: string;
+  name: string;
+  sort_order: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
 export interface SimpleDashboardCardRecord {
   id: string;
   dashboard_id: string;
+  section_id: string | null;
   asset_metric_id: string;
   sort_order: number;
   created_at: Date;
@@ -29,11 +39,20 @@ export class PostgresSimpleDashboardRepository {
     return result.rows;
   }
 
+  async listSections(): Promise<SimpleDashboardSectionRecord[]> {
+    const result = await this.pool.query<SimpleDashboardSectionRecord>(`
+      SELECT id, dashboard_id, name, sort_order, created_at, updated_at
+      FROM simple_dashboard_sections
+      ORDER BY dashboard_id, sort_order, created_at, id
+    `);
+    return result.rows;
+  }
+
   async listCards(): Promise<SimpleDashboardCardRecord[]> {
     const result = await this.pool.query<SimpleDashboardCardRecord>(`
-      SELECT id, dashboard_id, asset_metric_id, sort_order, created_at, updated_at
+      SELECT id, dashboard_id, section_id, asset_metric_id, sort_order, created_at, updated_at
       FROM simple_dashboard_cards
-      ORDER BY dashboard_id, sort_order, created_at, id
+      ORDER BY dashboard_id, section_id NULLS FIRST, sort_order, created_at, id
     `);
     return result.rows;
   }
@@ -58,6 +77,79 @@ export class PostgresSimpleDashboardRepository {
       RETURNING id, name, sort_order, created_at, updated_at
     `, [id, name]);
     return result.rows[0] ?? null;
+  }
+
+  async reorderDashboards(dashboardIds: string[]): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const existing = await client.query<{ id: string }>(`
+        SELECT id FROM simple_dashboards ORDER BY sort_order, created_at, id FOR UPDATE
+      `);
+      const existingIds = existing.rows.map(row => row.id);
+      if (existingIds.length !== dashboardIds.length || existingIds.some(id => !dashboardIds.includes(id))) {
+        await client.query("ROLLBACK");
+        return false;
+      }
+      for (let index = 0; index < dashboardIds.length; index += 1) {
+        await client.query(`UPDATE simple_dashboards SET sort_order = $2, updated_at = NOW() WHERE id = $1`, [dashboardIds[index], index]);
+      }
+      await client.query("COMMIT");
+      return true;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async createSection(dashboardId: string, name: string): Promise<SimpleDashboardSectionRecord> {
+    const result = await this.pool.query<SimpleDashboardSectionRecord>(`
+      INSERT INTO simple_dashboard_sections (dashboard_id, name, sort_order)
+      VALUES ($1, $2, COALESCE((SELECT MAX(sort_order) + 1 FROM simple_dashboard_sections WHERE dashboard_id = $1), 0))
+      RETURNING id, dashboard_id, name, sort_order, created_at, updated_at
+    `, [dashboardId, name]);
+    return result.rows[0]!;
+  }
+
+  async renameSection(dashboardId: string, sectionId: string, name: string): Promise<SimpleDashboardSectionRecord | null> {
+    const result = await this.pool.query<SimpleDashboardSectionRecord>(`
+      UPDATE simple_dashboard_sections SET name = $3, updated_at = NOW()
+      WHERE id = $1 AND dashboard_id = $2
+      RETURNING id, dashboard_id, name, sort_order, created_at, updated_at
+    `, [sectionId, dashboardId, name]);
+    return result.rows[0] ?? null;
+  }
+
+  async deleteSection(dashboardId: string, sectionId: string): Promise<boolean> {
+    const result = await this.pool.query(`DELETE FROM simple_dashboard_sections WHERE id = $1 AND dashboard_id = $2`, [sectionId, dashboardId]);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async reorderSections(dashboardId: string, sectionIds: string[]): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const existing = await client.query<{ id: string }>(`
+        SELECT id FROM simple_dashboard_sections WHERE dashboard_id = $1 ORDER BY sort_order, created_at, id FOR UPDATE
+      `, [dashboardId]);
+      const existingIds = existing.rows.map(row => row.id);
+      if (existingIds.length !== sectionIds.length || existingIds.some(id => !sectionIds.includes(id))) {
+        await client.query("ROLLBACK");
+        return false;
+      }
+      for (let index = 0; index < sectionIds.length; index += 1) {
+        await client.query(`UPDATE simple_dashboard_sections SET sort_order = $3, updated_at = NOW() WHERE dashboard_id = $1 AND id = $2`, [dashboardId, sectionIds[index], index]);
+      }
+      await client.query("COMMIT");
+      return true;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async deleteDashboard(id: string): Promise<boolean> {
@@ -86,39 +178,43 @@ export class PostgresSimpleDashboardRepository {
 
   async createCard(
     dashboardId: string,
-    assetMetricId: string
+    assetMetricId: string,
+    sectionId: string | null
   ): Promise<SimpleDashboardCardRecord> {
     const result = await this.pool.query<SimpleDashboardCardRecord>(`
       INSERT INTO simple_dashboard_cards (
         dashboard_id,
+        section_id,
         asset_metric_id,
         sort_order
       )
       VALUES (
         $1,
+        $3,
         $2,
         COALESCE((
           SELECT MAX(sort_order) + 1
           FROM simple_dashboard_cards
-          WHERE dashboard_id = $1
+          WHERE dashboard_id = $1 AND section_id IS NOT DISTINCT FROM $3
         ), 0)
       )
-      RETURNING id, dashboard_id, asset_metric_id, sort_order, created_at, updated_at
-    `, [dashboardId, assetMetricId]);
+      RETURNING id, dashboard_id, section_id, asset_metric_id, sort_order, created_at, updated_at
+    `, [dashboardId, assetMetricId, sectionId]);
     return result.rows[0]!;
   }
 
   async updateCard(
     dashboardId: string,
     cardId: string,
-    assetMetricId: string
+    assetMetricId: string,
+    sectionId: string | null
   ): Promise<SimpleDashboardCardRecord | null> {
     const result = await this.pool.query<SimpleDashboardCardRecord>(`
       UPDATE simple_dashboard_cards
-      SET asset_metric_id = $3, updated_at = NOW()
+      SET asset_metric_id = $3, section_id = $4, updated_at = NOW()
       WHERE id = $1 AND dashboard_id = $2
-      RETURNING id, dashboard_id, asset_metric_id, sort_order, created_at, updated_at
-    `, [cardId, dashboardId, assetMetricId]);
+      RETURNING id, dashboard_id, section_id, asset_metric_id, sort_order, created_at, updated_at
+    `, [cardId, dashboardId, assetMetricId, sectionId]);
     return result.rows[0] ?? null;
   }
 

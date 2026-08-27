@@ -576,9 +576,19 @@ export interface SimpleDashboard {
   updatedAt: string;
 }
 
+export interface SimpleDashboardSection {
+  id: string;
+  dashboardId: string;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SimpleDashboardCard {
   id: string;
   dashboardId: string;
+  sectionId: string | null;
   assetMetricId: string;
   sortOrder: number;
   createdAt: string;
@@ -587,5 +597,6 @@ export interface SimpleDashboardCard {
 
 export interface SimpleDashboardData {
   dashboards: SimpleDashboard[];
+  sections: SimpleDashboardSection[];
   cards: SimpleDashboardCard[];
 }

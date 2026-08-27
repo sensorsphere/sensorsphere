@@ -37,7 +37,8 @@ import type {
   UpdateProjectTodoInput,
   SimpleDashboardData,
   SimpleDashboard,
-  SimpleDashboardCard
+  SimpleDashboardCard,
+  SimpleDashboardSection
 } from "./types";
 
 async function readJson<T>(
@@ -1183,6 +1184,45 @@ export async function renameSimpleDashboard(
   );
 }
 
+export async function reorderSimpleDashboards(dashboardIds: string[]): Promise<void> {
+  await readJson<{ status: string }>(
+    await fetch("/api/v1/simple-dashboards/order", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dashboardIds })
+    })
+  );
+}
+
+export async function createSimpleDashboardSection(dashboardId: string, name: string): Promise<SimpleDashboardSection> {
+  return readJson<SimpleDashboardSection>(
+    await fetch(`/api/v1/simple-dashboards/${encodeURIComponent(dashboardId)}/sections`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name })
+    })
+  );
+}
+
+export async function renameSimpleDashboardSection(dashboardId: string, sectionId: string, name: string): Promise<SimpleDashboardSection> {
+  return readJson<SimpleDashboardSection>(
+    await fetch(`/api/v1/simple-dashboards/${encodeURIComponent(dashboardId)}/sections/${encodeURIComponent(sectionId)}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name })
+    })
+  );
+}
+
+export async function deleteSimpleDashboardSection(dashboardId: string, sectionId: string): Promise<void> {
+  const response = await fetch(`/api/v1/simple-dashboards/${encodeURIComponent(dashboardId)}/sections/${encodeURIComponent(sectionId)}`, { method: "DELETE" });
+  if (!response.ok) await readJson<never>(response);
+}
+
+export async function reorderSimpleDashboardSections(dashboardId: string, sectionIds: string[]): Promise<void> {
+  await readJson<{ status: string }>(
+    await fetch(`/api/v1/simple-dashboards/${encodeURIComponent(dashboardId)}/sections/order`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sectionIds })
+    })
+  );
+}
+
 export async function deleteSimpleDashboard(
   id: string
 ): Promise<void> {
@@ -1197,7 +1237,8 @@ export async function deleteSimpleDashboard(
 
 export async function addSimpleDashboardCard(
   dashboardId: string,
-  assetMetricId: string
+  assetMetricId: string,
+  sectionId: string | null = null
 ): Promise<SimpleDashboardCard> {
   return readJson<SimpleDashboardCard>(
     await fetch(
@@ -1205,7 +1246,7 @@ export async function addSimpleDashboardCard(
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assetMetricId })
+        body: JSON.stringify({ assetMetricId, sectionId })
       }
     )
   );
@@ -1214,7 +1255,8 @@ export async function addSimpleDashboardCard(
 export async function updateSimpleDashboardCard(
   dashboardId: string,
   cardId: string,
-  assetMetricId: string
+  assetMetricId: string,
+  sectionId: string | null = null
 ): Promise<SimpleDashboardCard> {
   return readJson<SimpleDashboardCard>(
     await fetch(
@@ -1222,7 +1264,7 @@ export async function updateSimpleDashboardCard(
       {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assetMetricId })
+        body: JSON.stringify({ assetMetricId, sectionId })
       }
     )
   );
