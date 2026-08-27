@@ -12,3 +12,7 @@ sensor:
 
     battery_level:
       name: "Battery Level D6:43:DA"
+
+  - platform: ble_rssi
+    mac_address: "4C:65:A8:D6:43:DA"
+    name: "RSSI D6:43:DA"
