@@ -39,6 +39,7 @@ export interface AssetRecord {
   room_name: string | null;
   source_sensor_uid: string | null;
   source_sensor_name: string | null;
+  tags: string[];
   last_measurement_at: Date | null;
   age_seconds: number | null;
   warning_after_seconds: number;
@@ -70,6 +71,10 @@ export interface AssetRepository {
     externalId: string
   ): Promise<AssetRecord | null>;
   findMetrics(assetIds: string[]): Promise<AssetMetricRecord[]>;
+  assetTypeExists(key: string): Promise<boolean>;
+  manufacturerExists(name: string): Promise<boolean>;
+  tagsExist(names: string[]): Promise<boolean>;
+  replaceTags(id: string, names: string[]): Promise<boolean>;
   create(
     asset: CreateAssetRecord
   ): Promise<AssetRecord>;
@@ -128,6 +133,7 @@ const ASSET_SELECT = `
       r.name AS room_name,
       a.source_sensor_uid,
       s.name AS source_sensor_name,
+      COALESCE(tag_list.tags, ARRAY[]::text[]) AS tags,
       latest.time AS last_measurement_at,
       CASE
         WHEN latest.time IS NULL
@@ -166,6 +172,12 @@ const ASSET_SELECT = `
   LEFT JOIN locations l ON l.id = a.location_id
   LEFT JOIN rooms r ON r.id = a.room_id
   LEFT JOIN sensors s ON s.sensor_uid = a.source_sensor_uid
+  LEFT JOIN LATERAL (
+      SELECT ARRAY_AGG(t.name ORDER BY t.name) AS tags
+      FROM asset_tags at
+      JOIN tags t ON t.id = at.tag_id
+      WHERE at.asset_id = a.id
+  ) tag_list ON TRUE
   LEFT JOIN LATERAL (
       SELECT m.time
       FROM measurements m
@@ -252,6 +264,75 @@ implements AssetRepository {
       );
 
     return result.rows;
+  }
+
+
+  async assetTypeExists(
+    key: string
+  ): Promise<boolean> {
+    const result = await this.pool.query<{ exists: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM asset_types WHERE key = $1) AS exists`,
+      [key]
+    );
+    return result.rows[0]?.exists ?? false;
+  }
+
+  async manufacturerExists(
+    name: string
+  ): Promise<boolean> {
+    const result = await this.pool.query<{ exists: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM manufacturers WHERE LOWER(name) = LOWER($1)) AS exists`,
+      [name]
+    );
+    return result.rows[0]?.exists ?? false;
+  }
+
+  async tagsExist(
+    names: string[]
+  ): Promise<boolean> {
+    if (names.length === 0) {
+      return true;
+    }
+    const normalized = [...new Set(names.map(name => name.trim().toLowerCase()))];
+    const result = await this.pool.query<{ count: number }>(
+      `SELECT COUNT(*)::integer AS count FROM tags WHERE LOWER(name) = ANY($1::text[])`,
+      [normalized]
+    );
+    return (result.rows[0]?.count ?? 0) === normalized.length;
+  }
+
+  async replaceTags(
+    id: string,
+    names: string[]
+  ): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const asset = await client.query(
+        `SELECT 1 FROM assets WHERE id = $1`,
+        [id]
+      );
+      if ((asset.rowCount ?? 0) === 0) {
+        await client.query("ROLLBACK");
+        return false;
+      }
+      await client.query(`DELETE FROM asset_tags WHERE asset_id = $1`, [id]);
+      if (names.length > 0) {
+        await client.query(
+          `INSERT INTO asset_tags (asset_id, tag_id)
+           SELECT $1, id FROM tags WHERE LOWER(name) = ANY($2::text[])
+           ON CONFLICT DO NOTHING`,
+          [id, [...new Set(names.map(name => name.trim().toLowerCase()))]]
+        );
+      }
+      await client.query("COMMIT");
+      return true;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async create(

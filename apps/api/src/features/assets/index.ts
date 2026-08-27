@@ -22,6 +22,10 @@ import {
   registerAssetRoutes
 } from "./routes.js";
 
+import {
+  registerAssetClassificationRoutes
+} from "./classification.js";
+
 export interface AssetFeatureOptions {
   pool: Pool;
 }
@@ -52,5 +56,15 @@ export async function registerAssetFeature(
       prefix: "/api/v1",
       controller
     }
+  );
+
+  await app.register(
+    async classificationApp => {
+      await registerAssetClassificationRoutes(
+        classificationApp,
+        options.pool
+      );
+    },
+    { prefix: "/api/v1" }
   );
 }

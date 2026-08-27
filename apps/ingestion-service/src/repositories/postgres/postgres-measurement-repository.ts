@@ -477,6 +477,13 @@ implements MeasurementRepository {
     metric: "manufacturer" | "model" | "firmware",
     value: string
   ): Promise<void> {
+    if (metric === "manufacturer" && value.trim()) {
+      await this.pool.query(
+        `INSERT INTO manufacturers (name) VALUES ($1) ON CONFLICT DO NOTHING`,
+        [value.trim()]
+      );
+    }
+
     await this.pool.query(
       `
       INSERT INTO sensors (

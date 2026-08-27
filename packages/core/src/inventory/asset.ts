@@ -1,10 +1,4 @@
-export type AssetType =
-  | "sensor"
-  | "gateway"
-  | "meter"
-  | "controller"
-  | "device"
-  | "other";
+export type AssetType = string;
 
 export interface Asset {
   readonly id: string;
@@ -17,6 +11,7 @@ export interface Asset {
   readonly assetType: AssetType;
   readonly protocol: string | null;
   readonly enabled: boolean;
+  readonly tags: readonly string[];
   readonly gatewayId: string | null;
   readonly roomId: string | null;
   readonly createdAt: Date;

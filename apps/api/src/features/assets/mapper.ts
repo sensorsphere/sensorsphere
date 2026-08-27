@@ -51,6 +51,7 @@ export function mapAssetToDto(
     assetType: asset.asset_type,
     protocol: asset.protocol,
     enabled: asset.enabled,
+    tags: asset.tags,
 
     health: {
       status:

@@ -153,7 +153,10 @@ const createAssetSchema =
         .optional(),
 
     enabled:
-      z.boolean().optional()
+      z.boolean().optional(),
+
+    tags:
+      z.array(z.string().trim().min(1).max(100)).max(50).optional()
   })
   .strict();
 
@@ -204,7 +207,10 @@ const updateAssetSchema =
       z.number().int().positive().optional(),
 
     offlineAfterSeconds:
-      z.number().int().positive().optional()
+      z.number().int().positive().optional(),
+
+    tags:
+      z.array(z.string().trim().min(1).max(100)).max(50).optional()
   })
   .strict()
   .refine(
@@ -269,22 +275,23 @@ export class AssetController {
           parsedBody.data
         );
 
-      if (
-        result.status ===
-        "external_id_conflict"
-      ) {
-        await reply
-          .code(409)
-          .send({
-            error:
-              "Asset external id already exists"
-          });
-        return;
+      switch (result.status) {
+        case "created":
+          await reply.code(201).send(result.asset);
+          return;
+        case "external_id_conflict":
+          await reply.code(409).send({ error: "Asset external id already exists" });
+          return;
+        case "invalid_asset_type":
+          await badRequest(reply, "Unknown asset type");
+          return;
+        case "invalid_manufacturer":
+          await badRequest(reply, "Unknown manufacturer");
+          return;
+        case "invalid_tags":
+          await badRequest(reply, "Unknown tag");
+          return;
       }
-
-      await reply
-        .code(201)
-        .send(result.asset);
     };
 
   updateAsset =
@@ -361,6 +368,18 @@ export class AssetController {
             reply,
             "warningAfterSeconds must be lower than offlineAfterSeconds"
           );
+          return;
+
+        case "invalid_asset_type":
+          await badRequest(reply, "Unknown asset type");
+          return;
+
+        case "invalid_manufacturer":
+          await badRequest(reply, "Unknown manufacturer");
+          return;
+
+        case "invalid_tags":
+          await badRequest(reply, "Unknown tag");
           return;
       }
     };

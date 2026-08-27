@@ -145,6 +145,7 @@ export interface CreateGatewayInput {
   buildDate?: string | null;
   locationId?: string | null;
   enabled?: boolean;
+  tags?: string[];
 }
 
 export interface UpdateGatewayInput {
@@ -201,6 +202,7 @@ export interface Asset {
   assetType: string;
   protocol: string | null;
   enabled: boolean;
+  tags: string[];
   health: {
     status:
       | "online"
@@ -227,6 +229,28 @@ export interface Asset {
   updatedAt: string;
 }
 
+
+export interface AssetTypeMetadata {
+  key: string;
+  name: string;
+  description: string | null;
+}
+
+export interface ManufacturerMetadata {
+  name: string;
+}
+
+export interface TagMetadata {
+  id: string;
+  name: string;
+}
+
+export interface AssetClassification {
+  assetTypes: AssetTypeMetadata[];
+  manufacturers: ManufacturerMetadata[];
+  tags: TagMetadata[];
+}
+
 export interface CreateAssetInput {
   externalId: string;
   name?: string | null;
@@ -237,6 +261,7 @@ export interface CreateAssetInput {
   assetType: string;
   protocol?: string | null;
   enabled?: boolean;
+  tags?: string[];
 }
 
 export interface UpdateAssetInput {
@@ -251,6 +276,7 @@ export interface UpdateAssetInput {
   enabled?: boolean;
   warningAfterSeconds?: number;
   offlineAfterSeconds?: number;
+  tags?: string[];
 }
 
 export interface UpdateAssetHealthInput {

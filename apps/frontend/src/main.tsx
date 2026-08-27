@@ -18,6 +18,7 @@ import {
   MantineProvider,
   Menu,
   Modal,
+  MultiSelect,
   NavLink,
   NumberInput,
   SegmentedControl,
@@ -43,7 +44,14 @@ import {
 
 import {
   createAsset,
+  createAssetType,
+  createManufacturer,
+  createTag,
   deleteAsset,
+  deleteAssetType,
+  deleteManufacturer,
+  deleteTag,
+  getAssetClassification,
   getAssets,
   getGateways,
   getLocations,
@@ -53,7 +61,10 @@ import {
   getProjectTodos,
   getSensors,
   updateAsset,
-  updateAssetLocation
+  updateAssetLocation,
+  updateAssetType,
+  updateManufacturer,
+  updateTag
 } from "./api";
 
 import {
@@ -86,8 +97,11 @@ import {
 
 import type {
   Asset,
+  AssetTypeMetadata,
   CreateAssetInput,
   Location,
+  ManufacturerMetadata,
+  TagMetadata,
   UpdateAssetInput
 } from "./types";
 
@@ -395,6 +409,7 @@ interface AssetFormState {
   assetType: string;
   protocol: string;
   enabled: boolean;
+  tags: string[];
   locationId: string | null;
   warningAfterSeconds: number;
   offlineAfterSeconds: number;
@@ -412,6 +427,7 @@ function emptyAssetForm(): AssetFormState {
     assetType: "device",
     protocol: "",
     enabled: true,
+    tags: [],
     locationId: null,
     warningAfterSeconds: 300,
     offlineAfterSeconds: 600
@@ -432,9 +448,30 @@ function assetFormFromAsset(
     assetType: asset.assetType,
     protocol: asset.protocol ?? "",
     enabled: asset.enabled,
+    tags: asset.tags,
     locationId: asset.location?.id ?? null,
     warningAfterSeconds: asset.health.warningAfterSeconds,
     offlineAfterSeconds: asset.health.offlineAfterSeconds
+  };
+}
+
+type ClassificationKind = "assetType" | "manufacturer" | "tag";
+
+interface ClassificationEditorState {
+  kind: ClassificationKind;
+  originalId: string | null;
+  key: string;
+  name: string;
+  description: string;
+}
+
+function emptyClassificationEditor(kind: ClassificationKind): ClassificationEditorState {
+  return {
+    kind,
+    originalId: null,
+    key: "",
+    name: "",
+    description: ""
   };
 }
 
@@ -623,6 +660,33 @@ function Dashboard() {
     );
 
   const [
+    assetTypeFilter,
+    setAssetTypeFilter
+  ] = usePersistentState<string | null>(
+    "assets.assetType",
+    null,
+    (value): value is string | null => value === null || typeof value === "string"
+  );
+
+  const [
+    assetManufacturerFilter,
+    setAssetManufacturerFilter
+  ] = usePersistentState<string | null>(
+    "assets.manufacturer",
+    null,
+    (value): value is string | null => value === null || typeof value === "string"
+  );
+
+  const [
+    assetTagFilter,
+    setAssetTagFilter
+  ] = usePersistentState<string | null>(
+    "assets.tag",
+    null,
+    (value): value is string | null => value === null || typeof value === "string"
+  );
+
+  const [
     assetView,
     setAssetView
   ] =
@@ -654,6 +718,18 @@ function Dashboard() {
     assetPendingDelete,
     setAssetPendingDelete
   ] = React.useState<Asset | null>(null);
+
+  const [
+    classificationManagerOpen,
+    setClassificationManagerOpen
+  ] = React.useState(false);
+
+  const [
+    classificationEditor,
+    setClassificationEditor
+  ] = React.useState<ClassificationEditorState>(
+    emptyClassificationEditor("assetType")
+  );
 
   const [
     currentReadingSearch,
@@ -733,6 +809,13 @@ function Dashboard() {
         30_000
     });
 
+  const assetClassificationQuery =
+    useQuery({
+      queryKey: ["asset-classification"],
+      queryFn: getAssetClassification,
+      refetchInterval: 60_000
+    });
+
   const locationsQuery =
     useQuery({
       queryKey:
@@ -758,7 +841,8 @@ function Dashboard() {
             firmwareVersion: form.firmwareVersion.trim() || null,
             assetType: form.assetType.trim(),
             protocol: form.protocol.trim() || null,
-            enabled: form.enabled
+            enabled: form.enabled,
+            tags: form.tags
           };
 
           let saved: Asset;
@@ -816,6 +900,60 @@ function Dashboard() {
             queryClient.invalidateQueries({ queryKey: ["latest-observations"] })
           ]);
         }
+    });
+
+  const saveClassificationMutation =
+    useMutation({
+      mutationFn: async (editor: ClassificationEditorState) => {
+        if (editor.kind === "assetType") {
+          const payload = {
+            key: editor.key.trim().toLowerCase(),
+            name: editor.name.trim(),
+            description: editor.description.trim() || null
+          };
+          return editor.originalId
+            ? updateAssetType(editor.originalId, payload)
+            : createAssetType(payload);
+        }
+
+        if (editor.kind === "manufacturer") {
+          return editor.originalId
+            ? updateManufacturer(editor.originalId, editor.name.trim())
+            : createManufacturer(editor.name.trim());
+        }
+
+        return editor.originalId
+          ? updateTag(editor.originalId, editor.name.trim())
+          : createTag(editor.name.trim());
+      },
+      onSuccess: async () => {
+        setClassificationEditor(
+          emptyClassificationEditor(classificationEditor.kind)
+        );
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["asset-classification"] }),
+          queryClient.invalidateQueries({ queryKey: ["assets"] })
+        ]);
+      }
+    });
+
+  const deleteClassificationMutation =
+    useMutation({
+      mutationFn: async (input: { kind: ClassificationKind; id: string }) => {
+        if (input.kind === "assetType") {
+          await deleteAssetType(input.id);
+        } else if (input.kind === "manufacturer") {
+          await deleteManufacturer(input.id);
+        } else {
+          await deleteTag(input.id);
+        }
+      },
+      onSuccess: async () => {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["asset-classification"] }),
+          queryClient.invalidateQueries({ queryKey: ["assets"] })
+        ]);
+      }
     });
 
   const gatewaysQuery =
@@ -1139,6 +1277,11 @@ function Dashboard() {
       )
       .slice(0, 5);
 
+  const assetClassification = assetClassificationQuery.data;
+  const assetTypes: AssetTypeMetadata[] = assetClassification?.assetTypes ?? [];
+  const manufacturers: ManufacturerMetadata[] = assetClassification?.manufacturers ?? [];
+  const tags: TagMetadata[] = assetClassification?.tags ?? [];
+
   const assetLocations: Location[] =
     [...(locationsQuery.data ?? [])]
       .sort(
@@ -1181,6 +1324,15 @@ function Dashboard() {
           .toLowerCase()
           .includes(
             normalizedAssetSearch
+          ) ||
+          (asset.manufacturer ?? "")
+            .toLowerCase()
+            .includes(normalizedAssetSearch) ||
+          asset.assetType
+            .toLowerCase()
+            .includes(normalizedAssetSearch) ||
+          asset.tags.some(tag =>
+            tag.toLowerCase().includes(normalizedAssetSearch)
           );
 
         const matchesHealth =
@@ -1209,11 +1361,26 @@ function Dashboard() {
                 )
           );
 
+        const matchesType =
+          assetTypeFilter === null ||
+          asset.assetType === assetTypeFilter;
+
+        const matchesManufacturer =
+          assetManufacturerFilter === null ||
+          asset.manufacturer === assetManufacturerFilter;
+
+        const matchesTag =
+          assetTagFilter === null ||
+          asset.tags.includes(assetTagFilter);
+
         return (
           matchesSearch &&
           matchesHealth &&
           matchesLocation &&
-          matchesEnabled
+          matchesEnabled &&
+          matchesType &&
+          matchesManufacturer &&
+          matchesTag
         );
       }
     );
@@ -1232,6 +1399,12 @@ function Dashboard() {
             return asset.externalId;
           case "location":
             return asset.location?.name;
+          case "assetType":
+            return asset.assetType;
+          case "manufacturer":
+            return asset.manufacturer;
+          case "tags":
+            return asset.tags.join(", ");
           case "temperature":
             return metric(asset, "temperature");
           case "humidity":
@@ -3463,6 +3636,15 @@ function Dashboard() {
 
                       <Button
                         size="xs"
+                        color="gray"
+                        variant="light"
+                        onClick={() => setClassificationManagerOpen(true)}
+                      >
+                        Manage metadata
+                      </Button>
+
+                      <Button
+                        size="xs"
                         color="green"
                         variant="light"
                         onClick={() =>
@@ -3509,7 +3691,10 @@ function Dashboard() {
                         assetSearch.trim().length > 0 ||
                         assetHealthFilter !== "all" ||
                         assetEnabledFilter !== "all" ||
-                        assetLocationFilter !== null
+                        assetLocationFilter !== null ||
+                        assetTypeFilter !== null ||
+                        assetManufacturerFilter !== null ||
+                        assetTagFilter !== null
                       }
                       onReset={
                         () => {
@@ -3517,12 +3702,15 @@ function Dashboard() {
                           setAssetHealthFilter("all");
                           setAssetEnabledFilter("all");
                           setAssetLocationFilter(null);
+                          setAssetTypeFilter(null);
+                          setAssetManufacturerFilter(null);
+                          setAssetTagFilter(null);
                         }
                       }
                     />
                     <TextInput
                       label="Search"
-                      placeholder="Name, ID or location"
+                      placeholder="Name, ID, location or metadata"
                       value={
                         assetSearch
                       }
@@ -3553,6 +3741,42 @@ function Dashboard() {
                         flex: 1
                       }}
                       styles={activeFilterStyles(assetSearch.trim().length > 0)}
+                    />
+
+                    <Select
+                      label="Type"
+                      clearable
+                      searchable
+                      placeholder="All types"
+                      value={assetTypeFilter}
+                      onChange={setAssetTypeFilter}
+                      data={assetTypes.map(type => ({
+                        value: type.key,
+                        label: type.name
+                      }))}
+                      styles={activeFilterStyles(assetTypeFilter !== null)}
+                    />
+
+                    <Select
+                      label="Manufacturer"
+                      clearable
+                      searchable
+                      placeholder="All manufacturers"
+                      value={assetManufacturerFilter}
+                      onChange={setAssetManufacturerFilter}
+                      data={manufacturers.map(item => item.name)}
+                      styles={activeFilterStyles(assetManufacturerFilter !== null)}
+                    />
+
+                    <Select
+                      label="Tag"
+                      clearable
+                      searchable
+                      placeholder="All tags"
+                      value={assetTagFilter}
+                      onChange={setAssetTagFilter}
+                      data={tags.map(tag => tag.name)}
+                      styles={activeFilterStyles(assetTagFilter !== null)}
                     />
 
                     <BadgeSelect
@@ -3709,13 +3933,16 @@ function Dashboard() {
                           </SimpleGrid>
                         )
                         : (
-                          <Table.ScrollContainer minWidth={980}>
+                          <Table.ScrollContainer minWidth={1400}>
                             <Table striped highlightOnHover verticalSpacing="xs">
                               <Table.Thead>
                                 <Table.Tr>
                                   {[
                                     ["name", "Name"],
                                     ["externalId", "Asset ID"],
+                                    ["assetType", "Type"],
+                                    ["manufacturer", "Manufacturer"],
+                                    ["tags", "Tags"],
                                     ["location", "Location"],
                                     ["temperature", "Temperature"],
                                     ["humidity", "Humidity"],
@@ -3759,6 +3986,17 @@ function Dashboard() {
                                         {asset.sensor?.name ?? asset.name ?? asset.externalId}
                                       </Table.Td>
                                       <Table.Td>{asset.externalId}</Table.Td>
+                                      <Table.Td>{assetTypes.find(type => type.key === asset.assetType)?.name ?? asset.assetType}</Table.Td>
+                                      <Table.Td>{asset.manufacturer ?? "—"}</Table.Td>
+                                      <Table.Td>
+                                        {asset.tags.length > 0 ? (
+                                          <Group gap={4} wrap="wrap">
+                                            {asset.tags.map(tag => (
+                                              <Badge key={tag} size="xs" variant="light">{tag}</Badge>
+                                            ))}
+                                          </Group>
+                                        ) : "—"}
+                                      </Table.Td>
                                       <Table.Td>
                                         {asset.location ? (
                                           <Group gap={5} wrap="nowrap">
@@ -3825,6 +4063,252 @@ function Dashboard() {
             }
 
             <Modal
+              opened={classificationManagerOpen}
+              onClose={() => {
+                if (!saveClassificationMutation.isPending && !deleteClassificationMutation.isPending) {
+                  setClassificationManagerOpen(false);
+                  setClassificationEditor(emptyClassificationEditor("assetType"));
+                }
+              }}
+              title="Asset metadata"
+              size="lg"
+            >
+              <Stack gap="md">
+                <SegmentedControl
+                  value={classificationEditor.kind}
+                  onChange={value =>
+                    setClassificationEditor(
+                      emptyClassificationEditor(value as ClassificationKind)
+                    )
+                  }
+                  data={[
+                    { label: "Asset types", value: "assetType" },
+                    { label: "Manufacturers", value: "manufacturer" },
+                    { label: "Tags", value: "tag" }
+                  ]}
+                />
+
+                {classificationEditor.kind === "assetType" ? (
+                  <SimpleGrid cols={{ base: 1, sm: 2 }}>
+                    <TextInput
+                      label="Key"
+                      required
+                      placeholder="temperature_sensor"
+                      value={classificationEditor.key}
+                      onChange={event =>
+                        setClassificationEditor({
+                          ...classificationEditor,
+                          key: event.currentTarget.value
+                        })
+                      }
+                    />
+                    <TextInput
+                      label="Name"
+                      required
+                      value={classificationEditor.name}
+                      onChange={event =>
+                        setClassificationEditor({
+                          ...classificationEditor,
+                          name: event.currentTarget.value
+                        })
+                      }
+                    />
+                    <TextInput
+                      label="Description"
+                      value={classificationEditor.description}
+                      onChange={event =>
+                        setClassificationEditor({
+                          ...classificationEditor,
+                          description: event.currentTarget.value
+                        })
+                      }
+                    />
+                  </SimpleGrid>
+                ) : (
+                  <TextInput
+                    label={classificationEditor.kind === "manufacturer" ? "Manufacturer" : "Tag"}
+                    required
+                    value={classificationEditor.name}
+                    onChange={event =>
+                      setClassificationEditor({
+                        ...classificationEditor,
+                        name: event.currentTarget.value
+                      })
+                    }
+                  />
+                )}
+
+                <Group justify="flex-end">
+                  {classificationEditor.originalId && (
+                    <Button
+                      size="xs"
+                      color="gray"
+                      variant="light"
+                      onClick={() =>
+                        setClassificationEditor(
+                          emptyClassificationEditor(classificationEditor.kind)
+                        )
+                      }
+                    >
+                      Cancel edit
+                    </Button>
+                  )}
+                  <Button
+                    size="xs"
+                    color={classificationEditor.originalId ? "blue" : "green"}
+                    variant="light"
+                    loading={saveClassificationMutation.isPending}
+                    disabled={
+                      !classificationEditor.name.trim() ||
+                      (classificationEditor.kind === "assetType" && !classificationEditor.key.trim())
+                    }
+                    onClick={() => saveClassificationMutation.mutate(classificationEditor)}
+                  >
+                    {classificationEditor.originalId ? "Save" : "Add"}
+                  </Button>
+                </Group>
+
+                {saveClassificationMutation.isError && (
+                  <Alert color="red" title="Unable to save metadata">
+                    {saveClassificationMutation.error instanceof Error
+                      ? saveClassificationMutation.error.message
+                      : "Unknown error"}
+                  </Alert>
+                )}
+
+                {deleteClassificationMutation.isError && (
+                  <Alert color="red" title="Unable to delete metadata">
+                    {deleteClassificationMutation.error instanceof Error
+                      ? deleteClassificationMutation.error.message
+                      : "Unknown error"}
+                  </Alert>
+                )}
+
+                <Stack gap="xs">
+                  {classificationEditor.kind === "assetType" &&
+                    assetTypes.map(item => (
+                      <Card key={item.key} withBorder padding="sm">
+                        <Group justify="space-between">
+                          <div>
+                            <Text fw={600}>{item.name}</Text>
+                            <Text size="xs" c="dimmed">{item.key}{item.description ? ` · ${item.description}` : ""}</Text>
+                          </div>
+                          <Group gap="xs">
+                            <Button
+                              size="compact-xs"
+                              color="blue"
+                              variant="light"
+                              onClick={() =>
+                                setClassificationEditor({
+                                  kind: "assetType",
+                                  originalId: item.key,
+                                  key: item.key,
+                                  name: item.name,
+                                  description: item.description ?? ""
+                                })
+                              }
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="compact-xs"
+                              color="red"
+                              variant="light"
+                              onClick={() => {
+                                if (window.confirm(`Delete asset type ${item.name}?`)) {
+                                  deleteClassificationMutation.mutate({ kind: "assetType", id: item.key });
+                                }
+                              }}
+                            >
+                              Delete
+                            </Button>
+                          </Group>
+                        </Group>
+                      </Card>
+                    ))}
+
+                  {classificationEditor.kind === "manufacturer" &&
+                    manufacturers.map(item => (
+                      <Card key={item.name} withBorder padding="sm">
+                        <Group justify="space-between">
+                          <Text fw={600}>{item.name}</Text>
+                          <Group gap="xs">
+                            <Button
+                              size="compact-xs"
+                              color="blue"
+                              variant="light"
+                              onClick={() =>
+                                setClassificationEditor({
+                                  kind: "manufacturer",
+                                  originalId: item.name,
+                                  key: "",
+                                  name: item.name,
+                                  description: ""
+                                })
+                              }
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="compact-xs"
+                              color="red"
+                              variant="light"
+                              onClick={() => {
+                                if (window.confirm(`Delete manufacturer ${item.name}?`)) {
+                                  deleteClassificationMutation.mutate({ kind: "manufacturer", id: item.name });
+                                }
+                              }}
+                            >
+                              Delete
+                            </Button>
+                          </Group>
+                        </Group>
+                      </Card>
+                    ))}
+
+                  {classificationEditor.kind === "tag" &&
+                    tags.map(item => (
+                      <Card key={item.id} withBorder padding="sm">
+                        <Group justify="space-between">
+                          <Badge variant="light">{item.name}</Badge>
+                          <Group gap="xs">
+                            <Button
+                              size="compact-xs"
+                              color="blue"
+                              variant="light"
+                              onClick={() =>
+                                setClassificationEditor({
+                                  kind: "tag",
+                                  originalId: item.id,
+                                  key: "",
+                                  name: item.name,
+                                  description: ""
+                                })
+                              }
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="compact-xs"
+                              color="red"
+                              variant="light"
+                              onClick={() => {
+                                if (window.confirm(`Delete tag ${item.name}?`)) {
+                                  deleteClassificationMutation.mutate({ kind: "tag", id: item.id });
+                                }
+                              }}
+                            >
+                              Delete
+                            </Button>
+                          </Group>
+                        </Group>
+                      </Card>
+                    ))}
+                </Stack>
+              </Stack>
+            </Modal>
+
+            <Modal
               opened={assetForm !== null}
               onClose={() => {
                 if (!saveAssetMutation.isPending) {
@@ -3864,16 +4348,21 @@ function Dashboard() {
                       }
                     />
 
-                    <TextInput
+                    <Select
                       label="Asset type"
                       required
+                      searchable
                       value={assetForm.assetType}
-                      onChange={event =>
+                      onChange={value =>
                         setAssetForm({
                           ...assetForm,
-                          assetType: event.currentTarget.value
+                          assetType: value ?? ""
                         })
                       }
+                      data={assetTypes.map(type => ({
+                        value: type.key,
+                        label: type.name
+                      }))}
                     />
 
                     <TextInput
@@ -3887,15 +4376,34 @@ function Dashboard() {
                       }
                     />
 
-                    <TextInput
+                    <Select
                       label="Manufacturer"
-                      value={assetForm.manufacturer}
-                      onChange={event =>
+                      searchable
+                      clearable
+                      placeholder="Unspecified"
+                      value={assetForm.manufacturer || null}
+                      onChange={value =>
                         setAssetForm({
                           ...assetForm,
-                          manufacturer: event.currentTarget.value
+                          manufacturer: value ?? ""
                         })
                       }
+                      data={manufacturers.map(item => item.name)}
+                    />
+
+                    <MultiSelect
+                      label="Tags"
+                      searchable
+                      clearable
+                      placeholder="No tags"
+                      value={assetForm.tags}
+                      onChange={value =>
+                        setAssetForm({
+                          ...assetForm,
+                          tags: value
+                        })
+                      }
+                      data={tags.map(tag => tag.name)}
                     />
 
                     <TextInput

@@ -1,5 +1,9 @@
 import type {
   Asset,
+  AssetClassification,
+  AssetTypeMetadata,
+  ManufacturerMetadata,
+  TagMetadata,
   CreateAssetInput,
   UpdateAssetInput,
   LatestObservation,
@@ -442,6 +446,99 @@ export async function getHistory(
   return readJson<Measurement[]>(
     response
   );
+}
+
+
+export async function getAssetClassification():
+Promise<AssetClassification> {
+  return readJson<AssetClassification>(
+    await fetch("/api/v1/asset-classification")
+  );
+}
+
+export async function createAssetType(input: {
+  key: string;
+  name: string;
+  description?: string | null;
+}): Promise<AssetTypeMetadata> {
+  return readJson<AssetTypeMetadata>(
+    await fetch("/api/v1/asset-types", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input)
+    })
+  );
+}
+
+export async function updateAssetType(
+  key: string,
+  input: Partial<{ key: string; name: string; description: string | null }>
+): Promise<AssetTypeMetadata> {
+  return readJson<AssetTypeMetadata>(
+    await fetch(`/api/v1/asset-types/${encodeURIComponent(key)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input)
+    })
+  );
+}
+
+export async function deleteAssetType(key: string): Promise<void> {
+  const response = await fetch(`/api/v1/asset-types/${encodeURIComponent(key)}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
+}
+
+export async function createManufacturer(name: string): Promise<ManufacturerMetadata> {
+  return readJson<ManufacturerMetadata>(
+    await fetch("/api/v1/manufacturers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    })
+  );
+}
+
+export async function updateManufacturer(
+  currentName: string,
+  name: string
+): Promise<ManufacturerMetadata> {
+  return readJson<ManufacturerMetadata>(
+    await fetch(`/api/v1/manufacturers/${encodeURIComponent(currentName)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    })
+  );
+}
+
+export async function deleteManufacturer(name: string): Promise<void> {
+  const response = await fetch(`/api/v1/manufacturers/${encodeURIComponent(name)}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
+}
+
+export async function createTag(name: string): Promise<TagMetadata> {
+  return readJson<TagMetadata>(
+    await fetch("/api/v1/tags", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    })
+  );
+}
+
+export async function updateTag(id: string, name: string): Promise<TagMetadata> {
+  return readJson<TagMetadata>(
+    await fetch(`/api/v1/tags/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    })
+  );
+}
+
+export async function deleteTag(id: string): Promise<void> {
+  const response = await fetch(`/api/v1/tags/${id}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
 }
 
 export async function getAssets():

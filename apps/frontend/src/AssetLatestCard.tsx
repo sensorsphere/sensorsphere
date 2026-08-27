@@ -930,6 +930,25 @@ export function AssetLatestCard({
               size="xs"
               c="dimmed"
             >
+              Tags
+            </Text>
+
+            <Group gap={4} wrap="wrap">
+              {asset.tags.length > 0
+                ? asset.tags.map(tag => (
+                    <Badge key={tag} size="xs" variant="light">
+                      {tag}
+                    </Badge>
+                  ))
+                : <Text size="sm">—</Text>}
+            </Group>
+          </div>
+
+          <div>
+            <Text
+              size="xs"
+              c="dimmed"
+            >
               Model
             </Text>
 

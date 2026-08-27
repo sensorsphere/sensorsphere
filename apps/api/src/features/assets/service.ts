@@ -48,8 +48,30 @@ export class AssetService {
     status: "created";
     asset: AssetDto;
   } | {
-    status: "external_id_conflict";
+    status:
+      | "external_id_conflict"
+      | "invalid_asset_type"
+      | "invalid_manufacturer"
+      | "invalid_tags";
   }> {
+
+    if (!(await this.repository.assetTypeExists(input.assetType))) {
+      return { status: "invalid_asset_type" };
+    }
+
+    if (
+      input.manufacturer &&
+      !(await this.repository.manufacturerExists(input.manufacturer))
+    ) {
+      return { status: "invalid_manufacturer" };
+    }
+
+    if (
+      input.tags &&
+      !(await this.repository.tagsExist(input.tags))
+    ) {
+      return { status: "invalid_tags" };
+    }
 
     const existing =
       await this.repository.findByExternalId(
@@ -76,11 +98,18 @@ export class AssetService {
         enabled: input.enabled ?? true
       });
 
+    if (input.tags) {
+      await this.repository.replaceTags(asset.id, input.tags);
+    }
+
+    const created =
+      await this.repository.findById(asset.id);
+
     return {
       status: "created",
       asset:
         mapAssetToDto(
-          asset,
+          created ?? asset,
           []
         )
     };
@@ -96,7 +125,10 @@ export class AssetService {
     status:
       | "asset_not_found"
       | "external_id_conflict"
-      | "invalid_health_thresholds";
+      | "invalid_health_thresholds"
+      | "invalid_asset_type"
+      | "invalid_manufacturer"
+      | "invalid_tags";
   }> {
 
     const current =
@@ -106,6 +138,27 @@ export class AssetService {
       return {
         status: "asset_not_found"
       };
+    }
+
+    if (
+      input.assetType &&
+      !(await this.repository.assetTypeExists(input.assetType))
+    ) {
+      return { status: "invalid_asset_type" };
+    }
+
+    if (
+      input.manufacturer &&
+      !(await this.repository.manufacturerExists(input.manufacturer))
+    ) {
+      return { status: "invalid_manufacturer" };
+    }
+
+    if (
+      input.tags &&
+      !(await this.repository.tagsExist(input.tags))
+    ) {
+      return { status: "invalid_tags" };
     }
 
     const warningAfterSeconds =
@@ -177,6 +230,10 @@ export class AssetService {
       return {
         status: "asset_not_found"
       };
+    }
+
+    if (input.tags) {
+      await this.repository.replaceTags(id, input.tags);
     }
 
     const refreshed =

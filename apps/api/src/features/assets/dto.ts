@@ -25,6 +25,7 @@ export interface AssetDto {
   assetType: string;
   protocol: string | null;
   enabled: boolean;
+  tags: string[];
   health: {
     status:
       | "online"
@@ -63,6 +64,7 @@ export interface CreateAssetInput {
   assetType: string;
   protocol?: string | null;
   enabled?: boolean;
+  tags?: string[];
 }
 
 export interface UpdateAssetInput {
@@ -77,4 +79,5 @@ export interface UpdateAssetInput {
   enabled?: boolean;
   warningAfterSeconds?: number;
   offlineAfterSeconds?: number;
+  tags?: string[];
 }
