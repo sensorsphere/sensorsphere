@@ -38,6 +38,7 @@ import {
 
 import {
   getAssets,
+  getGateways,
   getLatestObservations,
   getRuntimeConfig,
   getFrontendBuildDate,
@@ -605,6 +606,18 @@ function Dashboard() {
         30_000
     });
 
+  const gatewaysQuery =
+    useQuery({
+      queryKey:
+        ["gateways"],
+
+      queryFn:
+        getGateways,
+
+      refetchInterval:
+        30_000
+    });
+
   const observationsQuery =
     useQuery({
       queryKey:
@@ -672,6 +685,7 @@ function Dashboard() {
 
   if (
     assetsQuery.isLoading ||
+    gatewaysQuery.isLoading ||
     observationsQuery.isLoading ||
     sensorsQuery.isLoading
   ) {
@@ -684,6 +698,7 @@ function Dashboard() {
 
   if (
     assetsQuery.isError ||
+    gatewaysQuery.isError ||
     observationsQuery.isError ||
     sensorsQuery.isError
   ) {
@@ -698,6 +713,9 @@ function Dashboard() {
 
   const assets =
     assetsQuery.data ?? [];
+
+  const gateways =
+    gatewaysQuery.data ?? [];
 
   const observations =
     observationsQuery.data ?? [];
@@ -1004,10 +1022,24 @@ function Dashboard() {
       }
     );
 
-  const unassignedAssets =
+  const assetsWithoutLocation =
     assets.filter(
       asset =>
         asset.location === null
+    );
+
+  const sensorsWithoutPrimaryGateway =
+    sensors.filter(
+      sensor =>
+        sensor.enabled &&
+        sensor.gateway === null
+    );
+
+  const gatewaysWithoutLocation =
+    gateways.filter(
+      gateway =>
+        gateway.enabled &&
+        gateway.location === null
     );
 
   const assignedLocations =
@@ -1857,7 +1889,9 @@ function Dashboard() {
               (
                 offlineAssets.length > 0 ||
                 warningAssets.length > 0 ||
-                unassignedAssets.length > 0
+                sensorsWithoutPrimaryGateway.length > 0 ||
+                assetsWithoutLocation.length > 0 ||
+                gatewaysWithoutLocation.length > 0
               ) && (
                 <div>
 
@@ -1947,29 +1981,69 @@ function Dashboard() {
                       </Alert>
                     )}
 
-                    {unassignedAssets.length > 0 && (
+                    {sensorsWithoutPrimaryGateway.length > 0 && (
                       <Alert
-                        color="yellow"
+                        color="red"
                         title={
-                          `${unassignedAssets.length} unassigned asset${
-                            unassignedAssets.length > 1
-                              ? "s"
-                              : ""
-                          }`
+                          `${sensorsWithoutPrimaryGateway.length} sensor${
+                            sensorsWithoutPrimaryGateway.length > 1 ? "s" : ""
+                          } without a Primary Gateway`
                         }
                       >
                         <Stack gap="xs">
-                          {unassignedAssets.map(
+                          <Text size="sm">
+                            Active routing ignores measurements from these sensors until a Primary Gateway is assigned.
+                          </Text>
+                          {sensorsWithoutPrimaryGateway.map(
+                            sensor => (
+                              <Text key={sensor.id} size="sm">
+                                {sensor.name ?? sensor.uid} · {sensor.uid}
+                              </Text>
+                            )
+                          )}
+                        </Stack>
+                      </Alert>
+                    )}
+
+                    {assetsWithoutLocation.length > 0 && (
+                      <Alert
+                        color="yellow"
+                        title={
+                          `${assetsWithoutLocation.length} asset${
+                            assetsWithoutLocation.length > 1 ? "s" : ""
+                          } without a Location`
+                        }
+                      >
+                        <Stack gap="xs">
+                          {assetsWithoutLocation.map(
                             asset => (
-                              <Text
-                                key={asset.id}
-                                size="sm"
-                              >
+                              <Text key={asset.id} size="sm">
                                 {
                                   asset.sensor?.name
                                   ?? asset.name
                                   ?? asset.externalId
                                 }
+                              </Text>
+                            )
+                          )}
+                        </Stack>
+                      </Alert>
+                    )}
+
+                    {gatewaysWithoutLocation.length > 0 && (
+                      <Alert
+                        color="yellow"
+                        title={
+                          `${gatewaysWithoutLocation.length} gateway${
+                            gatewaysWithoutLocation.length > 1 ? "s" : ""
+                          } without a Location`
+                        }
+                      >
+                        <Stack gap="xs">
+                          {gatewaysWithoutLocation.map(
+                            gateway => (
+                              <Text key={gateway.id} size="sm">
+                                {gateway.name} · {gateway.gatewayId}
                               </Text>
                             )
                           )}

@@ -43,7 +43,7 @@ const logger = createLogger({
     });
 
 const configuredMetricRoutingMode =
-  (process.env.METRIC_ROUTING_MODE ?? "dry_run")
+  (process.env.METRIC_ROUTING_MODE ?? "active")
     .trim()
     .toLowerCase();
 
@@ -53,7 +53,7 @@ const metricRoutingMode:
     configuredMetricRoutingMode === "active" ||
     configuredMetricRoutingMode === "dry_run"
       ? configuredMetricRoutingMode
-      : "dry_run";
+      : "active";
 
 const METRIC_ROUTING_DEDUP_WINDOW_MS = 5_000;
 const PRIMARY_GATEWAY_FAILOVER_AFTER_MS = 2 * 60 * 1000;
@@ -565,6 +565,9 @@ Promise<void> {
               decision = "IGNORE";
               reason = "not_assigned_gateway";
             }
+          } else if (metricRoutingMode === "active") {
+            decision = "IGNORE";
+            reason = "sensor_unassigned";
           } else {
             dedupKey =
               measurement.metric === "rssi"
@@ -651,6 +654,16 @@ Promise<void> {
           }
         }
 
+        return;
+      }
+
+      if (metricRoutingMode === "active") {
+        logger.debug(
+          {
+            topic: message.topic
+          },
+          "Legacy MQTT message ignored in active routing mode"
+        );
         return;
       }
 

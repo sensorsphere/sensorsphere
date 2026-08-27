@@ -88,7 +88,7 @@ export class MetricRoutingRepository {
 
     const row = result.rows[0];
     return {
-      mode: row?.mode ?? "dry_run",
+      mode: row?.mode ?? "active",
       updatedAt: (row?.updated_at ?? new Date(0)).toISOString()
     };
   }

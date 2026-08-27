@@ -80,7 +80,8 @@ services:
 
     environment:
       MQTT_URL: ${MQTT_INTERNAL_URL:-mqtt://mosquitto:1883}
-      MQTT_TOPIC: ${MQTT_TOPIC:-sensors/#}
+      MQTT_TOPIC: sensors/ble_gateway/+/sensor/+/state
+      METRIC_ROUTING_MODE: active
 
       DB_HOST: timescaledb
       DB_PORT: 5432

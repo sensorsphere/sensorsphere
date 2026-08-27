@@ -308,8 +308,8 @@ export function MetricRoutingPanel() {
       <SimpleGrid cols={{ base: 2, md: 5 }}>
         {[
           { label: "Received", value: summary?.received ?? 0, color: "violet" },
-          { label: "Would accept", value: summary?.accepted ?? 0, color: "green" },
-          { label: "Would ignore", value: summary?.ignored ?? 0, color: "orange" },
+          { label: status?.mode === "active" ? "Accepted" : "Would accept", value: summary?.accepted ?? 0, color: "green" },
+          { label: status?.mode === "active" ? "Ignored" : "Would ignore", value: summary?.ignored ?? 0, color: "orange" },
           { label: "Duplicates", value: summary?.deduplicated ?? 0, color: "blue" },
           { label: "Errors", value: summary?.errors ?? 0, color: "red" }
         ].map(stat => (
