@@ -534,7 +534,7 @@ Promise<void> {
             Number.isFinite(rssi)
           ) {
             void repository
-              .saveGatewayCoverageRssi(
+              .saveGatewayDeviceBleObservation(
                 gatewayId,
                 sensorUid,
                 rssi,
@@ -548,7 +548,7 @@ Promise<void> {
                     gatewayId,
                     sensorUid
                   },
-                  "Unable to persist gateway coverage RSSI"
+                  "Unable to persist gateway-device BLE observation"
                 );
               });
           }

@@ -531,7 +531,7 @@ implements MeasurementRepository {
     );
   }
 
-  async saveGatewayCoverageRssi(
+  async saveGatewayDeviceBleObservation(
     gatewayId: string,
     sensorUid: string,
     rssi: number,
@@ -568,10 +568,10 @@ implements MeasurementRepository {
 
       await client.query(
         `
-        INSERT INTO gateway_sensor_rssi_samples (
+        INSERT INTO gateway_device_ble_observations (
           time,
           gateway_id,
-          sensor_uid,
+          device_uid,
           rssi,
           source_topic
         )

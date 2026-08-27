@@ -156,75 +156,136 @@ app.get("/sensors", async () => {
   return result.rows;
 });
 
+type GatewayDeviceObservationStatsRow = {
+  gatewayId: string;
+  deviceUid: string;
+  sampleCount: number;
+  avgRssi: number;
+  minRssi: number;
+  maxRssi: number;
+  stddevRssi: number;
+  firstSeenAt: Date;
+  lastSeenAt: Date;
+  rank: number;
+  leadDb: number | null;
+};
+
+function parseObservationHours(
+  hours: string | undefined
+): number | null {
+  const requestedHours = Number(hours ?? "24");
+
+  return Number.isFinite(requestedHours) &&
+    requestedHours > 0 &&
+    requestedHours <= 24 * 30
+    ? requestedHours
+    : null;
+}
+
+async function getGatewayDeviceObservationStats(
+  hours: number
+): Promise<GatewayDeviceObservationStatsRow[]> {
+  const result =
+    await pool.query<GatewayDeviceObservationStatsRow>(
+      `
+      WITH stats AS (
+        SELECT
+          gateway_id,
+          device_uid,
+          COUNT(*)::integer AS sample_count,
+          AVG(rssi)::double precision AS avg_rssi,
+          MIN(rssi)::double precision AS min_rssi,
+          MAX(rssi)::double precision AS max_rssi,
+          COALESCE(STDDEV_SAMP(rssi), 0)::double precision AS stddev_rssi,
+          MIN(time) AS first_seen_at,
+          MAX(time) AS last_seen_at
+        FROM gateway_device_ble_observations
+        WHERE time >= NOW() - ($1 * INTERVAL '1 hour')
+        GROUP BY gateway_id, device_uid
+      ), ranked AS (
+        SELECT
+          stats.*,
+          ROW_NUMBER() OVER (
+            PARTITION BY device_uid
+            ORDER BY avg_rssi DESC, sample_count DESC, gateway_id
+          ) AS rank,
+          LEAD(avg_rssi) OVER (
+            PARTITION BY device_uid
+            ORDER BY avg_rssi DESC, sample_count DESC, gateway_id
+          ) AS second_avg_rssi
+        FROM stats
+      )
+      SELECT
+        gateway_id AS "gatewayId",
+        device_uid AS "deviceUid",
+        sample_count AS "sampleCount",
+        avg_rssi AS "avgRssi",
+        min_rssi AS "minRssi",
+        max_rssi AS "maxRssi",
+        stddev_rssi AS "stddevRssi",
+        first_seen_at AS "firstSeenAt",
+        last_seen_at AS "lastSeenAt",
+        rank,
+        CASE
+          WHEN rank = 1 AND second_avg_rssi IS NOT NULL
+            THEN avg_rssi - second_avg_rssi
+          ELSE NULL
+        END AS "leadDb"
+      FROM ranked
+      ORDER BY device_uid, rank, gateway_id
+      `,
+      [hours]
+    );
+
+  return result.rows;
+}
+
+app.get(
+  "/api/v1/gateway-device-observations",
+  async (request, reply) => {
+    const query = request.query as {
+      hours?: string;
+    };
+    const requestedHours =
+      parseObservationHours(query.hours);
+
+    if (requestedHours === null) {
+      return reply.code(400).send({
+        error: "invalid_hours"
+      });
+    }
+
+    const rows =
+      await getGatewayDeviceObservationStats(
+        requestedHours
+      );
+
+    return {
+      hours: requestedHours,
+      generatedAt: new Date().toISOString(),
+      rows
+    };
+  }
+);
+
 app.get("/api/v1/gateway-coverage", async (request, reply) => {
   const query = request.query as {
     hours?: string;
   };
 
   const requestedHours =
-    Number(query.hours ?? "24");
+    parseObservationHours(query.hours);
 
-  if (
-    !Number.isFinite(requestedHours) ||
-    requestedHours <= 0 ||
-    requestedHours > 24 * 30
-  ) {
+  if (requestedHours === null) {
     return reply.code(400).send({
       error: "invalid_hours"
     });
   }
 
-  const [result, gatewayResult] =
+  const [observationRows, gatewayResult] =
     await Promise.all([
-      pool.query(
-        `
-        WITH stats AS (
-          SELECT
-            gateway_id,
-            sensor_uid,
-            COUNT(*)::integer AS sample_count,
-            AVG(rssi)::double precision AS avg_rssi,
-            MIN(rssi)::double precision AS min_rssi,
-            MAX(rssi)::double precision AS max_rssi,
-            COALESCE(STDDEV_SAMP(rssi), 0)::double precision AS stddev_rssi,
-            MIN(time) AS first_seen_at,
-            MAX(time) AS last_seen_at
-          FROM gateway_sensor_rssi_samples
-          WHERE time >= NOW() - ($1 * INTERVAL '1 hour')
-          GROUP BY gateway_id, sensor_uid
-        ), ranked AS (
-          SELECT
-            stats.*,
-            ROW_NUMBER() OVER (
-              PARTITION BY sensor_uid
-              ORDER BY avg_rssi DESC, sample_count DESC, gateway_id
-            ) AS rank,
-            LEAD(avg_rssi) OVER (
-              PARTITION BY sensor_uid
-              ORDER BY avg_rssi DESC, sample_count DESC, gateway_id
-            ) AS second_avg_rssi
-          FROM stats
-        )
-        SELECT
-          gateway_id AS "gatewayId",
-          sensor_uid AS "sensorUid",
-          sample_count AS "sampleCount",
-          avg_rssi AS "avgRssi",
-          min_rssi AS "minRssi",
-          max_rssi AS "maxRssi",
-          stddev_rssi AS "stddevRssi",
-          first_seen_at AS "firstSeenAt",
-          last_seen_at AS "lastSeenAt",
-          rank,
-          CASE
-            WHEN rank = 1 AND second_avg_rssi IS NOT NULL
-              THEN avg_rssi - second_avg_rssi
-            ELSE NULL
-          END AS "leadDb"
-        FROM ranked
-        ORDER BY sensor_uid, rank, gateway_id
-        `,
-        [requestedHours]
+      getGatewayDeviceObservationStats(
+        requestedHours
       ),
 
       pool.query(
@@ -233,9 +294,9 @@ app.get("/api/v1/gateway-coverage", async (request, reply) => {
           SELECT
             gateway_id,
             COUNT(*)::integer AS sample_count,
-            COUNT(DISTINCT sensor_uid)::integer AS sensor_count,
+            COUNT(DISTINCT device_uid)::integer AS sensor_count,
             MAX(time) AS last_rssi_at
-          FROM gateway_sensor_rssi_samples
+          FROM gateway_device_ble_observations
           GROUP BY gateway_id
         )
         SELECT
@@ -277,7 +338,19 @@ app.get("/api/v1/gateway-coverage", async (request, reply) => {
     hours: requestedHours,
     generatedAt: new Date().toISOString(),
     gateways: gatewayResult.rows,
-    rows: result.rows
+    rows: observationRows.map(row => ({
+      gatewayId: row.gatewayId,
+      sensorUid: row.deviceUid,
+      sampleCount: row.sampleCount,
+      avgRssi: row.avgRssi,
+      minRssi: row.minRssi,
+      maxRssi: row.maxRssi,
+      stddevRssi: row.stddevRssi,
+      firstSeenAt: row.firstSeenAt,
+      lastSeenAt: row.lastSeenAt,
+      rank: row.rank,
+      leadDb: row.leadDb
+    }))
   };
 });
 
@@ -381,7 +454,7 @@ app.delete("/api/v1/gateway-coverage", async (_request, reply) => {
   const result = await pool.query(
     `
     WITH deleted AS (
-      DELETE FROM gateway_sensor_rssi_samples
+      DELETE FROM gateway_device_ble_observations
       RETURNING 1
     ), reset_gateways AS (
       UPDATE gateway_coverage_gateways
@@ -420,7 +493,7 @@ app.delete(
     const result = await pool.query(
       `
       WITH deleted AS (
-        DELETE FROM gateway_sensor_rssi_samples
+        DELETE FROM gateway_device_ble_observations
         WHERE gateway_id = $1
         RETURNING 1
       ), reset_gateway AS (
@@ -472,8 +545,8 @@ app.delete(
     const result = await pool.query(
       `
         WITH deleted AS (
-          DELETE FROM gateway_sensor_rssi_samples
-          WHERE sensor_uid = $1
+          DELETE FROM gateway_device_ble_observations
+          WHERE device_uid = $1
           RETURNING 1
         )
         SELECT COUNT(*)::integer AS deleted_samples
@@ -510,8 +583,8 @@ app.delete(
     const result = await pool.query(
       `
         WITH deleted AS (
-          DELETE FROM gateway_sensor_rssi_samples
-          WHERE sensor_uid = $1
+          DELETE FROM gateway_device_ble_observations
+          WHERE device_uid = $1
           RETURNING 1
         )
         SELECT COUNT(*)::integer AS deleted_samples
@@ -535,7 +608,7 @@ app.delete(
     const result = await pool.query(
       `
       WITH deleted_samples AS (
-        DELETE FROM gateway_sensor_rssi_samples
+        DELETE FROM gateway_device_ble_observations
         RETURNING 1
       ), deleted_gateways AS (
         DELETE FROM gateway_coverage_gateways
@@ -576,7 +649,7 @@ app.delete(
     const result = await pool.query(
       `
       WITH deleted_samples AS (
-        DELETE FROM gateway_sensor_rssi_samples
+        DELETE FROM gateway_device_ble_observations
         WHERE gateway_id = $1
         RETURNING 1
       ), deleted_gateway AS (
