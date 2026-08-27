@@ -746,7 +746,8 @@ app.put("/api/v1/history-config", async (request, reply) => {
     !body ||
     (
       body.version !== 1 &&
-      body.version !== 2
+      body.version !== 2 &&
+      body.version !== 3
     ) ||
     typeof body.activeTabId !== "string" ||
     typeof body.refreshIntervalMs !== "number" ||

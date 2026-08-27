@@ -1899,7 +1899,7 @@ function HistoryGraph({
                   restoredSavedAt
                     ? "violet"
                     : hasUnsavedChanges
-                      ? "blue"
+                      ? "red"
                       : editing
                         ? "cyan"
                         : "green"
