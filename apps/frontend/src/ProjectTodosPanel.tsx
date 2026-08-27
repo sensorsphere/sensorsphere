@@ -511,6 +511,7 @@ export function ProjectTodosPanel() {
       <Card withBorder padding="sm">
         <Group justify="space-between" align="flex-end">
           <Group align="flex-end">
+            <ResetFiltersAction active={filtersActive} onReset={resetFilters} />
             <TextInput
               label="Search"
               placeholder="Task, PR, patch, component…"
@@ -688,7 +689,6 @@ export function ProjectTodosPanel() {
                 </Menu.Dropdown>
               </Menu>
             </Stack>
-            <ResetFiltersAction active={filtersActive} onReset={resetFilters} />
           </Group>
           <Group>
             <Button

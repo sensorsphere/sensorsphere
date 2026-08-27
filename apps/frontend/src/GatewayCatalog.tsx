@@ -519,7 +519,16 @@ export function GatewayCatalog() {
           </Group>
         </Group>
 
-        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
+        <Group align="flex-end" wrap="nowrap">
+          <ResetFiltersAction
+            active={filtersActive}
+            onReset={() => {
+              setNameSearch("");
+              setTypeFilter(null);
+              setEnabledFilter("all");
+            }}
+          />
+          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm" style={{ flex: 1 }}>
           <TextInput
             label="Search"
             placeholder="Name, gateway ID, type, MAC, SSID or IP"
@@ -553,17 +562,8 @@ export function GatewayCatalog() {
             ]}
             styles={activeFilterStyles(enabledFilter !== "all")}
           />
-          <Group align="flex-end" h="100%">
-            <ResetFiltersAction
-              active={filtersActive}
-              onReset={() => {
-                setNameSearch("");
-                setTypeFilter(null);
-                setEnabledFilter("all");
-              }}
-            />
-          </Group>
-        </SimpleGrid>
+          </SimpleGrid>
+        </Group>
         </div>
 
         {viewMode === "cards" ? (

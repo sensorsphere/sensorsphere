@@ -318,7 +318,9 @@ export function MetricRoutingPanel() {
 
       <Card withBorder padding="md" className="metric-routing-card">
         <Stack gap="sm" className="metric-routing-card-stack">
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
+          <Group align="flex-end" wrap="nowrap">
+            <ResetFiltersAction active={filtersActive} onReset={resetFilters} />
+            <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} style={{ flex: 1 }}>
             <TextInput
               label="Sensor"
               placeholder="Name/UID A, Name/UID B"
@@ -353,7 +355,8 @@ export function MetricRoutingPanel() {
               styles={activeFilterStyles(metricFilter.trim().length > 0)}
               rightSection={metricFilter ? <ActionIcon size="sm" variant="subtle" onClick={() => setMetricFilter("")}>×</ActionIcon> : null}
             />
-          </SimpleGrid>
+            </SimpleGrid>
+          </Group>
 
           <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
             <TextInput label="Assigned gateway" placeholder="gateway-01, gateway-02" value={assignedGatewayFilter} onChange={e => setAssignedGatewayFilter(e.currentTarget.value)} styles={activeFilterStyles(assignedGatewayFilter.trim().length > 0)} rightSection={assignedGatewayFilter ? <ActionIcon size="sm" variant="subtle" onClick={() => setAssignedGatewayFilter("")}>×</ActionIcon> : null} />
@@ -462,10 +465,6 @@ export function MetricRoutingPanel() {
             >
               Anomalies only
             </Button>
-            <ResetFiltersAction
-              active={filtersActive}
-              onReset={resetFilters}
-            />
             <Text size="xs" c="dimmed">
               Loaded {loadedEvents.length} / {summary?.received ?? 0} events for selected period
               {eventsQuery.hasNextPage ? " · scroll down to load older events" : ""}

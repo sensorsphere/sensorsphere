@@ -2797,6 +2797,22 @@ function Dashboard() {
                       gap="sm"
                       align="flex-end"
                     >
+                      <ResetFiltersAction
+                        active={
+                          currentReadingSearch.trim().length > 0 ||
+                          currentReadingLocation !== null ||
+                          currentReadingStatus !== "all" ||
+                          currentReadingHealth !== "all"
+                        }
+                        onReset={
+                          () => {
+                            setCurrentReadingSearch("");
+                            setCurrentReadingLocation(null);
+                            setCurrentReadingStatus("all");
+                            setCurrentReadingHealth("all");
+                          }
+                        }
+                      />
                       <TextInput
                         label="Filter by name"
                         placeholder="Sensor name"
@@ -2877,22 +2893,7 @@ function Dashboard() {
                         styles={activeFilterStyles(currentReadingHealth !== "all")}
                       />
 
-                      <ResetFiltersAction
-                        active={
-                          currentReadingSearch.trim().length > 0 ||
-                          currentReadingLocation !== null ||
-                          currentReadingStatus !== "all" ||
-                          currentReadingHealth !== "all"
-                        }
-                        onReset={
-                          () => {
-                            setCurrentReadingSearch("");
-                            setCurrentReadingLocation(null);
-                            setCurrentReadingStatus("all");
-                            setCurrentReadingHealth("all");
-                          }
-                        }
-                      />
+
                       <Badge variant="light">
                         {
                           currentReadingAssets.length
@@ -3503,6 +3504,22 @@ function Dashboard() {
                     mb="md"
                     align="flex-end"
                   >
+                    <ResetFiltersAction
+                      active={
+                        assetSearch.trim().length > 0 ||
+                        assetHealthFilter !== "all" ||
+                        assetEnabledFilter !== "all" ||
+                        assetLocationFilter !== null
+                      }
+                      onReset={
+                        () => {
+                          setAssetSearch("");
+                          setAssetHealthFilter("all");
+                          setAssetEnabledFilter("all");
+                          setAssetLocationFilter(null);
+                        }
+                      }
+                    />
                     <TextInput
                       label="Search"
                       placeholder="Name, ID or location"
@@ -3635,22 +3652,7 @@ function Dashboard() {
                     />
 
 
-                    <ResetFiltersAction
-                      active={
-                        assetSearch.trim().length > 0 ||
-                        assetHealthFilter !== "all" ||
-                        assetEnabledFilter !== "all" ||
-                        assetLocationFilter !== null
-                      }
-                      onReset={
-                        () => {
-                          setAssetSearch("");
-                          setAssetHealthFilter("all");
-                          setAssetEnabledFilter("all");
-                          setAssetLocationFilter(null);
-                        }
-                      }
-                    />                  </Group>
+                  </Group>
 
                   </div>
 

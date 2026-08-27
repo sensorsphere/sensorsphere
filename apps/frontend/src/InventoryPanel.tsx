@@ -1286,10 +1286,22 @@ export function InventoryPanel() {
 
       <Stack gap="sm">
 
-        <Group
-          align="flex-end"
-          grow
-        >
+        <Group align="flex-end" wrap="nowrap">
+          <ResetFiltersAction
+            active={
+              search.trim().length > 0 ||
+              locationFilter !== null ||
+              statusFilter !== null ||
+              protocolFilter !== null
+            }
+            onReset={() => {
+              setSearch("");
+              setLocationFilter(null);
+              setStatusFilter(null);
+              setProtocolFilter(null);
+            }}
+          />
+          <Group align="flex-end" grow style={{ flex: 1 }}>
           <TextInput
             label="Search"
             placeholder="Asset, gateway, sensor UID, location..."
@@ -1382,6 +1394,7 @@ export function InventoryPanel() {
             }
             styles={activeFilterStyles(protocolFilter !== null)}
           />
+          </Group>
         </Group>
 
         <Group
@@ -1416,22 +1429,7 @@ export function InventoryPanel() {
           />
 
 
-          <ResetFiltersAction
-            active={
-              search.trim().length > 0 ||
-              locationFilter !== null ||
-              statusFilter !== null ||
-              protocolFilter !== null
-            }
-            onReset={
-              () => {
-                setSearch("");
-                setLocationFilter(null);
-                setStatusFilter(null);
-                setProtocolFilter(null);
-              }
-            }
-          />
+
           <SegmentedControl
             value={inventoryView}
             onChange={

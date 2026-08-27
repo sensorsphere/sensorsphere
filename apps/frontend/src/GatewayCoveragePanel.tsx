@@ -1784,6 +1784,10 @@ export function GatewayCoveragePanel() {
               </Text>
             </Stack>
             <Group gap="xs" align="flex-end">
+              <ResetFiltersAction
+                active={filtersActive}
+                onReset={resetFilters}
+              />
               <TextInput
                 size="xs"
                 label="Sensor filter"
@@ -1920,10 +1924,6 @@ export function GatewayCoveragePanel() {
                 ]}
                 aria-label="Filter by gateway assignment recommendation"
                 styles={activeFilterStyles(assignmentMatchFilter !== null)}
-              />
-              <ResetFiltersAction
-                active={filtersActive}
-                onReset={resetFilters}
               />
               <Button
                 size="compact-sm"

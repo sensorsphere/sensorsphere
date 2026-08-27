@@ -872,15 +872,18 @@ export function SensorCatalog() {
           </Group>
         </Group>
 
-        <SimpleGrid
-          cols={{
-            base: 1,
-            xs: 2,
-            md: 4,
-            lg: 8
-          }}
-          spacing="sm"
-        >
+        <Group align="flex-end" wrap="nowrap">
+          <ResetFiltersAction active={filtersActive} onReset={clearFilters} />
+          <SimpleGrid
+            cols={{
+              base: 1,
+              xs: 2,
+              md: 4,
+              lg: 8
+            }}
+            spacing="sm"
+            style={{ flex: 1 }}
+          >
           <TextInput
             label="Search by name"
             placeholder="Name or UID"
@@ -1003,13 +1006,8 @@ export function SensorCatalog() {
             mt="xl"
           />
 
-          <Group align="flex-end" h="100%">
-            <ResetFiltersAction
-              active={filtersActive}
-              onReset={clearFilters}
-            />
-          </Group>
-        </SimpleGrid>
+          </SimpleGrid>
+        </Group>
         </div>
 
         {viewMode === "cards" ? (

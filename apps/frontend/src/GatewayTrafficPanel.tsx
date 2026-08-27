@@ -273,7 +273,9 @@ export function GatewayTrafficPanel() {
 
       <Card withBorder padding="md" className="gateway-traffic-card">
         <Stack gap="sm" className="gateway-traffic-card-stack">
-          <SimpleGrid className="gateway-traffic-filters" cols={{ base: 1, sm: 2, lg: 7 }}>
+          <Group align="flex-end" wrap="nowrap">
+            <ResetFiltersAction active={filtersActive} onReset={resetFilters} />
+            <SimpleGrid className="gateway-traffic-filters" cols={{ base: 1, sm: 2, lg: 7 }} style={{ flex: 1 }}>
             <TextInput
               label="Gateway"
               placeholder="gateway-01, gateway-02"
@@ -358,11 +360,11 @@ export function GatewayTrafficPanel() {
                 {processingTypes.length > 0 && <ActionIcon variant="subtle" aria-label="Reset Processing filter" onClick={() => setProcessingFilter("")}>×</ActionIcon>}
               </Group>
             </Stack>
-          </SimpleGrid>
+            </SimpleGrid>
+          </Group>
 
           <Group className="gateway-traffic-table-meta" justify="space-between" wrap="wrap">
             <Group>
-              <ResetFiltersAction active={filtersActive} onReset={resetFilters} />
               <Text size="xs" c="dimmed">
                 Loaded {events.length} events
                 {eventsQuery.hasNextPage ? " · scroll down to load older events" : ""}
