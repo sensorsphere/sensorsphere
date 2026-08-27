@@ -1822,15 +1822,33 @@ function Dashboard() {
         </Stack>
       </AppShell.Navbar>
 
-      <AppShell.Main>
+      <AppShell.Main
+        className={
+          activePage === "gateway-coverage"
+            ? "gateway-coverage-main"
+            : undefined
+        }
+      >
 
         <Container
           fluid
           py="xl"
           px="md"
+          className={
+            activePage === "gateway-coverage"
+              ? "gateway-coverage-page-container"
+              : undefined
+          }
         >
 
-          <Stack gap="xl">
+          <Stack
+            gap="xl"
+            className={
+              activePage === "gateway-coverage"
+                ? "gateway-coverage-page-stack"
+                : undefined
+            }
+          >
 
             {
               activePage ===

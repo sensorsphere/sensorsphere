@@ -1563,53 +1563,11 @@ export function GatewayCoveragePanel() {
         }
     });
 
-  const tableScrollRef =
-    React.useRef<HTMLDivElement>(null);
-
-  const [tableViewportHeight, setTableViewportHeight] =
-    React.useState<number | null>(null);
-
-  React.useLayoutEffect(() => {
-    const updateTableViewportHeight = (): void => {
-      const container = tableScrollRef.current;
-
-      if (!container) {
-        return;
-      }
-
-      const top = container.getBoundingClientRect().top;
-      const nextHeight = Math.max(
-        240,
-        Math.floor(window.innerHeight - top - 20)
-      );
-
-      setTableViewportHeight(current =>
-        current === nextHeight ? current : nextHeight
-      );
-    };
-
-    updateTableViewportHeight();
-
-    const frame = window.requestAnimationFrame(
-      updateTableViewportHeight
-    );
-
-    window.addEventListener(
-      "resize",
-      updateTableViewportHeight
-    );
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener(
-        "resize",
-        updateTableViewportHeight
-      );
-    };
-  });
-
   return (
-    <Stack gap="lg">
+    <Stack
+      gap="lg"
+      className="gateway-coverage-panel"
+    >
       <Group justify="space-between" align="flex-end">
         <div>
           <Group gap="xs">
@@ -1693,7 +1651,12 @@ export function GatewayCoveragePanel() {
       )}
 
       {gatewaySummaries.length > 0 && (
-        <Card withBorder padding="md" pt={6}>
+        <Card
+          withBorder
+          padding="md"
+          pt={6}
+          className="gateway-coverage-card"
+        >
           <Group justify="space-between" mb="xs" align="flex-end">
             <Stack gap={1}>
               <Text fw={600}>
@@ -1958,15 +1921,7 @@ export function GatewayCoveragePanel() {
           </Group>
 
           <div
-            ref={tableScrollRef}
-            style={{
-              maxHeight: tableViewportHeight !== null
-                ? `${tableViewportHeight}px`
-                : "calc(100dvh - 260px)",
-              overflow: "auto",
-              overscrollBehavior: "contain",
-              scrollbarGutter: "stable"
-            }}
+            className="gateway-coverage-table-scroll"
           >
             <Table
               striped
