@@ -140,3 +140,70 @@ body { background: var(--ss-page-bg); }
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
+
+
+/* Keep high-value page controls visible while content scrolls. */
+.page-sticky-controls {
+  position: sticky;
+  top: 64px;
+  z-index: 12;
+  background: var(--ss-page-bg);
+  padding-block: 4px 10px;
+  border-bottom: 1px solid var(--ss-border);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
+}
+
+/* Metric Routing owns its table scrolling, matching Gateway Coverage. */
+.metric-routing-main {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.metric-routing-page-container {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.metric-routing-page-stack,
+.metric-routing-page {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.metric-routing-results-card,
+.metric-routing-results-stack {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.metric-routing-table-scroll {
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.history-tabs-sticky {
+  position: sticky;
+  top: 64px;
+  z-index: 14;
+  background: var(--ss-page-bg);
+  padding-block: 6px;
+}
+
+.history-global-controls {
+  top: 106px;
+}

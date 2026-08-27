@@ -4134,6 +4134,7 @@ export function HistoryPanel() {
         gap="xs"
         align="center"
         wrap="wrap"
+        className="history-tabs-sticky"
       >
         {
           tabs.map(
@@ -4714,6 +4715,7 @@ export function HistoryPanel() {
         </Stack>
       </Modal>
 
+      <div className="page-sticky-controls history-global-controls">
       <Group
         justify="space-between"
         align="flex-end"
@@ -4858,6 +4860,7 @@ export function HistoryPanel() {
           </Button>
         </Group>
       </Group>
+      </div>
 
       {graphs.length === 0 ? (
         <Alert color="blue">

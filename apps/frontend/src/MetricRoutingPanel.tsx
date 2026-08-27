@@ -231,7 +231,7 @@ export function MetricRoutingPanel() {
   }
 
   return (
-    <Stack gap="lg">
+    <Stack gap="lg" className="metric-routing-page">
       <SegmentedControl
         value={view}
         onChange={value => setView(value as "routing" | "traffic")}
@@ -320,8 +320,8 @@ export function MetricRoutingPanel() {
         ))}
       </SimpleGrid>
 
-      <Card withBorder padding="md">
-        <Stack gap="sm">
+      <Card withBorder padding="md" className="metric-routing-results-card">
+        <Stack gap="sm" className="metric-routing-results-stack">
           <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
             <TextInput
               label="Sensor"

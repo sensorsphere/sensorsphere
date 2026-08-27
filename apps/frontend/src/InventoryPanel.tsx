@@ -1228,6 +1228,7 @@ export function InventoryPanel() {
     <>
       <Stack gap="md">
 
+      <div className="page-sticky-controls">
       <Group
         justify="space-between"
       >
@@ -1450,6 +1451,7 @@ export function InventoryPanel() {
         </Group>
 
       </Stack>
+      </div>
 
       {(unassignedAssets.length > 0 || unassignedGateways.length > 0) && (
         <Card

@@ -1548,31 +1548,6 @@ function Dashboard() {
             label={
               navbarCollapsed
                 ? null
-                : "Assets"
-            }
-            leftSection={
-              <NavigationIcon
-                page="assets"
-              />
-            }
-            title="Assets"
-            aria-label="Assets"
-            active={
-              activePage ===
-              "assets"
-            }
-            onClick={
-              () =>
-                navigateTo(
-                  "assets"
-                )
-            }
-          />
-
-          <NavLink
-            label={
-              navbarCollapsed
-                ? null
                 : "History"
             }
             leftSection={
@@ -1598,6 +1573,31 @@ function Dashboard() {
             label={
               navbarCollapsed
                 ? null
+                : "Assets"
+            }
+            leftSection={
+              <NavigationIcon
+                page="assets"
+              />
+            }
+            title="Assets"
+            aria-label="Assets"
+            active={
+              activePage ===
+              "assets"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "assets"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
                 : "Alerts"
             }
             leftSection={
@@ -1615,31 +1615,6 @@ function Dashboard() {
               () =>
                 navigateTo(
                   "alerts"
-                )
-            }
-          />
-
-          <NavLink
-            label={
-              navbarCollapsed
-                ? null
-                : "Inventory"
-            }
-            leftSection={
-              <NavigationIcon
-                page="inventory"
-              />
-            }
-            title="Inventory"
-            aria-label="Inventory"
-            active={
-              activePage ===
-              "inventory"
-            }
-            onClick={
-              () =>
-                navigateTo(
-                  "inventory"
                 )
             }
           />
@@ -1698,6 +1673,31 @@ function Dashboard() {
             label={
               navbarCollapsed
                 ? null
+                : "Inventory"
+            }
+            leftSection={
+              <NavigationIcon
+                page="inventory"
+              />
+            }
+            title="Inventory"
+            aria-label="Inventory"
+            active={
+              activePage ===
+              "inventory"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "inventory"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
                 : "Metric Routing"
             }
             leftSection={
@@ -1743,6 +1743,7 @@ function Dashboard() {
                 )
             }
           />
+
 
 
 
@@ -1826,7 +1827,9 @@ function Dashboard() {
         className={
           activePage === "gateway-coverage"
             ? "gateway-coverage-main"
-            : undefined
+            : activePage === "metric-routing"
+              ? "metric-routing-main"
+              : undefined
         }
       >
 
@@ -1837,7 +1840,9 @@ function Dashboard() {
           className={
             activePage === "gateway-coverage"
               ? "gateway-coverage-page-container"
-              : undefined
+              : activePage === "metric-routing"
+                ? "metric-routing-page-container"
+                : undefined
           }
         >
 
@@ -3197,6 +3202,7 @@ function Dashboard() {
                 "assets" && (
                 <div>
 
+                  <div className="page-sticky-controls">
                   <Group
                     justify="space-between"
                     mb="md"
@@ -3418,6 +3424,7 @@ function Dashboard() {
                         }
                       }
                     />                  </Group>
+                  </div>
 
                   <Text
                     size="xs"
