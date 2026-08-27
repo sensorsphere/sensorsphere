@@ -109,11 +109,11 @@ type SensorSort = {
   gatewayId?: string;
 };
 
-type AssignmentMatchStatus =
-  | "MATCH"
-  | "MISMATCH"
-  | "UNASSIGNED"
-  | "NO RECOMMENDATION";
+type AssignmentRecommendationStatus =
+  | "ALIGNED"
+  | "BETTER GATEWAY AVAILABLE"
+  | "AMBIGUOUS"
+  | "INSUFFICIENT DATA";
 
 type AssignmentFilter =
   | "ASSIGNED"
@@ -270,12 +270,13 @@ function recommendationFilterColor(
   return "gray";
 }
 
-function assignmentMatchFilterColor(
+function assignmentRecommendationColor(
   value: string
 ): string {
-  if (value === "MATCH") return "green";
-  if (value === "MISMATCH") return "red";
-  if (value === "NO RECOMMENDATION") return "orange";
+  if (value === "ALIGNED") return "green";
+  if (value === "BETTER GATEWAY AVAILABLE") return "blue";
+  if (value === "AMBIGUOUS") return "yellow";
+  if (value === "INSUFFICIENT DATA") return "orange";
   return "gray";
 }
 
@@ -626,17 +627,17 @@ export function GatewayCoveragePanel() {
     });
 
   const [assignmentMatchFilter, setAssignmentMatchFilter] =
-    React.useState<AssignmentMatchStatus | null>(() => {
+    React.useState<AssignmentRecommendationStatus | null>(() => {
       if (typeof window === "undefined") return null;
 
       const value = window.localStorage.getItem(
         ASSIGNMENT_MATCH_FILTER_STORAGE_KEY
       );
 
-      return value === "MATCH" ||
-        value === "MISMATCH" ||
-        value === "UNASSIGNED" ||
-        value === "NO RECOMMENDATION"
+      return value === "ALIGNED" ||
+        value === "BETTER GATEWAY AVAILABLE" ||
+        value === "AMBIGUOUS" ||
+        value === "INSUFFICIENT DATA"
         ? value
         : null;
     });
@@ -1094,40 +1095,51 @@ export function GatewayCoveragePanel() {
       ])
     );
 
-  const assignmentMatchStatus =
-    (sensorUid: string): AssignmentMatchStatus => {
+  const assignmentRecommendationStatus =
+    (sensorUid: string): AssignmentRecommendationStatus => {
       const assignedGateway =
         sensorByUid.get(sensorUid)?.gateway ?? null;
       const suggestion =
         suggestionBySensorUid.get(sensorUid);
 
-      if (!assignedGateway) {
-        return "UNASSIGNED";
+      if (
+        !suggestion?.gatewayId ||
+        suggestion.status === "NO SUGGESTION" ||
+        suggestion.status === "NO RELIABLE SUGGESTION"
+      ) {
+        return "INSUFFICIENT DATA";
       }
 
-      if (!suggestion?.gatewayId) {
-        return "NO RECOMMENDATION";
+      if (suggestion.status.startsWith("AMBIGUOUS")) {
+        return "AMBIGUOUS";
       }
 
-      return suggestion.gatewayId === assignedGateway.gatewayId
-        ? "MATCH"
-        : "MISMATCH";
+      return assignedGateway?.gatewayId === suggestion.gatewayId
+        ? "ALIGNED"
+        : "BETTER GATEWAY AVAILABLE";
     };
 
-  const matchSensorCount =
+  const alignedSensorCount =
     allSensorUids.filter(
-      sensorUid => assignmentMatchStatus(sensorUid) === "MATCH"
+      sensorUid => assignmentRecommendationStatus(sensorUid) === "ALIGNED"
     ).length;
 
-  const mismatchSensorCount =
-    allSensorUids.filter(
-      sensorUid => assignmentMatchStatus(sensorUid) === "MISMATCH"
-    ).length;
-
-  const noRecommendationSensorCount =
+  const betterGatewaySensorCount =
     allSensorUids.filter(
       sensorUid =>
-        assignmentMatchStatus(sensorUid) === "NO RECOMMENDATION"
+        assignmentRecommendationStatus(sensorUid) ===
+          "BETTER GATEWAY AVAILABLE"
+    ).length;
+
+  const ambiguousSensorCount =
+    allSensorUids.filter(
+      sensorUid => assignmentRecommendationStatus(sensorUid) === "AMBIGUOUS"
+    ).length;
+
+  const insufficientDataSensorCount =
+    allSensorUids.filter(
+      sensorUid =>
+        assignmentRecommendationStatus(sensorUid) === "INSUFFICIENT DATA"
     ).length;
 
   const sensors =
@@ -1195,7 +1207,7 @@ export function GatewayCoveragePanel() {
 
         if (
           assignmentMatchFilter !== null &&
-          assignmentMatchStatus(sensorUid) !== assignmentMatchFilter
+          assignmentRecommendationStatus(sensorUid) !== assignmentMatchFilter
         ) {
           return false;
         }
@@ -1421,11 +1433,14 @@ export function GatewayCoveragePanel() {
         sensor?.gateway?.id ??
         suggestedPrimaryGateway?.id ??
         null;
+      const currentBackupGatewayId =
+        sensor?.backupGateway?.id ?? null;
       const backupGatewayId =
-        sensor?.backupGateway?.id ??
-        (suggestedBackupGateway?.id !== primaryGatewayId
-          ? suggestedBackupGateway?.id ?? null
-          : null);
+        currentBackupGatewayId && currentBackupGatewayId !== primaryGatewayId
+          ? currentBackupGatewayId
+          : suggestedBackupGateway?.id !== primaryGatewayId
+            ? suggestedBackupGateway?.id ?? null
+            : null;
 
       setAssignmentSensorUid(sensorUid);
       setAssignmentGatewayIdDraft(primaryGatewayId);
@@ -1750,26 +1765,21 @@ export function GatewayCoveragePanel() {
                   {noBackupSensorCount}
                 </Text>
                 {" · "}
-                Match: {" "}
-                <Text
-                  span
-                  c={
-                    matchSensorCount > 0 &&
-                    matchSensorCount < assignedSensorCount
-                      ? "green"
-                      : undefined
-                  }
-                  fw={700}
-                >
-                  {matchSensorCount}
+                Aligned: {" "}
+                <Text span c={alignedSensorCount > 0 ? "green" : undefined} fw={700}>
+                  {alignedSensorCount}
                 </Text>
-                {" - Mismatch: "}
-                <Text span c={mismatchSensorCount > 0 ? "red" : undefined} fw={700}>
-                  {mismatchSensorCount}
+                {" - Better gateway: "}
+                <Text span c={betterGatewaySensorCount > 0 ? "blue" : undefined} fw={700}>
+                  {betterGatewaySensorCount}
                 </Text>
-                {" - No recommendation: "}
-                <Text span c={noRecommendationSensorCount > 0 ? "orange" : undefined} fw={700}>
-                  {noRecommendationSensorCount}
+                {" - Ambiguous: "}
+                <Text span c={ambiguousSensorCount > 0 ? "yellow" : undefined} fw={700}>
+                  {ambiguousSensorCount}
+                </Text>
+                {" - Insufficient data: "}
+                <Text span c={insufficientDataSensorCount > 0 ? "orange" : undefined} fw={700}>
+                  {insufficientDataSensorCount}
                 </Text>
               </Text>
             </Stack>
@@ -1891,24 +1901,24 @@ export function GatewayCoveragePanel() {
                 styles={activeFilterStyles(recommendationFilter !== null)}
               />
               <BadgeSelect
-                badgeColor={assignmentMatchFilterColor}
+                badgeColor={assignmentRecommendationColor}
                 size="xs"
-                label="Assignment match"
+                label="Assignment recommendation"
                 value={assignmentMatchFilter}
                 onChange={value =>
                   setAssignmentMatchFilter(
-                    value as AssignmentMatchStatus | null
+                    value as AssignmentRecommendationStatus | null
                   )
                 }
-                placeholder="All assignment states"
+                placeholder="All recommendation states"
                 clearable
                 data={[
-                  "MATCH",
-                  "MISMATCH",
-                  "UNASSIGNED",
-                  "NO RECOMMENDATION"
+                  "ALIGNED",
+                  "BETTER GATEWAY AVAILABLE",
+                  "AMBIGUOUS",
+                  "INSUFFICIENT DATA"
                 ]}
-                aria-label="Filter by gateway assignment match"
+                aria-label="Filter by gateway assignment recommendation"
                 styles={activeFilterStyles(assignmentMatchFilter !== null)}
               />
               <ResetFiltersAction
@@ -2373,16 +2383,10 @@ export function GatewayCoveragePanel() {
                       : null;
 
                   const assignmentStatus =
-                    assignmentMatchStatus(sensorUid);
+                    assignmentRecommendationStatus(sensorUid);
 
                   const assignmentColor =
-                    assignmentStatus === "MATCH"
-                      ? "green"
-                      : assignmentStatus === "MISMATCH"
-                        ? "red"
-                        : assignmentStatus === "NO RECOMMENDATION"
-                          ? "orange"
-                          : "gray";
+                    assignmentRecommendationColor(assignmentStatus);
 
                   return (
                     <Table.Tr
@@ -2724,17 +2728,13 @@ export function GatewayCoveragePanel() {
                           >
                             {assignmentStatus}
                           </Badge>
-                          {assignmentStatus === "MISMATCH" && assignedGateway && (
+                          {assignmentStatus !== "ALIGNED" && assignedGateway && (
                             <Text size="xs" c="dimmed" lh={1.25}>
-                              Assigned: {assignedGateway.gatewayId}
+                              Current primary: {assignedGateway.gatewayId}
                             </Text>
                           )}
-                          {assignmentStatus === "NO RECOMMENDATION" && assignedGateway && (
-                            <Text size="xs" c="dimmed" lh={1.25}>
-                              Assigned: {assignedGateway.gatewayId}
-                            </Text>
-                          )}
-                          {suggestion.gatewayId && assignmentStatus !== "MATCH" && (
+                          {suggestion.gatewayId &&
+                            assignmentStatus === "BETTER GATEWAY AVAILABLE" && (
                             <Button
                               size="compact-xs"
                               variant="light"
@@ -2757,7 +2757,7 @@ export function GatewayCoveragePanel() {
                                 )
                               }
                             >
-                              Assign suggested
+                              Use suggested primary
                             </Button>
                           )}
                           {suggestion.backupCandidateGatewayId && (
@@ -2924,6 +2924,21 @@ export function GatewayCoveragePanel() {
                   ? `${suggestedGateway.name} · ${suggestedGateway.gatewayId} · ${suggestedGateway.location?.name ?? "[No location]"}`
                   : suggestion?.gatewayId ?? "No recommendation"}
               </Text>
+
+              {assignmentSensorUid && (
+                <Group gap="xs">
+                  <Text size="sm">Recommendation state:</Text>
+                  <Badge
+                    size="sm"
+                    variant="light"
+                    color={assignmentRecommendationColor(
+                      assignmentRecommendationStatus(assignmentSensorUid)
+                    )}
+                  >
+                    {assignmentRecommendationStatus(assignmentSensorUid)}
+                  </Badge>
+                </Group>
+              )}
 
               <Select
                 label="Primary gateway"
