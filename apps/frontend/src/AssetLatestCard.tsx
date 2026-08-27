@@ -44,6 +44,7 @@ interface Props {
   asset: Asset;
   observations: LatestObservation[];
   enabled: boolean;
+  onEdit?: (asset: Asset) => void;
 }
 
 function formatAge(
@@ -198,7 +199,8 @@ function qualityColor(
 export function AssetLatestCard({
   asset,
   observations,
-  enabled
+  enabled,
+  onEdit
 }: Props) {
 
   const queryClient =
@@ -677,6 +679,16 @@ export function AssetLatestCard({
           )}
 
         <Group justify="flex-end">
+          {onEdit && (
+            <Button
+              size="xs"
+              variant="default"
+              onClick={() => onEdit(asset)}
+            >
+              Edit
+            </Button>
+          )}
+
           <Button
             size="xs"
             variant="light"

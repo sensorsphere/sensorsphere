@@ -17,13 +17,16 @@ import {
   Loader,
   MantineProvider,
   Menu,
+  Modal,
   NavLink,
+  NumberInput,
   SegmentedControl,
   Select,
   SimpleGrid,
   Stack,
   Table,
   Text,
+  Textarea,
   TextInput,
   Title,
   useMantineColorScheme
@@ -34,17 +37,23 @@ import "@mantine/core/styles.css";
 import {
   QueryClient,
   QueryClientProvider,
+  useMutation,
   useQuery
 } from "@tanstack/react-query";
 
 import {
+  createAsset,
+  deleteAsset,
   getAssets,
   getGateways,
+  getLocations,
   getLatestObservations,
   getRuntimeConfig,
   getFrontendBuildDate,
   getProjectTodos,
-  getSensors
+  getSensors,
+  updateAsset,
+  updateAssetLocation
 } from "./api";
 
 import {
@@ -76,7 +85,10 @@ import {
 } from "./alerts-api";
 
 import type {
-  Asset
+  Asset,
+  CreateAssetInput,
+  Location,
+  UpdateAssetInput
 } from "./types";
 
 import {
@@ -372,6 +384,60 @@ function attentionAccent(
   };
 }
 
+interface AssetFormState {
+  id: string | null;
+  externalId: string;
+  name: string;
+  description: string;
+  manufacturer: string;
+  model: string;
+  firmwareVersion: string;
+  assetType: string;
+  protocol: string;
+  enabled: boolean;
+  locationId: string | null;
+  warningAfterSeconds: number;
+  offlineAfterSeconds: number;
+}
+
+function emptyAssetForm(): AssetFormState {
+  return {
+    id: null,
+    externalId: "",
+    name: "",
+    description: "",
+    manufacturer: "",
+    model: "",
+    firmwareVersion: "",
+    assetType: "device",
+    protocol: "",
+    enabled: true,
+    locationId: null,
+    warningAfterSeconds: 300,
+    offlineAfterSeconds: 600
+  };
+}
+
+function assetFormFromAsset(
+  asset: Asset
+): AssetFormState {
+  return {
+    id: asset.id,
+    externalId: asset.externalId,
+    name: asset.name ?? "",
+    description: asset.description ?? "",
+    manufacturer: asset.manufacturer ?? "",
+    model: asset.model ?? "",
+    firmwareVersion: asset.firmwareVersion ?? "",
+    assetType: asset.assetType,
+    protocol: asset.protocol ?? "",
+    enabled: asset.enabled,
+    locationId: asset.location?.id ?? null,
+    warningAfterSeconds: asset.health.warningAfterSeconds,
+    offlineAfterSeconds: asset.health.offlineAfterSeconds
+  };
+}
+
 function Dashboard() {
 
   const [
@@ -580,6 +646,16 @@ function Dashboard() {
   ] = React.useState<SortDirection>("asc");
 
   const [
+    assetForm,
+    setAssetForm
+  ] = React.useState<AssetFormState | null>(null);
+
+  const [
+    assetPendingDelete,
+    setAssetPendingDelete
+  ] = React.useState<Asset | null>(null);
+
+  const [
     currentReadingSearch,
     setCurrentReadingSearch
   ] =
@@ -655,6 +731,91 @@ function Dashboard() {
 
       refetchInterval:
         30_000
+    });
+
+  const locationsQuery =
+    useQuery({
+      queryKey:
+        ["locations"],
+
+      queryFn:
+        getLocations,
+
+      refetchInterval:
+        60_000
+    });
+
+  const saveAssetMutation =
+    useMutation({
+      mutationFn:
+        async (form: AssetFormState) => {
+          const commonInput = {
+            externalId: form.externalId.trim(),
+            name: form.name.trim() || null,
+            description: form.description.trim() || null,
+            manufacturer: form.manufacturer.trim() || null,
+            model: form.model.trim() || null,
+            firmwareVersion: form.firmwareVersion.trim() || null,
+            assetType: form.assetType.trim(),
+            protocol: form.protocol.trim() || null,
+            enabled: form.enabled
+          };
+
+          let saved: Asset;
+
+          if (form.id) {
+            const updateInput: UpdateAssetInput = {
+              ...commonInput,
+              warningAfterSeconds: form.warningAfterSeconds,
+              offlineAfterSeconds: form.offlineAfterSeconds
+            };
+
+            saved = await updateAsset(
+              form.id,
+              updateInput
+            );
+          } else {
+            const createInput: CreateAssetInput = commonInput;
+            saved = await createAsset(createInput);
+          }
+
+          if (
+            saved.location?.id !== form.locationId
+          ) {
+            saved = await updateAssetLocation(
+              saved.id,
+              form.locationId
+            );
+          }
+
+          return saved;
+        },
+
+      onSuccess:
+        async () => {
+          setAssetForm(null);
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["assets"] }),
+            queryClient.invalidateQueries({ queryKey: ["latest-observations"] })
+          ]);
+        }
+    });
+
+  const deleteAssetMutation =
+    useMutation({
+      mutationFn:
+        (assetId: string) =>
+          deleteAsset(assetId),
+
+      onSuccess:
+        async () => {
+          setAssetPendingDelete(null);
+          setAssetForm(null);
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["assets"] }),
+            queryClient.invalidateQueries({ queryKey: ["latest-observations"] })
+          ]);
+        }
     });
 
   const gatewaysQuery =
@@ -978,30 +1139,14 @@ function Dashboard() {
       )
       .slice(0, 5);
 
-  const assetLocations =
-    Array.from(
-      new Map(
-        assets
-          .filter(
-            asset =>
-              asset.location !==
-              null
+  const assetLocations: Location[] =
+    [...(locationsQuery.data ?? [])]
+      .sort(
+        (left, right) =>
+          left.name.localeCompare(
+            right.name
           )
-          .map(
-            asset => [
-              asset.location!.id,
-              asset.location!
-            ]
-          )
-      )
-      .values()
-    )
-    .sort(
-      (left, right) =>
-        left.name.localeCompare(
-          right.name
-        )
-    );
+      );
 
   const normalizedAssetSearch =
     assetSearch
@@ -3315,6 +3460,16 @@ function Dashboard() {
                         {filteredAssets.length} / {assets.length} assets
                       </Badge>
 
+                      <Button
+                        onClick={() =>
+                          setAssetForm(
+                            emptyAssetForm()
+                          )
+                        }
+                      >
+                        Add asset
+                      </Button>
+
                       <SegmentedControl
                         value={
                           assetView
@@ -3534,6 +3689,14 @@ function Dashboard() {
                                     enabled={
                                       isAssetEnabled(asset)
                                     }
+                                    onEdit={
+                                      currentAsset =>
+                                        setAssetForm(
+                                          assetFormFromAsset(
+                                            currentAsset
+                                          )
+                                        )
+                                    }
                                   />
                                 )
                               )
@@ -3564,6 +3727,7 @@ function Dashboard() {
                                       {label}
                                     </SortableTableHeader>
                                   ))}
+                                  <Table.Th>Actions</Table.Th>
                                 </Table.Tr>
                               </Table.Thead>
 
@@ -3628,6 +3792,19 @@ function Dashboard() {
                                           {asset.health.status}
                                         </Badge>
                                       </Table.Td>
+                                      <Table.Td>
+                                        <Button
+                                          size="compact-xs"
+                                          variant="default"
+                                          onClick={() =>
+                                            setAssetForm(
+                                              assetFormFromAsset(asset)
+                                            )
+                                          }
+                                        >
+                                          Edit
+                                        </Button>
+                                      </Table.Td>
                                     </Table.Tr>
                                   );
                                 })}
@@ -3640,6 +3817,288 @@ function Dashboard() {
                 </div>
               )
             }
+
+            <Modal
+              opened={assetForm !== null}
+              onClose={() => {
+                if (!saveAssetMutation.isPending) {
+                  setAssetForm(null);
+                }
+              }}
+              title={
+                assetForm?.id
+                  ? "Edit asset"
+                  : "Add asset"
+              }
+              size="lg"
+            >
+              {assetForm && (
+                <Stack gap="md">
+                  <SimpleGrid cols={{ base: 1, sm: 2 }}>
+                    <TextInput
+                      label="Asset ID"
+                      required
+                      value={assetForm.externalId}
+                      onChange={event =>
+                        setAssetForm({
+                          ...assetForm,
+                          externalId: event.currentTarget.value
+                        })
+                      }
+                    />
+
+                    <TextInput
+                      label="Name"
+                      value={assetForm.name}
+                      onChange={event =>
+                        setAssetForm({
+                          ...assetForm,
+                          name: event.currentTarget.value
+                        })
+                      }
+                    />
+
+                    <TextInput
+                      label="Asset type"
+                      required
+                      value={assetForm.assetType}
+                      onChange={event =>
+                        setAssetForm({
+                          ...assetForm,
+                          assetType: event.currentTarget.value
+                        })
+                      }
+                    />
+
+                    <TextInput
+                      label="Protocol"
+                      value={assetForm.protocol}
+                      onChange={event =>
+                        setAssetForm({
+                          ...assetForm,
+                          protocol: event.currentTarget.value
+                        })
+                      }
+                    />
+
+                    <TextInput
+                      label="Manufacturer"
+                      value={assetForm.manufacturer}
+                      onChange={event =>
+                        setAssetForm({
+                          ...assetForm,
+                          manufacturer: event.currentTarget.value
+                        })
+                      }
+                    />
+
+                    <TextInput
+                      label="Model"
+                      value={assetForm.model}
+                      onChange={event =>
+                        setAssetForm({
+                          ...assetForm,
+                          model: event.currentTarget.value
+                        })
+                      }
+                    />
+
+                    <TextInput
+                      label="Firmware version"
+                      value={assetForm.firmwareVersion}
+                      onChange={event =>
+                        setAssetForm({
+                          ...assetForm,
+                          firmwareVersion: event.currentTarget.value
+                        })
+                      }
+                    />
+
+                    <Select
+                      label="Location"
+                      searchable
+                      clearable
+                      placeholder="Unassigned"
+                      value={assetForm.locationId}
+                      onChange={locationId =>
+                        setAssetForm({
+                          ...assetForm,
+                          locationId
+                        })
+                      }
+                      data={assetLocations.map(location => ({
+                        value: location.id,
+                        label: location.name
+                      }))}
+                    />
+
+                    <NumberInput
+                      label="Warning after (seconds)"
+                      min={1}
+                      value={assetForm.warningAfterSeconds}
+                      onChange={value =>
+                        setAssetForm({
+                          ...assetForm,
+                          warningAfterSeconds:
+                            typeof value === "number"
+                              ? value
+                              : assetForm.warningAfterSeconds
+                        })
+                      }
+                    />
+
+                    <NumberInput
+                      label="Offline after (seconds)"
+                      min={2}
+                      value={assetForm.offlineAfterSeconds}
+                      onChange={value =>
+                        setAssetForm({
+                          ...assetForm,
+                          offlineAfterSeconds:
+                            typeof value === "number"
+                              ? value
+                              : assetForm.offlineAfterSeconds
+                        })
+                      }
+                    />
+                  </SimpleGrid>
+
+                  <Textarea
+                    label="Description"
+                    autosize
+                    minRows={2}
+                    value={assetForm.description}
+                    onChange={event =>
+                      setAssetForm({
+                        ...assetForm,
+                        description: event.currentTarget.value
+                      })
+                    }
+                  />
+
+                  <div>
+                    <Text size="sm" fw={500} mb={4}>
+                      Status
+                    </Text>
+                    <SegmentedControl
+                      value={assetForm.enabled ? "enabled" : "disabled"}
+                      onChange={value =>
+                        setAssetForm({
+                          ...assetForm,
+                          enabled: value === "enabled"
+                        })
+                      }
+                      data={[
+                        { label: "Enabled", value: "enabled" },
+                        { label: "Disabled", value: "disabled" }
+                      ]}
+                    />
+                  </div>
+
+                  {saveAssetMutation.isError && (
+                    <Alert color="red" title="Unable to save asset">
+                      {saveAssetMutation.error instanceof Error
+                        ? saveAssetMutation.error.message
+                        : "Unknown error"}
+                    </Alert>
+                  )}
+
+                  <Group justify="space-between">
+                    <div>
+                      {assetForm.id && (
+                        <Button
+                          color="red"
+                          variant="light"
+                          onClick={() => {
+                            const currentAsset = assets.find(
+                              asset => asset.id === assetForm.id
+                            );
+                            if (currentAsset) {
+                              setAssetPendingDelete(currentAsset);
+                            }
+                          }}
+                        >
+                          Delete asset
+                        </Button>
+                      )}
+                    </div>
+
+                    <Group>
+                      <Button
+                        variant="default"
+                        disabled={saveAssetMutation.isPending}
+                        onClick={() => setAssetForm(null)}
+                      >
+                        Cancel
+                      </Button>
+
+                      <Button
+                        loading={saveAssetMutation.isPending}
+                        disabled={
+                          !assetForm.externalId.trim() ||
+                          !assetForm.assetType.trim() ||
+                          assetForm.warningAfterSeconds >=
+                            assetForm.offlineAfterSeconds
+                        }
+                        onClick={() =>
+                          saveAssetMutation.mutate(assetForm)
+                        }
+                      >
+                        Save
+                      </Button>
+                    </Group>
+                  </Group>
+                </Stack>
+              )}
+            </Modal>
+
+            <Modal
+              opened={assetPendingDelete !== null}
+              onClose={() => {
+                if (!deleteAssetMutation.isPending) {
+                  setAssetPendingDelete(null);
+                }
+              }}
+              title="Delete asset"
+              size="sm"
+            >
+              <Stack gap="md">
+                <Text>
+                  Delete <strong>{assetPendingDelete?.name ?? assetPendingDelete?.externalId}</strong>?
+                  This is only allowed when the asset has no metrics attached.
+                </Text>
+
+                {deleteAssetMutation.isError && (
+                  <Alert color="red" title="Unable to delete asset">
+                    {deleteAssetMutation.error instanceof Error
+                      ? deleteAssetMutation.error.message
+                      : "Unknown error"}
+                  </Alert>
+                )}
+
+                <Group justify="flex-end">
+                  <Button
+                    variant="default"
+                    disabled={deleteAssetMutation.isPending}
+                    onClick={() => setAssetPendingDelete(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    color="red"
+                    loading={deleteAssetMutation.isPending}
+                    disabled={!assetPendingDelete}
+                    onClick={() => {
+                      if (assetPendingDelete) {
+                        deleteAssetMutation.mutate(assetPendingDelete.id);
+                      }
+                    }}
+                  >
+                    Delete
+                  </Button>
+                </Group>
+              </Stack>
+            </Modal>
 
 {
               activePage ===

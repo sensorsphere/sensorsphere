@@ -259,7 +259,7 @@ implements AssetRepository {
   ): Promise<AssetRecord> {
 
     const result =
-      await this.pool.query<AssetRecord>(
+      await this.pool.query<{ id: string }>(
         `
         INSERT INTO assets (
           id,
@@ -278,28 +278,7 @@ implements AssetRepository {
           $1, $2, $3, $4, $5,
           $6, $7, $8, $9
         )
-        RETURNING
-          id,
-          external_id,
-          name,
-          description,
-          manufacturer,
-          model,
-          firmware_version,
-          asset_type,
-          protocol,
-          enabled,
-          gateway_id,
-          NULL::text AS gateway_name,
-          location_id,
-          NULL::text AS location_name,
-          NULL::text AS location_type,
-          room_id,
-          NULL::text AS room_name,
-          source_sensor_uid,
-          NULL::timestamptz AS last_measurement_at,
-          created_at,
-          updated_at
+        RETURNING id
         `,
         [
           asset.external_id,
@@ -314,7 +293,18 @@ implements AssetRepository {
         ]
       );
 
-    return result.rows[0]!;
+    const created =
+      await this.findById(
+        result.rows[0]!.id
+      );
+
+    if (!created) {
+      throw new Error(
+        "Created asset could not be reloaded"
+      );
+    }
+
+    return created;
   }
 
   async updateDetails(
@@ -330,7 +320,7 @@ implements AssetRepository {
     }
 
     const result =
-      await this.pool.query<AssetRecord>(
+      await this.pool.query(
         `
         UPDATE assets
         SET
@@ -345,28 +335,6 @@ implements AssetRepository {
           enabled = $10,
           updated_at = NOW()
         WHERE id = $1
-        RETURNING
-          id,
-          external_id,
-          name,
-          description,
-          manufacturer,
-          model,
-          firmware_version,
-          asset_type,
-          protocol,
-          enabled,
-          gateway_id,
-          NULL::text AS gateway_name,
-          location_id,
-          NULL::text AS location_name,
-          NULL::text AS location_type,
-          room_id,
-          NULL::text AS room_name,
-          source_sensor_uid,
-          NULL::timestamptz AS last_measurement_at,
-          created_at,
-          updated_at
         `,
         [
           id,
@@ -394,8 +362,13 @@ implements AssetRepository {
         ]
       );
 
-    return result.rows[0] ?? null;
+    if ((result.rowCount ?? 0) === 0) {
+      return null;
+    }
+
+    return this.findById(id);
   }
+
   async locationExists(
     locationId: string
   ): Promise<boolean> {
@@ -423,35 +396,13 @@ implements AssetRepository {
   ): Promise<AssetRecord | null> {
 
     const result =
-      await this.pool.query<AssetRecord>(
+      await this.pool.query(
         `
         UPDATE assets
         SET
           location_id = $2,
           updated_at = NOW()
         WHERE id = $1
-        RETURNING
-          id,
-          external_id,
-          name,
-          description,
-          manufacturer,
-          model,
-          firmware_version,
-          asset_type,
-          protocol,
-          enabled,
-          gateway_id,
-          NULL::text AS gateway_name,
-          location_id,
-          NULL::text AS location_name,
-          NULL::text AS location_type,
-          room_id,
-          NULL::text AS room_name,
-          source_sensor_uid,
-          NULL::timestamptz AS last_measurement_at,
-          created_at,
-          updated_at
         `,
         [
           id,
@@ -459,7 +410,11 @@ implements AssetRepository {
         ]
       );
 
-    return result.rows[0] ?? null;
+    if ((result.rowCount ?? 0) === 0) {
+      return null;
+    }
+
+    return this.findById(id);
   }
 
   async updateHealthThresholds(

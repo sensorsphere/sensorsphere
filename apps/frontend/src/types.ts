@@ -227,6 +227,32 @@ export interface Asset {
   updatedAt: string;
 }
 
+export interface CreateAssetInput {
+  externalId: string;
+  name?: string | null;
+  description?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  firmwareVersion?: string | null;
+  assetType: string;
+  protocol?: string | null;
+  enabled?: boolean;
+}
+
+export interface UpdateAssetInput {
+  externalId?: string;
+  name?: string | null;
+  description?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  firmwareVersion?: string | null;
+  assetType?: string;
+  protocol?: string | null;
+  enabled?: boolean;
+  warningAfterSeconds?: number;
+  offlineAfterSeconds?: number;
+}
+
 export interface UpdateAssetHealthInput {
   warningAfterSeconds: number;
   offlineAfterSeconds: number;

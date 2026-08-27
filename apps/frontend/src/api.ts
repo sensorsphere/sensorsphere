@@ -1,5 +1,7 @@
 import type {
   Asset,
+  CreateAssetInput,
+  UpdateAssetInput,
   LatestObservation,
   CreateLocationInput,
   Location,
@@ -453,6 +455,68 @@ Promise<Asset[]> {
   return readJson<Asset[]>(
     response
   );
+}
+
+export async function createAsset(
+  input: CreateAssetInput
+): Promise<Asset> {
+  const response =
+    await fetch(
+      "/api/v1/assets",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+        body: JSON.stringify(input)
+      }
+    );
+
+  return readJson<Asset>(response);
+}
+
+export async function updateAsset(
+  assetId: string,
+  input: UpdateAssetInput
+): Promise<Asset> {
+  const response =
+    await fetch(
+      `/api/v1/assets/${assetId}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+        body: JSON.stringify(input)
+      }
+    );
+
+  return readJson<Asset>(response);
+}
+
+export async function deleteAsset(
+  assetId: string
+): Promise<void> {
+  const response =
+    await fetch(
+      `/api/v1/assets/${assetId}`,
+      { method: "DELETE" }
+    );
+
+  if (!response.ok) {
+    const body =
+      await response.json().catch(() => null);
+    const message =
+      body &&
+      typeof body === "object" &&
+      "error" in body &&
+      typeof body.error === "string"
+        ? body.error
+        : `HTTP ${response.status}`;
+    throw new Error(message);
+  }
 }
 
 export async function getLatestObservations():
