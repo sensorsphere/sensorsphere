@@ -56,6 +56,14 @@ export class MetricRoutingController {
     const hours = Number(query.hours ?? "1");
     const limit = Number(query.limit ?? "500");
     const messageTypes = query.messageType?.split(",").map(value => value.trim()).filter(Boolean) ?? [];
+    const processing = query.processing?.split(",").map(value => value.trim()).filter(Boolean) ?? [];
+    const allowedProcessing = new Set([
+      "GATEWAY_METADATA",
+      "SENSOR_METADATA",
+      "METRIC_ROUTING",
+      "COVERAGE_ROUTING",
+      "UNRECOGNIZED"
+    ]);
     const beforeOccurredAt = query.beforeOccurredAt?.trim() || undefined;
     const beforeId = query.beforeId === undefined ? undefined : Number(query.beforeId);
 
@@ -65,6 +73,10 @@ export class MetricRoutingController {
     }
     if (messageTypes.some(value => !trafficTypeSchema.safeParse(value).success)) {
       reply.code(400).send({ error: "invalid_gateway_traffic_type" });
+      return;
+    }
+    if (processing.some(value => !allowedProcessing.has(value))) {
+      reply.code(400).send({ error: "invalid_gateway_traffic_processing" });
       return;
     }
     if ((beforeOccurredAt && (!Number.isInteger(beforeId) || (beforeId ?? 0) < 1)) ||
@@ -78,6 +90,7 @@ export class MetricRoutingController {
       hours,
       limit,
       messageType: messageTypes.length ? messageTypes.join(",") : undefined,
+      processing: processing.length ? processing.join(",") : undefined,
       gatewayId: query.gatewayId?.trim() || undefined,
       sensorUid: query.sensorUid?.trim() || undefined,
       metric: query.metric?.trim() || undefined,

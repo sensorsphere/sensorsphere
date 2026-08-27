@@ -238,6 +238,7 @@ export async function getGatewayTrafficEvents(input: {
   hours: number;
   limit?: number;
   messageType?: GatewayTrafficMessageType | string | null;
+  processing?: string | null;
   gatewayId?: string;
   sensorUid?: string;
   metric?: string;
@@ -252,6 +253,7 @@ export async function getGatewayTrafficEvents(input: {
   });
 
   if (input.messageType) params.set("messageType", input.messageType);
+  if (input.processing) params.set("processing", input.processing);
   if (input.gatewayId?.trim()) params.set("gatewayId", input.gatewayId.trim());
   if (input.sensorUid?.trim()) params.set("sensorUid", input.sensorUid.trim());
   if (input.metric?.trim()) params.set("metric", input.metric.trim());

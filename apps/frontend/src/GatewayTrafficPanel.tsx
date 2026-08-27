@@ -34,15 +34,41 @@ import {
   getGatewayTrafficSummary
 } from "./api";
 import { usePersistentState } from "./preferences/usePersistentState";
-import type { GatewayTrafficMessageType } from "./types";
+import type {
+  GatewayTrafficMessageType,
+  GatewayTrafficProcessing
+} from "./types";
 
 const REFRESH_INTERVAL_MS = 2_000;
 const TRAFFIC_TYPES: GatewayTrafficMessageType[] = ["METADATA", "SENSOR", "UNKNOWN"];
+const PROCESSING_TYPES: GatewayTrafficProcessing[] = [
+  "GATEWAY_METADATA",
+  "SENSOR_METADATA",
+  "METRIC_ROUTING",
+  "COVERAGE_ROUTING",
+  "UNRECOGNIZED"
+];
 
 function trafficTypeColor(type: GatewayTrafficMessageType): string {
   if (type === "METADATA") return "violet";
   if (type === "SENSOR") return "blue";
   return "gray";
+}
+
+function processingColor(processing: GatewayTrafficProcessing): string {
+  if (processing === "GATEWAY_METADATA") return "violet";
+  if (processing === "SENSOR_METADATA") return "grape";
+  if (processing === "METRIC_ROUTING") return "blue";
+  if (processing === "COVERAGE_ROUTING") return "teal";
+  return "red";
+}
+
+function processingLabel(processing: GatewayTrafficProcessing): string {
+  if (processing === "GATEWAY_METADATA") return "GATEWAY METADATA";
+  if (processing === "SENSOR_METADATA") return "SENSOR METADATA";
+  if (processing === "METRIC_ROUTING") return "ROUTING";
+  if (processing === "COVERAGE_ROUTING") return "COVERAGE + ROUTING";
+  return "UNRECOGNIZED";
 }
 
 function timeLabel(value: string): string {
@@ -55,6 +81,8 @@ export function GatewayTrafficPanel() {
   const [paused, setPaused] = React.useState(false);
   const [messageTypeFilter, setMessageTypeFilter] = usePersistentState("gatewayTraffic.messageTypes", "");
   const messageTypes = messageTypeFilter.split(",").map(value => value.trim()).filter(Boolean) as GatewayTrafficMessageType[];
+  const [processingFilter, setProcessingFilter] = usePersistentState("gatewayTraffic.processing", "");
+  const processingTypes = processingFilter.split(",").map(value => value.trim()).filter(Boolean) as GatewayTrafficProcessing[];
   const [gatewayFilter, setGatewayFilter] = usePersistentState("gatewayTraffic.gateway", "");
   const [sensorFilter, setSensorFilter] = usePersistentState("gatewayTraffic.sensor", "");
   const [metricFilter, setMetricFilter] = usePersistentState("gatewayTraffic.metric", "");
@@ -74,6 +102,7 @@ export function GatewayTrafficPanel() {
       "gateway-traffic-events",
       hours,
       messageTypeFilter,
+      processingFilter,
       gatewayFilter,
       sensorFilter,
       metricFilter,
@@ -85,6 +114,7 @@ export function GatewayTrafficPanel() {
       hours: Number(hours),
       limit: 500,
       messageType: messageTypeFilter,
+      processing: processingFilter,
       gatewayId: gatewayFilter,
       sensorUid: sensorFilter,
       metric: metricFilter,
@@ -113,6 +143,7 @@ export function GatewayTrafficPanel() {
       switch (tableSortKey) {
         case "gateway": return event.gatewayId;
         case "type": return event.messageType;
+        case "processing": return event.processing;
         case "sensor": return event.sensorUid;
         case "metric": return event.metric;
         case "payload": return event.payload;
@@ -135,6 +166,7 @@ export function GatewayTrafficPanel() {
   const summary = summaryQuery.data;
   const filtersActive =
     messageTypes.length > 0 ||
+    processingTypes.length > 0 ||
     gatewayFilter.trim().length > 0 ||
     sensorFilter.trim().length > 0 ||
     metricFilter.trim().length > 0 ||
@@ -143,6 +175,7 @@ export function GatewayTrafficPanel() {
 
   const resetFilters = (): void => {
     setMessageTypeFilter("");
+    setProcessingFilter("");
     setGatewayFilter("");
     setSensorFilter("");
     setMetricFilter("");
@@ -168,6 +201,12 @@ export function GatewayTrafficPanel() {
     const next = append ? [...messageTypes] : [];
     if (!next.includes(type)) next.push(type);
     setMessageTypeFilter(next.join(","));
+  };
+
+  const setOrAppendProcessing = (processing: GatewayTrafficProcessing, append: boolean): void => {
+    const next = append ? [...processingTypes] : [];
+    if (!next.includes(processing)) next.push(processing);
+    setProcessingFilter(next.join(","));
   };
 
   return (
@@ -234,7 +273,7 @@ export function GatewayTrafficPanel() {
 
       <Card withBorder padding="md">
         <Stack gap="sm">
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 6 }}>
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 7 }}>
             <TextInput
               label="Gateway"
               placeholder="gateway-01, gateway-02"
@@ -301,6 +340,22 @@ export function GatewayTrafficPanel() {
                 {messageTypes.length > 0 && <ActionIcon variant="subtle" aria-label="Reset Type filter" onClick={() => setMessageTypeFilter("")}>×</ActionIcon>}
               </Group>
             </Stack>
+            <Stack gap={4}>
+              <Text size="sm" fw={500}>Processing</Text>
+              <Group gap={4} wrap="nowrap">
+                <Menu withinPortal closeOnItemClick={false}>
+                  <Menu.Target>
+                    <Button variant="default" justify="flex-start" style={{ flex: 1 }} styles={{ root: processingTypes.length ? { border: "2px solid var(--mantine-color-blue-6)" } : undefined }}>
+                      {processingTypes.length ? <Group gap={4}>{processingTypes.map(processing => <Badge key={processing} color={processingColor(processing)} variant="light">{processingLabel(processing)}</Badge>)}</Group> : <Text size="sm" c="dimmed" fw={400}>All processing</Text>}
+                    </Button>
+                  </Menu.Target>
+                  <Menu.Dropdown>
+                    {PROCESSING_TYPES.map(processing => <Menu.Item key={processing} leftSection={processingTypes.includes(processing) ? "✓" : undefined} onClick={() => setProcessingFilter(processingTypes.includes(processing) ? processingTypes.filter(value => value !== processing).join(",") : [...processingTypes, processing].join(","))}><Badge color={processingColor(processing)} variant="light">{processingLabel(processing)}</Badge></Menu.Item>)}
+                  </Menu.Dropdown>
+                </Menu>
+                {processingTypes.length > 0 && <ActionIcon variant="subtle" aria-label="Reset Processing filter" onClick={() => setProcessingFilter("")}>×</ActionIcon>}
+              </Group>
+            </Stack>
           </SimpleGrid>
 
           <Group justify="space-between" wrap="wrap">
@@ -334,10 +389,10 @@ export function GatewayTrafficPanel() {
                 }
               }}
             >
-              <Table striped highlightOnHover verticalSpacing={3} style={{ minWidth: 1180 }}>
+              <Table striped highlightOnHover verticalSpacing={3} style={{ minWidth: 1380 }}>
                 <Table.Thead>
                   <Table.Tr>
-                    {[["time", "Time"], ["gateway", "Gateway"], ["type", "Type"], ["sensor", "Sensor"], ["metric", "Metric"], ["payload", "Payload"], ["topic", "Topic"]].map(([key, label]) => (
+                    {[["time", "Time"], ["gateway", "Gateway"], ["type", "Type"], ["processing", "Processing"], ["sensor", "Sensor"], ["metric", "Metric"], ["payload", "Payload"], ["topic", "Topic"]].map(([key, label]) => (
                       <SortableTableHeader key={key} active={tableSortKey === key} direction={tableSortDirection} onClick={() => toggleTableSort(key)}>
                         {label}
                       </SortableTableHeader>
@@ -364,6 +419,16 @@ export function GatewayTrafficPanel() {
                           {event.messageType}
                         </Badge>
                       </Table.Td>
+                      <Table.Td>
+                        <Badge
+                          color={processingColor(event.processing)}
+                          variant="light"
+                          style={filterValueStyle}
+                          onClick={click => setOrAppendProcessing(event.processing, click.ctrlKey || click.metaKey)}
+                        >
+                          {processingLabel(event.processing)}
+                        </Badge>
+                      </Table.Td>
                       <Table.Td><Text size="sm" style={event.sensorUid ? filterValueStyle : undefined} onClick={click => event.sensorUid && setOrAppendFilter(sensorFilter, event.sensorUid, click.ctrlKey || click.metaKey, setSensorFilter)}>{event.sensorUid ?? "—"}</Text></Table.Td>
                       <Table.Td><Text size="sm" style={event.metric ? filterValueStyle : undefined} onClick={click => event.metric && setOrAppendFilter(metricFilter, event.metric, click.ctrlKey || click.metaKey, setMetricFilter)}>{event.metric ?? "—"}</Text></Table.Td>
                       <Table.Td>
@@ -376,7 +441,7 @@ export function GatewayTrafficPanel() {
                   ))}
                   {eventsQuery.isFetchingNextPage && (
                     <Table.Tr>
-                      <Table.Td colSpan={7}>
+                      <Table.Td colSpan={8}>
                         <Text size="xs" c="dimmed" ta="center">Loading older events…</Text>
                       </Table.Td>
                     </Table.Tr>

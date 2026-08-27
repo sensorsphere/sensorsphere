@@ -9,6 +9,7 @@ import type {
   GatewayTrafficEventDto,
   GatewayTrafficEventsPageDto,
   GatewayTrafficMessageType,
+  GatewayTrafficProcessing,
   GatewayTrafficSummaryDto
 } from "./dto.js";
 
@@ -54,6 +55,7 @@ interface GatewayTrafficRecord {
   gateway_location_id: string | null;
   gateway_location_name: string | null;
   message_type: GatewayTrafficMessageType;
+  processing: GatewayTrafficProcessing;
   sensor_uid: string | null;
   metric: string | null;
   payload: string;
@@ -64,6 +66,7 @@ export interface GatewayTrafficFilters {
   hours: number;
   limit: number;
   messageType?: string;
+  processing?: string;
   gatewayId?: string;
   sensorUid?: string;
   metric?: string;
@@ -210,6 +213,7 @@ export class MetricRoutingRepository {
     };
 
     addExactAny("event.message_type", filters.messageType);
+    addExactAny("event.processing", filters.processing);
     addIlikeAny("COALESCE(event.gateway_id, '')", filters.gatewayId);
     addIlikeAny("COALESCE(event.sensor_uid, '')", filters.sensorUid);
     addIlikeAny("COALESCE(event.metric, '')", filters.metric);
@@ -232,7 +236,7 @@ export class MetricRoutingRepository {
         event.id, event.occurred_at, event.gateway_id,
         gateway.location_id AS gateway_location_id,
         location.name AS gateway_location_name,
-        event.message_type, event.sensor_uid, event.metric,
+        event.message_type, event.processing, event.sensor_uid, event.metric,
         event.payload, event.source_topic
       FROM gateway_traffic_events event
       LEFT JOIN gateways gateway
@@ -256,6 +260,7 @@ export class MetricRoutingRepository {
       gatewayLocationId: row.gateway_location_id,
       gatewayLocationName: row.gateway_location_name,
       messageType: row.message_type,
+      processing: row.processing,
       sensorUid: row.sensor_uid,
       metric: row.metric,
       payload: row.payload,

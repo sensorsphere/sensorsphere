@@ -284,12 +284,29 @@ Promise<void> {
               ? "SENSOR"
               : "UNKNOWN";
 
+      const trafficProcessing:
+        | "GATEWAY_METADATA"
+        | "SENSOR_METADATA"
+        | "METRIC_ROUTING"
+        | "COVERAGE_ROUTING"
+        | "UNRECOGNIZED" =
+          trafficMessageType === "METADATA"
+            ? "GATEWAY_METADATA"
+            : sensorMetadata
+              ? "SENSOR_METADATA"
+              : trafficMeasurement?.metric === "rssi"
+                ? "COVERAGE_ROUTING"
+                : trafficMeasurement
+                  ? "METRIC_ROUTING"
+                  : "UNRECOGNIZED";
+
       if (gatewayTopicMatch) {
         void repository
           .saveGatewayTrafficEvent({
             occurredAt: message.receivedAt,
             gatewayId: trafficGatewayId,
             messageType: trafficMessageType,
+            processing: trafficProcessing,
             sensorUid:
               sensorMetadata?.sensorUid
               ?? trafficMeasurement?.sensorUid
@@ -401,6 +418,10 @@ Promise<void> {
             await repository.ensureSensorExists(
               trafficMeasurement.sensorUid
             );
+            await repository.saveSensorActivity(
+              trafficMeasurement.sensorUid,
+              message.receivedAt
+            );
           } catch (error) {
             logger.error(
               {
@@ -414,6 +435,25 @@ Promise<void> {
         }
 
         if (sensorMetadata) {
+          try {
+            await repository.ensureSensorExists(
+              sensorMetadata.sensorUid
+            );
+            await repository.saveSensorActivity(
+              sensorMetadata.sensorUid,
+              message.receivedAt
+            );
+          } catch (error) {
+            logger.error(
+              {
+                error,
+                gatewayId,
+                sensorUid: sensorMetadata.sensorUid
+              },
+              "Unable to persist sensor metadata activity"
+            );
+          }
+
           const value =
             message.payload
               .toString()

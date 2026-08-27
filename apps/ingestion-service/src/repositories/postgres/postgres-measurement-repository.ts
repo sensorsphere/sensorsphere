@@ -70,6 +70,12 @@ implements MeasurementRepository {
     occurredAt: Date;
     gatewayId: string | null;
     messageType: "METADATA" | "SENSOR" | "UNKNOWN";
+    processing:
+      | "GATEWAY_METADATA"
+      | "SENSOR_METADATA"
+      | "METRIC_ROUTING"
+      | "COVERAGE_ROUTING"
+      | "UNRECOGNIZED";
     sensorUid: string | null;
     metric: string | null;
     payload: string;
@@ -78,14 +84,15 @@ implements MeasurementRepository {
     await this.pool.query(
       `
       INSERT INTO gateway_traffic_events (
-        occurred_at, gateway_id, message_type, sensor_uid, metric, payload, source_topic
+        occurred_at, gateway_id, message_type, processing, sensor_uid, metric, payload, source_topic
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       `,
       [
         input.occurredAt,
         input.gatewayId,
         input.messageType,
+        input.processing,
         input.sensorUid,
         input.metric,
         input.payload,
@@ -358,13 +365,101 @@ implements MeasurementRepository {
   async ensureSensorExists(
     sensorUid: string
   ): Promise<void> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      await client.query(
+        `
+        INSERT INTO sensors (sensor_uid)
+        VALUES ($1)
+        ON CONFLICT (sensor_uid) DO NOTHING
+        `,
+        [sensorUid]
+      );
+
+      await client.query(
+        `
+        INSERT INTO assets (
+          id, external_id, name, manufacturer, model, firmware_version,
+          asset_type, protocol, enabled, gateway_id, room_id, source_sensor_uid
+        )
+        SELECT
+          sensor.uuid,
+          sensor.sensor_uid,
+          COALESCE(sensor.name, sensor.sensor_uid),
+          sensor.manufacturer,
+          sensor.model,
+          sensor.firmware_version,
+          'sensor',
+          'mqtt',
+          sensor.enabled,
+          sensor.gateway_id,
+          sensor.room_id,
+          sensor.sensor_uid
+        FROM sensors sensor
+        WHERE LOWER(sensor.sensor_uid) = LOWER($1)
+        ON CONFLICT (source_sensor_uid) DO UPDATE
+        SET
+          name = COALESCE(assets.name, EXCLUDED.name),
+          manufacturer = COALESCE(EXCLUDED.manufacturer, assets.manufacturer),
+          model = COALESCE(EXCLUDED.model, assets.model),
+          firmware_version = COALESCE(EXCLUDED.firmware_version, assets.firmware_version),
+          enabled = EXCLUDED.enabled,
+          updated_at = NOW()
+        `,
+        [sensorUid]
+      );
+
+      await client.query(
+        `
+        INSERT INTO asset_metrics (
+          id, asset_id, metric_key, display_name, unit, value_type, enabled
+        )
+        SELECT
+          gen_random_uuid(),
+          asset.id,
+          metric.metric_key,
+          metric.display_name,
+          metric.unit,
+          'number',
+          TRUE
+        FROM assets asset
+        CROSS JOIN (
+          VALUES
+            ('temperature', 'Temperature', '°C'),
+            ('humidity', 'Humidity', '%'),
+            ('battery', 'Battery', '%'),
+            ('voltage', 'Voltage', 'V'),
+            ('rssi', 'RSSI', 'dBm')
+        ) AS metric(metric_key, display_name, unit)
+        WHERE LOWER(asset.source_sensor_uid) = LOWER($1)
+        ON CONFLICT (asset_id, metric_key) DO NOTHING
+        `,
+        [sensorUid]
+      );
+
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async saveSensorActivity(
+    sensorUid: string,
+    receivedAt: Date
+  ): Promise<void> {
     await this.pool.query(
       `
-      INSERT INTO sensors (sensor_uid)
-      VALUES ($1)
-      ON CONFLICT (sensor_uid) DO NOTHING
+      UPDATE sensors
+      SET last_seen_at = GREATEST(last_seen_at, $2::timestamptz)
+      WHERE LOWER(sensor_uid) = LOWER($1)
       `,
-      [sensorUid]
+      [sensorUid, receivedAt]
     );
   }
 
@@ -408,6 +503,19 @@ implements MeasurementRepository {
             THEN NOW()
           ELSE sensors.updated_at
         END
+      `,
+      [sensorUid, metric, value]
+    );
+
+    await this.pool.query(
+      `
+      UPDATE assets
+      SET
+        manufacturer = CASE WHEN $2::text = 'manufacturer' THEN $3::text ELSE manufacturer END,
+        model = CASE WHEN $2::text = 'model' THEN $3::text ELSE model END,
+        firmware_version = CASE WHEN $2::text = 'firmware' THEN $3::text ELSE firmware_version END,
+        updated_at = NOW()
+      WHERE LOWER(source_sensor_uid) = LOWER($1)
       `,
       [sensorUid, metric, value]
     );

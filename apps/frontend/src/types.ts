@@ -412,6 +412,13 @@ export type GatewayTrafficMessageType =
   | "SENSOR"
   | "UNKNOWN";
 
+export type GatewayTrafficProcessing =
+  | "GATEWAY_METADATA"
+  | "SENSOR_METADATA"
+  | "METRIC_ROUTING"
+  | "COVERAGE_ROUTING"
+  | "UNRECOGNIZED";
+
 export interface GatewayTrafficEvent {
   id: number;
   occurredAt: string;
@@ -419,6 +426,7 @@ export interface GatewayTrafficEvent {
   gatewayLocationId: string | null;
   gatewayLocationName: string | null;
   messageType: GatewayTrafficMessageType;
+  processing: GatewayTrafficProcessing;
   sensorUid: string | null;
   metric: string | null;
   payload: string;

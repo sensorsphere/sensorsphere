@@ -64,8 +64,8 @@ const SENSOR_SELECT = `
       bgt.name AS backup_gateway_type,
       latest.time AS last_measurement_at,
       CASE
-          WHEN latest.time IS NULL THEN FALSE
-          WHEN latest.time >= NOW() - INTERVAL '5 minutes' THEN TRUE
+          WHEN GREATEST(s.last_seen_at, latest.time) IS NULL THEN FALSE
+          WHEN GREATEST(s.last_seen_at, latest.time) >= NOW() - INTERVAL '5 minutes' THEN TRUE
           ELSE FALSE
       END AS online,
       COALESCE(today.measurement_count, 0)::INTEGER AS measurements_today
