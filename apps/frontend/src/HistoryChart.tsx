@@ -55,6 +55,32 @@ interface Props {
   smoothing?: HistorySmoothingConfig;
 }
 
+
+function formatTooltipValue(
+  value: unknown
+): string {
+  const candidate =
+    Array.isArray(value)
+      ? value[value.length - 1]
+      : value;
+
+  const numeric =
+    typeof candidate === "number"
+      ? candidate
+      : Number(candidate);
+
+  if (Number.isFinite(numeric)) {
+    return numeric.toLocaleString(
+      undefined,
+      {
+        maximumFractionDigits: 2
+      }
+    );
+  }
+
+  return String(candidate ?? "");
+}
+
 function rawSeries(
   observations: ObservationHistoryPoint[]
 ) {
@@ -373,7 +399,10 @@ export function HistoryChart({
       textStyle: {
         color:
           dark ? "#f1f3f5" : "#202124"
-      }
+      },
+      valueFormatter:
+        (value: unknown) =>
+          formatTooltipValue(value)
     },
 
     legend: {
@@ -481,9 +510,7 @@ export function HistoryChart({
         name: item.name,
         type: "line",
         smooth:
-          curveStyle === "smooth"
-            ? 0.35
-            : false,
+          curveStyle === "smooth",
         smoothMonotone:
           curveStyle === "smooth"
             ? "x"
@@ -514,7 +541,12 @@ export function HistoryChart({
               : rawSeries(
                   item.history
                 ) as Array<[string, number]>,
-            smoothing
+            curveStyle === "raw"
+              ? {
+                  method: "none",
+                  window: smoothing.window
+                }
+              : smoothing
           )
       }))
   };

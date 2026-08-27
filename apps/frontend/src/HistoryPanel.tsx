@@ -103,7 +103,7 @@ interface HistoryTabConfig {
 }
 
 interface HistoryConfig {
-  version: 2;
+  version: 3;
   activeTabId: string;
   refreshIntervalMs: number;
   tabs: HistoryTabConfig[];
@@ -601,8 +601,8 @@ function normalizeHistoryTabs(
               "smooth",
             smoothing:
               graph.smoothing ?? {
-                method: "none",
-                window: 3
+                method: "moving_average",
+                window: 7
               },
             savedAt:
               graph.savedAt,
@@ -637,7 +637,8 @@ function normalizeHistoryConfig(
   if (
     (
       config.version !== 1 &&
-      config.version !== 2
+      config.version !== 2 &&
+      config.version !== 3
     ) ||
     typeof config.activeTabId !== "string" ||
     !isRefreshInterval(
@@ -650,16 +651,52 @@ function normalizeHistoryConfig(
     return null;
   }
 
+  const normalizedTabs =
+    normalizeHistoryTabs(
+      config.tabs
+    );
+
+  const migratedTabs =
+    config.version < 3
+      ? normalizedTabs.map(
+          tab => ({
+            ...tab,
+            graphs:
+              tab.graphs.map(
+                graph => {
+                  const smoothing =
+                    graph.smoothing;
+
+                  const usesLegacyDefault =
+                    !smoothing ||
+                    (
+                      smoothing.method === "none" &&
+                      smoothing.window === 3
+                    );
+
+                  return usesLegacyDefault
+                    ? {
+                        ...graph,
+                        curveStyle: "smooth",
+                        smoothing: {
+                          method: "moving_average",
+                          window: 7
+                        }
+                      }
+                    : graph;
+                }
+              )
+          })
+        )
+      : normalizedTabs;
+
   return {
-    version: 2,
+    version: 3,
     activeTabId:
       config.activeTabId,
     refreshIntervalMs:
       config.refreshIntervalMs,
-    tabs:
-      normalizeHistoryTabs(
-        config.tabs
-      )
+    tabs: migratedTabs
   };
 }
 
@@ -670,7 +707,7 @@ function createHistoryConfig(
 ): HistoryConfig {
 
   return {
-    version: 2,
+    version: 3,
     activeTabId,
     refreshIntervalMs,
     tabs:
@@ -2516,6 +2553,12 @@ function HistoryGraph({
 
                 <Select
                   label="Smoothing"
+                  disabled={
+                    (
+                      workingGraph.curveStyle ??
+                      "smooth"
+                    ) === "raw"
+                  }
                   value={
                     workingGraph.smoothing
                       ?.method ??
@@ -2552,6 +2595,10 @@ function HistoryGraph({
                 />
 
                 {
+                  (
+                    workingGraph.curveStyle ??
+                    "smooth"
+                  ) === "smooth" &&
                   (
                     workingGraph.smoothing
                       ?.method ??
@@ -4792,11 +4839,19 @@ export function HistoryPanel() {
 
           <Button
             onClick={
-              () =>
+              () => {
+                const graph =
+                  newGraph();
+
+                setGraphIdToScrollTo(
+                  graph.id
+                );
+
                 setGraphs([
                   ...graphs,
-                  newGraph()
-                ])
+                  graph
+                ]);
+              }
             }
           >
             + Add graph
