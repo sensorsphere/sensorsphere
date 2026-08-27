@@ -21,6 +21,7 @@ echo "   FLASH_SERVER    : $FLASH_SERVER"
 echo "   LOGGER_LEVEL    : $LOGGER_LEVEL"
 echo "   ESP_IP          : ${ESP_IP}"
 echo "   BUILD_DATE      : ${BUILD_DATE}"
+echo "   ESP_EXTRA_VARS  : ${ESP_EXTRA_VARS}"
 echo "======================================"
 
 if [[ ! -n "$FLASH_ONLY" ]] || [[ "$FLASH_ONLY" -ne "1" ]]; then

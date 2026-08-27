@@ -17,7 +17,7 @@ packages:
   ble_tracker: !include packages/ble/tracker.yaml
   diagnostics: !include packages/diagnostics.yaml
 
-  atc_sensors: !include packages/ble/atc-sensors-all.yaml
+  atc_sensors: !include packages/ble/${SENSORS_FILE}.yaml
 
 logger:
   level: ${LOGGER_LEVEL}

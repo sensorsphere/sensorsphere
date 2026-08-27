@@ -1,0 +1,14 @@
+# https://esphome.io/components/sensor/xiaomi_ble/#lywsdcgq
+
+sensor:
+  - platform: xiaomi_lywsdcgq
+    mac_address: "4C:65:A8:D6:43:DA"
+
+    temperature:
+      name: "Temperature D6:43:DA"
+
+    humidity:
+      name: "Humidity D6:43:DA"
+
+    battery_level:
+      name: "Battery Level D6:43:DA"

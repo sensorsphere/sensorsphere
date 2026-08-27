@@ -1,3 +1,6 @@
+# https://esphome.io/components/sensor/atc_mithermometer/
+# https://esphome.io/components/sensor/xiaomi_ble/#lywsd03mmc
+
 sensor:
   - platform: atc_mithermometer
     mac_address: "A4:C1:38:C8:AC:73"
