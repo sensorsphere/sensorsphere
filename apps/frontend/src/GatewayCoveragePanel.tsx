@@ -1563,6 +1563,51 @@ export function GatewayCoveragePanel() {
         }
     });
 
+  const tableScrollRef =
+    React.useRef<HTMLDivElement>(null);
+
+  const [tableViewportHeight, setTableViewportHeight] =
+    React.useState<number | null>(null);
+
+  React.useLayoutEffect(() => {
+    const updateTableViewportHeight = (): void => {
+      const container = tableScrollRef.current;
+
+      if (!container) {
+        return;
+      }
+
+      const top = container.getBoundingClientRect().top;
+      const nextHeight = Math.max(
+        240,
+        Math.floor(window.innerHeight - top - 20)
+      );
+
+      setTableViewportHeight(current =>
+        current === nextHeight ? current : nextHeight
+      );
+    };
+
+    updateTableViewportHeight();
+
+    const frame = window.requestAnimationFrame(
+      updateTableViewportHeight
+    );
+
+    window.addEventListener(
+      "resize",
+      updateTableViewportHeight
+    );
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener(
+        "resize",
+        updateTableViewportHeight
+      );
+    };
+  });
+
   return (
     <Stack gap="lg">
       <Group justify="space-between" align="flex-end">
@@ -1912,10 +1957,15 @@ export function GatewayCoveragePanel() {
             </Badge>
           </Group>
 
-          <Table.ScrollContainer
-            minWidth={720}
+          <div
+            ref={tableScrollRef}
             style={{
-              overflowY: "visible"
+              maxHeight: tableViewportHeight !== null
+                ? `${tableViewportHeight}px`
+                : "calc(100dvh - 260px)",
+              overflow: "auto",
+              overscrollBehavior: "contain",
+              scrollbarGutter: "stable"
             }}
           >
             <Table
@@ -1930,9 +1980,9 @@ export function GatewayCoveragePanel() {
             >
               <Table.Thead
                 style={{
-                  display: "table",
-                  width: "100%",
-                  tableLayout: "fixed",
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 2,
                   background: colorScheme === "dark"
                     ? "var(--mantine-color-dark-8)"
                     : "var(--mantine-color-gray-2)"
@@ -2272,14 +2322,7 @@ export function GatewayCoveragePanel() {
                 </Table.Tr>
               </Table.Thead>
 
-              <Table.Tbody
-                style={{
-                  display: "block",
-                  maxHeight: "calc(100vh - 420px)",
-                  overflowY: "auto",
-                  scrollbarGutter: "stable"
-                }}
-              >
+              <Table.Tbody>
                 {sensors.map(sensorUid => {
                   const sensorRows =
                     rowsBySensor.get(sensorUid) ?? [];
@@ -2341,11 +2384,6 @@ export function GatewayCoveragePanel() {
                   return (
                     <Table.Tr
                       key={sensorUid}
-                      style={{
-                        display: "table",
-                        width: "100%",
-                        tableLayout: "fixed"
-                      }}
                     >
                       <Table.Td
                         style={{
@@ -2824,7 +2862,7 @@ export function GatewayCoveragePanel() {
                 })}
               </Table.Tbody>
             </Table>
-          </Table.ScrollContainer>
+          </div>
         </Card>
       )}
 
