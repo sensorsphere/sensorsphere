@@ -247,7 +247,10 @@ app.get("/api/v1/gateway-coverage", async (request, reply) => {
           gateway.wifi_ssid AS "wifiSsid",
           gateway.build_date AS "buildDate",
           gateway.ip_address AS "ipAddress",
-          gateway.location_id AS "locationId",
+          COALESCE(
+            functional_gateway.location_id,
+            gateway.location_id
+          ) AS "locationId",
           location.name AS "locationName",
           COALESCE(
             stats.last_rssi_at,
@@ -258,8 +261,13 @@ app.get("/api/v1/gateway-coverage", async (request, reply) => {
         FROM gateway_coverage_gateways gateway
         LEFT JOIN sample_stats stats
           ON stats.gateway_id = gateway.gateway_id
+        LEFT JOIN gateways functional_gateway
+          ON functional_gateway.gateway_id = gateway.gateway_id
         LEFT JOIN locations location
-          ON location.id = gateway.location_id
+          ON location.id = COALESCE(
+            functional_gateway.location_id,
+            gateway.location_id
+          )
         ORDER BY gateway.gateway_id
         `
       )

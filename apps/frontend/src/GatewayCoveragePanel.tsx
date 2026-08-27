@@ -393,11 +393,16 @@ function recommendationInfo(
 
   const candidates =
     rows
+      .map(row => ({
+        ...row,
+        avgRssi: Number(row.avgRssi),
+        sampleCount: Number(row.sampleCount)
+      }))
       .filter(
         row =>
-          Number.isFinite(row.avgRssi)
+          Number.isFinite(row.avgRssi) &&
+          Number.isFinite(row.sampleCount)
       )
-      .slice()
       .sort(
         (left, right) =>
           right.avgRssi - left.avgRssi
