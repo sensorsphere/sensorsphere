@@ -64,7 +64,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
-import { LocationOptionContent, LocationScopeToggle, locationIdsForScope, sortLocationsHierarchically } from "./LocationFilterControls";
+import { LocationFilterField, locationIdsForScope } from "./LocationFilterControls";
 
 interface LocationNodeProps {
   location: Location;
@@ -1336,22 +1336,15 @@ export function InventoryPanel() {
             styles={activeFilterStyles(search.trim().length > 0)}
           />
 
-          <Group align="flex-end" gap="xs" wrap="nowrap">
-            <Select
-              label="Location"
-              placeholder="All locations"
-              clearable
-              searchable
-              value={locationFilter}
-              onChange={setLocationFilter}
-              data={[{ value: "__unassigned__", label: "Unassigned" }, ...sortLocationsHierarchically(locations).map(location => ({ value: location.id, label: location.name }))]}
-              leftSection={locationFilter && locationFilter !== "__unassigned__" ? <LocationIcon name={getLocationIconName(locationsById.get(locationFilter))} size={16} /> : null}
-              renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} locations={locations} />}
-              styles={activeFilterStyles(locationFilter !== null)}
-              style={{ flex: 1 }}
-            />
-            <LocationScopeToggle active={includeLocationDescendants} onChange={setIncludeLocationDescendants} />
-          </Group>
+          <LocationFilterField
+            locations={locations}
+            value={locationFilter}
+            onChange={setLocationFilter}
+            includeDescendants={includeLocationDescendants}
+            onIncludeDescendantsChange={setIncludeLocationDescendants}
+            includeUnassigned
+            styles={activeFilterStyles(locationFilter !== null)}
+          />
 
           <BadgeSelect
             badgeColor={value => value === "enabled" ? "blue" : "gray"}

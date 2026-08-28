@@ -61,7 +61,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
-import { LocationOptionContent, LocationScopeToggle, locationIdsForScope, sortLocationsHierarchically } from "./LocationFilterControls";
+import { LocationFilterField, LocationSelect, locationIdsForScope } from "./LocationFilterControls";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 
 interface SensorFormState {
@@ -592,15 +592,6 @@ export function SensorCatalog() {
       )
     );
 
-  const locationOptions =
-    sortLocationsHierarchically(locations)
-      .map(
-        location => ({
-          value: location.id,
-          label: location.name
-        })
-      );
-
   const manufacturerOptions =
     Array.from(
       new Set(
@@ -937,25 +928,17 @@ export function SensorCatalog() {
             styles={activeFilterStyles(modelFilter !== null)}
           />
 
-          <Stack gap={4} style={{ gridColumn: "span 2" }}>
-            <Text size="sm" fw={500}>Location</Text>
-            <Group gap="xs" wrap="nowrap">
-              <Select
-                aria-label="Location"
-                clearable
-                searchable
-                placeholder="All"
-                value={locationFilter}
-                onChange={setLocationFilter}
-                data={locationOptions}
-                leftSection={locationFilter ? <LocationIcon name={getLocationIconName(locationsById.get(locationFilter))} size={16} /> : null}
-                renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} locations={locations} />}
-                styles={activeFilterStyles(locationFilter !== null)}
-                style={{ flex: 1 }}
-              />
-              <LocationScopeToggle active={includeLocationDescendants} onChange={setIncludeLocationDescendants} />
-            </Group>
-          </Stack>
+          <div style={{ gridColumn: "span 2" }}>
+            <LocationFilterField
+              locations={locations}
+              value={locationFilter}
+              onChange={setLocationFilter}
+              includeDescendants={includeLocationDescendants}
+              onIncludeDescendantsChange={setIncludeLocationDescendants}
+              placeholder="All"
+              styles={activeFilterStyles(locationFilter !== null)}
+            />
+          </div>
 
           <Select
             label="Gateway"
@@ -1475,40 +1458,14 @@ export function SensorCatalog() {
               }
             />
 
-            <Select
+            <LocationSelect
               label="Location"
               searchable
               clearable
               placeholder="Unassigned"
-              value={
-                form.locationId || null
-              }
-              data={locationOptions}
-              leftSection={
-                form.locationId ? (
-                  <LocationIcon
-                    name={getLocationIconName(locationsById.get(form.locationId))}
-                    size={17}
-                  />
-                ) : undefined
-              }
-              renderOption={({ option }) => (
-                <Group gap="xs" wrap="nowrap">
-                  <LocationIcon
-                    name={getLocationIconName(locationsById.get(option.value))}
-                    size={17}
-                  />
-                  <Text size="sm">{option.label}</Text>
-                </Group>
-              )}
-              onChange={
-                value =>
-                  setForm({
-                    ...form,
-                    locationId:
-                      value ?? ""
-                  })
-              }
+              value={form.locationId || null}
+              locations={locations}
+              onChange={value => setForm({ ...form, locationId: value ?? "" })}
             />
 
             <Select

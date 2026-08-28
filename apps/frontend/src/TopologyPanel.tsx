@@ -1,12 +1,13 @@
 import React from "react";
 
+import { LocationSelect } from "./LocationFilterControls";
+
 import {
   Badge,
   Card,
   Checkbox,
   Group,
   Loader,
-  Select,
   SimpleGrid,
   Stack,
   Text,
@@ -213,93 +214,6 @@ export function TopologyPanel() {
     assetsBySensorUid.set(asset.sensor.uid, current);
   }
 
-  const locationOptions = locations
-    .map(location => ({
-      value: location.id,
-      label: locationPath(location, locationsById)
-    }))
-    .sort((left, right) => left.label.localeCompare(right.label));
-
-  const groups: Array<{
-    id: string;
-    name: string;
-    path: string;
-    location: Location | null;
-  }> = [
-    ...locations.map(location => ({
-      id: location.id,
-      name: location.name,
-      path: locationPath(location, locationsById),
-      location
-    })),
-    {
-      id: "__unassigned__",
-      name: "Unassigned",
-      path: "Unassigned",
-      location: null
-    }
-  ];
-
-  const visibleGroups = groups
-    .filter(group => !locationFilter || group.id === locationFilter)
-    .map(group => {
-      const groupSensors = sensors.filter(sensor => {
-        if (!showBlacklisted && sensor.blacklisted) {
-          return false;
-        }
-
-        return group.location
-          ? sensor.room?.id === group.location.id
-          : sensor.room === null;
-      });
-
-      const groupGateways = gateways.filter(gateway =>
-        group.location
-          ? gateway.location?.id === group.location.id
-          : gateway.location === null
-      );
-
-      const groupAssets = assets.filter(asset =>
-        group.location
-          ? asset.location?.id === group.location.id
-          : asset.location === null
-      );
-
-      const rows = groupSensors
-        .map(sensor => {
-          const primary = sensor.gateway
-            ? gatewaysById.get(sensor.gateway.id) ?? null
-            : null;
-          const linkedAssets = assetsBySensorUid.get(sensor.uid) ?? [];
-          const gatewayLocationId = primary?.location?.id ?? null;
-          const sensorLocationId = sensor.room?.id ?? null;
-          const gatewayMismatch = Boolean(primary) && gatewayLocationId !== sensorLocationId;
-          const missingPrimary = !primary;
-          const assetMismatch = linkedAssets.some(asset =>
-            (asset.location?.id ?? null) !== sensorLocationId
-          );
-          const mismatch = gatewayMismatch || missingPrimary || assetMismatch;
-
-          return {
-            sensor,
-            primary,
-            linkedAssets,
-            mismatch
-          };
-        })
-        .filter(row => !showOnlyMismatches || row.mismatch);
-
-      return {
-        ...group,
-        groupGateways,
-        groupAssets,
-        rows
-      };
-    })
-    .filter(group =>
-      group.rows.length > 0 ||
-      (!showOnlyMismatches && (group.groupGateways.length > 0 || group.groupAssets.length > 0))
-    );
 
   return (
     <Stack gap="md">
@@ -317,15 +231,14 @@ export function TopologyPanel() {
 
       <Card withBorder padding="sm">
         <Group gap="lg" align="center">
-          <Select
+          <LocationSelect
             label="Location"
             placeholder="All locations"
             clearable
             searchable
-            data={locationOptions}
+            locations={locations}
             value={locationFilter}
             onChange={setLocationFilter}
-            style={{ minWidth: 260 }}
           />
           <Checkbox
             label="Show only mismatches"

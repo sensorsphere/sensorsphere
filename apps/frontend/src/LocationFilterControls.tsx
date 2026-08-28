@@ -1,7 +1,9 @@
-import React from "react";
-import { ActionIcon, Group, Text } from "@mantine/core";
+import React, { useMemo } from "react";
+import { ActionIcon, Group, Select, Stack, Text, type SelectProps } from "@mantine/core";
 import { LocationIcon, getLocationIconName } from "./LocationIcon";
 import type { Location } from "./types";
+
+export const LOCATION_SELECT_WIDTH = 320;
 
 export function locationIdsForScope(
   locations: Location[],
@@ -85,12 +87,66 @@ export function LocationOptionContent({
   label: string;
   locations?: Location[];
 }) {
-  const depth = location ? locationDepth(locations, location.id) : 0;
+  if (!location) {
+    return <Text size="sm">{label}</Text>;
+  }
+  const depth = locationDepth(locations, location.id);
   return (
     <Group gap="xs" wrap="nowrap" style={{ paddingLeft: depth * 18 }}>
       <LocationIcon name={getLocationIconName(location)} size={16} />
       <Text size="sm">{label}</Text>
     </Group>
+  );
+}
+
+type SharedLocationSelectProps = Omit<
+  SelectProps,
+  "data" | "leftSection" | "renderOption"
+> & {
+  locations: Location[];
+  includeUnassigned?: boolean;
+  unassignedLabel?: string;
+};
+
+export function LocationSelect({
+  locations,
+  includeUnassigned = false,
+  unassignedLabel = "Unassigned",
+  value,
+  w = LOCATION_SELECT_WIDTH,
+  ...props
+}: SharedLocationSelectProps) {
+  const sortedLocations = useMemo(
+    () => sortLocationsHierarchically(locations),
+    [locations]
+  );
+  const locationsById = useMemo(
+    () => new Map(locations.map(location => [location.id, location])),
+    [locations]
+  );
+  const data = [
+    ...(includeUnassigned ? [{ value: "__unassigned__", label: unassignedLabel }] : []),
+    ...sortedLocations.map(location => ({ value: location.id, label: location.name }))
+  ];
+  const selectedLocation = typeof value === "string" && value !== "__unassigned__"
+    ? locationsById.get(value)
+    : undefined;
+
+  return (
+    <Select
+      {...props}
+      w={w}
+      value={value}
+      data={data}
+      leftSection={selectedLocation ? <LocationIcon name={getLocationIconName(selectedLocation)} size={16} /> : null}
+      renderOption={({ option }) => (
+        <LocationOptionContent
+          location={locationsById.get(option.value)}
+          label={option.label}
+          locations={locations}
+        />
+      )}
+    />
   );
 }
 
@@ -129,5 +185,48 @@ export function LocationScopeToggle({
     >
       <TreeIcon />
     </ActionIcon>
+  );
+}
+
+export function LocationFilterField({
+  locations,
+  value,
+  onChange,
+  includeDescendants,
+  onIncludeDescendantsChange,
+  placeholder = "All locations",
+  includeUnassigned = false,
+  styles
+}: {
+  locations: Location[];
+  value: string | null;
+  onChange: (value: string | null) => void;
+  includeDescendants: boolean;
+  onIncludeDescendantsChange: (active: boolean) => void;
+  placeholder?: string;
+  includeUnassigned?: boolean;
+  styles?: SelectProps["styles"];
+}) {
+  return (
+    <Stack gap={4}>
+      <Text size="sm" fw={500}>Location</Text>
+      <Group gap="xs" wrap="nowrap" align="center">
+        <LocationSelect
+          aria-label="Location"
+          clearable
+          searchable
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          locations={locations}
+          includeUnassigned={includeUnassigned}
+          styles={styles}
+        />
+        <LocationScopeToggle
+          active={includeDescendants}
+          onChange={onIncludeDescendantsChange}
+        />
+      </Group>
+    </Stack>
   );
 }

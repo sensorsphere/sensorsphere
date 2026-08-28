@@ -55,7 +55,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
-import { LocationOptionContent, LocationScopeToggle, locationIdsForScope, sortLocationsHierarchically } from "./LocationFilterControls";
+import { LocationFilterField, LocationSelect, locationIdsForScope } from "./LocationFilterControls";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 
 interface GatewayFormState {
@@ -392,12 +392,6 @@ export function GatewayCatalog() {
     value: type.id,
     label: type.name
   }));
-  const locationOptions =
-    sortLocationsHierarchically(locationsQuery.data ?? [])
-      .map(location => ({
-        value: location.id,
-        label: `${location.name} · ${location.type}`
-      }));
   const locationsById =
     new Map(
       (locationsQuery.data ?? []).map(
@@ -574,25 +568,18 @@ export function GatewayCatalog() {
             data={typeOptions}
             styles={activeFilterStyles(typeFilter !== null)}
           />
-          <Stack gap={4} style={{ gridColumn: "span 2" }}>
-            <Text size="sm" fw={500}>Location</Text>
-            <Group gap="xs" wrap="nowrap">
-              <Select
-                aria-label="Location"
-                clearable
-                searchable
-                placeholder="All locations"
-                value={locationFilter}
-                onChange={setLocationFilter}
-                data={[{ value: "__unassigned__", label: "Unassigned" }, ...locationOptions]}
-                leftSection={locationFilter && locationFilter !== "__unassigned__" ? <LocationIcon name={getLocationIconName(locationsById.get(locationFilter))} size={16} /> : null}
-                renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} locations={locations} />}
-                styles={activeFilterStyles(locationFilter !== null)}
-                style={{ flex: 1 }}
-              />
-              <LocationScopeToggle active={includeLocationDescendants} onChange={setIncludeLocationDescendants} />
-            </Group>
-          </Stack>
+          <div style={{ gridColumn: "span 2" }}>
+            <LocationFilterField
+              locations={locations}
+              value={locationFilter}
+              onChange={setLocationFilter}
+              includeDescendants={includeLocationDescendants}
+              onIncludeDescendantsChange={setIncludeLocationDescendants}
+              placeholder="All locations"
+              includeUnassigned
+              styles={activeFilterStyles(locationFilter !== null)}
+            />
+          </div>
           <Select
             label="SSID"
             clearable
@@ -909,31 +896,14 @@ export function GatewayCatalog() {
             value={form.buildDate}
             onChange={event => setForm({ ...form, buildDate: event.currentTarget.value })}
           />
-          <Select
+          <LocationSelect
             label="Location"
             placeholder="No location"
             clearable
             searchable
             value={form.locationId || null}
-            leftSection={
-              form.locationId ? (
-                <LocationIcon
-                  name={getLocationIconName(locationsById.get(form.locationId))}
-                  size={17}
-                />
-              ) : undefined
-            }
-            renderOption={({ option }) => (
-              <Group gap="xs" wrap="nowrap">
-                <LocationIcon
-                  name={getLocationIconName(locationsById.get(option.value))}
-                  size={17}
-                />
-                <Text size="sm">{option.label}</Text>
-              </Group>
-            )}
+            locations={locations}
             onChange={value => setForm({ ...form, locationId: value ?? "" })}
-            data={locationOptions}
           />
           <Checkbox
             label="Enabled"

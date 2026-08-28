@@ -131,7 +131,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
-import { LocationOptionContent, LocationScopeToggle, locationIdsForScope, sortLocationsHierarchically } from "./LocationFilterControls";
+import { LocationFilterField, LocationSelect, locationIdsForScope } from "./LocationFilterControls";
 
 import {
   SortableTableHeader,
@@ -1217,10 +1217,6 @@ function Dashboard() {
     currentReadingSearch
       .trim()
       .toLowerCase();
-
-  const currentReadingLocationOptions =
-    sortLocationsHierarchically(locationsQuery.data ?? [])
-      .map(location => ({ value: location.id, label: location.name }));
 
   const currentReadingLocationIds = locationIdsForScope(
     locationsQuery.data ?? [],
@@ -3090,21 +3086,15 @@ function Dashboard() {
                         styles={activeFilterStyles(currentReadingSearch.trim().length > 0)}
                       />
 
-                      <Group align="flex-end" gap="xs" wrap="nowrap">
-                        <Select
-                          label="Location"
-                          clearable
-                          searchable
-                          placeholder="All locations"
-                          value={currentReadingLocation}
-                          onChange={setCurrentReadingLocation}
-                          data={[{ value: "__unassigned__", label: "Unassigned" }, ...currentReadingLocationOptions]}
-                          leftSection={currentReadingLocation && currentReadingLocation !== "__unassigned__" ? <LocationIcon name={getLocationIconName(assetLocationsById.get(currentReadingLocation))} size={16} /> : null}
-                          renderOption={({ option }) => <LocationOptionContent location={assetLocationsById.get(option.value)} label={option.label} locations={assetLocations} />}
-                          styles={activeFilterStyles(currentReadingLocation !== null)}
-                        />
-                        <LocationScopeToggle active={locationIncludeDescendants} onChange={setLocationIncludeDescendants} />
-                      </Group>
+                      <LocationFilterField
+                        locations={assetLocations}
+                        value={currentReadingLocation}
+                        onChange={setCurrentReadingLocation}
+                        includeDescendants={locationIncludeDescendants}
+                        onIncludeDescendantsChange={setLocationIncludeDescendants}
+                        includeUnassigned
+                        styles={activeFilterStyles(currentReadingLocation !== null)}
+                      />
 
 
                       <BadgeSelect
@@ -3937,21 +3927,14 @@ function Dashboard() {
                       styles={activeFilterStyles(assetEnabledFilter !== "all")}
                     />
 
-                    <Group align="flex-end" gap="xs" wrap="nowrap">
-                      <Select
-                        label="Location"
-                        clearable
-                        searchable
-                        placeholder="All locations"
-                        value={assetLocationFilter}
-                        onChange={setAssetLocationFilter}
-                        data={assetLocations.map(location => ({ value: location.id, label: location.name }))}
-                        leftSection={assetLocationFilter ? <LocationIcon name={getLocationIconName(assetLocationsById.get(assetLocationFilter))} size={16} /> : null}
-                        renderOption={({ option }) => <LocationOptionContent location={assetLocationsById.get(option.value)} label={option.label} locations={assetLocations} />}
-                        styles={activeFilterStyles(assetLocationFilter !== null)}
-                      />
-                      <LocationScopeToggle active={locationIncludeDescendants} onChange={setLocationIncludeDescendants} />
-                    </Group>
+                    <LocationFilterField
+                      locations={assetLocations}
+                      value={assetLocationFilter}
+                      onChange={setAssetLocationFilter}
+                      includeDescendants={locationIncludeDescendants}
+                      onIncludeDescendantsChange={setLocationIncludeDescendants}
+                      styles={activeFilterStyles(assetLocationFilter !== null)}
+                    />
 
 
                   </Group>
@@ -4565,16 +4548,14 @@ function Dashboard() {
                       }
                     />
 
-                    <Select
+                    <LocationSelect
                       label="Location"
                       searchable
                       clearable
                       placeholder="Unassigned"
                       value={assetForm.locationId}
                       onChange={locationId => setAssetForm({ ...assetForm, locationId })}
-                      data={assetLocations.map(location => ({ value: location.id, label: location.name }))}
-                      leftSection={assetForm.locationId ? <LocationIcon name={getLocationIconName(assetLocationsById.get(assetForm.locationId))} size={16} /> : null}
-                      renderOption={({ option }) => <LocationOptionContent location={assetLocationsById.get(option.value)} label={option.label} locations={assetLocations} />}
+                      locations={assetLocations}
                     />
 
                     <NumberInput
