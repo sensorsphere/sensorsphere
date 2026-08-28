@@ -255,6 +255,8 @@ export function SimpleDashboardPanel() {
         queryClient.invalidateQueries({ queryKey: ["simple-dashboard-templates"] }),
         invalidate()
       ]);
+      setTemplateManagerInitialId(result.template.id);
+      setTemplateManagerOpened(true);
       if (result.instance) setSelectedDashboardId(result.instance.id);
     }
   });
@@ -858,6 +860,7 @@ export function SimpleDashboardPanel() {
                 <Group gap="xs">
                   <Button size="xs" variant="light" color="blue" onClick={() => { setTemplateManagerInitialId(activeDashboard.templateId); setTemplateManagerOpened(true); }}>Edit template</Button>
                   <Button size="xs" variant="light" color="orange" onClick={() => setDetachConfirmOpen(true)}>Detach</Button>
+                  <Button size="xs" variant="light" color="red" onClick={() => setDeleteTarget({ type: "dashboard", id: activeDashboard.id, name: activeDashboard.name })}>Delete instance</Button>
                 </Group>
               </Group>
             </Alert>

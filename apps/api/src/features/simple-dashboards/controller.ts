@@ -26,7 +26,7 @@ const reorderDashboardsSchema = z.object({ dashboardIds: z.array(uuid).max(100) 
 const sectionSchema = z.object({ name: z.string().trim().min(1).max(120) }).strict();
 const reorderSectionsSchema = z.object({ sectionIds: z.array(uuid).max(100) }).strict();
 const templateCardSchema = z.object({ assetId: uuid, sectionId: uuid }).strict();
-const instantiateTemplateSchema = z.object({ metricKeys: z.array(z.string().trim().min(1).max(120)).min(1).max(50) }).strict();
+const instantiateTemplateSchema = z.object({ metricKeys: z.array(z.string().trim().min(1).max(120)).max(50) }).strict();
 const convertDashboardToTemplateSchema = z.object({
   name: z.string().trim().min(1).max(120),
   createInstance: z.boolean().default(false),
@@ -415,9 +415,9 @@ export class SimpleDashboardController {
     const parsed = instantiateTemplateSchema.safeParse(request.body);
     if (!parsedId.success || !parsed.success) return reply.code(400).send({ error: "Invalid template instance" });
     const metricKeys = [...new Set(parsed.data.metricKeys)];
+    if (!(await this.repository.templateExists(parsedId.data))) return reply.code(404).send({ error: "Template not found" });
     const dashboards = await this.repository.createTemplateInstances(parsedId.data, metricKeys);
-    if (dashboards.length === 0) return reply.code(404).send({ error: "Template not found" });
-    return reply.code(201).send(dashboards.map(mapDashboard));
+    return reply.send(dashboards.map(mapDashboard));
   };
 
   convertDashboardToTemplate = async (request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply: FastifyReply) => {

@@ -442,12 +442,46 @@ export class PostgresSimpleDashboardRepository {
   }
 
   async renameTemplate(id: string, name: string): Promise<SimpleDashboardTemplateRecord | null> {
-    const result = await this.pool.query<SimpleDashboardTemplateRecord>(`
-      UPDATE simple_dashboard_templates SET name = $2, updated_at = NOW()
-      WHERE id = $1
-      RETURNING id, name, created_at, updated_at
-    `, [id, name]);
-    return result.rows[0] ?? null;
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query<SimpleDashboardTemplateRecord>(`
+        UPDATE simple_dashboard_templates SET name = $2, updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, name, created_at, updated_at
+      `, [id, name]);
+      const template = result.rows[0];
+      if (!template) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+
+      const instances = await client.query<{ id: string; template_metric_key: string }>(`
+        SELECT id, template_metric_key
+        FROM simple_dashboards
+        WHERE template_id = $1 AND template_metric_key IS NOT NULL
+        ORDER BY sort_order, created_at, id
+        FOR UPDATE
+      `, [id]);
+      for (const instance of instances.rows) {
+        const baseName = `${name} - ${instance.template_metric_key}`;
+        let dashboardName = baseName;
+        let suffix = 2;
+        while ((await client.query(`SELECT 1 FROM simple_dashboards WHERE LOWER(name) = LOWER($1) AND id <> $2`, [dashboardName, instance.id])).rowCount) {
+          dashboardName = `${baseName} (${suffix})`;
+          suffix += 1;
+        }
+        await client.query(`UPDATE simple_dashboards SET name = $2, updated_at = NOW() WHERE id = $1`, [instance.id, dashboardName]);
+      }
+
+      await client.query("COMMIT");
+      return template;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async deleteTemplate(id: string): Promise<boolean> {
@@ -602,24 +636,65 @@ export class PostgresSimpleDashboardRepository {
         await client.query("ROLLBACK");
         return [];
       }
-      const created: SimpleDashboardRecord[] = [];
-      for (const metricKey of metricKeys) {
+
+      const desiredMetricKeys = [...new Set(metricKeys)];
+      const desiredMetricSet = new Set(desiredMetricKeys);
+      const existingResult = await client.query<SimpleDashboardRecord>(`
+        SELECT d.id, d.name, d.sort_order, d.template_id, d.template_metric_key,
+               $2::text AS template_name, d.created_at, d.updated_at
+        FROM simple_dashboards d
+        WHERE d.template_id = $1
+        ORDER BY d.sort_order, d.created_at, d.id
+        FOR UPDATE
+      `, [templateId, templateResult.rows[0].name]);
+
+      const instanceByMetric = new Map<string, SimpleDashboardRecord>();
+      for (const instance of existingResult.rows) {
+        const metricKey = instance.template_metric_key;
+        if (!metricKey || !desiredMetricSet.has(metricKey) || instanceByMetric.has(metricKey)) {
+          await client.query(`DELETE FROM simple_dashboards WHERE id = $1`, [instance.id]);
+          continue;
+        }
+        instanceByMetric.set(metricKey, instance);
+      }
+
+      const resultRows: SimpleDashboardRecord[] = [];
+      for (const metricKey of desiredMetricKeys) {
+        const existing = instanceByMetric.get(metricKey);
         const baseName = `${templateResult.rows[0].name} - ${metricKey}`;
+        if (existing) {
+          let name = baseName;
+          let suffix = 2;
+          while ((await client.query(`SELECT 1 FROM simple_dashboards WHERE LOWER(name) = LOWER($1) AND id <> $2`, [name, existing.id])).rowCount) {
+            name = `${baseName} (${suffix})`;
+            suffix += 1;
+          }
+          const updated = await client.query<SimpleDashboardRecord>(`
+            UPDATE simple_dashboards
+            SET name = $2, updated_at = NOW()
+            WHERE id = $1
+            RETURNING id, name, sort_order, template_id, template_metric_key, $3::text AS template_name, created_at, updated_at
+          `, [existing.id, name, templateResult.rows[0].name]);
+          resultRows.push(updated.rows[0]!);
+          continue;
+        }
+
         let name = baseName;
         let suffix = 2;
         while ((await client.query(`SELECT 1 FROM simple_dashboards WHERE LOWER(name) = LOWER($1)`, [name])).rowCount) {
           name = `${baseName} (${suffix})`;
           suffix += 1;
         }
-        const result = await client.query<SimpleDashboardRecord>(`
+        const created = await client.query<SimpleDashboardRecord>(`
           INSERT INTO simple_dashboards (name, sort_order, template_id, template_metric_key)
           VALUES ($1, COALESCE((SELECT MAX(sort_order) + 1 FROM simple_dashboards), 0), $2, $3)
           RETURNING id, name, sort_order, template_id, template_metric_key, $4::text AS template_name, created_at, updated_at
         `, [name, templateId, metricKey, templateResult.rows[0].name]);
-        created.push(result.rows[0]!);
+        resultRows.push(created.rows[0]!);
       }
+
       await client.query("COMMIT");
-      return created;
+      return resultRows;
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -627,6 +702,7 @@ export class PostgresSimpleDashboardRepository {
       client.release();
     }
   }
+
 
 
   async convertDashboardToTemplate(
@@ -742,7 +818,7 @@ export class PostgresSimpleDashboardRepository {
         SELECT d.id, d.name, d.sort_order, d.template_id, d.template_metric_key, t.name AS template_name, d.created_at, d.updated_at
         FROM simple_dashboards d
         LEFT JOIN simple_dashboard_templates t ON t.id = d.template_id
-        WHERE d.id = $1 FOR UPDATE
+        WHERE d.id = $1 FOR UPDATE OF d
       `, [id]);
       const dashboard = dashboardResult.rows[0];
       if (!dashboard?.template_id || !dashboard.template_metric_key) {

@@ -23,6 +23,7 @@ import {
   deleteSimpleDashboardTemplateAsset,
   deleteSimpleDashboardTemplateSection,
   getAssets,
+  getSimpleDashboards,
   getSimpleDashboardTemplates,
   instantiateSimpleDashboardTemplate,
   renameSimpleDashboardTemplate,
@@ -45,6 +46,7 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
     enabled: opened
   });
   const assetsQuery = useQuery({ queryKey: ["assets"], queryFn: getAssets, enabled: opened });
+  const dashboardsQuery = useQuery({ queryKey: ["simple-dashboards"], queryFn: getSimpleDashboards, enabled: opened });
   const [selectedTemplateId, setSelectedTemplateId] = React.useState<string | null>(null);
   const [newTemplateName, setNewTemplateName] = React.useState("");
   const [newSectionName, setNewSectionName] = React.useState("");
@@ -98,9 +100,12 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
     mutationFn: ({ templateId, cardId }: { templateId: string; cardId: string }) => deleteSimpleDashboardTemplateAsset(templateId, cardId),
     onSuccess: async () => { setDeleteTarget(null); await invalidateTemplates(); await invalidateDashboards(); }
   });
-  const instantiate = useMutation({
+  const saveInstanceMetrics = useMutation({
     mutationFn: ({ templateId, metrics }: { templateId: string; metrics: string[] }) => instantiateSimpleDashboardTemplate(templateId, metrics),
-    onSuccess: async () => { setMetricKeys([]); await invalidateDashboards(); }
+    onSuccess: async dashboards => {
+      setMetricKeys(dashboards.map(item => item.templateMetricKey).filter((value): value is string => Boolean(value)));
+      await invalidateDashboards();
+    }
   });
   const reorderSections = useMutation({
     mutationFn: ({ templateId, sectionIds }: { templateId: string; sectionIds: string[] }) => reorderSimpleDashboardTemplateSections(templateId, sectionIds),
@@ -115,6 +120,7 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
   const sections = templatesQuery.data?.sections ?? [];
   const templateCards = templatesQuery.data?.cards ?? [];
   const assets = assetsQuery.data ?? [];
+  const dashboards = dashboardsQuery.data?.dashboards ?? [];
   const activeTemplate = templates.find(item => item.id === selectedTemplateId)
     ?? templates.find(item => item.id === initialTemplateId)
     ?? templates[0]
@@ -131,6 +137,16 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
       setSelectedTemplateId(templates[0].id);
     }
   }, [opened, initialTemplateId, templates.length]);
+
+
+  React.useEffect(() => {
+    if (!opened || !activeTemplate || !dashboardsQuery.data) return;
+    setMetricKeys(
+      dashboards
+        .filter(item => item.templateId === activeTemplate.id && item.templateMetricKey)
+        .map(item => item.templateMetricKey!)
+    );
+  }, [opened, activeTemplate?.id, dashboardsQuery.dataUpdatedAt]);
 
   React.useEffect(() => {
     if (activeSections.length > 0 && !activeSections.some(item => item.id === assetSectionId)) {
@@ -189,18 +205,21 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
 
               <Card withBorder radius="md" p="sm">
                 <Stack gap="sm">
-                  <Text fw={600}>Instantiate</Text>
+                  <div>
+                    <Text fw={600}>Instance metrics</Text>
+                    <Text size="xs" c="dimmed">Selected metrics are the instances managed by this template. Save adds missing instances and removes unchecked ones.</Text>
+                  </div>
                   <MultiSelect
                     label="Metrics"
-                    placeholder="Choose one or more metrics"
+                    placeholder="Choose metrics"
                     searchable
                     data={availableMetricKeys}
                     value={metricKeys}
                     onChange={setMetricKeys}
                   />
                   <Group justify="flex-end">
-                    <Button variant="light" color="green" disabled={metricKeys.length === 0} loading={instantiate.isPending} onClick={() => instantiate.mutate({ templateId: activeTemplate.id, metrics: metricKeys })}>
-                      Create {metricKeys.length || ""} instance{metricKeys.length === 1 ? "" : "s"}
+                    <Button variant="light" color="green" loading={saveInstanceMetrics.isPending} onClick={() => saveInstanceMetrics.mutate({ templateId: activeTemplate.id, metrics: metricKeys })}>
+                      Save instance metrics
                     </Button>
                   </Group>
                 </Stack>
