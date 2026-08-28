@@ -746,11 +746,11 @@ export function SimpleDashboardPanel() {
                             </Group>
                             <Group gap={6} align="center" wrap="nowrap">
                               <Text
-                                size="lg"
-                                fw={600}
+                                size="xl"
+                                fw={700}
                                 style={{
                                   color,
-                                  lineHeight: "var(--mantine-line-height-lg)"
+                                  lineHeight: "var(--mantine-line-height-xl)"
                                 }}
                               >
                                 {formatMetricValue(observation)}{metric.unit ? ` ${metric.unit}` : ""}
