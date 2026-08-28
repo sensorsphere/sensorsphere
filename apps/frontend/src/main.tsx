@@ -131,7 +131,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
-import { LocationOptionContent, LocationScopeToggle, locationIdsForScope } from "./LocationFilterControls";
+import { LocationOptionContent, LocationScopeToggle, locationIdsForScope, sortLocationsHierarchically } from "./LocationFilterControls";
 
 import {
   SortableTableHeader,
@@ -1219,8 +1219,7 @@ function Dashboard() {
       .toLowerCase();
 
   const currentReadingLocationOptions =
-    [...(locationsQuery.data ?? [])]
-      .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }))
+    sortLocationsHierarchically(locationsQuery.data ?? [])
       .map(location => ({ value: location.id, label: location.name }));
 
   const currentReadingLocationIds = locationIdsForScope(
@@ -3101,7 +3100,7 @@ function Dashboard() {
                           onChange={setCurrentReadingLocation}
                           data={[{ value: "__unassigned__", label: "Unassigned" }, ...currentReadingLocationOptions]}
                           leftSection={currentReadingLocation && currentReadingLocation !== "__unassigned__" ? <LocationIcon name={getLocationIconName(assetLocationsById.get(currentReadingLocation))} size={16} /> : null}
-                          renderOption={({ option }) => <LocationOptionContent location={assetLocationsById.get(option.value)} label={option.label} />}
+                          renderOption={({ option }) => <LocationOptionContent location={assetLocationsById.get(option.value)} label={option.label} locations={assetLocations} />}
                           styles={activeFilterStyles(currentReadingLocation !== null)}
                         />
                         <LocationScopeToggle active={locationIncludeDescendants} onChange={setLocationIncludeDescendants} />
@@ -3948,7 +3947,7 @@ function Dashboard() {
                         onChange={setAssetLocationFilter}
                         data={assetLocations.map(location => ({ value: location.id, label: location.name }))}
                         leftSection={assetLocationFilter ? <LocationIcon name={getLocationIconName(assetLocationsById.get(assetLocationFilter))} size={16} /> : null}
-                        renderOption={({ option }) => <LocationOptionContent location={assetLocationsById.get(option.value)} label={option.label} />}
+                        renderOption={({ option }) => <LocationOptionContent location={assetLocationsById.get(option.value)} label={option.label} locations={assetLocations} />}
                         styles={activeFilterStyles(assetLocationFilter !== null)}
                       />
                       <LocationScopeToggle active={locationIncludeDescendants} onChange={setLocationIncludeDescendants} />
@@ -4575,7 +4574,7 @@ function Dashboard() {
                       onChange={locationId => setAssetForm({ ...assetForm, locationId })}
                       data={assetLocations.map(location => ({ value: location.id, label: location.name }))}
                       leftSection={assetForm.locationId ? <LocationIcon name={getLocationIconName(assetLocationsById.get(assetForm.locationId))} size={16} /> : null}
-                      renderOption={({ option }) => <LocationOptionContent location={assetLocationsById.get(option.value)} label={option.label} />}
+                      renderOption={({ option }) => <LocationOptionContent location={assetLocationsById.get(option.value)} label={option.label} locations={assetLocations} />}
                     />
 
                     <NumberInput

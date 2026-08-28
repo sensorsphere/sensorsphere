@@ -331,8 +331,7 @@ export function GatewayTrafficPanel() {
               <Group gap={4} wrap="nowrap">
                 <Menu withinPortal closeOnItemClick={false}>
                   <Menu.Target>
-                    <Button variant="light" justify="flex-start" style={{ flex: 1 }} styles={{ root: messageTypes.length ? { border: "2px solid var(--mantine-color-blue-6)" } : undefined }}>
-                    color="gray"
+                    <Button variant="light" color="gray" justify="flex-start" style={{ flex: 1 }} styles={{ root: messageTypes.length ? { border: "2px solid var(--mantine-color-blue-6)" } : undefined }}>
                       {messageTypes.length ? <Group gap={4}>{messageTypes.map(type => <Badge key={type} color={trafficTypeColor(type)} variant="light">{type}</Badge>)}</Group> : <Text size="sm" c="dimmed" fw={400}>All types</Text>}
                     </Button>
                   </Menu.Target>
@@ -348,8 +347,7 @@ export function GatewayTrafficPanel() {
               <Group gap={4} wrap="nowrap">
                 <Menu withinPortal closeOnItemClick={false}>
                   <Menu.Target>
-                    <Button variant="light" justify="flex-start" style={{ flex: 1 }} styles={{ root: processingTypes.length ? { border: "2px solid var(--mantine-color-blue-6)" } : undefined }}>
-                    color="gray"
+                    <Button variant="light" color="gray" justify="flex-start" style={{ flex: 1 }} styles={{ root: processingTypes.length ? { border: "2px solid var(--mantine-color-blue-6)" } : undefined }}>
                       {processingTypes.length ? <Group gap={4}>{processingTypes.map(processing => <Badge key={processing} color={processingColor(processing)} variant="light">{processingLabel(processing)}</Badge>)}</Group> : <Text size="sm" c="dimmed" fw={400}>All processing</Text>}
                     </Button>
                   </Menu.Target>

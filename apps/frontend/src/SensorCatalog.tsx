@@ -61,7 +61,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
-import { LocationOptionContent, LocationScopeToggle, locationIdsForScope } from "./LocationFilterControls";
+import { LocationOptionContent, LocationScopeToggle, locationIdsForScope, sortLocationsHierarchically } from "./LocationFilterControls";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 
 interface SensorFormState {
@@ -593,15 +593,7 @@ export function SensorCatalog() {
     );
 
   const locationOptions =
-    [...locations]
-      .sort(
-        (a, b) =>
-          a.name.localeCompare(
-            b.name,
-            undefined,
-            { sensitivity: "base" }
-          )
-      )
+    sortLocationsHierarchically(locations)
       .map(
         location => ({
           value: location.id,
@@ -889,7 +881,7 @@ export function SensorCatalog() {
               base: 1,
               xs: 2,
               md: 4,
-              lg: 8
+              lg: 9
             }}
             spacing="sm"
             style={{ flex: 1 }}
@@ -945,22 +937,25 @@ export function SensorCatalog() {
             styles={activeFilterStyles(modelFilter !== null)}
           />
 
-          <Group align="flex-end" gap="xs" wrap="nowrap">
-            <Select
-              label="Location"
-              clearable
-              searchable
-              placeholder="All"
-              value={locationFilter}
-              onChange={setLocationFilter}
-              data={locationOptions}
-              leftSection={locationFilter ? <LocationIcon name={getLocationIconName(locationsById.get(locationFilter))} size={16} /> : null}
-              renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} />}
-              styles={activeFilterStyles(locationFilter !== null)}
-              style={{ flex: 1 }}
-            />
-            <LocationScopeToggle active={includeLocationDescendants} onChange={setIncludeLocationDescendants} />
-          </Group>
+          <Stack gap={4} style={{ gridColumn: "span 2" }}>
+            <Text size="sm" fw={500}>Location</Text>
+            <Group gap="xs" wrap="nowrap">
+              <Select
+                aria-label="Location"
+                clearable
+                searchable
+                placeholder="All"
+                value={locationFilter}
+                onChange={setLocationFilter}
+                data={locationOptions}
+                leftSection={locationFilter ? <LocationIcon name={getLocationIconName(locationsById.get(locationFilter))} size={16} /> : null}
+                renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} locations={locations} />}
+                styles={activeFilterStyles(locationFilter !== null)}
+                style={{ flex: 1 }}
+              />
+              <LocationScopeToggle active={includeLocationDescendants} onChange={setIncludeLocationDescendants} />
+            </Group>
+          </Stack>
 
           <Select
             label="Gateway"
@@ -1014,6 +1009,7 @@ export function SensorCatalog() {
 
           <Checkbox
             label="Show blacklisted only"
+            style={{ alignSelf: "end", minHeight: 36, display: "flex", alignItems: "center" }}
             checked={showBlacklistedOnly}
             onChange={event =>
               setShowBlacklistedOnly(event.currentTarget.checked)

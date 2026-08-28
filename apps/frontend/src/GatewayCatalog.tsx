@@ -55,7 +55,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
-import { LocationOptionContent, LocationScopeToggle, locationIdsForScope } from "./LocationFilterControls";
+import { LocationOptionContent, LocationScopeToggle, locationIdsForScope, sortLocationsHierarchically } from "./LocationFilterControls";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 
 interface GatewayFormState {
@@ -393,9 +393,7 @@ export function GatewayCatalog() {
     label: type.name
   }));
   const locationOptions =
-    (locationsQuery.data ?? [])
-      .slice()
-      .sort((left, right) => left.name.localeCompare(right.name))
+    sortLocationsHierarchically(locationsQuery.data ?? [])
       .map(location => ({
         value: location.id,
         label: `${location.name} · ${location.type}`
@@ -558,7 +556,7 @@ export function GatewayCatalog() {
               setEnabledFilter("all");
             }}
           />
-          <SimpleGrid cols={{ base: 1, sm: 3, xl: 6 }} spacing="sm" style={{ flex: 1 }}>
+          <SimpleGrid cols={{ base: 1, sm: 3, xl: 7 }} spacing="sm" style={{ flex: 1 }}>
           <TextInput
             label="Search"
             placeholder="Name, gateway ID, type, MAC, SSID or IP"
@@ -576,22 +574,25 @@ export function GatewayCatalog() {
             data={typeOptions}
             styles={activeFilterStyles(typeFilter !== null)}
           />
-          <Group align="flex-end" gap="xs" wrap="nowrap">
-            <Select
-              label="Location"
-              clearable
-              searchable
-              placeholder="All locations"
-              value={locationFilter}
-              onChange={setLocationFilter}
-              data={[{ value: "__unassigned__", label: "Unassigned" }, ...locationOptions]}
-              leftSection={locationFilter && locationFilter !== "__unassigned__" ? <LocationIcon name={getLocationIconName(locationsById.get(locationFilter))} size={16} /> : null}
-              renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} />}
-              styles={activeFilterStyles(locationFilter !== null)}
-              style={{ flex: 1 }}
-            />
-            <LocationScopeToggle active={includeLocationDescendants} onChange={setIncludeLocationDescendants} />
-          </Group>
+          <Stack gap={4} style={{ gridColumn: "span 2" }}>
+            <Text size="sm" fw={500}>Location</Text>
+            <Group gap="xs" wrap="nowrap">
+              <Select
+                aria-label="Location"
+                clearable
+                searchable
+                placeholder="All locations"
+                value={locationFilter}
+                onChange={setLocationFilter}
+                data={[{ value: "__unassigned__", label: "Unassigned" }, ...locationOptions]}
+                leftSection={locationFilter && locationFilter !== "__unassigned__" ? <LocationIcon name={getLocationIconName(locationsById.get(locationFilter))} size={16} /> : null}
+                renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} locations={locations} />}
+                styles={activeFilterStyles(locationFilter !== null)}
+                style={{ flex: 1 }}
+              />
+              <LocationScopeToggle active={includeLocationDescendants} onChange={setIncludeLocationDescendants} />
+            </Group>
+          </Stack>
           <Select
             label="SSID"
             clearable

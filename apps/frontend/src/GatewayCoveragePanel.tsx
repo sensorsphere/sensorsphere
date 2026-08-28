@@ -6,7 +6,7 @@ import { BadgeSelect } from "./BadgeSelect";
 import { NavigationIcon } from "./NavigationIcon";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 import { LocationIcon, getLocationIconName } from "./LocationIcon";
-import { LocationOptionContent } from "./LocationFilterControls";
+import { LocationOptionContent, sortLocationsHierarchically } from "./LocationFilterControls";
 
 import {
   ActionIcon,
@@ -1404,11 +1404,7 @@ export function GatewayCoveragePanel() {
     };
 
   const locationOptions =
-    (locationsQuery.data ?? [])
-      .slice()
-      .sort((left, right) =>
-        left.name.localeCompare(right.name)
-      )
+    sortLocationsHierarchically(locationsQuery.data ?? [])
       .map(location => ({
         value: location.id,
         label: `${location.name} · ${location.type}`
@@ -3162,7 +3158,7 @@ export function GatewayCoveragePanel() {
             disabled={locationsQuery.isLoading}
             nothingFoundMessage="No location found"
             leftSection={locationIdDraft ? <LocationIcon name={getLocationIconName(locationsById.get(locationIdDraft))} size={16} /> : null}
-            renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} />}
+            renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} locations={locations} />}
           />
 
           {locationsQuery.isError && (

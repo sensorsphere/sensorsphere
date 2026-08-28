@@ -29,7 +29,7 @@ import {
 
 import { NavigationIcon } from "./NavigationIcon";
 import { LocationIcon, getLocationIconName } from "./LocationIcon";
-import { LocationOptionContent, LocationScopeToggle, locationIdsForScope } from "./LocationFilterControls";
+import { LocationOptionContent, LocationScopeToggle, locationIdsForScope, sortLocationsHierarchically } from "./LocationFilterControls";
 import { GatewayTrafficPanel } from "./GatewayTrafficPanel";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
@@ -182,9 +182,7 @@ export function MetricRoutingPanel() {
     }
   };
 
-  const locationOptions = (locationsQuery.data ?? [])
-    .slice()
-    .sort((left, right) => left.name.localeCompare(right.name))
+  const locationOptions = sortLocationsHierarchically(locationsQuery.data ?? [])
     .map(location => ({
       value: location.id,
       label: location.name
@@ -362,7 +360,7 @@ export function MetricRoutingPanel() {
                 onChange={setLocationId}
                 data={locationOptions}
                 leftSection={locationId ? <LocationIcon name={getLocationIconName(locationsById.get(locationId))} size={16} /> : null}
-                renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} />}
+                renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} locations={locations} />}
                 styles={activeFilterStyles(locationId !== null)}
                 style={{ flex: 1 }}
               />

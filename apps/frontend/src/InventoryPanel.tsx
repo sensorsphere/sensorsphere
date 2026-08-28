@@ -64,7 +64,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
-import { LocationOptionContent, LocationScopeToggle, locationIdsForScope } from "./LocationFilterControls";
+import { LocationOptionContent, LocationScopeToggle, locationIdsForScope, sortLocationsHierarchically } from "./LocationFilterControls";
 
 interface LocationNodeProps {
   location: Location;
@@ -1344,9 +1344,9 @@ export function InventoryPanel() {
               searchable
               value={locationFilter}
               onChange={setLocationFilter}
-              data={[{ value: "__unassigned__", label: "Unassigned" }, ...locations.map(location => ({ value: location.id, label: location.name }))]}
+              data={[{ value: "__unassigned__", label: "Unassigned" }, ...sortLocationsHierarchically(locations).map(location => ({ value: location.id, label: location.name }))]}
               leftSection={locationFilter && locationFilter !== "__unassigned__" ? <LocationIcon name={getLocationIconName(locationsById.get(locationFilter))} size={16} /> : null}
-              renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} />}
+              renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} locations={locations} />}
               styles={activeFilterStyles(locationFilter !== null)}
               style={{ flex: 1 }}
             />
