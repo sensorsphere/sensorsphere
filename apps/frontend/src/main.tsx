@@ -59,6 +59,7 @@ import {
   getMetricDisplaySettings,
   getRuntimeConfig,
   getFrontendBuildDate,
+  getSimpleDashboards,
   getProjectTodos,
   getSensors,
   updateAsset,
@@ -75,6 +76,7 @@ import {
 import {
   AddMetricToDashboardModal
 } from "./AddMetricToDashboardModal";
+import { DashboardMetricAction } from "./DashboardMetricAction";
 
 import {
   SensorCatalog
@@ -851,6 +853,13 @@ function Dashboard() {
         30_000
     });
 
+  const simpleDashboardsQuery =
+    useQuery({
+      queryKey: ["simple-dashboards"],
+      queryFn: getSimpleDashboards,
+      refetchInterval: 30_000
+    });
+
   const metricDisplaySettingsQuery =
     useQuery({
       queryKey: ["metric-display-settings"],
@@ -1310,6 +1319,19 @@ function Dashboard() {
   const manufacturers: ManufacturerMetadata[] = assetClassification?.manufacturers ?? [];
   const tags: TagMetadata[] = assetClassification?.tags ?? [];
 
+  const dashboardMetricUsageCounts = React.useMemo(() => {
+    const usageByMetric = new Map<string, Set<string>>();
+    for (const card of simpleDashboardsQuery.data?.cards ?? []) {
+      const usageKey = `${card.dashboardId}:${card.sectionId ?? "unsectioned"}`;
+      const usages = usageByMetric.get(card.assetMetricId) ?? new Set<string>();
+      usages.add(usageKey);
+      usageByMetric.set(card.assetMetricId, usages);
+    }
+    return new Map(
+      Array.from(usageByMetric.entries()).map(([metricId, usages]) => [metricId, usages.size])
+    );
+  }, [simpleDashboardsQuery.data?.cards]);
+
   const assetLocations: Location[] =
     [...(locationsQuery.data ?? [])]
       .sort(
@@ -1437,12 +1459,12 @@ function Dashboard() {
             return asset.assetType;
           case "manufacturer":
             return asset.manufacturer;
-          case "tags":
-            return asset.tags.join(", ");
           case "temperature":
             return metric(asset, "temperature");
           case "humidity":
             return metric(asset, "humidity");
+          case "rssi":
+            return metric(asset, "rssi");
           case "battery":
             return metric(asset, "battery");
           case "enabled":
@@ -3988,6 +4010,7 @@ function Dashboard() {
                                         )
                                     }
                                     onAddMetricToDashboard={openDashboardMetricTarget}
+                                    dashboardUsageCounts={dashboardMetricUsageCounts}
                                   />
                                 )
                               )
@@ -4004,10 +4027,10 @@ function Dashboard() {
                                     ["externalId", "Asset ID"],
                                     ["assetType", "Type"],
                                     ["manufacturer", "Manufacturer"],
-                                    ["tags", "Tags"],
                                     ["location", "Location"],
                                     ["temperature", "Temperature"],
                                     ["humidity", "Humidity"],
+                                    ["rssi", "RSSI"],
                                     ["battery", "Battery"],
                                     ["enabled", "Enabled"],
                                     ["health", "Health"]
@@ -4033,10 +4056,13 @@ function Dashboard() {
                                     latestMetricValue(assetObservations, "temperature");
                                   const humidity =
                                     latestMetricValue(assetObservations, "humidity");
+                                  const rssi =
+                                    latestMetricValue(assetObservations, "rssi");
                                   const battery =
                                     latestMetricValue(assetObservations, "battery");
                                   const temperatureMetric = asset.metrics.find(item => item.key === "temperature");
                                   const humidityMetric = asset.metrics.find(item => item.key === "humidity");
+                                  const rssiMetric = asset.metrics.find(item => item.key === "rssi");
                                   const batteryMetric = asset.metrics.find(item => item.key === "battery" || item.key === "battery_level");
                                   const healthColor =
                                     asset.health.status === "online"
@@ -4054,15 +4080,6 @@ function Dashboard() {
                                       <Table.Td>{assetTypes.find(type => type.key === asset.assetType)?.name ?? asset.assetType}</Table.Td>
                                       <Table.Td>{asset.manufacturer ?? "—"}</Table.Td>
                                       <Table.Td>
-                                        {asset.tags.length > 0 ? (
-                                          <Group gap={4} wrap="wrap">
-                                            {asset.tags.map(tag => (
-                                              <Badge key={tag} size="xs" variant="light">{tag}</Badge>
-                                            ))}
-                                          </Group>
-                                        ) : "—"}
-                                      </Table.Td>
-                                      <Table.Td>
                                         {asset.location ? (
                                           <Group gap={5} wrap="nowrap">
                                             <LocationIcon
@@ -4078,16 +4095,11 @@ function Dashboard() {
                                           <Group gap={4} wrap="nowrap">
                                             <Text size="sm">{temperature} °C</Text>
                                             {temperatureMetric && (
-                                              <ActionIcon
-                                                size="compact-sm"
-                                                variant="subtle"
-                                                color="gray"
+                                              <DashboardMetricAction
+                                                usageCount={dashboardMetricUsageCounts.get(temperatureMetric.id) ?? 0}
                                                 title="Add Temperature to a dashboard"
-                                                aria-label="Add Temperature to a dashboard"
                                                 onClick={() => openDashboardMetricTarget(asset, temperatureMetric.id)}
-                                              >
-                                                <NavigationIcon page="dashboards" size={15} />
-                                              </ActionIcon>
+                                              />
                                             )}
                                           </Group>
                                         ) : "—"}
@@ -4097,16 +4109,25 @@ function Dashboard() {
                                           <Group gap={4} wrap="nowrap">
                                             <Text size="sm">{humidity} %</Text>
                                             {humidityMetric && (
-                                              <ActionIcon
-                                                size="compact-sm"
-                                                variant="subtle"
-                                                color="gray"
+                                              <DashboardMetricAction
+                                                usageCount={dashboardMetricUsageCounts.get(humidityMetric.id) ?? 0}
                                                 title="Add Humidity to a dashboard"
-                                                aria-label="Add Humidity to a dashboard"
                                                 onClick={() => openDashboardMetricTarget(asset, humidityMetric.id)}
-                                              >
-                                                <NavigationIcon page="dashboards" size={15} />
-                                              </ActionIcon>
+                                              />
+                                            )}
+                                          </Group>
+                                        ) : "—"}
+                                      </Table.Td>
+                                      <Table.Td>
+                                        {rssi !== null ? (
+                                          <Group gap={4} wrap="nowrap">
+                                            <Text size="sm">{rssi} dBm</Text>
+                                            {rssiMetric && (
+                                              <DashboardMetricAction
+                                                usageCount={dashboardMetricUsageCounts.get(rssiMetric.id) ?? 0}
+                                                title="Add RSSI to a dashboard"
+                                                onClick={() => openDashboardMetricTarget(asset, rssiMetric.id)}
+                                              />
                                             )}
                                           </Group>
                                         ) : "—"}
@@ -4116,16 +4137,11 @@ function Dashboard() {
                                           <Group gap={4} wrap="nowrap">
                                             <Text size="sm">{battery} %</Text>
                                             {batteryMetric && (
-                                              <ActionIcon
-                                                size="compact-sm"
-                                                variant="subtle"
-                                                color="gray"
+                                              <DashboardMetricAction
+                                                usageCount={dashboardMetricUsageCounts.get(batteryMetric.id) ?? 0}
                                                 title="Add Battery to a dashboard"
-                                                aria-label="Add Battery to a dashboard"
                                                 onClick={() => openDashboardMetricTarget(asset, batteryMetric.id)}
-                                              >
-                                                <NavigationIcon page="dashboards" size={15} />
-                                              </ActionIcon>
+                                              />
                                             )}
                                           </Group>
                                         ) : "—"}

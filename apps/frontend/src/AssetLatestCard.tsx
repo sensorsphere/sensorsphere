@@ -40,7 +40,7 @@ import {
   LocationIcon,
   getLocationIconName
 } from "./LocationIcon";
-import { NavigationIcon } from "./NavigationIcon";
+import { DashboardMetricAction } from "./DashboardMetricAction";
 
 interface Props {
   asset: Asset;
@@ -48,6 +48,7 @@ interface Props {
   enabled: boolean;
   onEdit?: (asset: Asset) => void;
   onAddMetricToDashboard?: (asset: Asset, metricId: string) => void;
+  dashboardUsageCounts?: ReadonlyMap<string, number>;
 }
 
 function formatAge(
@@ -204,7 +205,8 @@ export function AssetLatestCard({
   observations,
   enabled,
   onEdit,
-  onAddMetricToDashboard
+  onAddMetricToDashboard,
+  dashboardUsageCounts
 }: Props) {
 
   const queryClient =
@@ -645,19 +647,11 @@ export function AssetLatestCard({
                       </Text>
 
                       {onAddMetricToDashboard && (
-                        <ActionIcon
-                          size="compact-sm"
-                          variant="subtle"
-                          color="gray"
+                        <DashboardMetricAction
+                          usageCount={dashboardUsageCounts?.get(observation.metricId) ?? 0}
                           title="Add this metric to a dashboard"
-                          aria-label="Add this metric to a dashboard"
                           onClick={() => onAddMetricToDashboard(asset, observation.metricId)}
-                        >
-                          <NavigationIcon
-                            page="dashboards"
-                            size={16}
-                          />
-                        </ActionIcon>
+                        />
                       )}
 
                       {

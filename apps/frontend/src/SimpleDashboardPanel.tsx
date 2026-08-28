@@ -101,7 +101,8 @@ export function SimpleDashboardPanel() {
   const queryClient = useQueryClient();
   const dashboardsQuery = useQuery({
     queryKey: ["simple-dashboards"],
-    queryFn: getSimpleDashboards
+    queryFn: getSimpleDashboards,
+    refetchOnMount: "always"
   });
   const assetsQuery = useQuery({
     queryKey: ["assets"],
@@ -602,6 +603,27 @@ export function SimpleDashboardPanel() {
             }}
           >
             + New dashboard
+          </Button>
+          <Button
+            size="xs"
+            variant="light"
+            color="blue"
+            loading={
+              dashboardsQuery.isFetching
+              || assetsQuery.isFetching
+              || observationsQuery.isFetching
+              || colorsQuery.isFetching
+            }
+            onClick={() => {
+              void Promise.all([
+                dashboardsQuery.refetch(),
+                assetsQuery.refetch(),
+                observationsQuery.refetch(),
+                colorsQuery.refetch()
+              ]);
+            }}
+          >
+            Refresh
           </Button>
           {activeDashboard && (
             <>

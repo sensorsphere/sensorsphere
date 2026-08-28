@@ -127,6 +127,7 @@ export function AddMetricToDashboardModal({ opened, asset, metric, onClose }: Pr
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["simple-dashboards"] });
+      await queryClient.refetchQueries({ queryKey: ["simple-dashboards"], type: "all" });
       onClose();
     }
   });
