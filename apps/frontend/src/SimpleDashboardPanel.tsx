@@ -499,6 +499,25 @@ export function SimpleDashboardPanel() {
     const byId = new Map(dashboards.map(item => [item.id, item]));
     return dashboardDragOrder.map(id => byId.get(id)).filter((item): item is NonNullable<typeof item> => item !== undefined);
   })();
+  const metricDisplayNameByKey = new Map(
+    assets.flatMap(asset => asset.metrics).map(metric => [metric.key, metric.displayName || metric.key] as const)
+  );
+  const standardDashboards = orderedDashboards.filter(dashboard => !dashboard.templateId);
+  const templateDashboardGroups = Array.from(
+    orderedDashboards.reduce((groups, dashboard) => {
+      if (!dashboard.templateId) return groups;
+      const current = groups.get(dashboard.templateId) ?? {
+        templateId: dashboard.templateId,
+        templateName: dashboard.templateName ?? "Template",
+        dashboards: [] as typeof orderedDashboards
+      };
+      current.dashboards.push(dashboard);
+      groups.set(dashboard.templateId, current);
+      return groups;
+    }, new Map<string, { templateId: string; templateName: string; dashboards: typeof orderedDashboards }>()).values()
+  )
+    .map(group => ({ ...group, dashboards: [...group.dashboards].sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name)) }))
+    .sort((left, right) => left.templateName.localeCompare(right.templateName));
 
   const previewMoveDashboard = (sourceId: string, targetId: string) => {
     if (sourceId === targetId) return;
@@ -796,30 +815,58 @@ export function SimpleDashboardPanel() {
             onChange={value => value && setSelectedDashboardId(value)}
             style={{ minWidth: 0, flex: 1 }}
           >
-            <Tabs.List style={{ flexWrap: "nowrap", overflowX: "auto" }}>
-              {orderedDashboards.map(dashboard => (
-                <Tabs.Tab
-                  key={dashboard.id}
-                  value={dashboard.id}
-                  draggable
-                  onDragStart={() => {
-                    setDraggedDashboardId(dashboard.id);
-                    setDashboardDragOrder(dashboards.map(item => item.id));
-                  }}
-                  onDragEnter={() => draggedDashboardId && previewMoveDashboard(draggedDashboardId, dashboard.id)}
-                  onDragOver={event => event.preventDefault()}
-                  onDragEnd={() => {
-                    persistDashboardOrder();
-                    setDraggedDashboardId(null);
-                  }}
-                  style={{ cursor: "grab", opacity: draggedDashboardId === dashboard.id ? 0.6 : 1 }}
-                >
-                  <span title={dashboard.templateId ? `From template: ${dashboard.templateName ?? "Template"} · Metric: ${dashboard.templateMetricKey ?? ""}` : undefined}>
-                    {dashboard.templateId ? "▦ " : ""}{dashboard.name}
-                  </span>
-                </Tabs.Tab>
+            <Stack gap={4}>
+              {standardDashboards.length > 0 && (
+                <Group align="flex-start" gap="sm" wrap="nowrap">
+                  <Text size="xs" fw={700} c="dimmed" style={{ width: 112, flexShrink: 0, paddingTop: 8 }}>Standard</Text>
+                  <Tabs.List style={{ flex: 1, flexWrap: "wrap", overflow: "visible" }}>
+                    {standardDashboards.map(dashboard => (
+                      <Tabs.Tab
+                        key={dashboard.id}
+                        value={dashboard.id}
+                        draggable
+                        onDragStart={() => {
+                          setDraggedDashboardId(dashboard.id);
+                          setDashboardDragOrder(dashboards.map(item => item.id));
+                        }}
+                        onDragEnter={() => draggedDashboardId && previewMoveDashboard(draggedDashboardId, dashboard.id)}
+                        onDragOver={event => event.preventDefault()}
+                        onDragEnd={() => {
+                          persistDashboardOrder();
+                          setDraggedDashboardId(null);
+                        }}
+                        style={{ cursor: "grab", opacity: draggedDashboardId === dashboard.id ? 0.6 : 1 }}
+                      >
+                        {dashboard.name}
+                      </Tabs.Tab>
+                    ))}
+                  </Tabs.List>
+                </Group>
+              )}
+              {templateDashboardGroups.map(group => (
+                <Group key={group.templateId} align="flex-start" gap="sm" wrap="nowrap">
+                  <Text
+                    size="xs"
+                    fw={700}
+                    title={`Template: ${group.templateName}`}
+                    style={{ width: 112, flexShrink: 0, paddingTop: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  >
+                    {group.templateName}
+                  </Text>
+                  <Tabs.List style={{ flex: 1, flexWrap: "wrap", overflow: "visible" }}>
+                    {group.dashboards.map(dashboard => {
+                      const metricKey = dashboard.templateMetricKey ?? "";
+                      const metricLabel = metricDisplayNameByKey.get(metricKey) ?? metricKey;
+                      return (
+                        <Tabs.Tab key={dashboard.id} value={dashboard.id}>
+                          <span title={`From template: ${group.templateName} · Metric: ${metricKey}`}>▦ {metricLabel}</span>
+                        </Tabs.Tab>
+                      );
+                    })}
+                  </Tabs.List>
+                </Group>
               ))}
-            </Tabs.List>
+            </Stack>
           </Tabs>
           {!activeDashboardIsTemplateInstance && (
             <Group gap="xs">

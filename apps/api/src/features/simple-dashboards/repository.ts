@@ -141,16 +141,21 @@ export class PostgresSimpleDashboardRepository {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      const existing = await client.query<{ id: string }>(`
-        SELECT id FROM simple_dashboards ORDER BY sort_order, created_at, id FOR UPDATE
+      const existing = await client.query<{ id: string; template_id: string | null }>(`
+        SELECT id, template_id FROM simple_dashboards ORDER BY sort_order, created_at, id FOR UPDATE
       `);
       const existingIds = existing.rows.map(row => row.id);
       if (existingIds.length !== dashboardIds.length || existingIds.some(id => !dashboardIds.includes(id))) {
         await client.query("ROLLBACK");
         return false;
       }
-      for (let index = 0; index < dashboardIds.length; index += 1) {
-        await client.query(`UPDATE simple_dashboards SET sort_order = $2, updated_at = NOW() WHERE id = $1`, [dashboardIds[index], index]);
+      const byId = new Map(existing.rows.map(row => [row.id, row]));
+      let standardSortOrder = 0;
+      for (const dashboardId of dashboardIds) {
+        const dashboard = byId.get(dashboardId);
+        if (!dashboard || dashboard.template_id) continue;
+        await client.query(`UPDATE simple_dashboards SET sort_order = $2, updated_at = NOW() WHERE id = $1`, [dashboardId, standardSortOrder]);
+        standardSortOrder += 1;
       }
       await client.query("COMMIT");
       return true;
@@ -659,7 +664,7 @@ export class PostgresSimpleDashboardRepository {
       }
 
       const resultRows: SimpleDashboardRecord[] = [];
-      for (const metricKey of desiredMetricKeys) {
+      for (const [metricIndex, metricKey] of desiredMetricKeys.entries()) {
         const existing = instanceByMetric.get(metricKey);
         const baseName = `${templateResult.rows[0].name} - ${metricKey}`;
         if (existing) {
@@ -671,10 +676,10 @@ export class PostgresSimpleDashboardRepository {
           }
           const updated = await client.query<SimpleDashboardRecord>(`
             UPDATE simple_dashboards
-            SET name = $2, updated_at = NOW()
+            SET name = $2, sort_order = $3, updated_at = NOW()
             WHERE id = $1
-            RETURNING id, name, sort_order, template_id, template_metric_key, $3::text AS template_name, created_at, updated_at
-          `, [existing.id, name, templateResult.rows[0].name]);
+            RETURNING id, name, sort_order, template_id, template_metric_key, $4::text AS template_name, created_at, updated_at
+          `, [existing.id, name, metricIndex, templateResult.rows[0].name]);
           resultRows.push(updated.rows[0]!);
           continue;
         }
@@ -687,9 +692,9 @@ export class PostgresSimpleDashboardRepository {
         }
         const created = await client.query<SimpleDashboardRecord>(`
           INSERT INTO simple_dashboards (name, sort_order, template_id, template_metric_key)
-          VALUES ($1, COALESCE((SELECT MAX(sort_order) + 1 FROM simple_dashboards), 0), $2, $3)
-          RETURNING id, name, sort_order, template_id, template_metric_key, $4::text AS template_name, created_at, updated_at
-        `, [name, templateId, metricKey, templateResult.rows[0].name]);
+          VALUES ($1, $2, $3, $4)
+          RETURNING id, name, sort_order, template_id, template_metric_key, $5::text AS template_name, created_at, updated_at
+        `, [name, metricIndex, templateId, metricKey, templateResult.rows[0].name]);
         resultRows.push(created.rows[0]!);
       }
 

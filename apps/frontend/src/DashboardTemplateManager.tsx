@@ -53,6 +53,7 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
   const [assetSectionId, setAssetSectionId] = React.useState<string | null>(null);
   const [assetId, setAssetId] = React.useState<string | null>(null);
   const [metricKeys, setMetricKeys] = React.useState<string[]>([]);
+  const [draggedMetricKey, setDraggedMetricKey] = React.useState<string | null>(null);
   const [renameTarget, setRenameTarget] = React.useState<{ type: "template" | "section"; id: string; name: string } | null>(null);
   const [renameValue, setRenameValue] = React.useState("");
   const [deleteTarget, setDeleteTarget] = React.useState<{ type: "template" | "section" | "asset"; id: string; name: string } | null>(null);
@@ -215,8 +216,48 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
                     searchable
                     data={availableMetricKeys}
                     value={metricKeys}
-                    onChange={setMetricKeys}
+                    onChange={values => setMetricKeys(previous => [
+                      ...previous.filter(value => values.includes(value)),
+                      ...values.filter(value => !previous.includes(value))
+                    ])}
                   />
+                  {metricKeys.length > 0 && (
+                    <div>
+                      <Text size="xs" fw={600} mb={4}>Instance order</Text>
+                      <Group gap="xs" wrap="wrap">
+                        {metricKeys.map(metricKey => {
+                          const option = availableMetricKeys.find(item => item.value === metricKey);
+                          return (
+                            <Badge
+                              key={metricKey}
+                              variant="light"
+                              color="gray"
+                              draggable
+                              onDragStart={() => setDraggedMetricKey(metricKey)}
+                              onDragEnter={() => {
+                                if (!draggedMetricKey || draggedMetricKey === metricKey) return;
+                                setMetricKeys(current => {
+                                  const sourceIndex = current.indexOf(draggedMetricKey);
+                                  const targetIndex = current.indexOf(metricKey);
+                                  if (sourceIndex < 0 || targetIndex < 0) return current;
+                                  const next = [...current];
+                                  const [moved] = next.splice(sourceIndex, 1);
+                                  next.splice(targetIndex, 0, moved!);
+                                  return next;
+                                });
+                              }}
+                              onDragOver={event => event.preventDefault()}
+                              onDragEnd={() => setDraggedMetricKey(null)}
+                              style={{ cursor: "grab", opacity: draggedMetricKey === metricKey ? 0.6 : 1 }}
+                              title="Drag to reorder template instances"
+                            >
+                              {option?.label ?? metricKey}
+                            </Badge>
+                          );
+                        })}
+                      </Group>
+                    </div>
+                  )}
                   <Group justify="flex-end">
                     <Button variant="light" color="green" loading={saveInstanceMetrics.isPending} onClick={() => saveInstanceMetrics.mutate({ templateId: activeTemplate.id, metrics: metricKeys })}>
                       Save instance metrics
