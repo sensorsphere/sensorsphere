@@ -48,7 +48,7 @@ interface Props {
   enabled: boolean;
   onEdit?: (asset: Asset) => void;
   onAddMetricToDashboard?: (asset: Asset, metricId: string) => void;
-  dashboardUsageCounts?: ReadonlyMap<string, number>;
+  dashboardUsageDetails?: ReadonlyMap<string, readonly string[]>;
 }
 
 function formatAge(
@@ -206,7 +206,7 @@ export function AssetLatestCard({
   enabled,
   onEdit,
   onAddMetricToDashboard,
-  dashboardUsageCounts
+  dashboardUsageDetails
 }: Props) {
 
   const queryClient =
@@ -648,7 +648,7 @@ export function AssetLatestCard({
 
                       {onAddMetricToDashboard && (
                         <DashboardMetricAction
-                          usageCount={dashboardUsageCounts?.get(observation.metricId) ?? 0}
+                          usages={dashboardUsageDetails?.get(observation.metricId) ?? []}
                           title="Add this metric to a dashboard"
                           onClick={() => onAddMetricToDashboard(asset, observation.metricId)}
                         />

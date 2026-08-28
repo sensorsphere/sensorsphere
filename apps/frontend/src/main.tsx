@@ -1319,16 +1319,31 @@ function Dashboard() {
   const manufacturers: ManufacturerMetadata[] = assetClassification?.manufacturers ?? [];
   const tags: TagMetadata[] = assetClassification?.tags ?? [];
 
-  const dashboardMetricUsageCounts = (() => {
-    const usageByMetric = new Map<string, Set<string>>();
+  const dashboardMetricUsageDetails = (() => {
+    const dashboardsById = new Map(
+      (simpleDashboardsQuery.data?.dashboards ?? []).map(dashboard => [dashboard.id, dashboard])
+    );
+    const sectionsById = new Map(
+      (simpleDashboardsQuery.data?.sections ?? []).map(section => [section.id, section])
+    );
+    const usageByMetric = new Map<string, Map<string, string>>();
+
     for (const card of simpleDashboardsQuery.data?.cards ?? []) {
       const usageKey = `${card.dashboardId}:${card.sectionId ?? "unsectioned"}`;
-      const usages = usageByMetric.get(card.assetMetricId) ?? new Set<string>();
-      usages.add(usageKey);
+      const dashboardName = dashboardsById.get(card.dashboardId)?.name ?? "Unknown dashboard";
+      const sectionName = card.sectionId
+        ? sectionsById.get(card.sectionId)?.name ?? "Unknown section"
+        : "Unsectioned";
+      const usages = usageByMetric.get(card.assetMetricId) ?? new Map<string, string>();
+      usages.set(usageKey, `${dashboardName} — ${sectionName}`);
       usageByMetric.set(card.assetMetricId, usages);
     }
+
     return new Map(
-      Array.from(usageByMetric.entries()).map(([metricId, usages]) => [metricId, usages.size])
+      Array.from(usageByMetric.entries()).map(([metricId, usages]) => [
+        metricId,
+        Array.from(usages.values()).sort((left, right) => left.localeCompare(right))
+      ])
     );
   })();
 
@@ -4010,7 +4025,7 @@ function Dashboard() {
                                         )
                                     }
                                     onAddMetricToDashboard={openDashboardMetricTarget}
-                                    dashboardUsageCounts={dashboardMetricUsageCounts}
+                                    dashboardUsageDetails={dashboardMetricUsageDetails}
                                   />
                                 )
                               )
@@ -4096,7 +4111,7 @@ function Dashboard() {
                                             <Text size="sm">{temperature} °C</Text>
                                             {temperatureMetric && (
                                               <DashboardMetricAction
-                                                usageCount={dashboardMetricUsageCounts.get(temperatureMetric.id) ?? 0}
+                                                usages={dashboardMetricUsageDetails.get(temperatureMetric.id) ?? []}
                                                 title="Add Temperature to a dashboard"
                                                 onClick={() => openDashboardMetricTarget(asset, temperatureMetric.id)}
                                               />
@@ -4110,7 +4125,7 @@ function Dashboard() {
                                             <Text size="sm">{humidity} %</Text>
                                             {humidityMetric && (
                                               <DashboardMetricAction
-                                                usageCount={dashboardMetricUsageCounts.get(humidityMetric.id) ?? 0}
+                                                usages={dashboardMetricUsageDetails.get(humidityMetric.id) ?? []}
                                                 title="Add Humidity to a dashboard"
                                                 onClick={() => openDashboardMetricTarget(asset, humidityMetric.id)}
                                               />
@@ -4124,7 +4139,7 @@ function Dashboard() {
                                             <Text size="sm">{rssi} dBm</Text>
                                             {rssiMetric && (
                                               <DashboardMetricAction
-                                                usageCount={dashboardMetricUsageCounts.get(rssiMetric.id) ?? 0}
+                                                usages={dashboardMetricUsageDetails.get(rssiMetric.id) ?? []}
                                                 title="Add RSSI to a dashboard"
                                                 onClick={() => openDashboardMetricTarget(asset, rssiMetric.id)}
                                               />
@@ -4138,7 +4153,7 @@ function Dashboard() {
                                             <Text size="sm">{battery} %</Text>
                                             {batteryMetric && (
                                               <DashboardMetricAction
-                                                usageCount={dashboardMetricUsageCounts.get(batteryMetric.id) ?? 0}
+                                                usages={dashboardMetricUsageDetails.get(batteryMetric.id) ?? []}
                                                 title="Add Battery to a dashboard"
                                                 onClick={() => openDashboardMetricTarget(asset, batteryMetric.id)}
                                               />
