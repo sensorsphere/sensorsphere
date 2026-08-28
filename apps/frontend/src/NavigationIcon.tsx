@@ -31,17 +31,19 @@ const PAGE_COLORS: Record<PageKey, string> = {
 
 export function NavigationIcon({
   page,
-  size = 19
+  size = 19,
+  color
 }: {
   page: PageKey;
   size?: number;
+  color?: string;
 }) {
   const common = {
     width: size,
     height: size,
     viewBox: "0 0 24 24",
     fill: "none",
-    stroke: PAGE_COLORS[page],
+    stroke: color ?? PAGE_COLORS[page],
     strokeWidth: 2,
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,

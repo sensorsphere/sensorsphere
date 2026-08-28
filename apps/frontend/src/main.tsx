@@ -56,6 +56,7 @@ import {
   getGateways,
   getLocations,
   getLatestObservations,
+  getMetricDisplaySettings,
   getRuntimeConfig,
   getFrontendBuildDate,
   getProjectTodos,
@@ -190,6 +191,7 @@ import {
   NavigationIcon,
   type PageKey
 } from "./NavigationIcon";
+import { defaultMetricColor } from "./metricVisuals";
 
 function ThemeSelector() {
   const {
@@ -839,6 +841,20 @@ function Dashboard() {
       refetchInterval:
         30_000
     });
+
+  const metricDisplaySettingsQuery =
+    useQuery({
+      queryKey: ["metric-display-settings"],
+      queryFn: getMetricDisplaySettings,
+      refetchInterval: 60_000
+    });
+
+  const metricDisplayColors = new Map(
+    (metricDisplaySettingsQuery.data ?? []).map(setting => [setting.metricKey, setting.color])
+  );
+
+  const metricColorForKey = (metricKey: string): string =>
+    metricDisplayColors.get(metricKey) ?? defaultMetricColor(metricKey);
 
   const assetClassificationQuery =
     useQuery({
@@ -4008,6 +4024,10 @@ function Dashboard() {
                                         )
                                     }
                                     onAddMetricToDashboard={openDashboardMetricTarget}
+                                    metricColor={metricId => {
+                                      const metric = asset.metrics.find(item => item.id === metricId);
+                                      return metric ? metricColorForKey(metric.key) : undefined;
+                                    }}
                                   />
                                 )
                               )
@@ -4055,6 +4075,9 @@ function Dashboard() {
                                     latestMetricValue(assetObservations, "humidity");
                                   const battery =
                                     latestMetricValue(assetObservations, "battery");
+                                  const temperatureMetric = asset.metrics.find(item => item.key === "temperature");
+                                  const humidityMetric = asset.metrics.find(item => item.key === "humidity");
+                                  const batteryMetric = asset.metrics.find(item => item.key === "battery" || item.key === "battery_level");
                                   const healthColor =
                                     asset.health.status === "online"
                                       ? "green"
@@ -4092,53 +4115,59 @@ function Dashboard() {
                                       </Table.Td>
                                       <Table.Td>
                                         {temperature !== null ? (
-                                          <Button
-                                            size="compact-xs"
-                                            variant="subtle"
-                                            color="gray"
-                                            px={0}
-                                            title="Add Temperature to a dashboard"
-                                            onClick={() => {
-                                              const metric = asset.metrics.find(item => item.key === "temperature");
-                                              if (metric) openDashboardMetricTarget(asset, metric.id);
-                                            }}
-                                          >
-                                            {temperature} °C
-                                          </Button>
+                                          <Group gap={4} wrap="nowrap">
+                                            <Text size="sm">{temperature} °C</Text>
+                                            {temperatureMetric && (
+                                              <ActionIcon
+                                                size="compact-sm"
+                                                variant="subtle"
+                                                color="gray"
+                                                title="Add Temperature to a dashboard"
+                                                aria-label="Add Temperature to a dashboard"
+                                                onClick={() => openDashboardMetricTarget(asset, temperatureMetric.id)}
+                                              >
+                                                <NavigationIcon page="dashboards" size={15} color={metricColorForKey(temperatureMetric.key)} />
+                                              </ActionIcon>
+                                            )}
+                                          </Group>
                                         ) : "—"}
                                       </Table.Td>
                                       <Table.Td>
                                         {humidity !== null ? (
-                                          <Button
-                                            size="compact-xs"
-                                            variant="subtle"
-                                            color="gray"
-                                            px={0}
-                                            title="Add Humidity to a dashboard"
-                                            onClick={() => {
-                                              const metric = asset.metrics.find(item => item.key === "humidity");
-                                              if (metric) openDashboardMetricTarget(asset, metric.id);
-                                            }}
-                                          >
-                                            {humidity} %
-                                          </Button>
+                                          <Group gap={4} wrap="nowrap">
+                                            <Text size="sm">{humidity} %</Text>
+                                            {humidityMetric && (
+                                              <ActionIcon
+                                                size="compact-sm"
+                                                variant="subtle"
+                                                color="gray"
+                                                title="Add Humidity to a dashboard"
+                                                aria-label="Add Humidity to a dashboard"
+                                                onClick={() => openDashboardMetricTarget(asset, humidityMetric.id)}
+                                              >
+                                                <NavigationIcon page="dashboards" size={15} color={metricColorForKey(humidityMetric.key)} />
+                                              </ActionIcon>
+                                            )}
+                                          </Group>
                                         ) : "—"}
                                       </Table.Td>
                                       <Table.Td>
                                         {battery !== null ? (
-                                          <Button
-                                            size="compact-xs"
-                                            variant="subtle"
-                                            color="gray"
-                                            px={0}
-                                            title="Add Battery to a dashboard"
-                                            onClick={() => {
-                                              const metric = asset.metrics.find(item => item.key === "battery" || item.key === "battery_level");
-                                              if (metric) openDashboardMetricTarget(asset, metric.id);
-                                            }}
-                                          >
-                                            {battery} %
-                                          </Button>
+                                          <Group gap={4} wrap="nowrap">
+                                            <Text size="sm">{battery} %</Text>
+                                            {batteryMetric && (
+                                              <ActionIcon
+                                                size="compact-sm"
+                                                variant="subtle"
+                                                color="gray"
+                                                title="Add Battery to a dashboard"
+                                                aria-label="Add Battery to a dashboard"
+                                                onClick={() => openDashboardMetricTarget(asset, batteryMetric.id)}
+                                              >
+                                                <NavigationIcon page="dashboards" size={15} color={metricColorForKey(batteryMetric.key)} />
+                                              </ActionIcon>
+                                            )}
+                                          </Group>
                                         ) : "—"}
                                       </Table.Td>
                                       <Table.Td>

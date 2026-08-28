@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 
 import {
+  ActionIcon,
   Badge,
   Button,
   Card,
@@ -39,6 +40,7 @@ import {
   LocationIcon,
   getLocationIconName
 } from "./LocationIcon";
+import { NavigationIcon } from "./NavigationIcon";
 
 interface Props {
   asset: Asset;
@@ -46,6 +48,7 @@ interface Props {
   enabled: boolean;
   onEdit?: (asset: Asset) => void;
   onAddMetricToDashboard?: (asset: Asset, metricId: string) => void;
+  metricColor?: (metricId: string) => string | undefined;
 }
 
 function formatAge(
@@ -202,7 +205,8 @@ export function AssetLatestCard({
   observations,
   enabled,
   onEdit,
-  onAddMetricToDashboard
+  onAddMetricToDashboard,
+  metricColor
 }: Props) {
 
   const queryClient =
@@ -617,17 +621,6 @@ export function AssetLatestCard({
                 observation => (
                   <div
                     key={observation.metricId}
-                    role={onAddMetricToDashboard ? "button" : undefined}
-                    tabIndex={onAddMetricToDashboard ? 0 : undefined}
-                    title={onAddMetricToDashboard ? "Add this metric to a dashboard" : undefined}
-                    onClick={onAddMetricToDashboard ? () => onAddMetricToDashboard(asset, observation.metricId) : undefined}
-                    onKeyDown={onAddMetricToDashboard ? event => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        onAddMetricToDashboard(asset, observation.metricId);
-                      }
-                    } : undefined}
-                    style={onAddMetricToDashboard ? { cursor: "pointer" } : undefined}
                   >
                     <Text
                       size="xs"
@@ -652,6 +645,23 @@ export function AssetLatestCard({
                           )
                         }
                       </Text>
+
+                      {onAddMetricToDashboard && (
+                        <ActionIcon
+                          size="compact-sm"
+                          variant="subtle"
+                          color="gray"
+                          title="Add this metric to a dashboard"
+                          aria-label="Add this metric to a dashboard"
+                          onClick={() => onAddMetricToDashboard(asset, observation.metricId)}
+                        >
+                          <NavigationIcon
+                            page="dashboards"
+                            size={16}
+                            color={metricColor?.(observation.metricId)}
+                          />
+                        </ActionIcon>
+                      )}
 
                       {
                         qualityColor(
