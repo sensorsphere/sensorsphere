@@ -93,7 +93,7 @@ export class PostgresSimpleDashboardRepository {
              c.sort_order, c.created_at, c.updated_at
       FROM simple_dashboards d
       JOIN simple_dashboard_template_cards c ON c.template_id = d.template_id
-      JOIN asset_metrics m ON m.asset_id = c.asset_id AND m.key = d.template_metric_key
+      JOIN asset_metrics m ON m.asset_id = c.asset_id AND m.metric_key = d.template_metric_key
       WHERE d.template_id IS NOT NULL
       ORDER BY dashboard_id, section_id NULLS FIRST, sort_order, created_at, id
     `);
@@ -660,7 +660,7 @@ export class PostgresSimpleDashboardRepository {
       const cards = await client.query<{ section_id: string; asset_metric_id: string; sort_order: number }>(`
         SELECT c.section_id, m.id AS asset_metric_id, c.sort_order
         FROM simple_dashboard_template_cards c
-        JOIN asset_metrics m ON m.asset_id = c.asset_id AND m.key = $2
+        JOIN asset_metrics m ON m.asset_id = c.asset_id AND m.metric_key = $2
         WHERE c.template_id = $1
         ORDER BY c.section_id, c.sort_order, c.created_at, c.id
       `, [dashboard.template_id, dashboard.template_metric_key]);
