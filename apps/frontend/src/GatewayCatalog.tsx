@@ -55,7 +55,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
-import { LocationFilterField, LocationSelect, locationIdsForScope } from "./LocationFilterControls";
+import { LocationFilterField, LocationSelect, locationIdsForScope, matchesLocationFilter } from "./LocationFilterControls";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 
 interface GatewayFormState {
@@ -430,9 +430,10 @@ export function GatewayCatalog() {
         (gateway.ipAddress ?? "").toLowerCase().includes(normalizedSearch)
       ) &&
       (typeFilter === null || gateway.type.id === typeFilter) &&
-      (
-        locationFilter === null ||
-        (locationFilter === "__unassigned__" ? gateway.location === null : Boolean(gateway.location?.id && locationScopeIds?.has(gateway.location.id)))
+      matchesLocationFilter(
+        gateway.location?.id,
+        locationFilter,
+        locationScopeIds
       ) &&
       (ssidFilter === null || gateway.wifiSsid === ssidFilter) &&
       (statusFilter === "all" || (statusFilter === "online" ? isOnline(gateway.lastSeenAt) : !isOnline(gateway.lastSeenAt))) &&

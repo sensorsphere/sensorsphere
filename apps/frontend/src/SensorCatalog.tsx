@@ -61,7 +61,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
-import { LocationFilterField, LocationSelect, locationIdsForScope } from "./LocationFilterControls";
+import { LocationFilterField, LocationSelect, locationIdsForScope, matchesLocationFilter } from "./LocationFilterControls";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 
 interface SensorFormState {
@@ -733,9 +733,10 @@ export function SensorCatalog() {
             modelFilter === null ||
             sensor.model === modelFilter
           ) &&
-          (
-            locationFilter === null ||
-            Boolean(asset?.location?.id && locationScopeIds?.has(asset.location.id))
+          matchesLocationFilter(
+            asset?.location?.id,
+            locationFilter,
+            locationScopeIds
           ) &&
           (
             gatewayFilter === null ||

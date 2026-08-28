@@ -64,7 +64,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
-import { LocationFilterField, locationIdsForScope } from "./LocationFilterControls";
+import { LocationFilterField, locationIdsForScope, matchesLocationFilter } from "./LocationFilterControls";
 
 interface LocationNodeProps {
   location: Location;
@@ -1046,11 +1046,10 @@ export function InventoryPanel() {
       )
       .filter(
         asset =>
-          !locationFilter ||
-          (
-            locationFilter === "__unassigned__"
-              ? asset.location === null
-              : Boolean(asset.location?.id && locationScopeIds?.has(asset.location.id))
+          matchesLocationFilter(
+            asset.location?.id,
+            locationFilter,
+            locationScopeIds
           )
       )
       .filter(
@@ -1119,11 +1118,10 @@ export function InventoryPanel() {
       )
       .filter(
         gateway =>
-          !locationFilter ||
-          (
-            locationFilter === "__unassigned__"
-              ? gateway.location === null
-              : Boolean(gateway.location?.id && locationScopeIds?.has(gateway.location.id))
+          matchesLocationFilter(
+            gateway.location?.id,
+            locationFilter,
+            locationScopeIds
           )
       )
       .filter(

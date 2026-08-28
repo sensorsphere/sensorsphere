@@ -5,6 +5,16 @@ import type { Location } from "./types";
 
 export const LOCATION_SELECT_WIDTH = 320;
 
+export function matchesLocationFilter(
+  objectLocationId: string | null | undefined,
+  selectedLocationId: string | null,
+  locationScopeIds: Set<string> | null
+): boolean {
+  if (selectedLocationId === null) return true;
+  if (selectedLocationId === "__unassigned__") return !objectLocationId;
+  return Boolean(objectLocationId && locationScopeIds?.has(objectLocationId));
+}
+
 export function locationIdsForScope(
   locations: Location[],
   locationId: string | null,
@@ -88,7 +98,12 @@ export function LocationOptionContent({
   locations?: Location[];
 }) {
   if (!location) {
-    return <Text size="sm">{label}</Text>;
+    return (
+      <Group gap="xs" wrap="nowrap">
+        <LocationIcon name="unassigned" size={16} />
+        <Text size="sm">{label}</Text>
+      </Group>
+    );
   }
   const depth = locationDepth(locations, location.id);
   return (
@@ -131,6 +146,7 @@ export function LocationSelect({
   const selectedLocation = typeof value === "string" && value !== "__unassigned__"
     ? locationsById.get(value)
     : undefined;
+  const isUnassigned = value === "__unassigned__";
 
   return (
     <Select
@@ -138,7 +154,13 @@ export function LocationSelect({
       w={w}
       value={value}
       data={data}
-      leftSection={selectedLocation ? <LocationIcon name={getLocationIconName(selectedLocation)} size={16} /> : null}
+      leftSection={
+        isUnassigned
+          ? <LocationIcon name="unassigned" size={16} />
+          : selectedLocation
+            ? <LocationIcon name={getLocationIconName(selectedLocation)} size={16} />
+            : null
+      }
       renderOption={({ option }) => (
         <LocationOptionContent
           location={locationsById.get(option.value)}
@@ -167,10 +189,12 @@ function TreeIcon() {
 
 export function LocationScopeToggle({
   active,
-  onChange
+  onChange,
+  disabled = false
 }: {
   active: boolean;
   onChange: (active: boolean) => void;
+  disabled?: boolean;
 }) {
   const title = active ? "Include sublocations" : "Direct location only";
   return (
@@ -181,7 +205,8 @@ export function LocationScopeToggle({
       aria-label={title}
       title={title}
       aria-pressed={active}
-      onClick={() => onChange(!active)}
+      disabled={disabled}
+      onClick={() => { if (!disabled) onChange(!active); }}
     >
       <TreeIcon />
     </ActionIcon>
@@ -195,7 +220,7 @@ export function LocationFilterField({
   includeDescendants,
   onIncludeDescendantsChange,
   placeholder = "All locations",
-  includeUnassigned = false,
+  includeUnassigned = true,
   styles
 }: {
   locations: Location[];
@@ -225,6 +250,7 @@ export function LocationFilterField({
         <LocationScopeToggle
           active={includeDescendants}
           onChange={onIncludeDescendantsChange}
+          disabled={value === "__unassigned__"}
         />
       </Group>
     </Stack>

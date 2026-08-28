@@ -28,7 +28,7 @@ import {
 } from "@tanstack/react-query";
 
 import { NavigationIcon } from "./NavigationIcon";
-import { LocationFilterField, locationIdsForScope } from "./LocationFilterControls";
+import { LocationFilterField, locationIdsForScope, matchesLocationFilter } from "./LocationFilterControls";
 import { GatewayTrafficPanel } from "./GatewayTrafficPanel";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
@@ -111,7 +111,7 @@ export function MetricRoutingPanel() {
       limit: 500,
       sensorUid: sensorFilter,
       gatewayId: gatewayFilter,
-      location: locationId && !includeLocationDescendants ? locationId : undefined,
+      location: locationId && locationId !== "__unassigned__" && !includeLocationDescendants ? locationId : undefined,
       metric: metricFilter,
       assignedGatewayId: assignedGatewayFilter,
       reason: reasonFilter,
@@ -148,10 +148,10 @@ export function MetricRoutingPanel() {
 
   const events = loadedEvents.filter(event =>
     !hiddenDecisions.includes(event.decision) &&
-    (
-      locationId === null ||
-      !includeLocationDescendants ||
-      Boolean(event.gatewayLocationId && locationScopeIds?.has(event.gatewayLocationId))
+    matchesLocationFilter(
+      event.gatewayLocationId,
+      locationId,
+      locationScopeIds
     )
   );
 

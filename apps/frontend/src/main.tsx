@@ -131,7 +131,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
-import { LocationFilterField, LocationSelect, locationIdsForScope } from "./LocationFilterControls";
+import { LocationFilterField, LocationSelect, locationIdsForScope, matchesLocationFilter } from "./LocationFilterControls";
 
 import {
   SortableTableHeader,
@@ -1228,13 +1228,11 @@ function Dashboard() {
   const currentReadingAssets =
     sortedAssets.filter(
       asset => {
-        const matchesLocation =
-          currentReadingLocation === null ||
-          (
-            currentReadingLocation === "__unassigned__"
-              ? asset.location === null
-              : Boolean(asset.location?.id && currentReadingLocationIds?.has(asset.location.id))
-          );
+        const matchesLocation = matchesLocationFilter(
+          asset.location?.id,
+          currentReadingLocation,
+          currentReadingLocationIds
+        );
 
         const matchesStatus =
           currentReadingStatus === "all" ||
@@ -1377,9 +1375,11 @@ function Dashboard() {
           asset.health.status ===
             assetHealthFilter;
 
-        const matchesLocation =
-          assetLocationFilter === null ||
-          Boolean(asset.location?.id && assetLocationIds?.has(asset.location.id));
+        const matchesLocation = matchesLocationFilter(
+          asset.location?.id,
+          assetLocationFilter,
+          assetLocationIds
+        );
 
         const matchesEnabled =
           assetEnabledFilter ===

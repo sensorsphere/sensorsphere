@@ -31,7 +31,8 @@ export type LocationIconName =
   | "server"
   | "site"
   | "zone"
-  | "pin";
+  | "pin"
+  | "unassigned";
 
 export const LOCATION_ICON_OPTIONS:
 Array<{
@@ -199,6 +200,8 @@ function paths(
       return <><path d="M4 7h16v10H4z"/><path d="M8 7V4m8 3V4M8 20v-3m8 3v-3"/></>;
     case "pin":
       return <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></>;
+    case "unassigned":
+      return <><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/><path d="M5 5l14 14"/></>;
   }
 }
 
