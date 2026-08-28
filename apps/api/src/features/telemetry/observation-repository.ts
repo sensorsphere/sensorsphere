@@ -72,7 +72,7 @@ implements ObservationRepository {
         SELECT DISTINCT ON (am.id)
           a.id AS asset_id,
           a.external_id AS asset_external_id,
-          a.name AS asset_name,
+          COALESCE(s.name, a.external_id) AS asset_name,
           am.id AS metric_id,
           am.metric_key,
           am.display_name,
@@ -94,6 +94,8 @@ implements ObservationRepository {
           ON gp.metric_key = am.metric_key
         JOIN assets a
           ON a.id = am.asset_id
+        LEFT JOIN sensors s
+          ON s.sensor_uid = a.source_sensor_uid
         WHERE ($1::uuid IS NULL OR a.id = $1)
           AND am.enabled = TRUE
         ORDER BY am.id, o.time DESC
@@ -113,7 +115,7 @@ implements ObservationRepository {
         SELECT
           a.id AS asset_id,
           a.external_id AS asset_external_id,
-          a.name AS asset_name,
+          COALESCE(s.name, a.external_id) AS asset_name,
           am.id AS metric_id,
           am.metric_key,
           am.display_name,
@@ -135,6 +137,8 @@ implements ObservationRepository {
           ON gp.metric_key = am.metric_key
         JOIN assets a
           ON a.id = am.asset_id
+        LEFT JOIN sensors s
+          ON s.sensor_uid = a.source_sensor_uid
         WHERE am.id = $1
           AND o.time >= $2
           AND o.time <= $3

@@ -21,7 +21,6 @@ export interface MetricQualityPolicyRecord {
 export interface AssetRecord {
   id: string;
   external_id: string;
-  name: string | null;
   description: string | null;
   manufacturer: string | null;
   model: string | null;
@@ -54,7 +53,6 @@ export interface AssetRecord {
 
 export interface CreateAssetRecord {
   external_id: string;
-  name: string | null;
   description: string | null;
   manufacturer: string | null;
   model: string | null;
@@ -115,7 +113,6 @@ const ASSET_SELECT = `
   SELECT
       a.id,
       a.external_id,
-      a.name,
       a.description,
       a.manufacturer,
       a.model,
@@ -199,7 +196,7 @@ implements AssetRepository {
       await this.pool.query<AssetRecord>(
         `
         ${ASSET_SELECT}
-        ORDER BY COALESCE(a.name, a.external_id)
+        ORDER BY COALESCE(s.name, a.external_id)
         `
       );
 
@@ -345,7 +342,6 @@ implements AssetRepository {
         INSERT INTO assets (
           id,
           external_id,
-          name,
           description,
           manufacturer,
           model,
@@ -357,13 +353,12 @@ implements AssetRepository {
         VALUES (
           gen_random_uuid(),
           $1, $2, $3, $4, $5,
-          $6, $7, $8, $9
+          $6, $7, $8
         )
         RETURNING id
         `,
         [
           asset.external_id,
-          asset.name,
           asset.description,
           asset.manufacturer,
           asset.model,
@@ -406,23 +401,19 @@ implements AssetRepository {
         UPDATE assets
         SET
           external_id = $2,
-          name = $3,
-          description = $4,
-          manufacturer = $5,
-          model = $6,
-          firmware_version = $7,
-          asset_type = $8,
-          protocol = $9,
-          enabled = $10,
+          description = $3,
+          manufacturer = $4,
+          model = $5,
+          firmware_version = $6,
+          asset_type = $7,
+          protocol = $8,
+          enabled = $9,
           updated_at = NOW()
         WHERE id = $1
         `,
         [
           id,
           asset.external_id ?? current.external_id,
-          asset.name !== undefined
-            ? asset.name
-            : current.name,
           asset.description !== undefined
             ? asset.description
             : current.description,

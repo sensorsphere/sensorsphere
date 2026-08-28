@@ -160,7 +160,7 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
   );
   const assetOptions = assets
     .filter(asset => !usedAssetIds.has(asset.id))
-    .map(asset => ({ value: asset.id, label: asset.sensor?.name ?? asset.name ?? asset.externalId }));
+    .map(asset => ({ value: asset.id, label: asset.sensor?.name ?? asset.externalId }));
   const availableMetricKeys = [...new Map(
     assets.flatMap(asset => asset.metrics).map(metric => [metric.key, { value: metric.key, label: metric.displayName }])
   ).values()].sort((a, b) => a.label.localeCompare(b.label));

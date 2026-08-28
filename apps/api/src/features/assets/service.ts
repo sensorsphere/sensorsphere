@@ -87,7 +87,6 @@ export class AssetService {
     const asset =
       await this.repository.create({
         external_id: input.externalId,
-        name: input.name ?? null,
         description: input.description ?? null,
         manufacturer: input.manufacturer ?? null,
         model: input.model ?? null,
@@ -200,7 +199,6 @@ export class AssetService {
         id,
         {
           external_id: input.externalId,
-          name: input.name,
           description: input.description,
           manufacturer: input.manufacturer,
           model: input.model,

@@ -194,7 +194,6 @@ export interface MetricDisplaySetting {
 export interface Asset {
   id: string;
   externalId: string;
-  name: string | null;
   description: string | null;
   manufacturer: string | null;
   model: string | null;
@@ -253,7 +252,6 @@ export interface AssetClassification {
 
 export interface CreateAssetInput {
   externalId: string;
-  name?: string | null;
   description?: string | null;
   manufacturer?: string | null;
   model?: string | null;
@@ -266,7 +264,6 @@ export interface CreateAssetInput {
 
 export interface UpdateAssetInput {
   externalId?: string;
-  name?: string | null;
   description?: string | null;
   manufacturer?: string | null;
   model?: string | null;

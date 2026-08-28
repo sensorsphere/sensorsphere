@@ -409,7 +409,6 @@ function attentionAccent(
 interface AssetFormState {
   id: string | null;
   externalId: string;
-  name: string;
   description: string;
   manufacturer: string;
   model: string;
@@ -427,7 +426,6 @@ function emptyAssetForm(): AssetFormState {
   return {
     id: null,
     externalId: "",
-    name: "",
     description: "",
     manufacturer: "",
     model: "",
@@ -448,7 +446,6 @@ function assetFormFromAsset(
   return {
     id: asset.id,
     externalId: asset.externalId,
-    name: asset.name ?? "",
     description: asset.description ?? "",
     manufacturer: asset.manufacturer ?? "",
     model: asset.model ?? "",
@@ -881,7 +878,6 @@ function Dashboard() {
         async (form: AssetFormState) => {
           const commonInput = {
             externalId: form.externalId.trim(),
-            name: form.name.trim() || null,
             description: form.description.trim() || null,
             manufacturer: form.manufacturer.trim() || null,
             model: form.model.trim() || null,
@@ -1255,7 +1251,6 @@ function Dashboard() {
 
         const displayName =
           asset.sensor?.name
-          ?? asset.name
           ?? asset.externalId;
 
         return displayName
@@ -1358,7 +1353,6 @@ function Dashboard() {
             .length === 0 ||
           (
             asset.sensor?.name
-            ?? asset.name
             ?? asset.externalId
           )
           .toLowerCase()
@@ -1469,7 +1463,7 @@ function Dashboard() {
           case "health":
             return asset.health.status;
           default:
-            return asset.sensor?.name ?? asset.name ?? asset.externalId;
+            return asset.sensor?.name ?? asset.externalId;
         }
       };
 
@@ -1603,7 +1597,6 @@ function Dashboard() {
 
       setAssetSearch(
         asset.sensor?.name
-        ?? asset.name
         ?? asset.externalId
       );
       navigateTo("assets");
@@ -1695,7 +1688,6 @@ function Dashboard() {
                   observation.value as number,
                 sensorName:
                   asset.sensor?.name
-                  ?? asset.name
                   ?? asset.externalId
               };
             }
@@ -2670,7 +2662,6 @@ function Dashboard() {
                               >
                                 <Text size="sm">
                                   {asset.sensor?.name
-                                    ?? asset.name
                                     ?? asset.externalId}
                                 </Text>
                                 <Button
@@ -2776,7 +2767,6 @@ function Dashboard() {
                               >
                                 <Text size="sm">
                                   {asset.sensor?.name
-                                    ?? asset.name
                                     ?? asset.externalId}
                                   {" · "}
                                   {formatAge(asset.health.ageSeconds)}
@@ -2830,7 +2820,6 @@ function Dashboard() {
                               >
                                 <Text size="sm">
                                   {asset.sensor?.name
-                                    ?? asset.name
                                     ?? asset.externalId}
                                   {" · "}
                                   {formatAge(asset.health.ageSeconds)}
@@ -3354,7 +3343,6 @@ function Dashboard() {
                                     <Text fw={700}>
                                       {
                                         asset.sensor?.name
-                                        ?? asset.name
                                         ?? asset.externalId
                                       }
                                     </Text>
@@ -4065,7 +4053,7 @@ function Dashboard() {
                                   return (
                                     <Table.Tr key={asset.id}>
                                       <Table.Td fw={600}>
-                                        {asset.sensor?.name ?? asset.name ?? asset.externalId}
+                                        {asset.sensor?.name ?? asset.externalId}
                                       </Table.Td>
                                       <Table.Td>{asset.externalId}</Table.Td>
                                       <Table.Td>{assetTypes.find(type => type.key === asset.assetType)?.name ?? asset.assetType}</Table.Td>
@@ -4464,16 +4452,6 @@ function Dashboard() {
                       }
                     />
 
-                    <TextInput
-                      label="Name"
-                      value={assetForm.name}
-                      onChange={event =>
-                        setAssetForm({
-                          ...assetForm,
-                          name: event.currentTarget.value
-                        })
-                      }
-                    />
 
                     <Select
                       label="Asset type"

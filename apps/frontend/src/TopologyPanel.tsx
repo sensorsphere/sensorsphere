@@ -357,7 +357,7 @@ export function TopologyPanel() {
                             return (
                               <NodeCard
                                 key={asset.id}
-                                title={asset.name ?? asset.externalId}
+                                title={asset.sensor?.name ?? asset.externalId}
                                 subtitle={`${asset.assetType}${asset.location ? ` · ${asset.location.name}` : " · Unassigned"}`}
                                 tone={assetLocationMismatch ? "warning" : "default"}
                                 badges={(

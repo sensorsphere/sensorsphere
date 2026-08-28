@@ -849,7 +849,7 @@ export function SimpleDashboardPanel() {
             <Stack gap={4}>
               {standardDashboards.length > 0 && (
                 <Group align="flex-start" gap="sm" wrap="nowrap">
-                  <Text size="xs" fw={700} c="dimmed" style={{ width: 112, flexShrink: 0, paddingTop: 8 }}>Standard</Text>
+                  <Text size="xs" fw={700} c="dimmed" style={{ width: 176, flexShrink: 0, paddingTop: 8 }}>Standard</Text>
                   <Tabs.List style={{ flex: 1, flexWrap: "wrap", overflow: "visible" }}>
                     {standardDashboards.map(dashboard => (
                       <Tabs.Tab
@@ -880,16 +880,50 @@ export function SimpleDashboardPanel() {
                     gap={4}
                     wrap="nowrap"
                     title={`Template: ${group.templateName}`}
-                    style={{ width: 112, flexShrink: 0, paddingTop: 8, minWidth: 0 }}
+                    style={{ width: 176, flexShrink: 0, paddingTop: 4, minWidth: 0 }}
                   >
                     <Text span size="xs" c="orange" aria-hidden="true">▦</Text>
                     <Text
                       size="xs"
                       fw={700}
-                      style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}
                     >
                       {group.templateName}
                     </Text>
+                    {activeDashboard?.templateId === group.templateId && (
+                      <Group gap={2} wrap="nowrap">
+                        <ActionIcon
+                          size="xs"
+                          variant="light"
+                          color="blue"
+                          title={`Edit template: ${group.templateName}`}
+                          aria-label={`Edit template: ${group.templateName}`}
+                          onClick={() => { setTemplateManagerInitialId(group.templateId); setTemplateManagerOpened(true); }}
+                        >
+                          <PencilIcon />
+                        </ActionIcon>
+                        <ActionIcon
+                          size="xs"
+                          variant="light"
+                          color="orange"
+                          title="Detach from template"
+                          aria-label="Detach from template"
+                          onClick={() => setDetachConfirmOpen(true)}
+                        >
+                          <DetachIcon />
+                        </ActionIcon>
+                        <ActionIcon
+                          size="xs"
+                          variant="light"
+                          color="red"
+                          title="Delete instance"
+                          aria-label="Delete instance"
+                          onClick={() => setDeleteTarget({ type: "dashboard", id: activeDashboard.id, name: activeDashboard.name })}
+                        >
+                          <TrashIcon />
+                        </ActionIcon>
+                      </Group>
+                    )}
                   </Group>
                   <Tabs.List style={{ flex: 1, flexWrap: "wrap", overflow: "visible" }}>
                     {group.dashboards.map(dashboard => {
@@ -938,40 +972,6 @@ export function SimpleDashboardPanel() {
         </Card>
       ) : (
         <Stack gap="lg">
-          {activeDashboardIsTemplateInstance && (
-            <Group justify="flex-end" gap={6}>
-              <ActionIcon
-                size="sm"
-                variant="light"
-                color="blue"
-                title={`Edit template: ${activeDashboard.templateName ?? "Template"}`}
-                aria-label={`Edit template: ${activeDashboard.templateName ?? "Template"}`}
-                onClick={() => { setTemplateManagerInitialId(activeDashboard.templateId); setTemplateManagerOpened(true); }}
-              >
-                <PencilIcon />
-              </ActionIcon>
-              <ActionIcon
-                size="sm"
-                variant="light"
-                color="orange"
-                title="Detach from template"
-                aria-label="Detach from template"
-                onClick={() => setDetachConfirmOpen(true)}
-              >
-                <DetachIcon />
-              </ActionIcon>
-              <ActionIcon
-                size="sm"
-                variant="light"
-                color="red"
-                title="Delete instance"
-                aria-label="Delete instance"
-                onClick={() => setDeleteTarget({ type: "dashboard", id: activeDashboard.id, name: activeDashboard.name })}
-              >
-                <TrashIcon />
-              </ActionIcon>
-            </Group>
-          )}
           {activeSections.map(section => {
             const sectionCards = orderedActiveCards.filter(item => effectiveSectionId(item.card) === section.id);
             return (
@@ -1017,12 +1017,12 @@ export function SimpleDashboardPanel() {
                           <Stack gap={4}>
                             <Group justify="space-between" align="center" wrap="nowrap">
                               <Text size="sm" fw={600} lineClamp={1} c={asset.health.status === "offline" ? "red" : undefined} style={{ minWidth: 0 }}>
-                                {asset.name ?? asset.externalId}
+                                {asset.sensor?.name ?? asset.externalId}
                               </Text>
                               {!activeDashboardIsTemplateInstance && (
                                 <Group gap={4} wrap="nowrap">
                                   <ActionIcon size="sm" variant="light" color="blue" aria-label="Edit card" title="Edit card" onClick={() => openEditCardEditor({ card, asset, metric, observation })}>✎</ActionIcon>
-                                  <ActionIcon size="sm" variant="light" color="red" aria-label="Remove card" title="Remove card" onClick={() => setDeleteTarget({ type: "card", dashboardId: activeDashboard.id, cardId: card.id, label: `${asset.name ?? asset.externalId} · ${metric.displayName}` })}>×</ActionIcon>
+                                  <ActionIcon size="sm" variant="light" color="red" aria-label="Remove card" title="Remove card" onClick={() => setDeleteTarget({ type: "card", dashboardId: activeDashboard.id, cardId: card.id, label: `${asset.sensor?.name ?? asset.externalId} · ${metric.displayName}` })}>×</ActionIcon>
                                 </Group>
                               )}
                             </Group>
@@ -1031,7 +1031,7 @@ export function SimpleDashboardPanel() {
                                 size="xl"
                                 fw={700}
                                 style={{
-                                  color,
+                                  color: observation ? color : "var(--mantine-color-dark-3)",
                                   lineHeight: "var(--mantine-line-height-xl)"
                                 }}
                               >
@@ -1254,7 +1254,7 @@ export function SimpleDashboardPanel() {
             onChange={selectAssetForCard}
             data={assets.map(asset => ({
               value: asset.id,
-              label: `${asset.name ?? asset.externalId} · ${asset.location?.name ?? "Unassigned"}`
+              label: `${asset.sensor?.name ?? asset.externalId} · ${asset.location?.name ?? "Unassigned"}`
             }))}
           />
           <Group align="flex-end" gap="xs" wrap="nowrap">

@@ -486,7 +486,6 @@ export function AssetLatestCard({
             <Title order={3}>
               {
                 asset.sensor?.name
-                ?? asset.name
                 ?? asset.externalId
               }
             </Title>
@@ -744,7 +743,6 @@ export function AssetLatestCard({
       }
       title={
         asset.sensor?.name
-        ?? asset.name
         ?? asset.externalId
       }
       size="lg"

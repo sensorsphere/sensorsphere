@@ -43,7 +43,6 @@ export function mapAssetToDto(
   return {
     id: asset.id,
     externalId: asset.external_id,
-    name: asset.name,
     description: asset.description,
     manufacturer: asset.manufacturer,
     model: asset.model,

@@ -17,7 +17,6 @@ export interface AssetMetricDto {
 export interface AssetDto {
   id: string;
   externalId: string;
-  name: string | null;
   description: string | null;
   manufacturer: string | null;
   model: string | null;
@@ -56,7 +55,6 @@ export interface AssetDto {
 
 export interface CreateAssetInput {
   externalId: string;
-  name?: string | null;
   description?: string | null;
   manufacturer?: string | null;
   model?: string | null;
@@ -69,7 +67,6 @@ export interface CreateAssetInput {
 
 export interface UpdateAssetInput {
   externalId?: string;
-  name?: string | null;
   description?: string | null;
   manufacturer?: string | null;
   model?: string | null;

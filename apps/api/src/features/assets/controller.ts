@@ -119,11 +119,6 @@ const createAssetSchema =
     externalId:
       z.string().trim().min(1).max(255),
 
-    name:
-      z.string().trim().min(1).max(255)
-        .nullable()
-        .optional(),
-
     description:
       z.string().trim().max(2000)
         .nullable()
@@ -164,11 +159,6 @@ const updateAssetSchema =
   z.object({
     externalId:
       z.string().trim().min(1).max(255)
-        .optional(),
-
-    name:
-      z.string().trim().min(1).max(255)
-        .nullable()
         .optional(),
 
     description:

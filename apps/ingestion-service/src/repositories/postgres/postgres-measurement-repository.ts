@@ -389,13 +389,12 @@ implements MeasurementRepository {
       await client.query(
         `
         INSERT INTO assets (
-          id, external_id, name, manufacturer, model, firmware_version,
+          id, external_id, manufacturer, model, firmware_version,
           asset_type, protocol, enabled, gateway_id, room_id, source_sensor_uid
         )
         SELECT
           sensor.uuid,
           sensor.sensor_uid,
-          COALESCE(sensor.name, sensor.sensor_uid),
           sensor.manufacturer,
           sensor.model,
           sensor.firmware_version,
@@ -410,7 +409,6 @@ implements MeasurementRepository {
           AND sensor.blacklisted = FALSE
         ON CONFLICT (source_sensor_uid) DO UPDATE
         SET
-          name = COALESCE(assets.name, EXCLUDED.name),
           manufacturer = COALESCE(EXCLUDED.manufacturer, assets.manufacturer),
           model = COALESCE(EXCLUDED.model, assets.model),
           firmware_version = COALESCE(EXCLUDED.firmware_version, assets.firmware_version),

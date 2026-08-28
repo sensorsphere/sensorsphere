@@ -181,7 +181,6 @@ function assetLabel(
 
   return (
     asset.sensor?.name
-    ?? asset.name
     ?? asset.externalId
   );
 }

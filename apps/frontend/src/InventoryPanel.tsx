@@ -357,7 +357,6 @@ function LocationNode({
                 >
                   {
                     asset.sensor?.name
-                    ?? asset.name
                     ?? asset.externalId
                   }
                 </Text>
@@ -964,7 +963,6 @@ export function InventoryPanel() {
       const values = [
         asset.sensor?.name,
         asset.sensor?.uid,
-        asset.name,
         asset.externalId,
         asset.location?.name,
         asset.assetType,
@@ -1175,7 +1173,7 @@ export function InventoryPanel() {
         case "protocol": return asset.protocol;
         case "health": return asset.health.status;
         case "status": return assetIsEnabled(asset, sensorsByUid);
-        default: return asset.sensor?.name ?? asset.name ?? asset.externalId;
+        default: return asset.sensor?.name ?? asset.externalId;
       }
     }
     const gateway = item as Gateway;
@@ -1501,7 +1499,6 @@ export function InventoryPanel() {
                       >
                         {
                           asset.sensor?.name
-                          ?? asset.name
                           ?? asset.externalId
                         }
                       </Text>
@@ -1730,7 +1727,7 @@ export function InventoryPanel() {
                     const asset = row.item;
                     return (
                       <Table.Tr key={asset.id}>
-                        <Table.Td>{asset.sensor?.name ?? asset.name ?? asset.externalId}</Table.Td>
+                        <Table.Td>{asset.sensor?.name ?? asset.externalId}</Table.Td>
                         <Table.Td>{asset.sensor?.uid ?? "—"}</Table.Td>
                         <Table.Td>
                           <Group gap={4}>

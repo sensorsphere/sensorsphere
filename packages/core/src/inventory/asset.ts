@@ -3,7 +3,6 @@ export type AssetType = string;
 export interface Asset {
   readonly id: string;
   readonly externalId: string;
-  readonly name: string | null;
   readonly description: string | null;
   readonly manufacturer: string | null;
   readonly model: string | null;
