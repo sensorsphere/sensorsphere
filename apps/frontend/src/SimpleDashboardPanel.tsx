@@ -94,6 +94,37 @@ function qualityLabel(observation: LatestObservation | undefined): string | null
   }
 }
 
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 11.8 2.5 14l2.2-.5L12.8 5.4 10.6 3.2 3 11.8Z" />
+      <path d="m9.8 4 2.2 2.2" />
+    </svg>
+  );
+}
+
+function DetachIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m6.3 9.7-1.2 1.2a2.5 2.5 0 0 1-3.5-3.5l2-2a2.5 2.5 0 0 1 3.5 0" />
+      <path d="m9.7 6.3 1.2-1.2a2.5 2.5 0 0 1 3.5 3.5l-2 2a2.5 2.5 0 0 1-3.5 0" />
+      <path d="M5.8 10.2 10.2 5.8" />
+      <path d="m3 13 10-10" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 4h10" />
+      <path d="M6 4V2.5h4V4" />
+      <path d="m4.5 4 .6 9.5h5.8l.6-9.5" />
+      <path d="M7 7v4M9 7v4" />
+    </svg>
+  );
+}
+
 interface ResolvedMetricCard {
   card: SimpleDashboardCard;
   asset: Asset;
@@ -845,21 +876,28 @@ export function SimpleDashboardPanel() {
               )}
               {templateDashboardGroups.map(group => (
                 <Group key={group.templateId} align="flex-start" gap="sm" wrap="nowrap">
-                  <Text
-                    size="xs"
-                    fw={700}
+                  <Group
+                    gap={4}
+                    wrap="nowrap"
                     title={`Template: ${group.templateName}`}
-                    style={{ width: 112, flexShrink: 0, paddingTop: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    style={{ width: 112, flexShrink: 0, paddingTop: 8, minWidth: 0 }}
                   >
-                    {group.templateName}
-                  </Text>
+                    <Text span size="xs" c="orange" aria-hidden="true">▦</Text>
+                    <Text
+                      size="xs"
+                      fw={700}
+                      style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    >
+                      {group.templateName}
+                    </Text>
+                  </Group>
                   <Tabs.List style={{ flex: 1, flexWrap: "wrap", overflow: "visible" }}>
                     {group.dashboards.map(dashboard => {
                       const metricKey = dashboard.templateMetricKey ?? "";
                       const metricLabel = metricDisplayNameByKey.get(metricKey) ?? metricKey;
                       return (
                         <Tabs.Tab key={dashboard.id} value={dashboard.id}>
-                          <span title={`From template: ${group.templateName} · Metric: ${metricKey}`}>▦ {metricLabel}</span>
+                          <span title={`From template: ${group.templateName} · Metric: ${metricKey}`}>{metricLabel}</span>
                         </Tabs.Tab>
                       );
                     })}
@@ -901,16 +939,38 @@ export function SimpleDashboardPanel() {
       ) : (
         <Stack gap="lg">
           {activeDashboardIsTemplateInstance && (
-            <Alert color="orange" variant="light" title={`▦ Managed by template: ${activeDashboard.templateName ?? "Template"}`}>
-              <Group justify="space-between" align="center">
-                <Text size="sm">Structure is read-only · Metric: <b>{activeDashboard.templateMetricKey}</b></Text>
-                <Group gap="xs">
-                  <Button size="xs" variant="light" color="blue" onClick={() => { setTemplateManagerInitialId(activeDashboard.templateId); setTemplateManagerOpened(true); }}>Edit template</Button>
-                  <Button size="xs" variant="light" color="orange" onClick={() => setDetachConfirmOpen(true)}>Detach</Button>
-                  <Button size="xs" variant="light" color="red" onClick={() => setDeleteTarget({ type: "dashboard", id: activeDashboard.id, name: activeDashboard.name })}>Delete instance</Button>
-                </Group>
-              </Group>
-            </Alert>
+            <Group justify="flex-end" gap={6}>
+              <ActionIcon
+                size="sm"
+                variant="light"
+                color="blue"
+                title={`Edit template: ${activeDashboard.templateName ?? "Template"}`}
+                aria-label={`Edit template: ${activeDashboard.templateName ?? "Template"}`}
+                onClick={() => { setTemplateManagerInitialId(activeDashboard.templateId); setTemplateManagerOpened(true); }}
+              >
+                <PencilIcon />
+              </ActionIcon>
+              <ActionIcon
+                size="sm"
+                variant="light"
+                color="orange"
+                title="Detach from template"
+                aria-label="Detach from template"
+                onClick={() => setDetachConfirmOpen(true)}
+              >
+                <DetachIcon />
+              </ActionIcon>
+              <ActionIcon
+                size="sm"
+                variant="light"
+                color="red"
+                title="Delete instance"
+                aria-label="Delete instance"
+                onClick={() => setDeleteTarget({ type: "dashboard", id: activeDashboard.id, name: activeDashboard.name })}
+              >
+                <TrashIcon />
+              </ActionIcon>
+            </Group>
           )}
           {activeSections.map(section => {
             const sectionCards = orderedActiveCards.filter(item => effectiveSectionId(item.card) === section.id);
