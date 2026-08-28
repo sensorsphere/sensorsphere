@@ -1,6 +1,7 @@
 import React from "react";
 
 import { activeFilterStyles } from "./filterStyles";
+import { usePersistentState } from "./preferences/usePersistentState";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import { BadgeSelect } from "./BadgeSelect";
 
@@ -63,6 +64,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
+import { LocationOptionContent, LocationScopeToggle, locationIdsForScope } from "./LocationFilterControls";
 
 interface LocationNodeProps {
   location: Location;
@@ -604,6 +606,10 @@ export function InventoryPanel() {
       null
     );
 
+  const [includeLocationDescendants, setIncludeLocationDescendants] = usePersistentState<boolean>(
+    "filters.locationIncludeDescendants", true, (value): value is boolean => typeof value === "boolean"
+  );
+
   const [
     statusFilter,
     setStatusFilter
@@ -927,6 +933,9 @@ export function InventoryPanel() {
   const locations =
     locationsQuery.data ?? [];
 
+  const locationsById = new Map(locations.map(location => [location.id, location]));
+  const locationScopeIds = locationIdsForScope(locations, locationFilter, includeLocationDescendants);
+
   const sensors =
     sensorsQuery.data ?? [];
 
@@ -1039,11 +1048,9 @@ export function InventoryPanel() {
         asset =>
           !locationFilter ||
           (
-            locationFilter ===
-            "__unassigned__"
+            locationFilter === "__unassigned__"
               ? asset.location === null
-              : asset.location?.id ===
-                locationFilter
+              : Boolean(asset.location?.id && locationScopeIds?.has(asset.location.id))
           )
       )
       .filter(
@@ -1114,11 +1121,9 @@ export function InventoryPanel() {
         gateway =>
           !locationFilter ||
           (
-            locationFilter ===
-            "__unassigned__"
+            locationFilter === "__unassigned__"
               ? gateway.location === null
-              : gateway.location?.id ===
-                locationFilter
+              : Boolean(gateway.location?.id && locationScopeIds?.has(gateway.location.id))
           )
       )
       .filter(
@@ -1331,33 +1336,22 @@ export function InventoryPanel() {
             styles={activeFilterStyles(search.trim().length > 0)}
           />
 
-          <Select
-            label="Location"
-            placeholder="All locations"
-            clearable
-            searchable
-            value={locationFilter}
-            onChange={
-              setLocationFilter
-            }
-            data={[
-              {
-                value:
-                  "__unassigned__",
-                label:
-                  "Unassigned"
-              },
-              ...locations.map(
-                location => ({
-                  value:
-                    location.id,
-                  label:
-                    location.name
-                })
-              )
-            ]}
-            styles={activeFilterStyles(locationFilter !== null)}
-          />
+          <Group align="flex-end" gap="xs" wrap="nowrap">
+            <Select
+              label="Location"
+              placeholder="All locations"
+              clearable
+              searchable
+              value={locationFilter}
+              onChange={setLocationFilter}
+              data={[{ value: "__unassigned__", label: "Unassigned" }, ...locations.map(location => ({ value: location.id, label: location.name }))]}
+              leftSection={locationFilter && locationFilter !== "__unassigned__" ? <LocationIcon name={getLocationIconName(locationsById.get(locationFilter))} size={16} /> : null}
+              renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} />}
+              styles={activeFilterStyles(locationFilter !== null)}
+              style={{ flex: 1 }}
+            />
+            <LocationScopeToggle active={includeLocationDescendants} onChange={setIncludeLocationDescendants} />
+          </Group>
 
           <BadgeSelect
             badgeColor={value => value === "enabled" ? "blue" : "gray"}

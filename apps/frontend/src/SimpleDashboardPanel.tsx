@@ -722,6 +722,7 @@ export function SimpleDashboardPanel() {
                         <Card
                           key={card.id}
                           withBorder
+                          radius="md"
                           p="sm"
                           draggable
                           onDragStart={() => beginCardDrag(card.id)}

@@ -55,6 +55,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
+import { LocationOptionContent, LocationScopeToggle, locationIdsForScope } from "./LocationFilterControls";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 
 interface GatewayFormState {
@@ -201,6 +202,19 @@ export function GatewayCatalog() {
         value === "enabled" ||
         value === "disabled"
     );
+
+  const [locationFilter, setLocationFilter] = usePersistentState<string | null>(
+    "gateways.locationId", null, (value): value is string | null => value === null || typeof value === "string"
+  );
+  const [includeLocationDescendants, setIncludeLocationDescendants] = usePersistentState<boolean>(
+    "filters.locationIncludeDescendants", true, (value): value is boolean => typeof value === "boolean"
+  );
+  const [ssidFilter, setSsidFilter] = usePersistentState<string | null>(
+    "gateways.ssid", null, (value): value is string | null => value === null || typeof value === "string"
+  );
+  const [statusFilter, setStatusFilter] = usePersistentState<"all" | "online" | "offline">(
+    "gateways.status", "all", (value): value is "all" | "online" | "offline" => value === "all" || value === "online" || value === "offline"
+  );
 
   const [editingGateway, setEditingGateway] =
     React.useState<Gateway | null>(null);
@@ -395,6 +409,10 @@ export function GatewayCatalog() {
         ]
       )
     );
+  const locations = locationsQuery.data ?? [];
+  const locationScopeIds = locationIdsForScope(locations, locationFilter, includeLocationDescendants);
+  const ssidOptions = Array.from(new Set(gateways.map(gateway => gateway.wifiSsid).filter((value): value is string => Boolean(value))))
+    .sort((left, right) => left.localeCompare(right));
   const normalizedSearch = nameSearch.trim().toLowerCase();
   const typeOptions = gatewayTypes.map(type => ({
     value: type.id,
@@ -420,6 +438,12 @@ export function GatewayCatalog() {
         (gateway.ipAddress ?? "").toLowerCase().includes(normalizedSearch)
       ) &&
       (typeFilter === null || gateway.type.id === typeFilter) &&
+      (
+        locationFilter === null ||
+        (locationFilter === "__unassigned__" ? gateway.location === null : Boolean(gateway.location?.id && locationScopeIds?.has(gateway.location.id)))
+      ) &&
+      (ssidFilter === null || gateway.wifiSsid === ssidFilter) &&
+      (statusFilter === "all" || (statusFilter === "online" ? isOnline(gateway.lastSeenAt) : !isOnline(gateway.lastSeenAt))) &&
       (
         enabledFilter === "all" ||
         (enabledFilter === "enabled"
@@ -462,6 +486,9 @@ export function GatewayCatalog() {
   const filtersActive =
     nameSearch.trim().length > 0 ||
     typeFilter !== null ||
+    locationFilter !== null ||
+    ssidFilter !== null ||
+    statusFilter !== "all" ||
     enabledFilter !== "all";
 
   const openCreate = (): void => {
@@ -525,10 +552,13 @@ export function GatewayCatalog() {
             onReset={() => {
               setNameSearch("");
               setTypeFilter(null);
+              setLocationFilter(null);
+              setSsidFilter(null);
+              setStatusFilter("all");
               setEnabledFilter("all");
             }}
           />
-          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm" style={{ flex: 1 }}>
+          <SimpleGrid cols={{ base: 1, sm: 3, xl: 6 }} spacing="sm" style={{ flex: 1 }}>
           <TextInput
             label="Search"
             placeholder="Name, gateway ID, type, MAC, SSID or IP"
@@ -545,6 +575,40 @@ export function GatewayCatalog() {
             onChange={setTypeFilter}
             data={typeOptions}
             styles={activeFilterStyles(typeFilter !== null)}
+          />
+          <Group align="flex-end" gap="xs" wrap="nowrap">
+            <Select
+              label="Location"
+              clearable
+              searchable
+              placeholder="All locations"
+              value={locationFilter}
+              onChange={setLocationFilter}
+              data={[{ value: "__unassigned__", label: "Unassigned" }, ...locationOptions]}
+              leftSection={locationFilter && locationFilter !== "__unassigned__" ? <LocationIcon name={getLocationIconName(locationsById.get(locationFilter))} size={16} /> : null}
+              renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} />}
+              styles={activeFilterStyles(locationFilter !== null)}
+              style={{ flex: 1 }}
+            />
+            <LocationScopeToggle active={includeLocationDescendants} onChange={setIncludeLocationDescendants} />
+          </Group>
+          <Select
+            label="SSID"
+            clearable
+            searchable
+            placeholder="All SSIDs"
+            value={ssidFilter}
+            onChange={setSsidFilter}
+            data={ssidOptions}
+            styles={activeFilterStyles(ssidFilter !== null)}
+          />
+          <BadgeSelect
+            badgeColor={value => value === "online" ? "green" : value === "offline" ? "red" : "gray"}
+            label="Status"
+            value={statusFilter}
+            onChange={value => value && setStatusFilter(value as "all" | "online" | "offline")}
+            data={[{ value: "all", label: "All" }, { value: "online", label: "Online" }, { value: "offline", label: "Offline" }]}
+            styles={activeFilterStyles(statusFilter !== "all")}
           />
           <BadgeSelect
             badgeColor={value => value === "enabled" ? "blue" : value === "disabled" ? "orange" : "gray"}

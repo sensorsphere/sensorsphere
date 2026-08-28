@@ -79,14 +79,23 @@ export function getLocationIconName(
   const value =
     location?.metadata?.icon;
 
-  return (
+  if (
     typeof value === "string" &&
-    ICON_NAMES.has(
-      value as LocationIconName
-    )
-  )
-    ? value as LocationIconName
-    : null;
+    ICON_NAMES.has(value as LocationIconName)
+  ) {
+    return value as LocationIconName;
+  }
+
+  switch (location?.type?.toUpperCase()) {
+    case "SITE": return "site";
+    case "BUILDING": return "building";
+    case "FLOOR": return "floor";
+    case "ROOM": return "room";
+    case "ZONE": return "zone";
+    case "AREA": return "pin";
+    case "OTHER": return "pin";
+    default: return null;
+  }
 }
 
 function paths(

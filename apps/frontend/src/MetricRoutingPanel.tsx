@@ -28,6 +28,8 @@ import {
 } from "@tanstack/react-query";
 
 import { NavigationIcon } from "./NavigationIcon";
+import { LocationIcon, getLocationIconName } from "./LocationIcon";
+import { LocationOptionContent, LocationScopeToggle, locationIdsForScope } from "./LocationFilterControls";
 import { GatewayTrafficPanel } from "./GatewayTrafficPanel";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
@@ -76,6 +78,9 @@ export function MetricRoutingPanel() {
   const [sensorFilter, setSensorFilter] = usePersistentState("metricRouting.sensor", "");
   const [gatewayFilter, setGatewayFilter] = usePersistentState("metricRouting.gateway", "");
   const [locationId, setLocationId] = usePersistentState<string | null>("metricRouting.location", null);
+  const [includeLocationDescendants, setIncludeLocationDescendants] = usePersistentState<boolean>(
+    "filters.locationIncludeDescendants", true, (value): value is boolean => typeof value === "boolean"
+  );
   const [metricFilter, setMetricFilter] = usePersistentState("metricRouting.metric", "");
   const [assignedGatewayFilter, setAssignedGatewayFilter] = usePersistentState("metricRouting.assignedGateway", "");
   const [reasonFilter, setReasonFilter] = usePersistentState("metricRouting.reason", "");
@@ -98,7 +103,7 @@ export function MetricRoutingPanel() {
 
   const eventsQuery = useInfiniteQuery({
     queryKey: [
-      "metric-routing-events", hours, sensorFilter, gatewayFilter, locationId, metricFilter,
+      "metric-routing-events", hours, sensorFilter, gatewayFilter, locationId, includeLocationDescendants, metricFilter,
       assignedGatewayFilter, reasonFilter, decisionFilter
     ],
     initialPageParam: null as { occurredAt: string; id: number } | null,
@@ -107,7 +112,7 @@ export function MetricRoutingPanel() {
       limit: 500,
       sensorUid: sensorFilter,
       gatewayId: gatewayFilter,
-      location: locationId ?? undefined,
+      location: locationId && !includeLocationDescendants ? locationId : undefined,
       metric: metricFilter,
       assignedGatewayId: assignedGatewayFilter,
       reason: reasonFilter,
@@ -123,6 +128,9 @@ export function MetricRoutingPanel() {
     queryKey: ["locations"],
     queryFn: getLocations
   });
+
+  const locationsById = new Map((locationsQuery.data ?? []).map(location => [location.id, location]));
+  const locationScopeIds = locationIdsForScope(locationsQuery.data ?? [], locationId, includeLocationDescendants);
 
   const clearMutation = useMutation({
     mutationFn: clearMetricRoutingEvents,
@@ -140,7 +148,14 @@ export function MetricRoutingPanel() {
   const loadedEvents =
     eventsQuery.data?.pages.flatMap(page => page.events) ?? [];
 
-  const events = loadedEvents.filter(event => !hiddenDecisions.includes(event.decision));
+  const events = loadedEvents.filter(event =>
+    !hiddenDecisions.includes(event.decision) &&
+    (
+      locationId === null ||
+      !includeLocationDescendants ||
+      Boolean(event.gatewayLocationId && locationScopeIds?.has(event.gatewayLocationId))
+    )
+  );
 
   const sortedEvents = [...events].sort((left, right) => {
     const value = (event: (typeof events)[number]) => {
@@ -337,16 +352,22 @@ export function MetricRoutingPanel() {
               styles={activeFilterStyles(gatewayFilter.trim().length > 0)}
               rightSection={gatewayFilter ? <ActionIcon size="sm" variant="subtle" onClick={() => setGatewayFilter("")}>×</ActionIcon> : null}
             />
-            <Select
-              label="Location"
-              placeholder="All locations"
-              clearable
-              searchable
-              value={locationId}
-              onChange={setLocationId}
-              data={locationOptions}
-              styles={activeFilterStyles(locationId !== null)}
-            />
+            <Group align="flex-end" gap="xs" wrap="nowrap">
+              <Select
+                label="Location"
+                placeholder="All locations"
+                clearable
+                searchable
+                value={locationId}
+                onChange={setLocationId}
+                data={locationOptions}
+                leftSection={locationId ? <LocationIcon name={getLocationIconName(locationsById.get(locationId))} size={16} /> : null}
+                renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} />}
+                styles={activeFilterStyles(locationId !== null)}
+                style={{ flex: 1 }}
+              />
+              <LocationScopeToggle active={includeLocationDescendants} onChange={setIncludeLocationDescendants} />
+            </Group>
             <TextInput
               label="Metric"
               placeholder="temperature, humidity"

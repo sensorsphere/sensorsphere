@@ -61,6 +61,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
+import { LocationOptionContent, LocationScopeToggle, locationIdsForScope } from "./LocationFilterControls";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 
 interface SensorFormState {
@@ -162,6 +163,13 @@ export function SensorCatalog() {
       value =>
         value === null ||
         typeof value === "string"
+    );
+
+  const [includeLocationDescendants, setIncludeLocationDescendants] =
+    usePersistentState<boolean>(
+      "filters.locationIncludeDescendants",
+      true,
+      (value): value is boolean => typeof value === "boolean"
     );
 
   const [gatewayFilter, setGatewayFilter] =
@@ -642,6 +650,8 @@ export function SensorCatalog() {
   const gateways =
     gatewaysQuery.data ?? [];
 
+  const locationScopeIds = locationIdsForScope(locations, locationFilter, includeLocationDescendants);
+
   const gatewayOptions =
     gateways
       .slice()
@@ -742,7 +752,7 @@ export function SensorCatalog() {
           ) &&
           (
             locationFilter === null ||
-            asset?.location?.id === locationFilter
+            Boolean(asset?.location?.id && locationScopeIds?.has(asset.location.id))
           ) &&
           (
             gatewayFilter === null ||
@@ -935,16 +945,22 @@ export function SensorCatalog() {
             styles={activeFilterStyles(modelFilter !== null)}
           />
 
-          <Select
-            label="Location"
-            clearable
-            searchable
-            placeholder="All"
-            value={locationFilter}
-            onChange={setLocationFilter}
-            data={locationOptions}
-            styles={activeFilterStyles(locationFilter !== null)}
-          />
+          <Group align="flex-end" gap="xs" wrap="nowrap">
+            <Select
+              label="Location"
+              clearable
+              searchable
+              placeholder="All"
+              value={locationFilter}
+              onChange={setLocationFilter}
+              data={locationOptions}
+              leftSection={locationFilter ? <LocationIcon name={getLocationIconName(locationsById.get(locationFilter))} size={16} /> : null}
+              renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} />}
+              styles={activeFilterStyles(locationFilter !== null)}
+              style={{ flex: 1 }}
+            />
+            <LocationScopeToggle active={includeLocationDescendants} onChange={setIncludeLocationDescendants} />
+          </Group>
 
           <Select
             label="Gateway"

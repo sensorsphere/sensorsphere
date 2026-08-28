@@ -131,6 +131,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
+import { LocationOptionContent, LocationScopeToggle, locationIdsForScope } from "./LocationFilterControls";
 
 import {
   SortableTableHeader,
@@ -682,6 +683,13 @@ function Dashboard() {
           "string"
     );
 
+  const [locationIncludeDescendants, setLocationIncludeDescendants] =
+    usePersistentState<boolean>(
+      "filters.locationIncludeDescendants",
+      true,
+      (value): value is boolean => typeof value === "boolean"
+    );
+
   const [
     assetTypeFilter,
     setAssetTypeFilter
@@ -789,6 +797,7 @@ function Dashboard() {
         value === null ||
         typeof value === "string"
     );
+
 
 
   const [
@@ -1049,22 +1058,13 @@ function Dashboard() {
         return;
       }
 
-      const assets =
-        assetsQuery.data
-        ?? [];
+      const locations = locationsQuery.data ?? [];
 
-      if (
-        assets.length === 0
-      ) {
+      if (locations.length === 0) {
         return;
       }
 
-      const exists =
-        assets.some(
-          asset =>
-            asset.location?.id ===
-            assetLocationFilter
-        );
+      const exists = locations.some(location => location.id === assetLocationFilter);
 
       if (!exists) {
         setAssetLocationFilter(
@@ -1075,7 +1075,7 @@ function Dashboard() {
     },
     [
       assetLocationFilter,
-      assetsQuery.data,
+      locationsQuery.data,
       setAssetLocationFilter
     ]
   );
@@ -1219,27 +1219,16 @@ function Dashboard() {
       .toLowerCase();
 
   const currentReadingLocationOptions =
-    Array.from(
-      new Map(
-        assets
-          .filter(asset => asset.location)
-          .map(asset => [
-            asset.location!.id,
-            asset.location!.name
-          ])
-      )
-    )
-      .map(([value, label]) => ({
-        value,
-        label
-      }))
-      .sort((left, right) =>
-        left.label.localeCompare(
-          right.label,
-          undefined,
-          { sensitivity: "base" }
-        )
-      );
+    [...(locationsQuery.data ?? [])]
+      .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }))
+      .map(location => ({ value: location.id, label: location.name }));
+
+  const currentReadingLocationIds = locationIdsForScope(
+    locationsQuery.data ?? [],
+    currentReadingLocation,
+    locationIncludeDescendants
+  );
+
 
   const currentReadingAssets =
     sortedAssets.filter(
@@ -1249,8 +1238,7 @@ function Dashboard() {
           (
             currentReadingLocation === "__unassigned__"
               ? asset.location === null
-              : asset.location?.id ===
-                currentReadingLocation
+              : Boolean(asset.location?.id && currentReadingLocationIds?.has(asset.location.id))
           );
 
         const matchesStatus =
@@ -1337,6 +1325,12 @@ function Dashboard() {
             right.name
           )
       );
+  const assetLocationsById = new Map(assetLocations.map(location => [location.id, location]));
+  const assetLocationIds = locationIdsForScope(
+    assetLocations,
+    assetLocationFilter,
+    locationIncludeDescendants
+  );
 
   const normalizedAssetSearch =
     assetSearch
@@ -1389,10 +1383,8 @@ function Dashboard() {
             assetHealthFilter;
 
         const matchesLocation =
-          assetLocationFilter ===
-            null ||
-          asset.location?.id ===
-            assetLocationFilter;
+          assetLocationFilter === null ||
+          Boolean(asset.location?.id && assetLocationIds?.has(asset.location.id));
 
         const matchesEnabled =
           assetEnabledFilter ===
@@ -3099,22 +3091,21 @@ function Dashboard() {
                         styles={activeFilterStyles(currentReadingSearch.trim().length > 0)}
                       />
 
-                      <Select
-                        label="Location"
-                        clearable
-                        searchable
-                        placeholder="All locations"
-                        value={currentReadingLocation}
-                        onChange={setCurrentReadingLocation}
-                        data={[
-                          {
-                            value: "__unassigned__",
-                            label: "Unassigned"
-                          },
-                          ...currentReadingLocationOptions
-                        ]}
-                        styles={activeFilterStyles(currentReadingLocation !== null)}
-                      />
+                      <Group align="flex-end" gap="xs" wrap="nowrap">
+                        <Select
+                          label="Location"
+                          clearable
+                          searchable
+                          placeholder="All locations"
+                          value={currentReadingLocation}
+                          onChange={setCurrentReadingLocation}
+                          data={[{ value: "__unassigned__", label: "Unassigned" }, ...currentReadingLocationOptions]}
+                          leftSection={currentReadingLocation && currentReadingLocation !== "__unassigned__" ? <LocationIcon name={getLocationIconName(assetLocationsById.get(currentReadingLocation))} size={16} /> : null}
+                          renderOption={({ option }) => <LocationOptionContent location={assetLocationsById.get(option.value)} label={option.label} />}
+                          styles={activeFilterStyles(currentReadingLocation !== null)}
+                        />
+                        <LocationScopeToggle active={locationIncludeDescendants} onChange={setLocationIncludeDescendants} />
+                      </Group>
 
 
                       <BadgeSelect
@@ -3947,30 +3938,21 @@ function Dashboard() {
                       styles={activeFilterStyles(assetEnabledFilter !== "all")}
                     />
 
-                    <Select
-                      label="Location"
-                      clearable
-                      searchable
-                      placeholder="All locations"
-                      value={
-                        assetLocationFilter
-                      }
-                      onChange={
-                        setAssetLocationFilter
-                      }
-                      data={
-                        assetLocations.map(
-                          location => ({
-                            value:
-                              location.id,
-
-                            label:
-                              location.name
-                          })
-                        )
-                      }
-                      styles={activeFilterStyles(assetLocationFilter !== null)}
-                    />
+                    <Group align="flex-end" gap="xs" wrap="nowrap">
+                      <Select
+                        label="Location"
+                        clearable
+                        searchable
+                        placeholder="All locations"
+                        value={assetLocationFilter}
+                        onChange={setAssetLocationFilter}
+                        data={assetLocations.map(location => ({ value: location.id, label: location.name }))}
+                        leftSection={assetLocationFilter ? <LocationIcon name={getLocationIconName(assetLocationsById.get(assetLocationFilter))} size={16} /> : null}
+                        renderOption={({ option }) => <LocationOptionContent location={assetLocationsById.get(option.value)} label={option.label} />}
+                        styles={activeFilterStyles(assetLocationFilter !== null)}
+                      />
+                      <LocationScopeToggle active={locationIncludeDescendants} onChange={setLocationIncludeDescendants} />
+                    </Group>
 
 
                   </Group>
@@ -4590,16 +4572,10 @@ function Dashboard() {
                       clearable
                       placeholder="Unassigned"
                       value={assetForm.locationId}
-                      onChange={locationId =>
-                        setAssetForm({
-                          ...assetForm,
-                          locationId
-                        })
-                      }
-                      data={assetLocations.map(location => ({
-                        value: location.id,
-                        label: location.name
-                      }))}
+                      onChange={locationId => setAssetForm({ ...assetForm, locationId })}
+                      data={assetLocations.map(location => ({ value: location.id, label: location.name }))}
+                      leftSection={assetForm.locationId ? <LocationIcon name={getLocationIconName(assetLocationsById.get(assetForm.locationId))} size={16} /> : null}
+                      renderOption={({ option }) => <LocationOptionContent location={assetLocationsById.get(option.value)} label={option.label} />}
                     />
 
                     <NumberInput

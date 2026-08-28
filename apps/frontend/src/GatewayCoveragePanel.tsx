@@ -5,6 +5,8 @@ import { BadgeSelect } from "./BadgeSelect";
 
 import { NavigationIcon } from "./NavigationIcon";
 import { ResetFiltersAction } from "./ResetFiltersAction";
+import { LocationIcon, getLocationIconName } from "./LocationIcon";
+import { LocationOptionContent } from "./LocationFilterControls";
 
 import {
   ActionIcon,
@@ -1411,6 +1413,7 @@ export function GatewayCoveragePanel() {
         value: location.id,
         label: `${location.name} · ${location.type}`
       }));
+  const locationsById = new Map((locationsQuery.data ?? []).map(location => [location.id, location]));
 
   const openSensorAssignment =
     (
@@ -3158,6 +3161,8 @@ export function GatewayCoveragePanel() {
             searchable
             disabled={locationsQuery.isLoading}
             nothingFoundMessage="No location found"
+            leftSection={locationIdDraft ? <LocationIcon name={getLocationIconName(locationsById.get(locationIdDraft))} size={16} /> : null}
+            renderOption={({ option }) => <LocationOptionContent location={locationsById.get(option.value)} label={option.label} />}
           />
 
           {locationsQuery.isError && (
