@@ -257,12 +257,25 @@ export function SimpleDashboardPanel() {
 
   const activeDashboard =
     dashboards.find(item => item.id === selectedDashboardId) ?? dashboards[0] ?? null;
+  const activeDashboardCardSignature = activeDashboard
+    ? cards
+        .filter(card => card.dashboardId === activeDashboard.id)
+        .sort((left, right) => left.sortOrder - right.sortOrder)
+        .map(card => `${card.id}:${card.sectionId ?? ""}:${card.sortOrder}`)
+        .join("|")
+    : "";
 
   React.useEffect(() => {
     if (activeDashboard && activeDashboard.id !== selectedDashboardId) {
       setSelectedDashboardId(activeDashboard.id);
     }
   }, [activeDashboard?.id, selectedDashboardId, setSelectedDashboardId]);
+
+  React.useEffect(() => {
+    if (draggedCardId) return;
+    setDragOrder(null);
+    setDragSectionByCardId(null);
+  }, [activeDashboardCardSignature, draggedCardId]);
 
   React.useEffect(() => {
     setDraggedCardId(null);
@@ -615,6 +628,10 @@ export function SimpleDashboardPanel() {
               || colorsQuery.isFetching
             }
             onClick={() => {
+              setDraggedCardId(null);
+              setDragOrder(null);
+              setDragSectionByCardId(null);
+              setDashboardDragOrder(null);
               void Promise.all([
                 dashboardsQuery.refetch(),
                 assetsQuery.refetch(),

@@ -1155,7 +1155,7 @@ export async function importProjectTodosMarkdown(markdown: string): Promise<{
 export async function getSimpleDashboards():
 Promise<SimpleDashboardData> {
   return readJson<SimpleDashboardData>(
-    await fetch("/api/v1/simple-dashboards")
+    await fetch("/api/v1/simple-dashboards", { cache: "no-store" })
   );
 }
 
