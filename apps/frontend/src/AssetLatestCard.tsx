@@ -48,7 +48,6 @@ interface Props {
   enabled: boolean;
   onEdit?: (asset: Asset) => void;
   onAddMetricToDashboard?: (asset: Asset, metricId: string) => void;
-  metricColor?: (metricId: string) => string | undefined;
 }
 
 function formatAge(
@@ -205,8 +204,7 @@ export function AssetLatestCard({
   observations,
   enabled,
   onEdit,
-  onAddMetricToDashboard,
-  metricColor
+  onAddMetricToDashboard
 }: Props) {
 
   const queryClient =
@@ -658,7 +656,6 @@ export function AssetLatestCard({
                           <NavigationIcon
                             page="dashboards"
                             size={16}
-                            color={metricColor?.(observation.metricId)}
                           />
                         </ActionIcon>
                       )}

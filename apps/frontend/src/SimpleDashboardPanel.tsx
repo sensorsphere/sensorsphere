@@ -745,7 +745,14 @@ export function SimpleDashboardPanel() {
                               </Group>
                             </Group>
                             <Group gap={6} align="center" wrap="nowrap">
-                              <Text size="lg" fw={600} style={{ color }}>
+                              <Text
+                                size="lg"
+                                fw={600}
+                                style={{
+                                  color,
+                                  lineHeight: "var(--mantine-line-height-lg)"
+                                }}
+                              >
                                 {formatMetricValue(observation)}{metric.unit ? ` ${metric.unit}` : ""}
                               </Text>
                               <Badge variant="light" color={color} size="xs">{metric.displayName.toUpperCase()}</Badge>

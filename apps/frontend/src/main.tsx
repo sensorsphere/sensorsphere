@@ -4024,10 +4024,6 @@ function Dashboard() {
                                         )
                                     }
                                     onAddMetricToDashboard={openDashboardMetricTarget}
-                                    metricColor={metricId => {
-                                      const metric = asset.metrics.find(item => item.id === metricId);
-                                      return metric ? metricColorForKey(metric.key) : undefined;
-                                    }}
                                   />
                                 )
                               )
@@ -4126,7 +4122,7 @@ function Dashboard() {
                                                 aria-label="Add Temperature to a dashboard"
                                                 onClick={() => openDashboardMetricTarget(asset, temperatureMetric.id)}
                                               >
-                                                <NavigationIcon page="dashboards" size={15} color={metricColorForKey(temperatureMetric.key)} />
+                                                <NavigationIcon page="dashboards" size={15} />
                                               </ActionIcon>
                                             )}
                                           </Group>
@@ -4145,7 +4141,7 @@ function Dashboard() {
                                                 aria-label="Add Humidity to a dashboard"
                                                 onClick={() => openDashboardMetricTarget(asset, humidityMetric.id)}
                                               >
-                                                <NavigationIcon page="dashboards" size={15} color={metricColorForKey(humidityMetric.key)} />
+                                                <NavigationIcon page="dashboards" size={15} />
                                               </ActionIcon>
                                             )}
                                           </Group>
@@ -4164,7 +4160,7 @@ function Dashboard() {
                                                 aria-label="Add Battery to a dashboard"
                                                 onClick={() => openDashboardMetricTarget(asset, batteryMetric.id)}
                                               >
-                                                <NavigationIcon page="dashboards" size={15} color={metricColorForKey(batteryMetric.key)} />
+                                                <NavigationIcon page="dashboards" size={15} />
                                               </ActionIcon>
                                             )}
                                           </Group>
