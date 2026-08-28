@@ -8,6 +8,7 @@ import {
   Button,
   Card,
   Checkbox,
+  ColorInput,
   Group,
   Modal,
   SegmentedControl,
@@ -35,16 +36,20 @@ import {
 
 import {
   createGateway,
+  createGatewayType,
   deleteGateway,
+  deleteGatewayType,
   getGateways,
   getGatewayTypes,
   getLocations,
-  updateGateway
+  updateGateway,
+  updateGatewayType
 } from "./api";
 
 import type {
   CreateGatewayInput,
   Gateway,
+  GatewayType,
   UpdateGatewayInput
 } from "./types";
 
@@ -57,6 +62,31 @@ import {
 } from "./ResetFiltersAction";
 import { LocationFilterField, LocationSelect, locationIdsForScope, matchesLocationFilter } from "./LocationFilterControls";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
+import { GatewayTypeBadge } from "./GatewayTypeBadge";
+
+interface GatewayTypeFormState {
+  id: string | null;
+  key: string;
+  name: string;
+  description: string;
+  color: string;
+}
+
+const emptyGatewayTypeForm = (): GatewayTypeFormState => ({
+  id: null,
+  key: "",
+  name: "",
+  description: "",
+  color: "#7950f2"
+});
+
+const gatewayTypeToForm = (type: GatewayType): GatewayTypeFormState => ({
+  id: type.id,
+  key: type.key,
+  name: type.name,
+  description: type.description ?? "",
+  color: type.color || "#7950f2"
+});
 
 interface GatewayFormState {
   gatewayId: string;
@@ -224,6 +254,9 @@ export function GatewayCatalog() {
     React.useState<Gateway | null>(null);
   const [form, setForm] =
     React.useState<GatewayFormState>(emptyForm);
+  const [gatewayTypesOpen, setGatewayTypesOpen] = React.useState(false);
+  const [gatewayTypeForm, setGatewayTypeForm] = React.useState<GatewayTypeFormState>(emptyGatewayTypeForm);
+  const [gatewayTypeDeleteTarget, setGatewayTypeDeleteTarget] = React.useState<GatewayType | null>(null);
 
   const gatewaysQuery = useQuery({
     queryKey: ["gateways"],
@@ -234,6 +267,37 @@ export function GatewayCatalog() {
   const gatewayTypesQuery = useQuery({
     queryKey: ["gateway-types"],
     queryFn: getGatewayTypes
+  });
+
+  const saveGatewayTypeMutation = useMutation({
+    mutationFn: async () => {
+      const input = {
+        key: gatewayTypeForm.key.trim().toLowerCase(),
+        name: gatewayTypeForm.name.trim(),
+        description: emptyToNull(gatewayTypeForm.description),
+        color: gatewayTypeForm.color
+      };
+      return gatewayTypeForm.id
+        ? updateGatewayType(gatewayTypeForm.id, input)
+        : createGatewayType(input);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["gateway-types"] }),
+        queryClient.invalidateQueries({ queryKey: ["gateways"] }),
+        queryClient.invalidateQueries({ queryKey: ["sensors"] })
+      ]);
+      setGatewayTypeForm(emptyGatewayTypeForm());
+    }
+  });
+
+  const deleteGatewayTypeMutation = useMutation({
+    mutationFn: (id: string) => deleteGatewayType(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["gateway-types"] });
+      setGatewayTypeDeleteTarget(null);
+      setGatewayTypeForm(emptyGatewayTypeForm());
+    }
   });
 
   const locationsQuery = useQuery({
@@ -525,6 +589,7 @@ export function GatewayCatalog() {
             <Badge variant="light">
               {filteredGateways.length} / {gateways.length} gateways
             </Badge>
+            <Button size="xs" color="gray" variant="light" onClick={() => setGatewayTypesOpen(true)}>Manage types</Button>
             <Button size="xs" color="green" variant="light" onClick={openCreate}>Add gateway</Button>
             <SegmentedControl
               value={viewMode}
@@ -567,6 +632,10 @@ export function GatewayCatalog() {
             value={typeFilter}
             onChange={setTypeFilter}
             data={typeOptions}
+            renderOption={({ option }) => {
+              const type = gatewayTypes.find(current => current.id === option.value);
+              return type ? <GatewayTypeBadge type={type} size="sm" /> : option.label;
+            }}
             styles={activeFilterStyles(typeFilter !== null)}
           />
           <div style={{ gridColumn: "span 2" }}>
@@ -627,7 +696,7 @@ export function GatewayCatalog() {
                   <Group justify="space-between" align="flex-start">
                     <div>
                       <Text fw={700} size="lg">{gateway.name}</Text>
-                      <Text size="xs" c="dimmed">{gateway.type.name}</Text>
+                      <GatewayTypeBadge type={gateway.type} size="sm" />
                     </div>
                     <Group gap={4}>
                       <Badge
@@ -757,7 +826,7 @@ export function GatewayCatalog() {
                   <Table.Tr key={gateway.id}>
                     <Table.Td fw={600}>{gateway.name}</Table.Td>
                     <Table.Td>{gateway.gatewayId}</Table.Td>
-                    <Table.Td>{gateway.type.name}</Table.Td>
+                    <Table.Td><GatewayTypeBadge type={gateway.type} size="sm" /></Table.Td>
                     <Table.Td>{gateway.version ?? "—"}</Table.Td>
                     <Table.Td>{gateway.macAddress ?? "—"}</Table.Td>
                     <Table.Td>{gateway.wifiSsid ?? "—"}</Table.Td>
@@ -838,6 +907,97 @@ export function GatewayCatalog() {
       </Stack>
 
       <Modal
+        opened={gatewayTypesOpen}
+        onClose={() => { setGatewayTypesOpen(false); setGatewayTypeForm(emptyGatewayTypeForm()); }}
+        title="Gateway types"
+        size="lg"
+        centered
+      >
+        <Stack>
+          <TextInput
+            label="Key"
+            description="Stable identifier, for example ble_gateway"
+            value={gatewayTypeForm.key}
+            onChange={event => setGatewayTypeForm({ ...gatewayTypeForm, key: event.currentTarget.value })}
+          />
+          <TextInput
+            label="Name"
+            value={gatewayTypeForm.name}
+            onChange={event => setGatewayTypeForm({ ...gatewayTypeForm, name: event.currentTarget.value })}
+          />
+          <TextInput
+            label="Description"
+            value={gatewayTypeForm.description}
+            onChange={event => setGatewayTypeForm({ ...gatewayTypeForm, description: event.currentTarget.value })}
+          />
+          <ColorInput
+            label="Color"
+            format="hex"
+            swatches={[
+              "#868e96", "#fa5252", "#e64980", "#be4bdb", "#7950f2",
+              "#4c6ef5", "#228be6", "#15aabf", "#12b886", "#40c057",
+              "#82c91e", "#fab005", "#fd7e14"
+            ]}
+            value={gatewayTypeForm.color}
+            onChange={color => setGatewayTypeForm({ ...gatewayTypeForm, color })}
+          />
+          <Group justify="space-between">
+            {gatewayTypeForm.id ? (
+              <Button color="gray" variant="light" onClick={() => setGatewayTypeForm(emptyGatewayTypeForm())}>New type</Button>
+            ) : <span />}
+            <Button
+              color={gatewayTypeForm.id ? "blue" : "green"}
+              variant="light"
+              loading={saveGatewayTypeMutation.isPending}
+              disabled={!gatewayTypeForm.key.trim() || !gatewayTypeForm.name.trim() || !gatewayTypeForm.color.trim()}
+              onClick={() => saveGatewayTypeMutation.mutate()}
+            >
+              {gatewayTypeForm.id ? "Save" : "Add type"}
+            </Button>
+          </Group>
+          {saveGatewayTypeMutation.isError && (
+            <Text c="red" size="sm">{saveGatewayTypeMutation.error instanceof Error ? saveGatewayTypeMutation.error.message : "Unable to save gateway type"}</Text>
+          )}
+          <Table striped highlightOnHover verticalSpacing="xs">
+            <Table.Thead><Table.Tr><Table.Th>Type</Table.Th><Table.Th>Key</Table.Th><Table.Th>Description</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead>
+            <Table.Tbody>
+              {gatewayTypes.map(type => (
+                <Table.Tr key={type.id}>
+                  <Table.Td><GatewayTypeBadge type={type} /></Table.Td>
+                  <Table.Td>{type.key}</Table.Td>
+                  <Table.Td>{type.description ?? "—"}</Table.Td>
+                  <Table.Td>
+                    <Group gap={4} wrap="nowrap">
+                      <Button size="compact-xs" color="blue" variant="light" onClick={() => setGatewayTypeForm(gatewayTypeToForm(type))}>Edit</Button>
+                      <Button size="compact-xs" color="red" variant="light" onClick={() => setGatewayTypeDeleteTarget(type)}>Delete</Button>
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={gatewayTypeDeleteTarget !== null}
+        onClose={() => setGatewayTypeDeleteTarget(null)}
+        title="Delete gateway type"
+        centered
+      >
+        <Stack>
+          <Text>Delete gateway type <b>{gatewayTypeDeleteTarget?.name}</b>? A type assigned to gateways cannot be deleted.</Text>
+          {deleteGatewayTypeMutation.isError && (
+            <Text c="red">{deleteGatewayTypeMutation.error instanceof Error ? deleteGatewayTypeMutation.error.message : "Unable to delete gateway type"}</Text>
+          )}
+          <Group justify="flex-end">
+            <Button variant="light" color="gray" onClick={() => setGatewayTypeDeleteTarget(null)}>Cancel</Button>
+            <Button color="red" variant="light" loading={deleteGatewayTypeMutation.isPending} onClick={() => gatewayTypeDeleteTarget && deleteGatewayTypeMutation.mutate(gatewayTypeDeleteTarget.id)}>Delete</Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
         opened={creating || editingGateway !== null}
         onClose={closeEditor}
         title={editingGateway ? `Edit ${editingGateway.name}` : "Add gateway"}
@@ -865,6 +1025,10 @@ export function GatewayCatalog() {
             value={form.gatewayTypeId || null}
             onChange={value => setForm({ ...form, gatewayTypeId: value ?? "" })}
             data={gatewayTypeOptions}
+            renderOption={({ option }) => {
+              const type = gatewayTypes.find(current => current.id === option.value);
+              return type ? <GatewayTypeBadge type={type} size="sm" /> : option.label;
+            }}
           />
           <TextInput
             label="Version"
@@ -921,8 +1085,7 @@ export function GatewayCatalog() {
           )}
 
           <Group justify="flex-end">
-            <Button variant="light" onClick={closeEditor}>Cancel</Button>
-            color="gray"
+            <Button variant="light" color="gray" onClick={closeEditor}>Cancel</Button>
             <Button
               loading={saveMutation.isPending}
               disabled={!form.gatewayId.trim() || !form.name.trim() || !form.gatewayTypeId}
@@ -953,8 +1116,7 @@ export function GatewayCatalog() {
             </Text>
           )}
           <Group justify="flex-end">
-            <Button variant="light" onClick={() => setDeleteTarget(null)}>
-            color="gray"
+            <Button variant="light" color="gray" onClick={() => setDeleteTarget(null)}>
               Cancel
             </Button>
             <Button

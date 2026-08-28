@@ -36,6 +36,19 @@ const createGatewaySchema = z.object({
   enabled: z.boolean().optional()
 }).strict();
 
+const gatewayTypeKeySchema = z.string().trim().min(1).max(100).regex(/^[a-z0-9][a-z0-9_-]*$/);
+const gatewayTypeColorSchema = z.string().trim().min(1).max(32);
+const createGatewayTypeSchema = z.object({
+  key: gatewayTypeKeySchema,
+  name: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(500).nullable().optional(),
+  color: gatewayTypeColorSchema
+}).strict();
+const updateGatewayTypeSchema = createGatewayTypeSchema.partial().refine(
+  value => Object.keys(value).length > 0,
+  { message: "At least one editable field is required" }
+);
+
 const updateGatewaySchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   gatewayTypeId: databaseIdSchema.optional(),
@@ -81,6 +94,78 @@ export class GatewayController {
       reply,
       await this.service.listGatewayTypes()
     );
+  };
+
+
+  createGatewayType = async (
+    request: FastifyRequest<{ Body: unknown }>,
+    reply: FastifyReply
+  ): Promise<void> => {
+    const parsed = createGatewayTypeSchema.safeParse(request.body);
+    if (!parsed.success) {
+      await badRequest(reply, parsed.error.issues[0]?.message ?? "Invalid gateway type");
+      return;
+    }
+    try {
+      reply.code(201).send(await this.service.createGatewayType(parsed.data));
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "23505") {
+        reply.code(409).send({ error: "Gateway type already exists" });
+        return;
+      }
+      throw error;
+    }
+  };
+
+  updateGatewayType = async (
+    request: FastifyRequest<{ Params: GatewayParams; Body: unknown }>,
+    reply: FastifyReply
+  ): Promise<void> => {
+    const parsedId = databaseIdSchema.safeParse(request.params.id);
+    const parsedBody = updateGatewayTypeSchema.safeParse(request.body);
+    if (!parsedId.success) {
+      await badRequest(reply, "Invalid gateway type id");
+      return;
+    }
+    if (!parsedBody.success) {
+      await badRequest(reply, parsedBody.error.issues[0]?.message ?? "Invalid gateway type");
+      return;
+    }
+    try {
+      const updated = await this.service.updateGatewayType(parsedId.data, parsedBody.data);
+      if (!updated) {
+        await notFound(reply, "Gateway type not found");
+        return;
+      }
+      await ok(reply, updated);
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "23505") {
+        reply.code(409).send({ error: "Gateway type already exists" });
+        return;
+      }
+      throw error;
+    }
+  };
+
+  deleteGatewayType = async (
+    request: FastifyRequest<{ Params: GatewayParams }>,
+    reply: FastifyReply
+  ): Promise<void> => {
+    const parsedId = databaseIdSchema.safeParse(request.params.id);
+    if (!parsedId.success) {
+      await badRequest(reply, "Invalid gateway type id");
+      return;
+    }
+    const result = await this.service.deleteGatewayType(parsedId.data);
+    if (result === "in_use") {
+      reply.code(409).send({ error: "Gateway type is assigned to gateways" });
+      return;
+    }
+    if (result === "not_found") {
+      await notFound(reply, "Gateway type not found");
+      return;
+    }
+    reply.code(204).send();
   };
 
   getGateway = async (

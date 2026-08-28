@@ -14,7 +14,8 @@ export function mapGatewayTypeToDto(
     id: record.id,
     key: record.key,
     name: record.name,
-    description: record.description
+    description: record.description,
+    color: record.color
   };
 }
 
@@ -30,7 +31,8 @@ export function mapGatewayToDto(
       id: record.gateway_type_id,
       key: record.gateway_type_key,
       name: record.gateway_type_name,
-      description: record.gateway_type_description
+      description: record.gateway_type_description,
+      color: record.gateway_type_color
     },
     version: record.version,
     ipAddress: record.ip_address,

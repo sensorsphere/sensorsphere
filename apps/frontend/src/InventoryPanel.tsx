@@ -3,6 +3,7 @@ import React from "react";
 import { activeFilterStyles } from "./filterStyles";
 import { usePersistentState } from "./preferences/usePersistentState";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
+import { GatewayTypeBadge } from "./GatewayTypeBadge";
 import { BadgeSelect } from "./BadgeSelect";
 
 import { NavigationIcon } from "./NavigationIcon";
@@ -468,13 +469,7 @@ function LocationNode({
                 </div>
 
                 <Group gap={4}>
-                  <Badge
-                    size="xs"
-                    variant="light"
-                    color="violet"
-                  >
-                    Gateway
-                  </Badge>
+<GatewayTypeBadge type={gateway.type} size="xs" />
 
                   <Badge
                     size="xs"
@@ -1785,7 +1780,7 @@ export function InventoryPanel() {
                   return (
                     <Table.Tr key={`gateway-${gateway.id}`}>
                       <Table.Td>
-                        <Group gap="xs"><Text>{gateway.name}</Text><Badge size="xs" variant="light" color="violet">Gateway</Badge></Group>
+                        <Text>{gateway.name}</Text>
                       </Table.Td>
                       <Table.Td>{gateway.gatewayId}</Table.Td>
                       <Table.Td>
@@ -1807,7 +1802,7 @@ export function InventoryPanel() {
                           <Text size="sm">Unassigned</Text>
                         )}
                       </Table.Td>
-                      <Table.Td>{gateway.type.name}</Table.Td>
+                      <Table.Td><GatewayTypeBadge type={gateway.type} size="sm" /></Table.Td>
                       <Table.Td>MQTT</Table.Td>
                       <Table.Td><Badge color={gatewayIsOnline(gateway) ? "green" : "red"} variant="light">{gatewayIsOnline(gateway) ? "online" : "offline"}</Badge></Table.Td>
                       <Table.Td><Badge color={gateway.enabled ? "green" : "orange"} variant="light">{gateway.enabled ? "Enabled" : "Disabled"}</Badge></Table.Td>

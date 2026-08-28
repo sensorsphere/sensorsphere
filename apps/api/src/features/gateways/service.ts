@@ -1,8 +1,10 @@
 import type {
   CreateGatewayDto,
+  CreateGatewayTypeDto,
   GatewayDto,
   GatewayTypeDto,
-  UpdateGatewayDto
+  UpdateGatewayDto,
+  UpdateGatewayTypeDto
 } from "./dto.js";
 
 import type {
@@ -27,6 +29,28 @@ export class GatewayService {
   async listGatewayTypes(): Promise<GatewayTypeDto[]> {
     return (await this.repository.findTypes())
       .map(mapGatewayTypeToDto);
+  }
+
+
+  async createGatewayType(
+    input: CreateGatewayTypeDto
+  ): Promise<GatewayTypeDto> {
+    return mapGatewayTypeToDto(
+      await this.repository.createType(input)
+    );
+  }
+
+  async updateGatewayType(
+    id: string,
+    input: UpdateGatewayTypeDto
+  ): Promise<GatewayTypeDto | null> {
+    const updated = await this.repository.updateType(id, input);
+    return updated ? mapGatewayTypeToDto(updated) : null;
+  }
+
+  async deleteGatewayType(id: string): Promise<"deleted" | "in_use" | "not_found"> {
+    if ((await this.repository.countTypeUsage(id)) > 0) return "in_use";
+    return (await this.repository.deleteType(id)) ? "deleted" : "not_found";
   }
 
   async getGateway(

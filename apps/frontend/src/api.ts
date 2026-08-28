@@ -21,6 +21,8 @@ import type {
   UpdateSensor,
   Gateway,
   GatewayType,
+  CreateGatewayTypeInput,
+  UpdateGatewayTypeInput,
   CreateGatewayInput,
   UpdateGatewayInput,
   MetricRoutingDecision,
@@ -111,6 +113,34 @@ Promise<GatewayType[]> {
   return readJson<GatewayType[]>(
     response
   );
+}
+
+export async function createGatewayType(
+  input: CreateGatewayTypeInput
+): Promise<GatewayType> {
+  const response = await fetch("/api/v1/gateway-types", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  return readJson<GatewayType>(response);
+}
+
+export async function updateGatewayType(
+  id: string,
+  input: UpdateGatewayTypeInput
+): Promise<GatewayType> {
+  const response = await fetch(`/api/v1/gateway-types/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  return readJson<GatewayType>(response);
+}
+
+export async function deleteGatewayType(id: string): Promise<void> {
+  const response = await fetch(`/api/v1/gateway-types/${id}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
 }
 
 export async function getGateways():

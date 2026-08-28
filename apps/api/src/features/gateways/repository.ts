@@ -10,6 +10,7 @@ export interface GatewayTypeRecord {
   key: string;
   name: string;
   description: string | null;
+  color: string;
 }
 
 export interface GatewayRecord {
@@ -21,6 +22,7 @@ export interface GatewayRecord {
   gateway_type_key: string;
   gateway_type_name: string;
   gateway_type_description: string | null;
+  gateway_type_color: string;
   version: string | null;
   ip_address: string | null;
   mac_address: string | null;
@@ -45,6 +47,10 @@ export interface GatewayRepository {
   findById(id: string): Promise<GatewayRecord | null>;
   findTypes(): Promise<GatewayTypeRecord[]>;
   typeExists(id: string): Promise<boolean>;
+  createType(input: { key: string; name: string; description?: string | null; color: string }): Promise<GatewayTypeRecord>;
+  updateType(id: string, input: { key?: string; name?: string; description?: string | null; color?: string }): Promise<GatewayTypeRecord | null>;
+  deleteType(id: string): Promise<boolean>;
+  countTypeUsage(id: string): Promise<number>;
   create(input: CreateGatewayDto): Promise<GatewayRecord>;
   update(id: string, input: UpdateGatewayDto): Promise<boolean>;
   delete(id: string): Promise<boolean>;
@@ -60,6 +66,7 @@ const GATEWAY_SELECT = `
     gt.key AS gateway_type_key,
     gt.name AS gateway_type_name,
     gt.description AS gateway_type_description,
+    gt.color AS gateway_type_color,
     g.version,
     g.ip_address::text AS ip_address,
     g.mac_address,
@@ -131,7 +138,7 @@ implements GatewayRepository {
     const result =
       await this.pool.query<GatewayTypeRecord>(
         `
-        SELECT id, key, name, description
+        SELECT id, key, name, description, color
         FROM gateway_types
         ORDER BY name, key
         `
@@ -147,6 +154,49 @@ implements GatewayRepository {
     );
 
     return result.rows[0]?.exists ?? false;
+  }
+
+  async createType(input: { key: string; name: string; description?: string | null; color: string }): Promise<GatewayTypeRecord> {
+    const result = await this.pool.query<GatewayTypeRecord>(
+      `INSERT INTO gateway_types (key, name, description, color)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, key, name, description, color`,
+      [input.key, input.name, input.description ?? null, input.color]
+    );
+    return result.rows[0];
+  }
+
+  async updateType(
+    id: string,
+    input: { key?: string; name?: string; description?: string | null; color?: string }
+  ): Promise<GatewayTypeRecord | null> {
+    const current = await this.pool.query<GatewayTypeRecord>(
+      `SELECT id, key, name, description, color FROM gateway_types WHERE id = $1`,
+      [id]
+    );
+    if (!current.rows[0]) return null;
+    const next = { ...current.rows[0], ...input };
+    const result = await this.pool.query<GatewayTypeRecord>(
+      `UPDATE gateway_types
+       SET key = $2, name = $3, description = $4, color = $5, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, key, name, description, color`,
+      [id, next.key, next.name, next.description ?? null, next.color]
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async deleteType(id: string): Promise<boolean> {
+    const result = await this.pool.query(`DELETE FROM gateway_types WHERE id = $1`, [id]);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async countTypeUsage(id: string): Promise<number> {
+    const result = await this.pool.query<{ count: number }>(
+      `SELECT COUNT(*)::integer AS count FROM gateways WHERE gateway_type_id = $1`,
+      [id]
+    );
+    return result.rows[0]?.count ?? 0;
   }
 
   async create(

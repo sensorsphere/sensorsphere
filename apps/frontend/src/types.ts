@@ -104,6 +104,21 @@ export interface GatewayType {
   key: string;
   name: string;
   description: string | null;
+  color: string;
+}
+
+export interface CreateGatewayTypeInput {
+  key: string;
+  name: string;
+  description?: string | null;
+  color: string;
+}
+
+export interface UpdateGatewayTypeInput {
+  key?: string;
+  name?: string;
+  description?: string | null;
+  color?: string;
 }
 
 export interface Gateway {

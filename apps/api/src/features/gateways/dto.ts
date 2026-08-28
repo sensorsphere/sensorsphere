@@ -3,6 +3,21 @@ export interface GatewayTypeDto {
   key: string;
   name: string;
   description: string | null;
+  color: string;
+}
+
+export interface CreateGatewayTypeDto {
+  key: string;
+  name: string;
+  description?: string | null;
+  color: string;
+}
+
+export interface UpdateGatewayTypeDto {
+  key?: string;
+  name?: string;
+  description?: string | null;
+  color?: string;
 }
 
 export interface GatewayDto {
