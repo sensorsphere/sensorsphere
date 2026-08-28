@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   Group,
   Loader,
   Modal,
@@ -37,7 +38,8 @@ import {
   reorderSimpleDashboardCards,
   reorderSimpleDashboards,
   updateSimpleDashboardCard,
-  detachSimpleDashboard
+  detachSimpleDashboard,
+  convertSimpleDashboardToTemplate
 } from "./api";
 import type {
   Asset,
@@ -154,6 +156,11 @@ export function SimpleDashboardPanel() {
   const [templateManagerOpened, setTemplateManagerOpened] = React.useState(false);
   const [templateManagerInitialId, setTemplateManagerInitialId] = React.useState<string | null>(null);
   const [detachConfirmOpen, setDetachConfirmOpen] = React.useState(false);
+  const [convertTemplateOpen, setConvertTemplateOpen] = React.useState(false);
+  const [convertTemplateName, setConvertTemplateName] = React.useState("");
+  const [convertCreateInstance, setConvertCreateInstance] = React.useState(false);
+  const [convertMetricKey, setConvertMetricKey] = React.useState<string | null>(null);
+  const convertTemplateNameRef = React.useRef<HTMLInputElement>(null);
 
   const [deleteTarget, setDeleteTarget] = React.useState<
     | { type: "dashboard"; id: string; name: string }
@@ -236,6 +243,21 @@ export function SimpleDashboardPanel() {
       await invalidate();
     }
   });
+  const convertDashboardToTemplateMutation = useMutation({
+    mutationFn: ({ dashboardId, name, createInstance, metricKey }: { dashboardId: string; name: string; createInstance: boolean; metricKey: string | null }) =>
+      convertSimpleDashboardToTemplate(dashboardId, { name, createInstance, metricKey }),
+    onSuccess: async result => {
+      setConvertTemplateOpen(false);
+      setConvertTemplateName("");
+      setConvertCreateInstance(false);
+      setConvertMetricKey(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["simple-dashboard-templates"] }),
+        invalidate()
+      ]);
+      if (result.instance) setSelectedDashboardId(result.instance.id);
+    }
+  });
   const addCardMutation = useMutation({
     mutationFn: ({ dashboardId, assetMetricId, sectionId }: { dashboardId: string; assetMetricId: string; sectionId: string | null }) =>
       addSimpleDashboardCard(dashboardId, assetMetricId, sectionId),
@@ -316,18 +338,37 @@ export function SimpleDashboardPanel() {
   }, [dashboardModalMode]);
 
   React.useEffect(() => {
+    if (convertTemplateOpen) {
+      const timer = window.setTimeout(() => convertTemplateNameRef.current?.focus(), 80);
+      return () => window.clearTimeout(timer);
+    }
+  }, [convertTemplateOpen]);
+
+  React.useEffect(() => {
     if (!sectionModalMode) return;
     const timer = window.setTimeout(() => sectionNameInputRef.current?.focus(), 80);
     return () => window.clearTimeout(timer);
   }, [sectionModalMode]);
 
   React.useEffect(() => {
-    if (!dashboardModalMode && !sectionModalMode && !cardEditorMode) return;
+    if (!dashboardModalMode && !sectionModalMode && !cardEditorMode && !convertTemplateOpen) return;
 
     const handleSaveShortcut = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s") return;
       event.preventDefault();
       event.stopPropagation();
+
+      if (convertTemplateOpen) {
+        if (!activeDashboard || !convertTemplateName.trim() || convertDashboardToTemplateMutation.isPending) return;
+        if (convertCreateInstance && !convertMetricKey) return;
+        convertDashboardToTemplateMutation.mutate({
+          dashboardId: activeDashboard.id,
+          name: convertTemplateName.trim(),
+          createInstance: convertCreateInstance,
+          metricKey: convertCreateInstance ? convertMetricKey : null
+        });
+        return;
+      }
 
       if (dashboardModalMode) {
         const name = dashboardName.trim();
@@ -384,6 +425,11 @@ export function SimpleDashboardPanel() {
     cardCreatingSection,
     cardEditorMode,
     cardNewSectionName,
+    convertCreateInstance,
+    convertDashboardToTemplateMutation,
+    convertMetricKey,
+    convertTemplateName,
+    convertTemplateOpen,
     createCardSectionMutation,
     createDashboardMutation,
     createSectionMutation,
@@ -443,6 +489,9 @@ export function SimpleDashboardPanel() {
         .filter(section => section.dashboardId === activeDashboard.id)
         .sort((left, right) => left.sortOrder - right.sortOrder)
     : [];
+  const convertMetricOptions = Array.from(
+    new Map(activeCards.map(item => [item.metric.key, item.metric.displayName || item.metric.key])).entries()
+  ).map(([value, label]) => ({ value, label }));
   const orderedDashboards = (() => {
     if (!dashboardDragOrder) return dashboards;
     const byId = new Map(dashboards.map(item => [item.id, item]));
@@ -693,6 +742,21 @@ export function SimpleDashboardPanel() {
           </Button>
           {activeDashboard && (
             <>
+              {!activeDashboardIsTemplateInstance && (
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="orange"
+                  onClick={() => {
+                    setConvertTemplateName(activeDashboard.name);
+                    setConvertCreateInstance(false);
+                    setConvertMetricKey(convertMetricOptions[0]?.value ?? null);
+                    setConvertTemplateOpen(true);
+                  }}
+                >
+                  ▦ Convert to template
+                </Button>
+              )}
               <Button
                 size="xs"
                 variant="light"
@@ -894,6 +958,57 @@ export function SimpleDashboardPanel() {
         onClose={() => setTemplateManagerOpened(false)}
         initialTemplateId={templateManagerInitialId}
       />
+
+
+      <Modal opened={convertTemplateOpen} onClose={() => setConvertTemplateOpen(false)} title="Convert dashboard to template" centered>
+        <Stack>
+          <Text size="sm" c="dimmed">
+            Sections, Assets and their order will be copied into a new template. The current dashboard stays unchanged.
+          </Text>
+          <TextInput
+            ref={convertTemplateNameRef}
+            label="Template name"
+            value={convertTemplateName}
+            onChange={event => setConvertTemplateName(event.currentTarget.value)}
+          />
+          <Checkbox
+            label="Create a template instance after conversion"
+            checked={convertCreateInstance}
+            onChange={event => setConvertCreateInstance(event.currentTarget.checked)}
+          />
+          {convertCreateInstance && (
+            <Select
+              label="Instance metric"
+              data={convertMetricOptions}
+              value={convertMetricKey}
+              onChange={setConvertMetricKey}
+              searchable
+              allowDeselect={false}
+              nothingFoundMessage="No metric found on this dashboard"
+            />
+          )}
+          <Group justify="flex-end">
+            <Button variant="light" color="gray" onClick={() => setConvertTemplateOpen(false)}>Cancel</Button>
+            <Button
+              variant="light"
+              color="orange"
+              loading={convertDashboardToTemplateMutation.isPending}
+              disabled={!activeDashboard || !convertTemplateName.trim() || (convertCreateInstance && !convertMetricKey)}
+              onClick={() => {
+                if (!activeDashboard || !convertTemplateName.trim()) return;
+                convertDashboardToTemplateMutation.mutate({
+                  dashboardId: activeDashboard.id,
+                  name: convertTemplateName.trim(),
+                  createInstance: convertCreateInstance,
+                  metricKey: convertCreateInstance ? convertMetricKey : null
+                });
+              }}
+            >
+              Convert
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal opened={detachConfirmOpen} onClose={() => setDetachConfirmOpen(false)} title="Detach from template" centered>
         <Stack>

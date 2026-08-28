@@ -27,6 +27,11 @@ const sectionSchema = z.object({ name: z.string().trim().min(1).max(120) }).stri
 const reorderSectionsSchema = z.object({ sectionIds: z.array(uuid).max(100) }).strict();
 const templateCardSchema = z.object({ assetId: uuid, sectionId: uuid }).strict();
 const instantiateTemplateSchema = z.object({ metricKeys: z.array(z.string().trim().min(1).max(120)).min(1).max(50) }).strict();
+const convertDashboardToTemplateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  createInstance: z.boolean().default(false),
+  metricKey: z.string().trim().min(1).max(120).nullable().optional()
+}).strict();
 
 function mapDashboard(row: SimpleDashboardRecord) {
   return {
@@ -413,6 +418,28 @@ export class SimpleDashboardController {
     const dashboards = await this.repository.createTemplateInstances(parsedId.data, metricKeys);
     if (dashboards.length === 0) return reply.code(404).send({ error: "Template not found" });
     return reply.code(201).send(dashboards.map(mapDashboard));
+  };
+
+  convertDashboardToTemplate = async (request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply: FastifyReply) => {
+    const parsedId = uuid.safeParse(request.params.id);
+    const parsed = convertDashboardToTemplateSchema.safeParse(request.body);
+    if (!parsedId.success || !parsed.success) return reply.code(400).send({ error: "Invalid dashboard template conversion" });
+    if (parsed.data.createInstance && !parsed.data.metricKey) return reply.code(400).send({ error: "Metric is required when creating an instance" });
+    try {
+      const result = await this.repository.convertDashboardToTemplate(
+        parsedId.data,
+        parsed.data.name,
+        parsed.data.createInstance ? parsed.data.metricKey ?? null : null
+      );
+      if (!result) return reply.code(409).send({ error: "Only standard dashboards can be converted to templates" });
+      return reply.code(201).send({
+        template: mapTemplate(result.template),
+        instance: result.instance ? mapDashboard(result.instance) : null
+      });
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "23505") return reply.code(409).send({ error: "Template name already exists" });
+      throw error;
+    }
   };
 
   detachDashboard = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {

@@ -628,6 +628,112 @@ export class PostgresSimpleDashboardRepository {
     }
   }
 
+
+  async convertDashboardToTemplate(
+    dashboardId: string,
+    templateName: string,
+    instanceMetricKey: string | null
+  ): Promise<{ template: SimpleDashboardTemplateRecord; instance: SimpleDashboardRecord | null } | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const dashboardResult = await client.query<SimpleDashboardRecord>(`
+        SELECT d.id, d.name, d.sort_order, d.template_id, d.template_metric_key,
+               NULL::text AS template_name, d.created_at, d.updated_at
+        FROM simple_dashboards d
+        WHERE d.id = $1
+        FOR UPDATE
+      `, [dashboardId]);
+      const dashboard = dashboardResult.rows[0];
+      if (!dashboard || dashboard.template_id) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+
+      const templateResult = await client.query<SimpleDashboardTemplateRecord>(`
+        INSERT INTO simple_dashboard_templates (name)
+        VALUES ($1)
+        RETURNING id, name, created_at, updated_at
+      `, [templateName]);
+      const template = templateResult.rows[0]!;
+
+      const sourceSections = await client.query<{ id: string; name: string; sort_order: number }>(`
+        SELECT id, name, sort_order
+        FROM simple_dashboard_sections
+        WHERE dashboard_id = $1
+        ORDER BY sort_order, created_at, id
+      `, [dashboardId]);
+      const sectionMap = new Map<string, string>();
+      for (const section of sourceSections.rows) {
+        const inserted = await client.query<{ id: string }>(`
+          INSERT INTO simple_dashboard_template_sections (template_id, name, sort_order)
+          VALUES ($1, $2, $3)
+          RETURNING id
+        `, [template.id, section.name, section.sort_order]);
+        sectionMap.set(section.id, inserted.rows[0]!.id);
+      }
+
+      if (sourceSections.rows.length === 0) {
+        const inserted = await client.query<{ id: string }>(`
+          INSERT INTO simple_dashboard_template_sections (template_id, name, sort_order)
+          VALUES ($1, 'General', 0)
+          RETURNING id
+        `, [template.id]);
+        sectionMap.set("__general__", inserted.rows[0]!.id);
+      }
+
+      const sourceCards = await client.query<{ section_id: string | null; asset_id: string; sort_order: number }>(`
+        SELECT c.section_id, m.asset_id, c.sort_order
+        FROM simple_dashboard_cards c
+        JOIN asset_metrics m ON m.id = c.asset_metric_id
+        LEFT JOIN simple_dashboard_sections s ON s.id = c.section_id AND s.dashboard_id = c.dashboard_id
+        WHERE c.dashboard_id = $1
+        ORDER BY COALESCE(s.sort_order, 0), c.sort_order, c.created_at, c.id
+      `, [dashboardId]);
+      const seenAssets = new Set<string>();
+      const nextSortBySection = new Map<string, number>();
+      for (const card of sourceCards.rows) {
+        if (seenAssets.has(card.asset_id)) continue;
+        seenAssets.add(card.asset_id);
+        const targetSectionId = card.section_id
+          ? sectionMap.get(card.section_id)
+          : sectionMap.get("__general__") ?? sectionMap.values().next().value;
+        if (!targetSectionId) continue;
+        const sortOrder = nextSortBySection.get(targetSectionId) ?? 0;
+        await client.query(`
+          INSERT INTO simple_dashboard_template_cards (template_id, section_id, asset_id, sort_order)
+          VALUES ($1, $2, $3, $4)
+        `, [template.id, targetSectionId, card.asset_id, sortOrder]);
+        nextSortBySection.set(targetSectionId, sortOrder + 1);
+      }
+
+      let instance: SimpleDashboardRecord | null = null;
+      if (instanceMetricKey) {
+        const baseName = `${template.name} - ${instanceMetricKey}`;
+        let name = baseName;
+        let suffix = 2;
+        while ((await client.query(`SELECT 1 FROM simple_dashboards WHERE LOWER(name) = LOWER($1)`, [name])).rowCount) {
+          name = `${baseName} (${suffix})`;
+          suffix += 1;
+        }
+        const instanceResult = await client.query<SimpleDashboardRecord>(`
+          INSERT INTO simple_dashboards (name, sort_order, template_id, template_metric_key)
+          VALUES ($1, COALESCE((SELECT MAX(sort_order) + 1 FROM simple_dashboards), 0), $2, $3)
+          RETURNING id, name, sort_order, template_id, template_metric_key, $4::text AS template_name, created_at, updated_at
+        `, [name, template.id, instanceMetricKey, template.name]);
+        instance = instanceResult.rows[0] ?? null;
+      }
+
+      await client.query("COMMIT");
+      return { template, instance };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async detachDashboard(id: string): Promise<SimpleDashboardRecord | null> {
     const client = await this.pool.connect();
     try {

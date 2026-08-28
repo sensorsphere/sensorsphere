@@ -11,6 +11,7 @@ export async function registerSimpleDashboardRoutes(
   app.put("/simple-dashboards/order", options.controller.reorderDashboards);
   app.delete("/simple-dashboards/:id", options.controller.deleteDashboard);
   app.post("/simple-dashboards/:id/detach", options.controller.detachDashboard);
+  app.post("/simple-dashboards/:id/convert-to-template", options.controller.convertDashboardToTemplate);
   app.post("/simple-dashboards/:id/sections", options.controller.createSection);
   app.patch("/simple-dashboards/:id/sections/:sectionId", options.controller.renameSection);
   app.delete("/simple-dashboards/:id/sections/:sectionId", options.controller.deleteSection);

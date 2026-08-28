@@ -1376,6 +1376,20 @@ export async function instantiateSimpleDashboardTemplate(templateId: string, met
   );
 }
 
+
+export async function convertSimpleDashboardToTemplate(
+  id: string,
+  input: { name: string; createInstance: boolean; metricKey: string | null }
+): Promise<{ template: SimpleDashboardTemplate; instance: SimpleDashboard | null }> {
+  return readJson<{ template: SimpleDashboardTemplate; instance: SimpleDashboard | null }>(
+    await fetch(`/api/v1/simple-dashboards/${encodeURIComponent(id)}/convert-to-template`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input)
+    })
+  );
+}
+
 export async function detachSimpleDashboard(id: string): Promise<SimpleDashboard> {
   return readJson<SimpleDashboard>(
     await fetch(`/api/v1/simple-dashboards/${encodeURIComponent(id)}/detach`, { method: "POST" })
