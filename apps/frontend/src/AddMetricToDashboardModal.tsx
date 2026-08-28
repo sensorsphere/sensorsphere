@@ -45,6 +45,16 @@ export function AddMetricToDashboardModal({ opened, asset, metric, onClose }: Pr
   const selectedSections = sections
     .filter(section => section.dashboardId === dashboardId)
     .sort((left, right) => left.sortOrder - right.sortOrder);
+  const duplicateCardExists = Boolean(
+    dashboardId
+    && sectionId
+    && metric
+    && (dashboardsQuery.data?.cards ?? []).some(card => (
+      card.dashboardId === dashboardId
+      && card.sectionId === sectionId
+      && card.assetMetricId === metric.id
+    ))
+  );
 
   React.useEffect(() => {
     if (!opened) {
@@ -141,7 +151,7 @@ export function AddMetricToDashboardModal({ opened, asset, metric, onClose }: Pr
         createDashboard();
       } else if (creatingSection) {
         createSection();
-      } else if (dashboardId && sectionId && metric && !addMutation.isPending) {
+      } else if (dashboardId && sectionId && metric && !duplicateCardExists && !addMutation.isPending) {
         addMutation.mutate();
       }
     };
@@ -154,6 +164,7 @@ export function AddMetricToDashboardModal({ opened, asset, metric, onClose }: Pr
     creatingDashboard,
     creatingSection,
     dashboardId,
+    duplicateCardExists,
     metric,
     opened,
     sectionId
@@ -310,6 +321,11 @@ export function AddMetricToDashboardModal({ opened, asset, metric, onClose }: Pr
         {dashboards.length === 0 && !dashboardsQuery.isLoading && !creatingDashboard && (
           <Alert color="blue" variant="light">Create a dashboard with the + button above.</Alert>
         )}
+        {duplicateCardExists && (
+          <Text c="red" size="sm" fw={500}>
+            This metric is already added to the selected dashboard section.
+          </Text>
+        )}
         {errors.length > 0 && (
           <Alert color="red" variant="light">{errors[0].message}</Alert>
         )}
@@ -318,7 +334,7 @@ export function AddMetricToDashboardModal({ opened, asset, metric, onClose }: Pr
           <Button
             variant="light"
             color="green"
-            disabled={!dashboardId || !sectionId || !metric || creatingDashboard || creatingSection}
+            disabled={!dashboardId || !sectionId || !metric || duplicateCardExists || creatingDashboard || creatingSection}
             loading={addMutation.isPending}
             onClick={() => addMutation.mutate()}
           >
