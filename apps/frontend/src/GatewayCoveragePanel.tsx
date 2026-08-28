@@ -2097,10 +2097,12 @@ export function GatewayCoveragePanel() {
                         placeholder="All gateways"
                         clearable
                         data={[
-                          ...gateways.map(gateway => ({
-                            value: gateway,
-                            label: gateway
-                          })),
+                          ...[...gateways]
+                            .sort((left, right) => left.localeCompare(right))
+                            .map(gateway => ({
+                              value: gateway,
+                              label: gateway
+                            })),
                           {
                             value: "__no_reliable__",
                             label: "No reliable suggestion"

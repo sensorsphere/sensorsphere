@@ -64,7 +64,7 @@ import {
 import {
   ResetFiltersAction
 } from "./ResetFiltersAction";
-import { LocationFilterField, locationIdsForScope, matchesLocationFilter } from "./LocationFilterControls";
+import { LocationFilterField, LocationSelect, locationIdsForScope, matchesLocationFilter } from "./LocationFilterControls";
 
 interface LocationNodeProps {
   location: Location;
@@ -582,6 +582,16 @@ export function InventoryPanel() {
     React.useState<LocationFormState | null>(
       null
     );
+
+  const [
+    inventoryItemEdit,
+    setInventoryItemEdit
+  ] = React.useState<{
+    kind: "asset" | "gateway";
+    id: string;
+    name: string;
+    locationId: string | null;
+  } | null>(null);
 
   const [
     search,
@@ -1718,6 +1728,7 @@ export function InventoryPanel() {
                       {label}
                     </SortableTableHeader>
                   ))}
+                  <Table.Th>Actions</Table.Th>
                 </Table.Tr>
               </Table.Thead>
 
@@ -1748,6 +1759,23 @@ export function InventoryPanel() {
                           <Badge color={assetIsEnabled(asset, sensorsByUid) ? "green" : "orange"} variant="light">
                             {assetIsEnabled(asset, sensorsByUid) ? "Enabled" : "Disabled"}
                           </Badge>
+                        </Table.Td>
+                        <Table.Td>
+                          <Button
+                            size="compact-xs"
+                            color="blue"
+                            variant="light"
+                            onClick={() =>
+                              setInventoryItemEdit({
+                                kind: "asset",
+                                id: asset.id,
+                                name: asset.sensor?.name ?? asset.externalId,
+                                locationId: asset.location?.id ?? null
+                              })
+                            }
+                          >
+                            Edit
+                          </Button>
                         </Table.Td>
                       </Table.Tr>
                     );
@@ -1783,6 +1811,23 @@ export function InventoryPanel() {
                       <Table.Td>MQTT</Table.Td>
                       <Table.Td><Badge color={gatewayIsOnline(gateway) ? "green" : "red"} variant="light">{gatewayIsOnline(gateway) ? "online" : "offline"}</Badge></Table.Td>
                       <Table.Td><Badge color={gateway.enabled ? "green" : "orange"} variant="light">{gateway.enabled ? "Enabled" : "Disabled"}</Badge></Table.Td>
+                      <Table.Td>
+                        <Button
+                          size="compact-xs"
+                          color="blue"
+                          variant="light"
+                          onClick={() =>
+                            setInventoryItemEdit({
+                              kind: "gateway",
+                              id: gateway.id,
+                              name: gateway.name,
+                              locationId: gateway.location?.id ?? null
+                            })
+                          }
+                        >
+                          Edit
+                        </Button>
+                      </Table.Td>
                     </Table.Tr>
                   );
                 })}
@@ -1792,6 +1837,62 @@ export function InventoryPanel() {
         )}
 
     </Stack>
+
+    <Modal
+      opened={inventoryItemEdit !== null}
+      onClose={() => setInventoryItemEdit(null)}
+      title={inventoryItemEdit ? `Edit ${inventoryItemEdit.name}` : "Edit inventory item"}
+      centered
+    >
+      {inventoryItemEdit && (
+        <Stack>
+          <LocationSelect
+            locations={locationsQuery.data ?? []}
+            value={inventoryItemEdit.locationId}
+            onChange={locationId =>
+              setInventoryItemEdit({
+                ...inventoryItemEdit,
+                locationId
+              })
+            }
+            label="Location"
+            placeholder="Unassigned"
+            clearable
+          />
+
+          <Group justify="flex-end">
+            <Button
+              variant="light"
+              color="gray"
+              onClick={() => setInventoryItemEdit(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="light"
+              color="blue"
+              loading={moveAssetMutation.isPending || moveGatewayMutation.isPending}
+              onClick={() => {
+                if (inventoryItemEdit.kind === "asset") {
+                  moveAssetMutation.mutate({
+                    assetId: inventoryItemEdit.id,
+                    locationId: inventoryItemEdit.locationId
+                  });
+                } else {
+                  moveGatewayMutation.mutate({
+                    gatewayId: inventoryItemEdit.id,
+                    locationId: inventoryItemEdit.locationId
+                  });
+                }
+                setInventoryItemEdit(null);
+              }}
+            >
+              Save
+            </Button>
+          </Group>
+        </Stack>
+      )}
+    </Modal>
 
     <Modal
       opened={

@@ -1022,6 +1022,13 @@ export function SensorCatalog() {
                   sensor.uid
                 );
 
+              const assignedGateway =
+                sensor.gateway
+                  ? gateways.find(
+                      gateway => gateway.id === sensor.gateway?.id
+                    )
+                  : undefined;
+
               return (
               <Card
                 key={sensor.id}
@@ -1153,12 +1160,33 @@ export function SensorCatalog() {
                         Gateway
                       </Text>
 
-                      <Text size="sm">
-                        {
-                          sensor.gateway?.name
-                          ?? "—"
-                        }
-                      </Text>
+                      <Stack gap={2}>
+                        <Text size="sm">
+                          {
+                            sensor.gateway?.name
+                            ?? "—"
+                          }
+                        </Text>
+
+                        {assignedGateway?.location && (
+                          <Group gap={4} wrap="nowrap">
+                            <LocationIcon
+                              name={
+                                getLocationIconName(
+                                  locations.find(
+                                    location =>
+                                      location.id === assignedGateway.location?.id
+                                  )
+                                )
+                              }
+                              size={15}
+                            />
+                            <Text size="xs" c="dimmed">
+                              {assignedGateway.location.name}
+                            </Text>
+                          </Group>
+                        )}
+                      </Stack>
                     </div>
 
                     <div>
