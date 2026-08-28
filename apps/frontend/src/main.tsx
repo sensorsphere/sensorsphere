@@ -1319,7 +1319,7 @@ function Dashboard() {
   const manufacturers: ManufacturerMetadata[] = assetClassification?.manufacturers ?? [];
   const tags: TagMetadata[] = assetClassification?.tags ?? [];
 
-  const dashboardMetricUsageCounts = React.useMemo(() => {
+  const dashboardMetricUsageCounts = (() => {
     const usageByMetric = new Map<string, Set<string>>();
     for (const card of simpleDashboardsQuery.data?.cards ?? []) {
       const usageKey = `${card.dashboardId}:${card.sectionId ?? "unsectioned"}`;
@@ -1330,7 +1330,7 @@ function Dashboard() {
     return new Map(
       Array.from(usageByMetric.entries()).map(([metricId, usages]) => [metricId, usages.size])
     );
-  }, [simpleDashboardsQuery.data?.cards]);
+  })();
 
   const assetLocations: Location[] =
     [...(locationsQuery.data ?? [])]
