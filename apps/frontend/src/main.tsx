@@ -16,7 +16,6 @@ import {
   Group,
   Loader,
   MantineProvider,
-  Menu,
   Modal,
   MultiSelect,
   NavLink,
@@ -202,41 +201,24 @@ function ThemeSelector() {
     setColorScheme
   } = useMantineColorScheme();
 
-  const icon =
-    colorScheme === "dark"
-      ? "☾"
-      : colorScheme === "light"
-        ? "☀"
-        : "◐";
-
   return (
-    <Menu position="bottom-end" shadow="md" width={150}>
-      <Menu.Target>
-        <ActionIcon
-          variant="subtle"
-          size="lg"
-          aria-label="Select theme"
-          title={`Theme: ${colorScheme}`}
-        >
-          <span style={{ fontSize: 19, lineHeight: 1 }}>
-            {icon}
-          </span>
-        </ActionIcon>
-      </Menu.Target>
-
-      <Menu.Dropdown>
-        <Menu.Label>Appearance</Menu.Label>
-        <Menu.Item onClick={() => setColorScheme("light")}>
-          ☀ Light
-        </Menu.Item>
-        <Menu.Item onClick={() => setColorScheme("dark")}>
-          ☾ Dark
-        </Menu.Item>
-        <Menu.Item onClick={() => setColorScheme("auto")}>
-          ◐ System
-        </Menu.Item>
-      </Menu.Dropdown>
-    </Menu>
+    <Select
+      size="xs"
+      w={132}
+      aria-label="Select theme"
+      value={colorScheme}
+      onChange={value => {
+        if (value === "light" || value === "dark" || value === "auto") {
+          setColorScheme(value);
+        }
+      }}
+      data={[
+        { value: "light", label: "☀ Light" },
+        { value: "dark", label: "☾ Dark" },
+        { value: "auto", label: "◐ System" }
+      ]}
+      allowDeselect={false}
+    />
   );
 }
 
@@ -1805,7 +1787,8 @@ function Dashboard() {
       <AppShell.Header>
 
         <Container
-          size="xl"
+          fluid
+          px="md"
           h="100%"
         >
 
@@ -1862,13 +1845,6 @@ function Dashboard() {
             </Group>
 
             <Group gap="sm">
-              <Text
-                c="dimmed"
-                visibleFrom="sm"
-              >
-                Environmental monitoring
-              </Text>
-
               <ThemeSelector />
             </Group>
 

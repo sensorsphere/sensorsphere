@@ -15,6 +15,7 @@ import {
   addSimpleDashboardCard,
   createSimpleDashboard,
   createSimpleDashboardSection,
+  deleteSimpleDashboardCard,
   getSimpleDashboards
 } from "./api";
 import type { Asset, AssetMetric } from "./types";
@@ -45,16 +46,15 @@ export function AddMetricToDashboardModal({ opened, asset, metric, onClose }: Pr
   const selectedSections = sections
     .filter(section => section.dashboardId === dashboardId)
     .sort((left, right) => left.sortOrder - right.sortOrder);
-  const duplicateCardExists = Boolean(
-    dashboardId
-    && sectionId
-    && metric
-    && (dashboardsQuery.data?.cards ?? []).some(card => (
-      card.dashboardId === dashboardId
-      && card.sectionId === sectionId
-      && card.assetMetricId === metric.id
-    ))
-  );
+  const duplicateCard = dashboardId && sectionId && metric
+    ? (dashboardsQuery.data?.cards ?? []).find(card => (
+        card.dashboardId === dashboardId
+        && card.sectionId === sectionId
+        && card.assetMetricId === metric.id
+      )) ?? null
+    : null;
+  const duplicateCardExists = duplicateCard !== null;
+  const [removeConfirmationOpen, setRemoveConfirmationOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (!opened) {
@@ -132,6 +132,21 @@ export function AddMetricToDashboardModal({ opened, asset, metric, onClose }: Pr
     }
   });
 
+
+  const removeMutation = useMutation({
+    mutationFn: async () => {
+      if (!dashboardId || !duplicateCard) {
+        throw new Error("No dashboard card selected for removal.");
+      }
+      await deleteSimpleDashboardCard(dashboardId, duplicateCard.id);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["simple-dashboards"] });
+      await queryClient.refetchQueries({ queryKey: ["simple-dashboards"], type: "all" });
+      setRemoveConfirmationOpen(false);
+    }
+  });
+
   const createDashboard = React.useCallback(() => {
     if (!newDashboardName.trim() || createDashboardMutation.isPending) return;
     createDashboardMutation.mutate();
@@ -174,7 +189,8 @@ export function AddMetricToDashboardModal({ opened, asset, metric, onClose }: Pr
   const errors = [
     createDashboardMutation.error,
     createSectionMutation.error,
-    addMutation.error
+    addMutation.error,
+    removeMutation.error
   ].filter((error): error is Error => error instanceof Error);
 
   return (
@@ -323,9 +339,19 @@ export function AddMetricToDashboardModal({ opened, asset, metric, onClose }: Pr
           <Alert color="blue" variant="light">Create a dashboard with the + button above.</Alert>
         )}
         {duplicateCardExists && (
-          <Text c="red" size="sm" fw={500}>
-            This metric is already added to the selected dashboard section.
-          </Text>
+          <Group justify="space-between" align="center" gap="sm">
+            <Text c="red" size="sm" fw={500}>
+              This metric is already added to the selected dashboard section.
+            </Text>
+            <Button
+              size="xs"
+              variant="light"
+              color="red"
+              onClick={() => setRemoveConfirmationOpen(true)}
+            >
+              Remove from dashboard
+            </Button>
+          </Group>
         )}
         {errors.length > 0 && (
           <Alert color="red" variant="light">{errors[0].message}</Alert>
@@ -343,6 +369,33 @@ export function AddMetricToDashboardModal({ opened, asset, metric, onClose }: Pr
           </Button>
         </Group>
       </Stack>
+
+      <Modal
+        opened={removeConfirmationOpen}
+        onClose={() => setRemoveConfirmationOpen(false)}
+        title="Remove metric card"
+        centered
+      >
+        <Stack>
+          <Alert color="red" variant="light" title="Confirmation required">
+            Remove this metric from the selected dashboard section?
+          </Alert>
+          <Text size="sm" c="dimmed">
+            The Asset metric itself is not deleted. Only this dashboard card is removed.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="light" color="gray" onClick={() => setRemoveConfirmationOpen(false)}>Cancel</Button>
+            <Button
+              variant="light"
+              color="red"
+              loading={removeMutation.isPending}
+              onClick={() => removeMutation.mutate()}
+            >
+              Remove card
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Modal>
   );
 }

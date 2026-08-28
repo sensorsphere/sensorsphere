@@ -144,6 +144,8 @@ export function SimpleDashboardPanel() {
   const [editingSectionId, setEditingSectionId] = React.useState<string | null>(null);
   const [sectionName, setSectionName] = React.useState("");
   const [selectedSectionId, setSelectedSectionId] = React.useState<string | null>(null);
+  const [cardCreatingSection, setCardCreatingSection] = React.useState(false);
+  const [cardNewSectionName, setCardNewSectionName] = React.useState("");
   const dashboardNameInputRef = React.useRef<HTMLInputElement>(null);
   const sectionNameInputRef = React.useRef<HTMLInputElement>(null);
   const dropCommittedRef = React.useRef(false);
@@ -187,6 +189,16 @@ export function SimpleDashboardPanel() {
       setSectionModalMode(null);
       setEditingSectionId(null);
       setSectionName("");
+      await invalidate();
+    }
+  });
+  const createCardSectionMutation = useMutation({
+    mutationFn: ({ dashboardId, name }: { dashboardId: string; name: string }) =>
+      createSimpleDashboardSection(dashboardId, name),
+    onSuccess: async created => {
+      setSelectedSectionId(created.id);
+      setCardCreatingSection(false);
+      setCardNewSectionName("");
       await invalidate();
     }
   });
@@ -325,6 +337,15 @@ export function SimpleDashboardPanel() {
         return;
       }
 
+      if (cardCreatingSection) {
+        if (!activeDashboard || !cardNewSectionName.trim() || createCardSectionMutation.isPending) return;
+        createCardSectionMutation.mutate({
+          dashboardId: activeDashboard.id,
+          name: cardNewSectionName.trim()
+        });
+        return;
+      }
+
       if (!activeDashboard || !selectedMetricId || addCardMutation.isPending || updateCardMutation.isPending) return;
       if (cardEditorMode === "edit" && editingCardId) {
         updateCardMutation.mutate({
@@ -347,7 +368,10 @@ export function SimpleDashboardPanel() {
   }, [
     activeDashboard,
     addCardMutation,
+    cardCreatingSection,
     cardEditorMode,
+    cardNewSectionName,
+    createCardSectionMutation,
     createDashboardMutation,
     createSectionMutation,
     dashboardModalMode,
@@ -556,6 +580,8 @@ export function SimpleDashboardPanel() {
     setSelectedAssetId(null);
     setSelectedMetricId(null);
     setSelectedSectionId(sectionId ?? activeSections[0]?.id ?? null);
+    setCardCreatingSection(false);
+    setCardNewSectionName("");
     setCardEditorMode("add");
   };
 
@@ -564,6 +590,8 @@ export function SimpleDashboardPanel() {
     setSelectedAssetId(item.asset.id);
     setSelectedMetricId(item.metric.id);
     setSelectedSectionId(item.card.sectionId);
+    setCardCreatingSection(false);
+    setCardNewSectionName("");
     setCardEditorMode("edit");
   };
 
@@ -946,12 +974,71 @@ export function SimpleDashboardPanel() {
               label: `${asset.name ?? asset.externalId} · ${asset.location?.name ?? "Unassigned"}`
             }))}
           />
-          <Select
-            label="Section"
-            value={selectedSectionId}
-            onChange={setSelectedSectionId}
-            data={activeSections.map(section => ({ value: section.id, label: section.name }))}
-          />
+          <Group align="flex-end" gap="xs" wrap="nowrap">
+            <Select
+              style={{ flex: 1 }}
+              label="Section"
+              value={selectedSectionId}
+              onChange={setSelectedSectionId}
+              data={activeSections.map(section => ({ value: section.id, label: section.name }))}
+              disabled={cardCreatingSection}
+            />
+            <ActionIcon
+              color="green"
+              variant="light"
+              size="lg"
+              title="Create section"
+              aria-label="Create section"
+              onClick={() => {
+                setCardCreatingSection(true);
+                setCardNewSectionName("");
+              }}
+            >
+              +
+            </ActionIcon>
+          </Group>
+          {cardCreatingSection && (
+            <Group align="flex-end" gap="xs" wrap="nowrap">
+              <TextInput
+                style={{ flex: 1 }}
+                label="New section name"
+                value={cardNewSectionName}
+                onChange={event => setCardNewSectionName(event.currentTarget.value)}
+                autoFocus
+              />
+              <ActionIcon
+                color="green"
+                variant="light"
+                size="lg"
+                title="Create section"
+                aria-label="Create section"
+                loading={createCardSectionMutation.isPending}
+                disabled={!activeDashboard || !cardNewSectionName.trim()}
+                onClick={() => {
+                  if (!activeDashboard || !cardNewSectionName.trim()) return;
+                  createCardSectionMutation.mutate({
+                    dashboardId: activeDashboard.id,
+                    name: cardNewSectionName.trim()
+                  });
+                }}
+              >
+                ✓
+              </ActionIcon>
+              <ActionIcon
+                color="gray"
+                variant="light"
+                size="lg"
+                title="Cancel"
+                aria-label="Cancel section creation"
+                onClick={() => {
+                  setCardCreatingSection(false);
+                  setCardNewSectionName("");
+                }}
+              >
+                ×
+              </ActionIcon>
+            </Group>
+          )}
           <Select
             label="Metric"
             searchable
@@ -975,7 +1062,7 @@ export function SimpleDashboardPanel() {
             <Button
               variant="light"
               color={cardEditorMode === "edit" ? "blue" : "green"}
-              disabled={!activeDashboard || !selectedMetricId}
+              disabled={!activeDashboard || !selectedMetricId || cardCreatingSection}
               loading={addCardMutation.isPending || updateCardMutation.isPending}
               onClick={saveCardEditor}
             >
