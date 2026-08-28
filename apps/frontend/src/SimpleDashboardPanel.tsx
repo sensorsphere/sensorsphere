@@ -36,7 +36,8 @@ import {
   renameSimpleDashboardSection,
   reorderSimpleDashboardCards,
   reorderSimpleDashboards,
-  updateSimpleDashboardCard
+  updateSimpleDashboardCard,
+  detachSimpleDashboard
 } from "./api";
 import type {
   Asset,
@@ -49,6 +50,7 @@ import { NavigationIcon } from "./NavigationIcon";
 import { LocationIcon, getLocationIconName } from "./LocationIcon";
 
 import { defaultMetricColor } from "./metricVisuals";
+import { DashboardTemplateManager } from "./DashboardTemplateManager";
 
 function formatMetricValue(observation: LatestObservation | undefined): string {
   if (!observation) return "—";
@@ -149,6 +151,9 @@ export function SimpleDashboardPanel() {
   const dashboardNameInputRef = React.useRef<HTMLInputElement>(null);
   const sectionNameInputRef = React.useRef<HTMLInputElement>(null);
   const dropCommittedRef = React.useRef(false);
+  const [templateManagerOpened, setTemplateManagerOpened] = React.useState(false);
+  const [templateManagerInitialId, setTemplateManagerInitialId] = React.useState<string | null>(null);
+  const [detachConfirmOpen, setDetachConfirmOpen] = React.useState(false);
 
   const [deleteTarget, setDeleteTarget] = React.useState<
     | { type: "dashboard"; id: string; name: string }
@@ -224,6 +229,13 @@ export function SimpleDashboardPanel() {
       await invalidate();
     }
   });
+  const detachDashboardMutation = useMutation({
+    mutationFn: detachSimpleDashboard,
+    onSuccess: async () => {
+      setDetachConfirmOpen(false);
+      await invalidate();
+    }
+  });
   const addCardMutation = useMutation({
     mutationFn: ({ dashboardId, assetMetricId, sectionId }: { dashboardId: string; assetMetricId: string; sectionId: string | null }) =>
       addSimpleDashboardCard(dashboardId, assetMetricId, sectionId),
@@ -269,6 +281,7 @@ export function SimpleDashboardPanel() {
 
   const activeDashboard =
     dashboards.find(item => item.id === selectedDashboardId) ?? dashboards[0] ?? null;
+  const activeDashboardIsTemplateInstance = Boolean(activeDashboard?.templateId);
   const activeDashboardCardSignature = activeDashboard
     ? cards
         .filter(card => card.dashboardId === activeDashboard.id)
@@ -637,6 +650,14 @@ export function SimpleDashboardPanel() {
           <Button
             size="xs"
             variant="light"
+            color="orange"
+            onClick={() => { setTemplateManagerInitialId(null); setTemplateManagerOpened(true); }}
+          >
+            ▦ Templates
+          </Button>
+          <Button
+            size="xs"
+            variant="light"
             color="green"
             onClick={() => {
               setDashboardName("");
@@ -727,29 +748,33 @@ export function SimpleDashboardPanel() {
                   }}
                   style={{ cursor: "grab", opacity: draggedDashboardId === dashboard.id ? 0.6 : 1 }}
                 >
-                  {dashboard.name}
+                  <span title={dashboard.templateId ? `From template: ${dashboard.templateName ?? "Template"} · Metric: ${dashboard.templateMetricKey ?? ""}` : undefined}>
+                    {dashboard.templateId ? "▦ " : ""}{dashboard.name}
+                  </span>
                 </Tabs.Tab>
               ))}
             </Tabs.List>
           </Tabs>
-          <Group gap="xs">
-            <Button
-              size="xs"
-              variant="light"
-              color="green"
-              onClick={() => { setSectionName(""); setEditingSectionId(null); setSectionModalMode("create"); }}
-            >
-              + Add section
-            </Button>
-            <Button
-              size="xs"
-              variant="light"
-              color="green"
-              onClick={() => openAddCardEditor()}
-            >
-              + Add card
-            </Button>
-          </Group>
+          {!activeDashboardIsTemplateInstance && (
+            <Group gap="xs">
+              <Button
+                size="xs"
+                variant="light"
+                color="green"
+                onClick={() => { setSectionName(""); setEditingSectionId(null); setSectionModalMode("create"); }}
+              >
+                + Add section
+              </Button>
+              <Button
+                size="xs"
+                variant="light"
+                color="green"
+                onClick={() => openAddCardEditor()}
+              >
+                + Add card
+              </Button>
+            </Group>
+          )}
         </Group>
       )}
 
@@ -762,22 +787,35 @@ export function SimpleDashboardPanel() {
         </Card>
       ) : (
         <Stack gap="lg">
+          {activeDashboardIsTemplateInstance && (
+            <Alert color="orange" variant="light" title={`▦ Managed by template: ${activeDashboard.templateName ?? "Template"}`}>
+              <Group justify="space-between" align="center">
+                <Text size="sm">Structure is read-only · Metric: <b>{activeDashboard.templateMetricKey}</b></Text>
+                <Group gap="xs">
+                  <Button size="xs" variant="light" color="blue" onClick={() => { setTemplateManagerInitialId(activeDashboard.templateId); setTemplateManagerOpened(true); }}>Edit template</Button>
+                  <Button size="xs" variant="light" color="orange" onClick={() => setDetachConfirmOpen(true)}>Detach</Button>
+                </Group>
+              </Group>
+            </Alert>
+          )}
           {activeSections.map(section => {
             const sectionCards = orderedActiveCards.filter(item => effectiveSectionId(item.card) === section.id);
             return (
               <Stack
                 key={section.id}
                 gap="sm"
-                onDragEnter={() => { if (draggedCardId) previewMoveCardToSection(draggedCardId, section.id); }}
+                onDragEnter={() => { if (!activeDashboardIsTemplateInstance && draggedCardId) previewMoveCardToSection(draggedCardId, section.id); }}
                 onDragOver={event => event.preventDefault()}
-                onDrop={event => { event.preventDefault(); commitCardDrop(); }}
+                onDrop={event => { event.preventDefault(); if (!activeDashboardIsTemplateInstance) commitCardDrop(); }}
               >
                 <Group gap="xs" align="center" wrap="nowrap">
                   <Text size="sm" fw={700} c="dimmed">{section.name}</Text>
                   <div style={{ height: 1, flex: 1, background: "var(--mantine-color-dark-4)" }} />
-                  <ActionIcon size="sm" variant="light" color="blue" title="Rename section" onClick={() => { setEditingSectionId(section.id); setSectionName(section.name); setSectionModalMode("rename"); }}>✎</ActionIcon>
-                  <ActionIcon size="sm" variant="light" color="red" title="Delete section" onClick={() => setDeleteTarget({ type: "section", dashboardId: activeDashboard.id, sectionId: section.id, name: section.name })}>×</ActionIcon>
-                  <Button size="compact-xs" variant="light" color="green" onClick={() => openAddCardEditor(section.id)}>+ Add card</Button>
+                  {!activeDashboardIsTemplateInstance && (<>
+                    <ActionIcon size="sm" variant="light" color="blue" title="Rename section" onClick={() => { setEditingSectionId(section.id); setSectionName(section.name); setSectionModalMode("rename"); }}>✎</ActionIcon>
+                    <ActionIcon size="sm" variant="light" color="red" title="Delete section" onClick={() => setDeleteTarget({ type: "section", dashboardId: activeDashboard.id, sectionId: section.id, name: section.name })}>×</ActionIcon>
+                    <Button size="compact-xs" variant="light" color="green" onClick={() => openAddCardEditor(section.id)}>+ Add card</Button>
+                  </>)}
                 </Group>
                 {sectionCards.length === 0 ? (
                   <Text size="xs" c="dimmed">No cards in this section.</Text>
@@ -791,26 +829,28 @@ export function SimpleDashboardPanel() {
                           withBorder
                           radius="md"
                           p="sm"
-                          draggable
-                          onDragStart={() => beginCardDrag(card.id)}
+                          draggable={!activeDashboardIsTemplateInstance}
+                          onDragStart={() => !activeDashboardIsTemplateInstance && beginCardDrag(card.id)}
                           onDragEnter={event => {
                             event.stopPropagation();
-                            if (draggedCardId) previewMoveCard(draggedCardId, card.id, section.id);
+                            if (!activeDashboardIsTemplateInstance && draggedCardId) previewMoveCard(draggedCardId, card.id, section.id);
                           }}
-                          onDragEnd={finishCardDrag}
+                          onDragEnd={() => !activeDashboardIsTemplateInstance && finishCardDrag()}
                           onDragOver={event => event.preventDefault()}
-                          onDrop={event => { event.preventDefault(); event.stopPropagation(); commitCardDrop(); }}
-                          style={{ borderLeft: `4px solid ${color}`, cursor: "grab", opacity: draggedCardId === card.id ? 0.55 : 1 }}
+                          onDrop={event => { event.preventDefault(); event.stopPropagation(); if (!activeDashboardIsTemplateInstance) commitCardDrop(); }}
+                          style={{ borderLeft: `4px solid ${color}`, cursor: activeDashboardIsTemplateInstance ? "default" : "grab", opacity: draggedCardId === card.id ? 0.55 : 1 }}
                         >
                           <Stack gap={4}>
                             <Group justify="space-between" align="center" wrap="nowrap">
                               <Text size="sm" fw={600} lineClamp={1} c={asset.health.status === "offline" ? "red" : undefined} style={{ minWidth: 0 }}>
                                 {asset.name ?? asset.externalId}
                               </Text>
-                              <Group gap={4} wrap="nowrap">
-                                <ActionIcon size="sm" variant="light" color="blue" aria-label="Edit card" title="Edit card" onClick={() => openEditCardEditor({ card, asset, metric, observation })}>✎</ActionIcon>
-                                <ActionIcon size="sm" variant="light" color="red" aria-label="Remove card" title="Remove card" onClick={() => setDeleteTarget({ type: "card", dashboardId: activeDashboard.id, cardId: card.id, label: `${asset.name ?? asset.externalId} · ${metric.displayName}` })}>×</ActionIcon>
-                              </Group>
+                              {!activeDashboardIsTemplateInstance && (
+                                <Group gap={4} wrap="nowrap">
+                                  <ActionIcon size="sm" variant="light" color="blue" aria-label="Edit card" title="Edit card" onClick={() => openEditCardEditor({ card, asset, metric, observation })}>✎</ActionIcon>
+                                  <ActionIcon size="sm" variant="light" color="red" aria-label="Remove card" title="Remove card" onClick={() => setDeleteTarget({ type: "card", dashboardId: activeDashboard.id, cardId: card.id, label: `${asset.name ?? asset.externalId} · ${metric.displayName}` })}>×</ActionIcon>
+                                </Group>
+                              )}
                             </Group>
                             <Group gap={6} align="center" wrap="nowrap">
                               <Text
@@ -848,6 +888,24 @@ export function SimpleDashboardPanel() {
           })}
         </Stack>
       )}
+
+      <DashboardTemplateManager
+        opened={templateManagerOpened}
+        onClose={() => setTemplateManagerOpened(false)}
+        initialTemplateId={templateManagerInitialId}
+      />
+
+      <Modal opened={detachConfirmOpen} onClose={() => setDetachConfirmOpen(false)} title="Detach from template" centered>
+        <Stack>
+          <Alert color="orange" variant="light" title="Create an independent dashboard">
+            The current template structure and available metric cards will be copied into this dashboard. Future template changes will no longer affect it.
+          </Alert>
+          <Group justify="flex-end">
+            <Button variant="light" color="gray" onClick={() => setDetachConfirmOpen(false)}>Cancel</Button>
+            <Button variant="light" color="orange" loading={detachDashboardMutation.isPending} onClick={() => activeDashboard && detachDashboardMutation.mutate(activeDashboard.id)}>Detach</Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal
         opened={dashboardModalMode !== null}

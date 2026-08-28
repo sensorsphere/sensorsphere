@@ -41,7 +41,7 @@ export function AddMetricToDashboardModal({ opened, asset, metric, onClose }: Pr
   const [creatingSection, setCreatingSection] = React.useState(false);
   const [newSectionName, setNewSectionName] = React.useState("");
 
-  const dashboards = dashboardsQuery.data?.dashboards ?? [];
+  const dashboards = (dashboardsQuery.data?.dashboards ?? []).filter(dashboard => !dashboard.templateId);
   const sections = dashboardsQuery.data?.sections ?? [];
   const selectedSections = sections
     .filter(section => section.dashboardId === dashboardId)

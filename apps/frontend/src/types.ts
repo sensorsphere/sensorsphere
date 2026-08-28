@@ -572,6 +572,9 @@ export interface SimpleDashboard {
   id: string;
   name: string;
   sortOrder: number;
+  templateId: string | null;
+  templateMetricKey: string | null;
+  templateName: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -599,4 +602,36 @@ export interface SimpleDashboardData {
   dashboards: SimpleDashboard[];
   sections: SimpleDashboardSection[];
   cards: SimpleDashboardCard[];
+}
+
+export interface SimpleDashboardTemplate {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SimpleDashboardTemplateSection {
+  id: string;
+  templateId: string;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SimpleDashboardTemplateCard {
+  id: string;
+  templateId: string;
+  sectionId: string;
+  assetId: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SimpleDashboardTemplateData {
+  templates: SimpleDashboardTemplate[];
+  sections: SimpleDashboardTemplateSection[];
+  cards: SimpleDashboardTemplateCard[];
 }

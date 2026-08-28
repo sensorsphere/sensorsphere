@@ -38,7 +38,11 @@ import type {
   SimpleDashboardData,
   SimpleDashboard,
   SimpleDashboardCard,
-  SimpleDashboardSection
+  SimpleDashboardSection,
+  SimpleDashboardTemplate,
+  SimpleDashboardTemplateCard,
+  SimpleDashboardTemplateData,
+  SimpleDashboardTemplateSection
 } from "./types";
 
 async function readJson<T>(
@@ -1297,4 +1301,95 @@ export async function reorderSimpleDashboardCards(
       }
     )
   );
+}
+
+export async function getSimpleDashboardTemplates(): Promise<SimpleDashboardTemplateData> {
+  return readJson<SimpleDashboardTemplateData>(
+    await fetch("/api/v1/simple-dashboard-templates", { cache: "no-store" })
+  );
+}
+
+export async function createSimpleDashboardTemplate(name: string): Promise<SimpleDashboardTemplate> {
+  return readJson<SimpleDashboardTemplate>(
+    await fetch("/api/v1/simple-dashboard-templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    })
+  );
+}
+
+export async function renameSimpleDashboardTemplate(id: string, name: string): Promise<SimpleDashboardTemplate> {
+  return readJson<SimpleDashboardTemplate>(
+    await fetch(`/api/v1/simple-dashboard-templates/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name })
+    })
+  );
+}
+
+export async function deleteSimpleDashboardTemplate(id: string): Promise<void> {
+  const response = await fetch(`/api/v1/simple-dashboard-templates/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!response.ok) await readJson<never>(response);
+}
+
+export async function createSimpleDashboardTemplateSection(templateId: string, name: string): Promise<SimpleDashboardTemplateSection> {
+  return readJson<SimpleDashboardTemplateSection>(
+    await fetch(`/api/v1/simple-dashboard-templates/${encodeURIComponent(templateId)}/sections`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name })
+    })
+  );
+}
+
+export async function renameSimpleDashboardTemplateSection(templateId: string, sectionId: string, name: string): Promise<SimpleDashboardTemplateSection> {
+  return readJson<SimpleDashboardTemplateSection>(
+    await fetch(`/api/v1/simple-dashboard-templates/${encodeURIComponent(templateId)}/sections/${encodeURIComponent(sectionId)}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name })
+    })
+  );
+}
+
+export async function deleteSimpleDashboardTemplateSection(templateId: string, sectionId: string): Promise<void> {
+  const response = await fetch(`/api/v1/simple-dashboard-templates/${encodeURIComponent(templateId)}/sections/${encodeURIComponent(sectionId)}`, { method: "DELETE" });
+  if (!response.ok) await readJson<never>(response);
+}
+
+export async function addSimpleDashboardTemplateAsset(templateId: string, sectionId: string, assetId: string): Promise<SimpleDashboardTemplateCard> {
+  return readJson<SimpleDashboardTemplateCard>(
+    await fetch(`/api/v1/simple-dashboard-templates/${encodeURIComponent(templateId)}/cards`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sectionId, assetId })
+    })
+  );
+}
+
+export async function deleteSimpleDashboardTemplateAsset(templateId: string, cardId: string): Promise<void> {
+  const response = await fetch(`/api/v1/simple-dashboard-templates/${encodeURIComponent(templateId)}/cards/${encodeURIComponent(cardId)}`, { method: "DELETE" });
+  if (!response.ok) await readJson<never>(response);
+}
+
+export async function instantiateSimpleDashboardTemplate(templateId: string, metricKeys: string[]): Promise<SimpleDashboard[]> {
+  return readJson<SimpleDashboard[]>(
+    await fetch(`/api/v1/simple-dashboard-templates/${encodeURIComponent(templateId)}/instances`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ metricKeys })
+    })
+  );
+}
+
+export async function detachSimpleDashboard(id: string): Promise<SimpleDashboard> {
+  return readJson<SimpleDashboard>(
+    await fetch(`/api/v1/simple-dashboards/${encodeURIComponent(id)}/detach`, { method: "POST" })
+  );
+}
+
+export async function reorderSimpleDashboardTemplateSections(templateId: string, sectionIds: string[]): Promise<void> {
+  await readJson<{ status: string }>(await fetch(`/api/v1/simple-dashboard-templates/${encodeURIComponent(templateId)}/sections/order`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sectionIds })
+  }));
+}
+
+export async function reorderSimpleDashboardTemplateAssets(templateId: string, cardIds: string[]): Promise<void> {
+  await readJson<{ status: string }>(await fetch(`/api/v1/simple-dashboard-templates/${encodeURIComponent(templateId)}/cards/order`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardIds })
+  }));
 }
