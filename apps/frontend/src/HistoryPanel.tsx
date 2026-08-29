@@ -1271,8 +1271,13 @@ function HistoryGraph({
                 ? refreshIntervalMs
                 : Infinity,
 
+            // A history query represents a moving time window. When the
+            // user switches back to a previously viewed period, its cached
+            // data may end several minutes before the current time. Always
+            // refetch on mount so the window is rebuilt up to "now" and
+            // the chart includes the latest available observation.
             refetchOnMount:
-              false,
+              "always",
 
             refetchOnWindowFocus:
               false,
