@@ -4,6 +4,7 @@ import { activeFilterStyles } from "./filterStyles";
 import { BadgeSelect } from "./BadgeSelect";
 
 import {
+  ActionIcon,
   Badge,
   Button,
   Card,
@@ -17,6 +18,7 @@ import {
   Stack,
   Table,
   Text,
+  Tooltip,
   TextInput,
   Title
 } from "@mantine/core";
@@ -63,6 +65,40 @@ import {
 import { LocationFilterField, LocationSelect, locationIdsForScope, matchesLocationFilter } from "./LocationFilterControls";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import { GatewayTypeBadge } from "./GatewayTypeBadge";
+
+function GatewayIpAddress({
+  ipAddress
+}: {
+  ipAddress: string | null;
+}) {
+  if (!ipAddress) {
+    return <Text size="sm">—</Text>;
+  }
+
+  const target =
+    `ss_${ipAddress}`;
+
+  return (
+    <Group gap={4} wrap="nowrap">
+      <Text size="sm">
+        {ipAddress}
+      </Text>
+      <Tooltip label="Open gateway web interface">
+        <ActionIcon
+          component="a"
+          href={`http://${ipAddress}`}
+          target={target}
+          variant="subtle"
+          color="blue"
+          size="sm"
+          aria-label={`Open ${ipAddress} web interface`}
+        >
+          ↗
+        </ActionIcon>
+      </Tooltip>
+    </Group>
+  );
+}
 
 interface GatewayTypeFormState {
   id: string | null;
@@ -726,7 +762,7 @@ export function GatewayCatalog() {
                     </div>
                     <div>
                       <Text size="xs" c="dimmed">IP address</Text>
-                      <Text size="sm">{gateway.ipAddress ?? "—"}</Text>
+                      <GatewayIpAddress ipAddress={gateway.ipAddress} />
                     </div>
                     <div>
                       <Text size="xs" c="dimmed">WiFi SSID</Text>
@@ -830,7 +866,7 @@ export function GatewayCatalog() {
                     <Table.Td>{gateway.version ?? "—"}</Table.Td>
                     <Table.Td>{gateway.macAddress ?? "—"}</Table.Td>
                     <Table.Td>{gateway.wifiSsid ?? "—"}</Table.Td>
-                    <Table.Td>{gateway.ipAddress ?? "—"}</Table.Td>
+                    <Table.Td><GatewayIpAddress ipAddress={gateway.ipAddress} /></Table.Td>
                     <Table.Td>
                       {gateway.location ? (
                         <Group gap={5} wrap="nowrap">

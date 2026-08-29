@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.1.0";
+export const MODULE_VERSION = "1.2.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.2.0": {
+    releasedAt: "2026-08-29T08:20:00+02:00",
+    patch: "PR-128-gateway-ip-web-link-v1.patch",
+    changes: [
+      {
+        type: "added",
+        description: "Direct web interface link from gateway IP addresses"
+      }
+    ]
+  },
   "1.1.0": {
     releasedAt: "2026-08-29T06:10:15+02:00",
     patch: "PR-127-versions-module-filter-v1.patch",

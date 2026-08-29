@@ -354,7 +354,7 @@ app.get("/api/v1/gateway-coverage", async (request, reply) => {
           gateway.wifi_rssi_seen_at AS "wifiRssiSeenAt",
           gateway.wifi_ssid AS "wifiSsid",
           gateway.build_date AS "buildDate",
-          gateway.ip_address AS "ipAddress",
+          host(gateway.ip_address) AS "ipAddress",
           COALESCE(
             functional_gateway.location_id,
             gateway.location_id

@@ -68,7 +68,7 @@ const GATEWAY_SELECT = `
     gt.description AS gateway_type_description,
     gt.color AS gateway_type_color,
     g.version,
-    g.ip_address::text AS ip_address,
+    host(g.ip_address) AS ip_address,
     g.mac_address,
     g.wifi_ssid,
     g.board_id,

@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.0.0";
+export const MODULE_VERSION = "1.1.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.1.0": {
+    releasedAt: "2026-08-29T08:20:00+02:00",
+    patch: "PR-128-gateway-ip-web-link-v1.patch",
+    changes: [
+      {
+        type: "changed",
+        description: "Gateway IP addresses exposed without PostgreSQL inet CIDR suffix"
+      }
+    ]
+  },
   "1.0.0": {
     releasedAt: "2026-08-29T05:59:35+02:00",
     patch: "PR-126-module-versioning-foundation-v1.patch",
