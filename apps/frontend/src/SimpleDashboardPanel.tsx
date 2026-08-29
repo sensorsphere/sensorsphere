@@ -53,6 +53,7 @@ import { LocationIcon, getLocationIconName } from "./LocationIcon";
 
 import { defaultMetricColor } from "./metricVisuals";
 import { DashboardTemplateManager } from "./DashboardTemplateManager";
+import type { HistoryTemplateLaunchConfig } from "./HistoryPanel";
 
 function formatMetricValue(observation: LatestObservation | undefined): string {
   if (!observation) return "—";
@@ -132,7 +133,11 @@ interface ResolvedMetricCard {
   observation: LatestObservation | undefined;
 }
 
-export function SimpleDashboardPanel() {
+interface SimpleDashboardPanelProps {
+  onOpenTemplateInHistory?: (launch: HistoryTemplateLaunchConfig) => void;
+}
+
+export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboardPanelProps = {}) {
   const queryClient = useQueryClient();
   const dashboardsQuery = useQuery({
     queryKey: ["simple-dashboards"],
@@ -1067,6 +1072,7 @@ export function SimpleDashboardPanel() {
         opened={templateManagerOpened}
         onClose={() => setTemplateManagerOpened(false)}
         initialTemplateId={templateManagerInitialId}
+        onOpenInHistory={onOpenTemplateInHistory}
       />
 
 

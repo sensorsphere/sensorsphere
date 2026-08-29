@@ -103,7 +103,8 @@ import {
 } from "./AlertPanel";
 
 import {
-  HistoryPanel
+  HistoryPanel,
+  type HistoryTemplateLaunchConfig
 } from "./HistoryPanel";
 
 import {
@@ -593,6 +594,11 @@ function Dashboard() {
       "dashboard",
       isPageKey
     );
+
+  const [
+    historyTemplateLaunch,
+    setHistoryTemplateLaunch
+  ] = React.useState<HistoryTemplateLaunchConfig | null>(null);
 
   const [
     navbarOpened,
@@ -2048,10 +2054,12 @@ function Dashboard() {
               "history"
             }
             onClick={
-              () =>
+              () => {
+                setHistoryTemplateLaunch(null);
                 navigateTo(
                   "history"
-                )
+                );
+              }
             }
           />
 
@@ -4788,14 +4796,25 @@ function Dashboard() {
 {
               activePage ===
                 "dashboards" && (
-                <SimpleDashboardPanel />
+                <SimpleDashboardPanel
+                  onOpenTemplateInHistory={launch => {
+                    setHistoryTemplateLaunch(launch);
+                    navigateTo("history");
+                  }}
+                />
               )
             }
 
 {
               activePage ===
                 "history" && (
-                <HistoryPanel />
+                <HistoryPanel
+                  templateLaunch={historyTemplateLaunch}
+                  onCloseTemplateLaunch={() => {
+                    setHistoryTemplateLaunch(null);
+                    navigateTo("dashboards");
+                  }}
+                />
               )
             }
 

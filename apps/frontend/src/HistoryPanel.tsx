@@ -109,6 +109,31 @@ interface HistoryConfig {
   tabs: HistoryTabConfig[];
 }
 
+export interface HistoryTemplateLaunchGraph {
+  id: string;
+  name: string;
+  metricKey: string;
+  assetIds: string[];
+}
+
+export interface HistoryTemplateLaunchTab {
+  id: string;
+  name: string;
+  graphs: HistoryTemplateLaunchGraph[];
+}
+
+export interface HistoryTemplateLaunchConfig {
+  key: string;
+  templateId: string;
+  templateName: string;
+  tabs: HistoryTemplateLaunchTab[];
+}
+
+interface HistoryPanelProps {
+  templateLaunch?: HistoryTemplateLaunchConfig | null;
+  onCloseTemplateLaunch?: () => void;
+}
+
 const PERIODS = [
   { label: "5 m", value: String(5 / 60) },
   { label: "10 m", value: String(10 / 60) },
@@ -720,6 +745,33 @@ function createHistoryConfig(
         tabs
       )
   };
+}
+
+function createTemplateHistoryConfig(
+  launch: HistoryTemplateLaunchConfig,
+  refreshIntervalMs: number
+): HistoryConfig {
+  const tabs: HistoryTabConfig[] =
+    launch.tabs.map(tab => ({
+      id: tab.id,
+      name: tab.name,
+      graphs: tab.graphs.map(graph => ({
+        ...newGraph(),
+        id: graph.id,
+        name: graph.name,
+        mode: "metric_sensors",
+        assetId: "",
+        metricIds: [],
+        metricKey: graph.metricKey,
+        assetIds: [...graph.assetIds]
+      }))
+    }));
+
+  return createHistoryConfig(
+    tabs[0]?.id ?? "history-tab-default",
+    refreshIntervalMs,
+    tabs
+  );
 }
 
 function newGraph(): HistoryGraphConfig {
@@ -2973,7 +3025,10 @@ function formatCurrentValue(
     : formatted;
 }
 
-export function HistoryPanel() {
+export function HistoryPanel({
+  templateLaunch = null,
+  onCloseTemplateLaunch
+}: HistoryPanelProps = {}) {
 
   const queryClient =
     useQueryClient();
@@ -3139,8 +3194,8 @@ export function HistoryPanel() {
     });
 
   const [
-    tabs,
-    setTabs
+    persistedTabs,
+    setPersistedTabs
   ] =
     usePersistentState<HistoryTabConfig[]>(
       "history.tabs.v1",
@@ -3158,8 +3213,8 @@ export function HistoryPanel() {
     );
 
   const [
-    activeTabId,
-    setActiveTabId
+    persistedActiveTabId,
+    setPersistedActiveTabId
   ] =
     usePersistentState<string>(
       "history.activeTabId",
@@ -3169,6 +3224,47 @@ export function HistoryPanel() {
       ): value is string =>
         typeof value === "string"
     );
+
+  const [
+    ephemeralConfig,
+    setEphemeralConfig
+  ] = React.useState<HistoryConfig | null>(null);
+
+  const tabs =
+    ephemeralConfig?.tabs ?? persistedTabs;
+
+  const activeTabId =
+    ephemeralConfig?.activeTabId ?? persistedActiveTabId;
+
+  const setTabs =
+    (nextTabs: HistoryTabConfig[]): void => {
+      if (ephemeralConfig) {
+        setEphemeralConfig(current => {
+          if (!current) return current;
+          const normalizedTabs = normalizeHistoryTabs(nextTabs);
+          return {
+            ...current,
+            activeTabId: normalizedTabs.some(tab => tab.id === current.activeTabId)
+              ? current.activeTabId
+              : normalizedTabs[0]?.id ?? current.activeTabId,
+            tabs: normalizedTabs
+          };
+        });
+        return;
+      }
+      setPersistedTabs(nextTabs);
+    };
+
+  const setActiveTabId =
+    (nextActiveTabId: string): void => {
+      if (ephemeralConfig) {
+        setEphemeralConfig(current => current
+          ? { ...current, activeTabId: nextActiveTabId }
+          : current);
+        return;
+      }
+      setPersistedActiveTabId(nextActiveTabId);
+    };
 
   const activeTab =
     tabs.find(
@@ -3244,14 +3340,56 @@ export function HistoryPanel() {
   );
 
   const [
-    refreshIntervalMs,
-    setRefreshIntervalMs
+    persistedRefreshIntervalMs,
+    setPersistedRefreshIntervalMs
   ] =
     usePersistentState<number>(
       "history.refreshIntervalMs",
       60_000,
       isRefreshInterval
     );
+
+  const refreshIntervalMs =
+    ephemeralConfig?.refreshIntervalMs ?? persistedRefreshIntervalMs;
+
+  const setRefreshIntervalMs =
+    (nextRefreshIntervalMs: number): void => {
+      if (ephemeralConfig) {
+        setEphemeralConfig(current => current
+          ? { ...current, refreshIntervalMs: nextRefreshIntervalMs }
+          : current);
+        return;
+      }
+      setPersistedRefreshIntervalMs(nextRefreshIntervalMs);
+    };
+
+  React.useEffect(
+    () => {
+      if (!templateLaunch) {
+        setEphemeralConfig(null);
+        return;
+      }
+
+      setEphemeralConfig(
+        createTemplateHistoryConfig(
+          templateLaunch,
+          persistedRefreshIntervalMs
+        )
+      );
+      setHistoryConfigError(null);
+    },
+    [templateLaunch?.key]
+  );
+
+  const resetTemplateHistory = (): void => {
+    if (!templateLaunch) return;
+    setEphemeralConfig(
+      createTemplateHistoryConfig(
+        templateLaunch,
+        persistedRefreshIntervalMs
+      )
+    );
+  };
 
   React.useEffect(
     () => {
@@ -3277,20 +3415,20 @@ export function HistoryPanel() {
             }
 
             if (!cancelled) {
-              setTabs(config.tabs);
-              setActiveTabId(
+              setPersistedTabs(config.tabs);
+              setPersistedActiveTabId(
                 config.activeTabId
               );
-              setRefreshIntervalMs(
+              setPersistedRefreshIntervalMs(
                 config.refreshIntervalMs
               );
             }
           } else if (response.status === 404) {
             const localConfig =
               createHistoryConfig(
-                activeTabId,
-                refreshIntervalMs,
-                tabs
+                persistedActiveTabId,
+                persistedRefreshIntervalMs,
+                persistedTabs
               );
 
             const saveResponse =
@@ -3351,9 +3489,9 @@ export function HistoryPanel() {
           () => {
             const config =
               createHistoryConfig(
-                activeTabId,
-                refreshIntervalMs,
-                tabs
+                persistedActiveTabId,
+                persistedRefreshIntervalMs,
+                persistedTabs
               );
 
             void fetch(
@@ -3396,10 +3534,10 @@ export function HistoryPanel() {
           timeout
         );
     }, [
-      activeTabId,
       historyConfigReady,
-      refreshIntervalMs,
-      tabs
+      persistedActiveTabId,
+      persistedRefreshIntervalMs,
+      persistedTabs
     ]
   );
 
@@ -3427,6 +3565,7 @@ export function HistoryPanel() {
     () => {
       if (
         historyConfigReady &&
+        !ephemeralConfig &&
         tabs.length === 1 &&
         tabs[0].id === "history-tab-default" &&
         tabs[0].graphs.length === 0
@@ -3458,6 +3597,7 @@ export function HistoryPanel() {
       }
     },
     [
+      ephemeralConfig,
       historyConfigReady,
       setTabs,
       tabs
@@ -3468,6 +3608,7 @@ export function HistoryPanel() {
     () => {
       if (
         historyConfigReady &&
+        !ephemeralConfig &&
         graphs.length === 0 &&
         (assetsQuery.data?.length ?? 0) > 0
       ) {
@@ -3500,6 +3641,7 @@ export function HistoryPanel() {
       }
     }, [
       assetsQuery.data,
+      ephemeralConfig,
       graphs.length,
       historyConfigReady,
       setGraphs
@@ -4732,6 +4874,29 @@ export function HistoryPanel() {
           }
         </Stack>
       </Modal>
+
+      {templateLaunch && (
+        <Alert
+          color="blue"
+          variant="light"
+          title={`Ephemeral History · ${templateLaunch.templateName}`}
+          mb="sm"
+        >
+          <Group justify="space-between" align="center">
+            <Text size="sm">
+              Generated from the dashboard template. Changes made here are temporary and do not modify the template or your saved History configuration.
+            </Text>
+            <Group gap="xs">
+              <Button size="xs" variant="light" onClick={resetTemplateHistory}>
+                Reset from template
+              </Button>
+              <Button size="xs" variant="light" color="gray" onClick={onCloseTemplateLaunch}>
+                Back to dashboards
+              </Button>
+            </Group>
+          </Group>
+        </Alert>
+      )}
 
       <Group
         justify="space-between"

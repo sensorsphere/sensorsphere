@@ -18,10 +18,24 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.5.3";
+export const MODULE_VERSION = "1.6.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.6.0": {
+    releasedAt: "2026-08-29T13:40:00+02:00",
+    patch: "PR-132-dashboard-template-ephemeral-history-v1.patch",
+    changes: [
+      {
+        type: "added",
+        description: "Dashboard templates can open an ephemeral History view where each template metric becomes a tab, each section becomes a graph and matching Assets become curves"
+      },
+      {
+        type: "added",
+        description: "Ephemeral template History can be reset or closed without changing the dashboard template or the persisted History configuration"
+      }
+    ]
+  },
   "1.5.3": {
     releasedAt: "2026-08-29T13:26:00+02:00",
     patch: "PR-131-project-todos-local-scroll-v4.patch",
