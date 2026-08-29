@@ -601,6 +601,11 @@ function Dashboard() {
   ] = React.useState<HistoryTemplateLaunchConfig | null>(null);
 
   const [
+    templateHistoryActive,
+    setTemplateHistoryActive
+  ] = React.useState(false);
+
+  const [
     navbarOpened,
     setNavbarOpened
   ] =
@@ -632,6 +637,10 @@ function Dashboard() {
     (
       page: PageKey
     ): void => {
+
+      setTemplateHistoryActive(
+        false
+      );
 
       setActivePage(
         page
@@ -1873,9 +1882,11 @@ function Dashboard() {
                   c="dimmed"
                 >
                   {
-                    PAGE_LABELS[
-                      activePage
-                    ]
+                    templateHistoryActive
+                      ? "Template History"
+                      : PAGE_LABELS[
+                          activePage
+                        ]
                   }
                 </Text>
               </div>
@@ -2025,6 +2036,7 @@ function Dashboard() {
             title="Dashboards"
             aria-label="Dashboards"
             active={
+              !templateHistoryActive &&
               activePage ===
               "dashboards"
             }
@@ -2054,12 +2066,10 @@ function Dashboard() {
               "history"
             }
             onClick={
-              () => {
-                setHistoryTemplateLaunch(null);
+              () =>
                 navigateTo(
                   "history"
-                );
-              }
+                )
             }
           />
 
@@ -2263,6 +2273,42 @@ function Dashboard() {
             }
           />
 
+
+
+          {historyTemplateLaunch && (
+            <NavLink
+              label={
+                navbarCollapsed
+                  ? null
+                  : "Template History"
+              }
+              leftSection={
+                <NavigationIcon
+                  page="history"
+                />
+              }
+              rightSection={
+                navbarCollapsed
+                  ? null
+                  : (
+                    <Badge
+                      size="xs"
+                      color="violet"
+                      variant="light"
+                    >
+                      Temp
+                    </Badge>
+                  )
+              }
+              title={`Template History · ${historyTemplateLaunch.templateName}`}
+              aria-label={`Template History · ${historyTemplateLaunch.templateName}`}
+              active={templateHistoryActive}
+              onClick={() => {
+                setTemplateHistoryActive(true);
+                setNavbarOpened(false);
+              }}
+            />
+          )}
 
 
         </Stack>
@@ -4799,7 +4845,8 @@ function Dashboard() {
                 <SimpleDashboardPanel
                   onOpenTemplateInHistory={launch => {
                     setHistoryTemplateLaunch(launch);
-                    navigateTo("history");
+                    setTemplateHistoryActive(true);
+                    setNavbarOpened(false);
                   }}
                 />
               )
@@ -4807,11 +4854,20 @@ function Dashboard() {
 
 {
               activePage ===
-                "history" && (
+                "history" &&
+                !templateHistoryActive && (
+                <HistoryPanel />
+              )
+            }
+
+            {
+              templateHistoryActive &&
+                historyTemplateLaunch && (
                 <HistoryPanel
                   templateLaunch={historyTemplateLaunch}
                   onCloseTemplateLaunch={() => {
                     setHistoryTemplateLaunch(null);
+                    setTemplateHistoryActive(false);
                     navigateTo("dashboards");
                   }}
                 />

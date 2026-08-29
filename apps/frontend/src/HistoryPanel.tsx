@@ -4887,19 +4887,6 @@ export function HistoryPanel({
         </Stack>
       </Modal>
 
-      {templateLaunch && (
-        <Alert
-          color="blue"
-          variant="light"
-          title={`Ephemeral History · ${templateLaunch.templateName}`}
-          mb="sm"
-        >
-          <Text size="sm">
-            Generated from the dashboard template. Changes made here are temporary and do not modify the template or your saved History configuration.
-          </Text>
-        </Alert>
-      )}
-
       <Group
         justify="space-between"
         align="flex-end"
@@ -4908,7 +4895,9 @@ export function HistoryPanel({
           <Group gap="xs">
               <NavigationIcon page="history" size={24} />
               <Title order={2}>
-                History
+                {templateLaunch
+                  ? `Template History · ${templateLaunch.templateName}`
+                  : "History"}
               </Title>
             </Group>
           <Text c="dimmed">

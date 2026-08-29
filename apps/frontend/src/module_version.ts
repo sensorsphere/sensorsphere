@@ -18,10 +18,24 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.6.1";
+export const MODULE_VERSION = "1.7.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.7.0": {
+    releasedAt: "2026-08-29T15:50:00+02:00",
+    patch: "PR-132-dashboard-template-ephemeral-history-v3.patch",
+    changes: [
+      {
+        type: "changed",
+        description: "Template-generated History runs in a dedicated temporary navigation entry instead of replacing the persistent History page"
+      },
+      {
+        type: "changed",
+        description: "Template History removes the vertical-space banner and identifies its temporary session through the dynamic navigation item and page title"
+      }
+    ]
+  },
   "1.6.1": {
     releasedAt: "2026-08-29T15:32:00+02:00",
     patch: "PR-132-dashboard-template-ephemeral-history-v2.patch",
