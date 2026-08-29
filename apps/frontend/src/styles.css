@@ -258,7 +258,15 @@ body { background: var(--ss-page-bg); }
   scrollbar-gutter: stable;
 }
 
-.project-todos-board-scroll {
+.project-todos-scroll-content {
+  min-height: max-content;
+}
+
+.project-todos-list-scroll > .project-todos-scroll-content {
+  flex: none;
+}
+
+.project-todos-board-scroll > .project-todos-scroll-content {
   align-content: start;
 }
 

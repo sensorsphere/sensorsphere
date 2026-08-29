@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.5.2";
+export const MODULE_VERSION = "1.5.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.5.3": {
+    releasedAt: "2026-08-29T13:26:00+02:00",
+    patch: "PR-131-project-todos-local-scroll-v4.patch",
+    changes: [
+      {
+        type: "fixed",
+        description: "Project Todos separates the constrained scroll viewport from the natural-height List and Board content so overflowing items create an internal scrollbar instead of being compressed"
+      }
+    ]
+  },
   "1.5.2": {
     releasedAt: "2026-08-29T12:45:00+02:00",
     patch: "PR-131-project-todos-local-scroll-v3.patch",

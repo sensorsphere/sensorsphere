@@ -705,7 +705,8 @@ export function ProjectTodosPanel() {
       </Card>
 
       {view === "list" ? (
-        <Stack gap="md" className="project-todos-view-scroll project-todos-list-scroll">
+        <div className="project-todos-view-scroll project-todos-list-scroll">
+          <Stack gap="md" className="project-todos-scroll-content">
           {sections
             .filter(section => sectionFilter.length === 0 || sectionFilter.includes(section.id))
             .map((section, sectionIndex) => {
@@ -801,12 +802,14 @@ export function ProjectTodosPanel() {
               );
             })}
           {sections.length === 0 && <Card withBorder><Text c="dimmed">Create a section or import your Markdown todo file to get started.</Text></Card>}
-        </Stack>
+          </Stack>
+        </div>
       ) : (
-        <SimpleGrid
-          cols={{ base: 1, lg: 3 }}
-          className="project-todos-view-scroll project-todos-board-scroll"
-        >
+        <div className="project-todos-view-scroll project-todos-board-scroll">
+          <SimpleGrid
+            cols={{ base: 1, lg: 3 }}
+            className="project-todos-scroll-content"
+          >
           {(["OPEN", "IN_PROGRESS", "DONE"] as ProjectTodoStatus[]).map(status => {
             const rows = boardRows(status);
             const isDropTarget = draggedTaskId !== null && dragOverStatus === status && dragOverTaskId === null;
@@ -945,7 +948,8 @@ export function ProjectTodosPanel() {
               </Card>
             );
           })}
-        </SimpleGrid>
+          </SimpleGrid>
+        </div>
       )}
 
       <Modal opened={taskModalOpen} onClose={() => setTaskModalOpen(false)} title={editingTask ? "Edit task" : newParentId ? "New subtask" : "New task"} size="lg">
