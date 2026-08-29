@@ -54,6 +54,8 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
   const [assetId, setAssetId] = React.useState<string | null>(null);
   const [metricKeys, setMetricKeys] = React.useState<string[]>([]);
   const [draggedMetricKey, setDraggedMetricKey] = React.useState<string | null>(null);
+  const [instanceMetricsDirty, setInstanceMetricsDirty] = React.useState(false);
+  const syncedTemplateIdRef = React.useRef<string | null>(null);
   const [renameTarget, setRenameTarget] = React.useState<{ type: "template" | "section"; id: string; name: string } | null>(null);
   const [renameValue, setRenameValue] = React.useState("");
   const [deleteTarget, setDeleteTarget] = React.useState<{ type: "template" | "section" | "asset"; id: string; name: string } | null>(null);
@@ -105,6 +107,7 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
     mutationFn: ({ templateId, metrics }: { templateId: string; metrics: string[] }) => instantiateSimpleDashboardTemplate(templateId, metrics),
     onSuccess: async dashboards => {
       setMetricKeys(dashboards.map(item => item.templateMetricKey).filter((value): value is string => Boolean(value)));
+      setInstanceMetricsDirty(false);
       await invalidateDashboards();
     }
   });
@@ -142,12 +145,50 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
 
   React.useEffect(() => {
     if (!opened || !activeTemplate || !dashboardsQuery.data) return;
-    setMetricKeys(
-      dashboards
-        .filter(item => item.templateId === activeTemplate.id && item.templateMetricKey)
-        .map(item => item.templateMetricKey!)
-    );
-  }, [opened, activeTemplate?.id, dashboardsQuery.dataUpdatedAt]);
+    const serverMetricKeys = dashboards
+      .filter(item => item.templateId === activeTemplate.id && item.templateMetricKey)
+      .map(item => item.templateMetricKey!);
+
+    if (syncedTemplateIdRef.current !== activeTemplate.id) {
+      syncedTemplateIdRef.current = activeTemplate.id;
+      setMetricKeys(serverMetricKeys);
+      setInstanceMetricsDirty(false);
+      return;
+    }
+
+    if (!instanceMetricsDirty) {
+      setMetricKeys(serverMetricKeys);
+    }
+  }, [opened, activeTemplate?.id, dashboardsQuery.dataUpdatedAt, instanceMetricsDirty]);
+
+  React.useEffect(() => {
+    if (!opened) {
+      syncedTemplateIdRef.current = null;
+      setInstanceMetricsDirty(false);
+    }
+  }, [opened]);
+
+  React.useEffect(() => {
+    if (!opened) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s") return;
+      if (renameTarget) {
+        if (!renameValue.trim() || !activeTemplate || renameTemplate.isPending || renameSection.isPending) return;
+        event.preventDefault();
+        if (renameTarget.type === "template") {
+          renameTemplate.mutate({ id: renameTarget.id, name: renameValue.trim() });
+        } else {
+          renameSection.mutate({ templateId: activeTemplate.id, sectionId: renameTarget.id, name: renameValue.trim() });
+        }
+        return;
+      }
+      if (!activeTemplate || saveInstanceMetrics.isPending) return;
+      event.preventDefault();
+      saveInstanceMetrics.mutate({ templateId: activeTemplate.id, metrics: metricKeys });
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [opened, activeTemplate?.id, metricKeys, renameTarget, renameValue, saveInstanceMetrics.isPending, renameTemplate.isPending, renameSection.isPending]);
 
   React.useEffect(() => {
     if (activeSections.length > 0 && !activeSections.some(item => item.id === assetSectionId)) {
@@ -216,10 +257,13 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
                     searchable
                     data={availableMetricKeys}
                     value={metricKeys}
-                    onChange={values => setMetricKeys(previous => [
-                      ...previous.filter(value => values.includes(value)),
-                      ...values.filter(value => !previous.includes(value))
-                    ])}
+                    onChange={values => {
+                      setMetricKeys(previous => [
+                        ...previous.filter(value => values.includes(value)),
+                        ...values.filter(value => !previous.includes(value))
+                      ]);
+                      setInstanceMetricsDirty(true);
+                    }}
                   />
                   {metricKeys.length > 0 && (
                     <div>
@@ -245,6 +289,7 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
                                   next.splice(targetIndex, 0, moved!);
                                   return next;
                                 });
+                                setInstanceMetricsDirty(true);
                               }}
                               onDragOver={event => event.preventDefault()}
                               onDragEnd={() => setDraggedMetricKey(null)}
@@ -259,7 +304,13 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
                     </div>
                   )}
                   <Group justify="flex-end">
-                    <Button variant="light" color="green" loading={saveInstanceMetrics.isPending} onClick={() => saveInstanceMetrics.mutate({ templateId: activeTemplate.id, metrics: metricKeys })}>
+                    <Button
+                      variant="light"
+                      color="green"
+                      loading={saveInstanceMetrics.isPending}
+                      disabled={!instanceMetricsDirty}
+                      onClick={() => saveInstanceMetrics.mutate({ templateId: activeTemplate.id, metrics: metricKeys })}
+                    >
                       Save instance metrics
                     </Button>
                   </Group>
