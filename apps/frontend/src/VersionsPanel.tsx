@@ -82,6 +82,9 @@ function moduleLabel(
 }
 
 export function VersionsPanel() {
+  const [moduleFilter, setModuleFilter] =
+    React.useState<string | null>(null);
+
   const [changeType, setChangeType] =
     React.useState<ModuleChangeType | null>(null);
 
@@ -118,6 +121,20 @@ export function VersionsPanel() {
     ...(versionsQuery.data ?? [])
   ];
 
+  const moduleOptions =
+    modules.map(module => ({
+      value: module.module,
+      label: moduleLabel(module.module)
+    }));
+
+  const visibleModules =
+    moduleFilter === null
+      ? modules
+      : modules.filter(
+          module =>
+            module.module === moduleFilter
+        );
+
   return (
     <Stack gap="lg">
       <Group justify="space-between" align="end">
@@ -128,22 +145,34 @@ export function VersionsPanel() {
           </Text>
         </div>
 
-        <Select
-          label="Change type"
-          placeholder="All changes"
-          clearable
-          value={changeType}
-          onChange={value =>
-            setChangeType(
-              value as ModuleChangeType | null
-            )
-          }
-          data={CHANGE_TYPES}
-          w={190}
-        />
+        <Group gap="sm" align="end">
+          <Select
+            label="Module"
+            placeholder="All modules"
+            clearable
+            value={moduleFilter}
+            onChange={setModuleFilter}
+            data={moduleOptions}
+            w={190}
+          />
+
+          <Select
+            label="Change type"
+            placeholder="All changes"
+            clearable
+            value={changeType}
+            onChange={value =>
+              setChangeType(
+                value as ModuleChangeType | null
+              )
+            }
+            data={CHANGE_TYPES}
+            w={190}
+          />
+        </Group>
       </Group>
 
-      {modules.map(module => (
+      {visibleModules.map(module => (
         <Card key={module.module} withBorder radius="md" p="lg">
           <Stack gap="md">
             <Group justify="space-between">
