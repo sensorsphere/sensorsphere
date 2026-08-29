@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.5.1";
+export const MODULE_VERSION = "1.5.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.5.2": {
+    releasedAt: "2026-08-29T12:45:00+02:00",
+    patch: "PR-131-project-todos-local-scroll-v3.patch",
+    changes: [
+      {
+        type: "fixed",
+        description: "Project Todos forces the List and Board content areas to consume only remaining viewport height so their internal vertical scrollbars activate"
+      }
+    ]
+  },
   "1.5.1": {
     releasedAt: "2026-08-29T12:34:00+02:00",
     patch: "PR-131-project-todos-local-scroll-v2.patch",
