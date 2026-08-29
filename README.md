@@ -1,29 +1,33 @@
-# IoT Platform
-
-Plateforme IoT conteneurisée pour :
-
-ESP32/BLE -> Mosquitto local -> Bridge MQTT/Tailscale -> Mosquitto VPS
--> mqtt-ingestor -> TimescaleDB -> API -> Frontend.
-
-## Prérequis sur le VPS
-
-Uniquement :
+## Prerequisites
 
 - Docker
 - Docker Compose plugin
 - Git (optionnel)
 
-Node.js et pnpm ne sont pas nécessaires sur le VPS.
+Node.js et pnpm are not needed on the dev machine
 
-## Premier démarrage
+## Getting started
 
 ```bash
+## Getting started for Production
+
+```sh
+
+# Create your own env
 cp .env.example .env
-nano .env
-docker compose config
-docker compose build
-docker compose up -d
-docker compose ps
+
+# edit the necssary env. vars. according to your context
+
+docker compose config \
+    && docker compose build \
+    && docker compose up -d \
+    && docker compose ps
+
+# all containers should be "Up"
+docker compose logs
+
+./infos.sh
+
 ```
 
 ## Logs
@@ -32,6 +36,7 @@ docker compose ps
 docker compose logs -f mosquitto
 docker compose logs -f mqtt-ingestor
 docker compose logs -f api
+
 ```
 
 ## Check health
@@ -49,10 +54,11 @@ curl http://127.0.0.1:8080/api/sensors
 
 ```
 
-## Arrêt
+## Stop all
 
 ```bash
 docker compose down
+
 ```
 
-Les données TimescaleDB et Mosquitto sont conservées dans `infrastructure/*/data`.
+TimescaleDB and Mosquitto data are persited in `data/*`.
