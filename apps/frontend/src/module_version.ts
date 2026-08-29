@@ -18,10 +18,24 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.7.0";
+export const MODULE_VERSION = "1.7.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.7.1": {
+    releasedAt: "2026-08-29T15:55:00+02:00",
+    patch: "PR-132-dashboard-template-ephemeral-history-v4.patch",
+    changes: [
+      {
+        type: "fixed",
+        description: "Template History now renders exclusively instead of leaving the source dashboard visible above it"
+      },
+      {
+        type: "fixed",
+        description: "Primary navigation scrolls independently so temporary Template History does not overlap footer navigation"
+      }
+    ]
+  },
   "1.7.0": {
     releasedAt: "2026-08-29T15:50:00+02:00",
     patch: "PR-132-dashboard-template-ephemeral-history-v3.patch",

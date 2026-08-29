@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.1.0";
+export const MODULE_VERSION = "1.1.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.1.1": {
+    releasedAt: "2026-08-29T15:55:00+02:00",
+    patch: "PR-132-dashboard-template-ephemeral-history-v4.patch",
+    changes: [
+      {
+        type: "fixed",
+        description: "Gateway Coverage casts legacy text IP addresses to inet before formatting them with PostgreSQL host()"
+      }
+    ]
+  },
   "1.1.0": {
     releasedAt: "2026-08-29T08:20:00+02:00",
     patch: "PR-128-gateway-ip-web-link-v1.patch",

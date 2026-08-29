@@ -70,6 +70,16 @@ body { background: var(--ss-page-bg); }
   border-color: var(--ss-border);
 }
 
+
+/* Keep primary navigation scrollable when temporary entries are added. */
+.app-navigation-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
 .metric-routing-main {
   height: 100dvh;
   min-height: 0;

@@ -1915,7 +1915,9 @@ function Dashboard() {
           display:
             "flex",
           flexDirection:
-            "column"
+            "column",
+          minHeight:
+            0
         }}
       >
         <button
@@ -1995,7 +1997,7 @@ function Dashboard() {
           </svg>
         </button>
 
-        <Stack gap={2}>
+        <Stack gap={2} className="app-navigation-scroll">
 
           <NavLink
             label={
@@ -2304,6 +2306,7 @@ function Dashboard() {
               aria-label={`Template History · ${historyTemplateLaunch.templateName}`}
               active={templateHistoryActive}
               onClick={() => {
+                setActivePage("dashboards");
                 setTemplateHistoryActive(true);
                 setNavbarOpened(false);
               }}
@@ -4841,7 +4844,8 @@ function Dashboard() {
 
 {
               activePage ===
-                "dashboards" && (
+                "dashboards" &&
+                !templateHistoryActive && (
                 <SimpleDashboardPanel
                   onOpenTemplateInHistory={launch => {
                     setHistoryTemplateLaunch(launch);
