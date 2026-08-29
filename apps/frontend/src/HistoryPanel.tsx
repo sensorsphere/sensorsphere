@@ -110,6 +110,11 @@ interface HistoryConfig {
 }
 
 const PERIODS = [
+  { label: "5 m", value: String(5 / 60) },
+  { label: "10 m", value: String(10 / 60) },
+  { label: "15 m", value: String(15 / 60) },
+  { label: "30 m", value: String(30 / 60) },
+  { label: "45 m", value: String(45 / 60) },
   { label: "1 h", value: "1" },
   { label: "2 h", value: "2" },
   { label: "3 h", value: "3" },
