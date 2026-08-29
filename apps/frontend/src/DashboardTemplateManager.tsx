@@ -16,7 +16,6 @@ import {
 } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DeleteActionIcon } from "./TableActionIcons";
-import type { HistoryTemplateLaunchConfig } from "./HistoryPanel";
 import {
   addSimpleDashboardTemplateAsset,
   createSimpleDashboardTemplate,
@@ -38,10 +37,9 @@ interface DashboardTemplateManagerProps {
   opened: boolean;
   onClose: () => void;
   initialTemplateId?: string | null;
-  onOpenInHistory?: (launch: HistoryTemplateLaunchConfig) => void;
 }
 
-export function DashboardTemplateManager({ opened, onClose, initialTemplateId, onOpenInHistory }: DashboardTemplateManagerProps) {
+export function DashboardTemplateManager({ opened, onClose, initialTemplateId }: DashboardTemplateManagerProps) {
   const queryClient = useQueryClient();
   const templatesQuery = useQuery({
     queryKey: ["simple-dashboard-templates"],
@@ -209,62 +207,6 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId, o
     assets.flatMap(asset => asset.metrics).map(metric => [metric.key, { value: metric.key, label: metric.displayName }])
   ).values()].sort((a, b) => a.label.localeCompare(b.label));
 
-  const historyLaunch = React.useMemo<HistoryTemplateLaunchConfig | null>(() => {
-    if (!activeTemplate || metricKeys.length === 0) return null;
-
-    const tabs = metricKeys.map(metricKey => {
-      const metricLabel = availableMetricKeys.find(item => item.value === metricKey)?.label ?? metricKey;
-      const graphs = activeSections.flatMap(section => {
-        const assetIds = templateCards
-          .filter(card => card.templateId === activeTemplate.id && card.sectionId === section.id)
-          .sort((left, right) => left.sortOrder - right.sortOrder)
-          .map(card => assets.find(asset => asset.id === card.assetId))
-          .filter((asset): asset is NonNullable<typeof asset> => Boolean(asset))
-          .filter(asset =>
-            asset.sensor !== null &&
-            asset.metrics.some(metric => metric.enabled && metric.key === metricKey)
-          )
-          .map(asset => asset.id);
-
-        if (assetIds.length === 0) return [];
-
-        return [{
-          id: `template-history-graph-${activeTemplate.id}-${metricKey}-${section.id}`,
-          name: section.name,
-          metricKey,
-          assetIds
-        }];
-      });
-
-      return {
-        id: `template-history-tab-${activeTemplate.id}-${metricKey}`,
-        name: metricLabel,
-        graphs
-      };
-    }).filter(tab => tab.graphs.length > 0);
-
-    if (tabs.length === 0) return null;
-
-    return {
-      key: `${activeTemplate.id}:${activeTemplate.updatedAt}:${metricKeys.join(",")}`,
-      templateId: activeTemplate.id,
-      templateName: activeTemplate.name,
-      tabs
-    };
-  }, [
-    activeTemplate,
-    activeSections,
-    assets,
-    availableMetricKeys,
-    metricKeys,
-    templateCards
-  ]);
-
-  const openInHistory = (): void => {
-    if (!historyLaunch || !onOpenInHistory) return;
-    onOpenInHistory(historyLaunch);
-    onClose();
-  };
 
   return (
     <>
@@ -300,16 +242,6 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId, o
                   <Text size="xs" c="dimmed">Instances inherit sections, Assets and ordering from this template.</Text>
                 </div>
                 <Group gap="xs">
-                  <Button
-                    size="xs"
-                    variant="light"
-                    color="cyan"
-                    disabled={!historyLaunch || instanceMetricsDirty || !onOpenInHistory}
-                    title={instanceMetricsDirty ? "Save instance metrics before opening this template in History" : "Generate an ephemeral History view from this template"}
-                    onClick={openInHistory}
-                  >
-                    Open in History
-                  </Button>
                   <Button size="xs" variant="light" color="blue" onClick={() => { setRenameTarget({ type: "template", id: activeTemplate.id, name: activeTemplate.name }); setRenameValue(activeTemplate.name); }}>Rename</Button>
                   <DeleteActionIcon onClick={() => setDeleteTarget({ type: "template", id: activeTemplate.id, name: activeTemplate.name })} />
                 </Group>

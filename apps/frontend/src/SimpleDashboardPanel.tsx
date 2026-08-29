@@ -555,6 +555,60 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
     .map(group => ({ ...group, dashboards: [...group.dashboards].sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name)) }))
     .sort((left, right) => left.templateName.localeCompare(right.templateName));
 
+  const historyLaunchForTemplate = (
+    templateId: string,
+    templateName: string,
+    templateDashboards: typeof orderedDashboards
+  ): HistoryTemplateLaunchConfig | null => {
+    const tabs = templateDashboards.flatMap(dashboard => {
+      const metricKey = dashboard.templateMetricKey;
+      if (!metricKey) return [];
+
+      const graphs = sections
+        .filter(section => section.dashboardId === dashboard.id)
+        .sort((left, right) => left.sortOrder - right.sortOrder)
+        .flatMap(section => {
+          const assetIds = cards
+            .filter(card => card.dashboardId === dashboard.id && card.sectionId === section.id)
+            .sort((left, right) => left.sortOrder - right.sortOrder)
+            .map(card => assetByMetricId.get(card.assetMetricId))
+            .filter((resolved): resolved is { asset: Asset; metric: AssetMetric } => resolved !== undefined)
+            .filter(resolved =>
+              resolved.asset.sensor !== null &&
+              resolved.metric.enabled &&
+              resolved.metric.key === metricKey
+            )
+            .map(resolved => resolved.asset.id);
+
+          if (assetIds.length === 0) return [];
+
+          return [{
+            id: `template-history-graph-${templateId}-${metricKey}-${section.id}`,
+            name: section.name,
+            metricKey,
+            assetIds
+          }];
+        });
+
+      if (graphs.length === 0) return [];
+
+      return [{
+        id: `template-history-tab-${templateId}-${metricKey}`,
+        name: metricDisplayNameByKey.get(metricKey) ?? metricKey,
+        graphs
+      }];
+    });
+
+    if (tabs.length === 0) return null;
+
+    return {
+      key: `${templateId}:${templateDashboards.map(dashboard => `${dashboard.id}:${dashboard.templateMetricKey ?? ""}`).join("|")}`,
+      templateId,
+      templateName,
+      tabs
+    };
+  };
+
   const previewMoveDashboard = (sourceId: string, targetId: string) => {
     if (sourceId === targetId) return;
     const ids = dashboardDragOrder ?? dashboards.map(item => item.id);
@@ -910,6 +964,20 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                         <ActionIcon
                           size="xs"
                           variant="light"
+                          color="violet"
+                          title={`Open template in History: ${group.templateName}`}
+                          aria-label={`Open template in History: ${group.templateName}`}
+                          disabled={!onOpenTemplateInHistory || !historyLaunchForTemplate(group.templateId, group.templateName, group.dashboards)}
+                          onClick={() => {
+                            const launch = historyLaunchForTemplate(group.templateId, group.templateName, group.dashboards);
+                            if (launch && onOpenTemplateInHistory) onOpenTemplateInHistory(launch);
+                          }}
+                        >
+                          <NavigationIcon page="history" size={14} />
+                        </ActionIcon>
+                        <ActionIcon
+                          size="xs"
+                          variant="light"
                           color="orange"
                           title="Detach from template"
                           aria-label="Detach from template"
@@ -1072,7 +1140,6 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
         opened={templateManagerOpened}
         onClose={() => setTemplateManagerOpened(false)}
         initialTemplateId={templateManagerInitialId}
-        onOpenInHistory={onOpenTemplateInHistory}
       />
 
 

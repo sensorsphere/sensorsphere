@@ -18,10 +18,24 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.6.0";
+export const MODULE_VERSION = "1.6.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.6.1": {
+    releasedAt: "2026-08-29T15:32:00+02:00",
+    patch: "PR-132-dashboard-template-ephemeral-history-v2.patch",
+    changes: [
+      {
+        type: "changed",
+        description: "Dashboard template History launch uses the violet History navigation icon beside template edit and detach actions"
+      },
+      {
+        type: "changed",
+        description: "Ephemeral History reset and back actions are grouped beside Export tab with a compact separator"
+      }
+    ]
+  },
   "1.6.0": {
     releasedAt: "2026-08-29T13:40:00+02:00",
     patch: "PR-132-dashboard-template-ephemeral-history-v1.patch",

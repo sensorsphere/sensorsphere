@@ -4555,6 +4555,18 @@ export function HistoryPanel({
           Export tab
         </Button>
 
+        {templateLaunch && (
+          <>
+            <Text size="sm" c="dimmed" aria-hidden="true">|</Text>
+            <Button size="xs" variant="light" onClick={resetTemplateHistory}>
+              Reset from template
+            </Button>
+            <Button size="xs" variant="light" color="gray" onClick={onCloseTemplateLaunch}>
+              Back to dashboards
+            </Button>
+          </>
+        )}
+
       </Group>
 
       {historyConfigError && (
@@ -4882,19 +4894,9 @@ export function HistoryPanel({
           title={`Ephemeral History · ${templateLaunch.templateName}`}
           mb="sm"
         >
-          <Group justify="space-between" align="center">
-            <Text size="sm">
-              Generated from the dashboard template. Changes made here are temporary and do not modify the template or your saved History configuration.
-            </Text>
-            <Group gap="xs">
-              <Button size="xs" variant="light" onClick={resetTemplateHistory}>
-                Reset from template
-              </Button>
-              <Button size="xs" variant="light" color="gray" onClick={onCloseTemplateLaunch}>
-                Back to dashboards
-              </Button>
-            </Group>
-          </Group>
+          <Text size="sm">
+            Generated from the dashboard template. Changes made here are temporary and do not modify the template or your saved History configuration.
+          </Text>
         </Alert>
       )}
 
