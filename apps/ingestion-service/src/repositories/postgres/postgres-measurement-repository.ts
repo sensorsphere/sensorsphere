@@ -46,21 +46,30 @@ implements MeasurementRepository {
 
   async reportComponentBuild(
     component: string,
-    buildDate: string
+    buildDate: string,
+    version: string,
+    changelog: Record<string, unknown>
   ): Promise<void> {
     await this.pool.query(
       `
       INSERT INTO component_build_info (
-        component, build_date, started_at, updated_at
+        component, build_date, version, changelog, started_at, updated_at
       )
-      VALUES ($1, $2::timestamptz, NOW(), NOW())
+      VALUES ($1, $2::timestamptz, $3, $4::jsonb, NOW(), NOW())
       ON CONFLICT (component) DO UPDATE
       SET
         build_date = EXCLUDED.build_date,
+        version = EXCLUDED.version,
+        changelog = EXCLUDED.changelog,
         started_at = NOW(),
         updated_at = NOW()
       `,
-      [component, buildDate]
+      [
+        component,
+        buildDate,
+        version,
+        JSON.stringify(changelog)
+      ]
     );
   }
 

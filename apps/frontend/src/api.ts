@@ -10,6 +10,7 @@ import type {
   CreateLocationInput,
   Location,
   Measurement,
+  ModuleVersionInfo,
   MoveLocationInput,
   UpdateLocationInput,
   MetricDisplaySetting,
@@ -80,6 +81,20 @@ Promise<RuntimeConfig> {
     );
 
   return readJson<RuntimeConfig>(
+    response
+  );
+}
+
+export async function getModuleVersions():
+Promise<ModuleVersionInfo[]> {
+
+  const response =
+    await fetch(
+      "/api/v1/module-versions",
+      { cache: "no-store" }
+    );
+
+  return readJson<ModuleVersionInfo[]>(
     response
   );
 }

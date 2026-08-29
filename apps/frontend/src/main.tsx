@@ -57,6 +57,7 @@ import {
   getLatestObservations,
   getMetricDisplaySettings,
   getRuntimeConfig,
+  getModuleVersions,
   getFrontendBuildDate,
   getSimpleDashboards,
   getProjectTodos,
@@ -151,6 +152,14 @@ import {
 import {
   ProjectTodosPanel
 } from "./ProjectTodosPanel";
+
+import {
+  VersionsPanel
+} from "./VersionsPanel";
+
+import {
+  MODULE_VERSION as FRONTEND_MODULE_VERSION
+} from "./module_version";
 
 import "./styles.css";
 
@@ -257,6 +266,9 @@ Record<PageKey, string> = {
   "gateway-coverage":
     "Gateway Coverage",
 
+  versions:
+    "Versions",
+
   todos:
     "Project Todos"
 };
@@ -277,6 +289,7 @@ function isPageKey(
     value === "gateways" ||
     value === "metric-routing" ||
     value === "gateway-coverage" ||
+    value === "versions" ||
     value === "todos"
   );
 }
@@ -516,6 +529,18 @@ function Dashboard() {
         Infinity
     });
 
+  const moduleVersionsQuery =
+    useQuery({
+      queryKey:
+        ["module-versions"],
+
+      queryFn:
+        getModuleVersions,
+
+      refetchInterval:
+        60_000
+    });
+
   const projectTodosQuery =
     useQuery({
       queryKey:
@@ -543,6 +568,21 @@ function Dashboard() {
     runtimeConfigQuery.data
       ?.builds
       ?.ingestion;
+
+
+  const apiModuleVersion =
+    moduleVersionsQuery.data
+      ?.find(item => item.module === "api")
+      ?.version
+    ?? null;
+
+  const ingestionModuleVersion =
+    moduleVersionsQuery.data
+      ?.find(
+        item => item.module === "ingestion-service"
+      )
+      ?.version
+    ?? null;
 
   const [
     activePage,
@@ -2224,6 +2264,31 @@ function Dashboard() {
             label={
               navbarCollapsed
                 ? null
+                : "Versions"
+            }
+            leftSection={
+              <NavigationIcon
+                page="versions"
+              />
+            }
+            title="Versions"
+            aria-label="Versions"
+            active={
+              activePage ===
+              "versions"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "versions"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
                 : "Project Todos"
             }
             leftSection={
@@ -2271,21 +2336,21 @@ function Dashboard() {
               <Group justify="space-between" gap="xs" wrap="nowrap">
                 <Text size="xs" c="dimmed">Frontend</Text>
                 <Text size="xs" c="dimmed" ta="right">
-                  {formatBuildDate(frontendBuildQuery.data)}
+                  {FRONTEND_MODULE_VERSION} · {formatBuildDate(frontendBuildQuery.data)}
                 </Text>
               </Group>
 
               <Group justify="space-between" gap="xs" wrap="nowrap">
                 <Text size="xs" c="dimmed">API</Text>
                 <Text size="xs" c="dimmed" ta="right">
-                  {formatBuildDate(apiBuildDate)}
+                  {apiModuleVersion ?? "—"} · {formatBuildDate(apiBuildDate)}
                 </Text>
               </Group>
 
               <Group justify="space-between" gap="xs" wrap="nowrap">
                 <Text size="xs" c="dimmed">Ingestion</Text>
                 <Text size="xs" c="dimmed" ta="right">
-                  {formatBuildDate(ingestionBuildDate)}
+                  {ingestionModuleVersion ?? "—"} · {formatBuildDate(ingestionBuildDate)}
                 </Text>
               </Group>
             </Stack>
@@ -4788,6 +4853,13 @@ function Dashboard() {
               activePage ===
                 "gateway-coverage" && (
                 <GatewayCoveragePanel />
+              )
+            }
+
+            {
+              activePage ===
+                "versions" && (
+                <VersionsPanel />
               )
             }
 

@@ -12,6 +12,7 @@ export type PageKey =
   | "gateways"
   | "metric-routing"
   | "gateway-coverage"
+  | "versions"
   | "todos";
 
 const PAGE_COLORS: Record<PageKey, string> = {
@@ -26,6 +27,7 @@ const PAGE_COLORS: Record<PageKey, string> = {
   gateways: "var(--mantine-color-lime-6)",
   "metric-routing": "var(--mantine-color-yellow-6)",
   "gateway-coverage": "var(--mantine-color-teal-6)",
+  versions: "var(--mantine-color-indigo-6)",
   todos: "var(--mantine-color-pink-6)"
 };
 
@@ -164,6 +166,16 @@ export function NavigationIcon({
           <path d="M8 16a6 6 0 0 1 8 0" />
           <path d="M11 13a2 2 0 0 1 2 0" />
           <circle cx="12" cy="20" r="1" />
+        </svg>
+      );
+
+    case "versions":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M9 9h6" />
+          <path d="M9 13h4" />
+          <path d="M9 17h2" />
         </svg>
       );
 

@@ -56,6 +56,12 @@ import {
   createPool
 } from "./db.js";
 
+import {
+  MODULE_CHANGELOG,
+  MODULE_NAME,
+  MODULE_VERSION
+} from "./module_version.js";
+
 const config =
   loadApiConfig();
 
@@ -78,7 +84,9 @@ const healthHandler = async () => {
   await pool.query("SELECT 1");
 
   return {
-    status: "ok"
+    status: "ok",
+    module: MODULE_NAME,
+    version: MODULE_VERSION
   };
 };
 
@@ -146,6 +154,41 @@ app.get("/api/v1/config", async () => {
       ingestion: ingestionBuildDate
     }
   };
+});
+
+
+app.get("/api/v1/module-versions", async () => {
+  const ingestionResult =
+    await pool.query<{
+      component: string;
+      version: string | null;
+      changelog: Record<string, unknown> | null;
+    }>(
+      `
+      SELECT
+        component,
+        version,
+        changelog
+      FROM component_build_info
+      WHERE component = 'ingestion-service'
+      `
+    );
+
+  const ingestion =
+    ingestionResult.rows[0];
+
+  return [
+    {
+      module: MODULE_NAME,
+      version: MODULE_VERSION,
+      changelog: MODULE_CHANGELOG
+    },
+    {
+      module: "ingestion-service",
+      version: ingestion?.version ?? null,
+      changelog: ingestion?.changelog ?? {}
+    }
+  ];
 });
 
 app.get("/sensors", async () => {

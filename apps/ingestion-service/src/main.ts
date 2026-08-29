@@ -32,6 +32,11 @@ import {
   startScheduler
 } from "./scheduler.js";
 
+import {
+  MODULE_CHANGELOG,
+  MODULE_VERSION
+} from "./module_version.js";
+
 const config =
   loadIngestionConfig();
 
@@ -116,6 +121,7 @@ async function main():
 Promise<void> {
 
   logger.info(
+    { version: MODULE_VERSION },
     "Starting SensorSphere ingestion service"
   );
 
@@ -146,7 +152,9 @@ Promise<void> {
     if (buildDate) {
       await repository.reportComponentBuild(
         "ingestion-service",
-        buildDate
+        buildDate,
+        MODULE_VERSION,
+        MODULE_CHANGELOG
       );
     }
   } catch (error) {

@@ -1,3 +1,28 @@
+export type ModuleChangeType =
+  | "added"
+  | "changed"
+  | "fixed"
+  | "removed"
+  | "deprecated"
+  | "security";
+
+export interface ModuleChange {
+  type: ModuleChangeType;
+  description: string;
+}
+
+export interface ModuleChangelogEntry {
+  releasedAt: string;
+  patch: string;
+  changes: ModuleChange[];
+}
+
+export interface ModuleVersionInfo {
+  module: string;
+  version: string | null;
+  changelog: Record<string, ModuleChangelogEntry>;
+}
+
 export interface RuntimeConfig {
   instanceName: string;
   builds?: {
