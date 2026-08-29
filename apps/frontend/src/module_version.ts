@@ -18,10 +18,24 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.2.0";
+export const MODULE_VERSION = "1.3.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.3.0": {
+    releasedAt: "2026-08-29T09:20:00+02:00",
+    patch: "PR-129-gateways-compact-view-v1.patch",
+    changes: [
+      {
+        type: "changed",
+        description: "Gateway web links now use a globe icon for clearer web-interface access"
+      },
+      {
+        type: "changed",
+        description: "Compact gateway table removes Version, MAC, SSID and Assets columns"
+      }
+    ]
+  },
   "1.2.0": {
     releasedAt: "2026-08-29T08:20:00+02:00",
     patch: "PR-128-gateway-ip-web-link-v1.patch",

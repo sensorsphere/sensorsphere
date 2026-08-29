@@ -93,7 +93,22 @@ function GatewayIpAddress({
           size="sm"
           aria-label={`Open ${ipAddress} web interface`}
         >
-          ↗
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path d="M3 12h18" />
+            <path d="M12 3a14 14 0 0 1 0 18" />
+            <path d="M12 3a14 14 0 0 0 0 18" />
+          </svg>
         </ActionIcon>
       </Tooltip>
     </Group>
@@ -840,15 +855,15 @@ export function GatewayCatalog() {
             ))}
           </SimpleGrid>
         ) : (
-          <Table.ScrollContainer minWidth={1200}>
+          <Table.ScrollContainer minWidth={1000}>
             <Table striped highlightOnHover verticalSpacing="xs">
               <Table.Thead>
                 <Table.Tr>
                   {[
-                    ["name", "Name"], ["gatewayId", "Gateway ID"], ["type", "Type"], ["version", "Version"],
-                    ["mac", "MAC"], ["ssid", "SSID"], ["ip", "IP"], ["location", "Location"],
-                    ["status", "Status"], ["wifiRssi", "WiFi RSSI"], ["enabled", "Enabled"],
-                    ["sensors", "Sensors"], ["assets", "Assets"], ["lastSeen", "Last seen"]
+                    ["name", "Name"], ["gatewayId", "Gateway ID"], ["type", "Type"],
+                    ["ip", "IP"], ["location", "Location"], ["status", "Status"],
+                    ["wifiRssi", "WiFi RSSI"], ["enabled", "Enabled"], ["sensors", "Sensors"],
+                    ["lastSeen", "Last seen"]
                   ].map(([key, label]) => (
                     <SortableTableHeader key={key} active={tableSortKey === key} direction={tableSortDirection} onClick={() => toggleTableSort(key)}>
                       {label}
@@ -863,9 +878,6 @@ export function GatewayCatalog() {
                     <Table.Td fw={600}>{gateway.name}</Table.Td>
                     <Table.Td>{gateway.gatewayId}</Table.Td>
                     <Table.Td><GatewayTypeBadge type={gateway.type} size="sm" /></Table.Td>
-                    <Table.Td>{gateway.version ?? "—"}</Table.Td>
-                    <Table.Td>{gateway.macAddress ?? "—"}</Table.Td>
-                    <Table.Td>{gateway.wifiSsid ?? "—"}</Table.Td>
                     <Table.Td><GatewayIpAddress ipAddress={gateway.ipAddress} /></Table.Td>
                     <Table.Td>
                       {gateway.location ? (
@@ -912,7 +924,6 @@ export function GatewayCatalog() {
                       </Badge>
                     </Table.Td>
                     <Table.Td>{gateway.sensorCount}</Table.Td>
-                    <Table.Td>{gateway.assetCount}</Table.Td>
                     <Table.Td>{lastSeenLabel(gateway.lastSeenAt)}</Table.Td>
                     <Table.Td>
                       <Group gap={4} wrap="nowrap">
