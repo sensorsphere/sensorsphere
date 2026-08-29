@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.4.0";
+export const MODULE_VERSION = "1.5.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.5.0": {
+    releasedAt: "2026-08-29T12:23:00+02:00",
+    patch: "PR-131-project-todos-local-scroll-v1.patch",
+    changes: [
+      {
+        type: "fixed",
+        description: "Project Todos keeps vertical scrolling inside the List table area or the Board kanban instead of the browser page"
+      }
+    ]
+  },
   "1.4.0": {
     releasedAt: "2026-08-29T09:32:00+02:00",
     patch: "PR-130-actions-icons-last-seen-v1.patch",

@@ -439,7 +439,7 @@ export function ProjectTodosPanel() {
   if (query.error) return <Text c="red">{query.error instanceof Error ? query.error.message : "Unable to load todos"}</Text>;
 
   return (
-    <Stack gap="md">
+    <Stack gap="md" className="project-todos-panel">
       <Group justify="space-between" align="flex-start">
         <div>
           <Group gap="xs">
@@ -705,7 +705,7 @@ export function ProjectTodosPanel() {
       </Card>
 
       {view === "list" ? (
-        <Stack gap="md">
+        <Stack gap="md" className="project-todos-view-scroll project-todos-list-scroll">
           {sections
             .filter(section => sectionFilter.length === 0 || sectionFilter.includes(section.id))
             .map((section, sectionIndex) => {
@@ -803,7 +803,10 @@ export function ProjectTodosPanel() {
           {sections.length === 0 && <Card withBorder><Text c="dimmed">Create a section or import your Markdown todo file to get started.</Text></Card>}
         </Stack>
       ) : (
-        <SimpleGrid cols={{ base: 1, lg: 3 }}>
+        <SimpleGrid
+          cols={{ base: 1, lg: 3 }}
+          className="project-todos-view-scroll project-todos-board-scroll"
+        >
           {(["OPEN", "IN_PROGRESS", "DONE"] as ProjectTodoStatus[]).map(status => {
             const rows = boardRows(status);
             const isDropTarget = draggedTaskId !== null && dragOverStatus === status && dragOverTaskId === null;
