@@ -18,10 +18,24 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.3.0";
+export const MODULE_VERSION = "1.4.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.4.0": {
+    releasedAt: "2026-08-29T09:32:00+02:00",
+    patch: "PR-130-actions-icons-last-seen-v1.patch",
+    changes: [
+      {
+        type: "changed",
+        description: "Last seen displays relative age with the exact timestamp available on hover"
+      },
+      {
+        type: "changed",
+        description: "Table and card actions use consistent icon-only controls with tooltips for edit, delete, blacklist and reactivate actions"
+      }
+    ]
+  },
   "1.3.0": {
     releasedAt: "2026-08-29T09:20:00+02:00",
     patch: "PR-129-gateways-compact-view-v1.patch",

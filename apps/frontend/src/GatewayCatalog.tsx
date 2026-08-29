@@ -65,6 +65,7 @@ import {
 import { LocationFilterField, LocationSelect, locationIdsForScope, matchesLocationFilter } from "./LocationFilterControls";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import { GatewayTypeBadge } from "./GatewayTypeBadge";
+import { DeleteActionIcon, EditActionIcon } from "./TableActionIcons";
 
 function GatewayIpAddress({
   ipAddress
@@ -216,12 +217,20 @@ function relativeAgo(
   return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
-function lastSeenLabel(
-  value: string | null
-): string {
-  return value
-    ? `${relativeAgo(value)} · ${new Date(value).toLocaleString()}`
-    : "Never";
+function LastSeen({
+  value
+}: {
+  value: string | null;
+}) {
+  if (!value) {
+    return <Text size="sm">Never</Text>;
+  }
+
+  return (
+    <Tooltip label={new Date(value).toLocaleString()}>
+      <Text size="sm">{relativeAgo(value)}</Text>
+    </Tooltip>
+  );
 }
 
 function isOnline(
@@ -833,22 +842,13 @@ export function GatewayCatalog() {
                     </div>
                     <div style={{ gridColumn: "1 / -1" }}>
                       <Text size="xs" c="dimmed">Last seen</Text>
-                      <Text size="sm">{lastSeenLabel(gateway.lastSeenAt)}</Text>
+                      <LastSeen value={gateway.lastSeenAt} />
                     </div>
                   </SimpleGrid>
 
                   <Group justify="flex-end">
-                    <Button size="xs" color="blue" variant="light" onClick={() => openEdit(gateway)}>
-                      Edit
-                    </Button>
-                    <Button
-                      size="xs"
-                      color="red"
-                      variant="light"
-                      onClick={() => setDeleteTarget(gateway)}
-                    >
-                      Delete
-                    </Button>
+                    <EditActionIcon onClick={() => openEdit(gateway)} />
+                    <DeleteActionIcon onClick={() => setDeleteTarget(gateway)} />
                   </Group>
                 </Stack>
               </Card>
@@ -924,25 +924,11 @@ export function GatewayCatalog() {
                       </Badge>
                     </Table.Td>
                     <Table.Td>{gateway.sensorCount}</Table.Td>
-                    <Table.Td>{lastSeenLabel(gateway.lastSeenAt)}</Table.Td>
+                    <Table.Td><LastSeen value={gateway.lastSeenAt} /></Table.Td>
                     <Table.Td>
                       <Group gap={4} wrap="nowrap">
-                        <Button
-                          size="compact-xs"
-                          color="blue"
-                          variant="light"
-                          onClick={() => openEdit(gateway)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="compact-xs"
-                          color="red"
-                          variant="light"
-                          onClick={() => setDeleteTarget(gateway)}
-                        >
-                          Delete
-                        </Button>
+                        <EditActionIcon onClick={() => openEdit(gateway)} />
+                        <DeleteActionIcon onClick={() => setDeleteTarget(gateway)} />
                       </Group>
                     </Table.Td>
                   </Table.Tr>
@@ -1015,8 +1001,8 @@ export function GatewayCatalog() {
                   <Table.Td>{type.description ?? "—"}</Table.Td>
                   <Table.Td>
                     <Group gap={4} wrap="nowrap">
-                      <Button size="compact-xs" color="blue" variant="light" onClick={() => setGatewayTypeForm(gatewayTypeToForm(type))}>Edit</Button>
-                      <Button size="compact-xs" color="red" variant="light" onClick={() => setGatewayTypeDeleteTarget(type)}>Delete</Button>
+                      <EditActionIcon onClick={() => setGatewayTypeForm(gatewayTypeToForm(type))} />
+                      <DeleteActionIcon onClick={() => setGatewayTypeDeleteTarget(type)} />
                     </Group>
                   </Table.Td>
                 </Table.Tr>

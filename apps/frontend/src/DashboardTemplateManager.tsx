@@ -15,6 +15,7 @@ import {
   Title
 } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DeleteActionIcon } from "./TableActionIcons";
 import {
   addSimpleDashboardTemplateAsset,
   createSimpleDashboardTemplate,
@@ -241,7 +242,7 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
                 </div>
                 <Group gap="xs">
                   <Button size="xs" variant="light" color="blue" onClick={() => { setRenameTarget({ type: "template", id: activeTemplate.id, name: activeTemplate.name }); setRenameValue(activeTemplate.name); }}>Rename</Button>
-                  <Button size="xs" variant="light" color="red" onClick={() => setDeleteTarget({ type: "template", id: activeTemplate.id, name: activeTemplate.name })}>Delete</Button>
+                  <DeleteActionIcon onClick={() => setDeleteTarget({ type: "template", id: activeTemplate.id, name: activeTemplate.name })} />
                 </Group>
               </Group>
 
@@ -345,7 +346,7 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
                             reorderSections.mutate({ templateId: activeTemplate.id, sectionIds: ids });
                           }}>↓</ActionIcon>
                           <ActionIcon variant="light" color="blue" title="Rename section" onClick={() => { setRenameTarget({ type: "section", id: section.id, name: section.name }); setRenameValue(section.name); }}>✎</ActionIcon>
-                          <ActionIcon variant="light" color="red" title="Delete section" onClick={() => setDeleteTarget({ type: "section", id: section.id, name: section.name })}>×</ActionIcon>
+                          <DeleteActionIcon onClick={() => setDeleteTarget({ type: "section", id: section.id, name: section.name })} />
                         </Group>
                       </Group>
                       {cards.length === 0 ? <Text size="xs" c="dimmed">No Assets.</Text> : cards.map(card => {
@@ -373,7 +374,7 @@ export function DashboardTemplateManager({ opened, onClose, initialTemplateId }:
                                 [allCards[left], allCards[right]] = [allCards[right], allCards[left]];
                                 reorderAssets.mutate({ templateId: activeTemplate.id, cardIds: allCards.map(item => item.id) });
                               }}>↓</ActionIcon>
-                              <ActionIcon variant="light" color="red" title="Remove Asset" onClick={() => setDeleteTarget({ type: "asset", id: card.id, name: label })}>×</ActionIcon>
+                              <DeleteActionIcon onClick={() => setDeleteTarget({ type: "asset", id: card.id, name: label })} />
                             </Group>
                           </Group>
                         );

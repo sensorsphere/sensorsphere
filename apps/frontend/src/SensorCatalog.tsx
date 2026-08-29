@@ -63,6 +63,7 @@ import {
 } from "./ResetFiltersAction";
 import { LocationFilterField, LocationSelect, locationIdsForScope, matchesLocationFilter } from "./LocationFilterControls";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
+import { BlacklistActionIcon, EditActionIcon, ReactivateActionIcon } from "./TableActionIcons";
 
 interface SensorFormState {
   name: string;
@@ -1226,39 +1227,20 @@ export function SensorCatalog() {
                   <Group
                     justify="flex-end"
                   >
-                    <Button
-                      size="xs"
-                      color="blue"
-                      variant="light"
-                      onClick={
-                        () =>
-                          openEditor(
-                            sensor
-                          )
-                      }
-                    >
-                      Edit
-                    </Button>
+                    <EditActionIcon
+                      onClick={() => openEditor(sensor)}
+                    />
                     {sensor.blacklisted ? (
-                      <Button
-                        size="xs"
-                        color="green"
-                        variant="light"
+                      <ReactivateActionIcon
                         onClick={() =>
                           blacklistMutation.mutate({ sensor, blacklisted: false })
                         }
-                      >
-                        Reactivate
-                      </Button>
+                        loading={blacklistMutation.isPending}
+                      />
                     ) : (
-                      <Button
-                        size="xs"
-                        color="red"
-                        variant="light"
+                      <BlacklistActionIcon
                         onClick={() => setBlacklistTarget(sensor)}
-                      >
-                        Blacklist
-                      </Button>
+                      />
                     )}
                   </Group>
 
@@ -1348,34 +1330,18 @@ export function SensorCatalog() {
                       </Table.Td>
                       <Table.Td>
                         <Group gap={4} wrap="nowrap">
-                        <Button
-                          size="compact-xs"
-                          color="blue"
-                          variant="light"
-                          onClick={() => openEditor(sensor)}
-                        >
-                          Edit
-                        </Button>
+                        <EditActionIcon onClick={() => openEditor(sensor)} />
                           {sensor.blacklisted ? (
-                            <Button
-                              size="compact-xs"
-                              color="green"
-                              variant="light"
+                            <ReactivateActionIcon
                               onClick={() =>
                                 blacklistMutation.mutate({ sensor, blacklisted: false })
                               }
-                            >
-                              Reactivate
-                            </Button>
+                              loading={blacklistMutation.isPending}
+                            />
                           ) : (
-                            <Button
-                              size="compact-xs"
-                              color="red"
-                              variant="light"
+                            <BlacklistActionIcon
                               onClick={() => setBlacklistTarget(sensor)}
-                            >
-                              Blacklist
-                            </Button>
+                            />
                           )}
                         </Group>
                       </Table.Td>
