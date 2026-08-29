@@ -908,7 +908,7 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
             <Stack gap={4}>
               {standardDashboards.length > 0 && (
                 <Group align="flex-start" gap="sm" wrap="nowrap">
-                  <Text size="xs" fw={700} c="dimmed" style={{ width: 176, flexShrink: 0, paddingTop: 8 }}>Standard</Text>
+                  <Text size="xs" fw={700} c="dimmed" style={{ width: 240, flexShrink: 0, paddingTop: 8 }}>Standard</Text>
                   <Tabs.List style={{ flex: 1, flexWrap: "wrap", overflow: "visible" }}>
                     {standardDashboards.map(dashboard => (
                       <Tabs.Tab
@@ -933,70 +933,78 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                   </Tabs.List>
                 </Group>
               )}
-              {templateDashboardGroups.map(group => (
+              {templateDashboardGroups.map(group => {
+                const templateSelected = activeDashboard?.templateId === group.templateId;
+                const templateHistoryLaunch = historyLaunchForTemplate(group.templateId, group.templateName, group.dashboards);
+
+                return (
                 <Group key={group.templateId} align="flex-start" gap="sm" wrap="nowrap">
                   <Group
                     gap={4}
                     wrap="nowrap"
                     title={`Template: ${group.templateName}`}
-                    style={{ width: 176, flexShrink: 0, paddingTop: 4, minWidth: 0 }}
+                    style={{ width: 240, flexShrink: 0, paddingTop: 4, minWidth: 0 }}
                   >
-                    <Text span size="xs" c="orange" aria-hidden="true">▦</Text>
+                    <Text span size="xs" c={templateSelected ? "blue" : "orange"} aria-hidden="true">▦</Text>
                     <Text
                       size="xs"
                       fw={700}
+                      c={templateSelected ? "blue" : undefined}
                       style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}
                     >
                       {group.templateName}
                     </Text>
-                    {activeDashboard?.templateId === group.templateId && (
-                      <Group gap={2} wrap="nowrap">
-                        <ActionIcon
-                          size="xs"
-                          variant="light"
-                          color="blue"
-                          title={`Edit template: ${group.templateName}`}
-                          aria-label={`Edit template: ${group.templateName}`}
-                          onClick={() => { setTemplateManagerInitialId(group.templateId); setTemplateManagerOpened(true); }}
-                        >
-                          <PencilIcon />
-                        </ActionIcon>
-                        <ActionIcon
-                          size="xs"
-                          variant="light"
-                          color="violet"
-                          title={`Open template in History: ${group.templateName}`}
-                          aria-label={`Open template in History: ${group.templateName}`}
-                          disabled={!onOpenTemplateInHistory || !historyLaunchForTemplate(group.templateId, group.templateName, group.dashboards)}
-                          onClick={() => {
-                            const launch = historyLaunchForTemplate(group.templateId, group.templateName, group.dashboards);
-                            if (launch && onOpenTemplateInHistory) onOpenTemplateInHistory(launch);
-                          }}
-                        >
-                          <NavigationIcon page="history" size={14} />
-                        </ActionIcon>
-                        <ActionIcon
-                          size="xs"
-                          variant="light"
-                          color="orange"
-                          title="Detach from template"
-                          aria-label="Detach from template"
-                          onClick={() => setDetachConfirmOpen(true)}
-                        >
-                          <DetachIcon />
-                        </ActionIcon>
-                        <ActionIcon
-                          size="xs"
-                          variant="light"
-                          color="red"
-                          title="Delete instance"
-                          aria-label="Delete instance"
-                          onClick={() => setDeleteTarget({ type: "dashboard", id: activeDashboard.id, name: activeDashboard.name })}
-                        >
-                          <TrashIcon />
-                        </ActionIcon>
-                      </Group>
-                    )}
+                    <Group gap={2} wrap="nowrap">
+                      <ActionIcon
+                        size="xs"
+                        variant="light"
+                        color="blue"
+                        title={`Edit template: ${group.templateName}`}
+                        aria-label={`Edit template: ${group.templateName}`}
+                        onClick={() => { setTemplateManagerInitialId(group.templateId); setTemplateManagerOpened(true); }}
+                      >
+                        <PencilIcon />
+                      </ActionIcon>
+                      <ActionIcon
+                        size="xs"
+                        variant="light"
+                        color="violet"
+                        title={`Open template in History: ${group.templateName}`}
+                        aria-label={`Open template in History: ${group.templateName}`}
+                        disabled={!onOpenTemplateInHistory || !templateHistoryLaunch}
+                        onClick={() => {
+                          if (templateHistoryLaunch && onOpenTemplateInHistory) onOpenTemplateInHistory(templateHistoryLaunch);
+                        }}
+                      >
+                        <NavigationIcon page="history" size={14} />
+                      </ActionIcon>
+                      <ActionIcon
+                        size="xs"
+                        variant="light"
+                        color="orange"
+                        title={templateSelected ? "Detach from template" : "Select a template metric before detaching"}
+                        aria-label="Detach from template"
+                        disabled={!templateSelected}
+                        onClick={() => setDetachConfirmOpen(true)}
+                      >
+                        <DetachIcon />
+                      </ActionIcon>
+                      <ActionIcon
+                        size="xs"
+                        variant="light"
+                        color="red"
+                        title={templateSelected ? "Delete instance" : "Select a template metric before deleting the instance"}
+                        aria-label="Delete instance"
+                        disabled={!templateSelected}
+                        onClick={() => {
+                          if (templateSelected && activeDashboard) {
+                            setDeleteTarget({ type: "dashboard", id: activeDashboard.id, name: activeDashboard.name });
+                          }
+                        }}
+                      >
+                        <TrashIcon />
+                      </ActionIcon>
+                    </Group>
                   </Group>
                   <Tabs.List style={{ flex: 1, flexWrap: "wrap", overflow: "visible" }}>
                     {group.dashboards.map(dashboard => {
@@ -1010,7 +1018,8 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                     })}
                   </Tabs.List>
                 </Group>
-              ))}
+                );
+              })}
             </Stack>
           </Tabs>
           {!activeDashboardIsTemplateInstance && (

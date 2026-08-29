@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.8.0";
+export const MODULE_VERSION = "1.9.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.9.0": {
+    releasedAt: "2026-08-29T23:05:00+02:00",
+    patch: "PR-135-history-views-dashboard-template-ui-v1.patch",
+    changes: [
+      { type: "added", description: "History views can be created and deleted directly from the History view selector" },
+      { type: "changed", description: "History and Alerts titles now render above their view or tab controls for consistent page hierarchy" },
+      { type: "changed", description: "Dashboard template actions stay visible, selected templates use the primary color and template names have more space" }
+    ]
+  },
   "1.8.0": {
     releasedAt: "2026-08-29T20:30:00+02:00",
     patch: "PR-134-history-view-groups-v2.patch",

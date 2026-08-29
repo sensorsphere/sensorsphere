@@ -3236,6 +3236,9 @@ export function HistoryPanel({
 
   const [saveHistoryViewOpened, setSaveHistoryViewOpened] = React.useState(false);
   const [saveHistoryViewName, setSaveHistoryViewName] = React.useState("");
+  const [newHistoryViewOpened, setNewHistoryViewOpened] = React.useState(false);
+  const [newHistoryViewName, setNewHistoryViewName] = React.useState("");
+  const [deleteHistoryViewOpened, setDeleteHistoryViewOpened] = React.useState(false);
 
   const [
     persistedTabs,
@@ -3346,6 +3349,46 @@ export function HistoryPanel({
       setPersistedActiveTabId(nextActiveTabId);
     }
   };
+
+  const createHistoryView = (): void => {
+    const name = newHistoryViewName.trim();
+    if (!name) return;
+
+    const duplicate = persistedViews.some(
+      view => view.name.toLocaleLowerCase() === name.toLocaleLowerCase()
+    );
+    if (duplicate) return;
+
+    const tab = newTab(1);
+    const viewId = `history-view-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const view: HistoryViewConfig = {
+      id: viewId,
+      name,
+      activeTabId: tab.id,
+      tabs: [tab],
+      source: "manual"
+    };
+
+    setPersistedViews(current => normalizeHistoryViews([...current, view]));
+    setPersistedActiveViewId(viewId);
+    setNewHistoryViewName("");
+    setNewHistoryViewOpened(false);
+  };
+
+  const deleteActiveHistoryView = (): void => {
+    if (!activeView || activeView.id === "history-view-my-views") return;
+
+    setPersistedViews(current =>
+      normalizeHistoryViews(current.filter(view => view.id !== activeView.id))
+    );
+    setPersistedActiveViewId("history-view-my-views");
+    setDeleteHistoryViewOpened(false);
+  };
+
+  const newHistoryViewNameDuplicate = newHistoryViewName.trim().length > 0 &&
+    persistedViews.some(
+      view => view.name.toLocaleLowerCase() === newHistoryViewName.trim().toLocaleLowerCase()
+    );
 
   const activeTab =
     tabs.find(
@@ -4413,6 +4456,20 @@ export function HistoryPanel({
   return (
     <Stack gap="lg">
 
+      <div>
+        <Group gap="xs">
+          <NavigationIcon page="history" size={24} />
+          <Title order={2}>
+            {templateLaunch
+              ? `Template History · ${templateLaunch.templateName}`
+              : "History"}
+          </Title>
+        </Group>
+        <Text c="dimmed">
+          Organize independent graph dashboards in multiple History tabs
+        </Text>
+      </div>
+
       <div className="page-sticky-controls page-sticky-controls-gap-lg history-sticky-controls">
       <Group
         gap="xs"
@@ -4431,6 +4488,43 @@ export function HistoryPanel({
             w={210}
             allowDeselect={false}
             />
+            <Tooltip label="Add view">
+              <ActionIcon
+                size="sm"
+                variant="light"
+                color="green"
+                aria-label="Add view"
+                onClick={() => {
+                  setNewHistoryViewName("");
+                  setNewHistoryViewOpened(true);
+                }}
+              >
+                +
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label={activeView?.id === "history-view-my-views" ? "My Views cannot be deleted" : "Delete view"}>
+              <ActionIcon
+                size="sm"
+                variant="light"
+                color="red"
+                aria-label="Delete view"
+                disabled={!activeView || activeView.id === "history-view-my-views"}
+                onClick={() => setDeleteHistoryViewOpened(true)}
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M4 7h16" />
+                  <path d="M9 7V4h6v3" />
+                  <path d="m8 11 1 8h6l1-8" />
+                </svg>
+              </ActionIcon>
+            </Tooltip>
           </>
         )}
         {
@@ -4886,6 +4980,62 @@ export function HistoryPanel({
       </Modal>
 
       <Modal
+        opened={newHistoryViewOpened}
+        onClose={() => setNewHistoryViewOpened(false)}
+        title="New History view"
+        centered
+      >
+        <Stack>
+          <TextInput
+            autoFocus
+            label="Name"
+            placeholder="My new view"
+            value={newHistoryViewName}
+            error={newHistoryViewNameDuplicate ? "A History view with this name already exists." : undefined}
+            onChange={event => setNewHistoryViewName(event.currentTarget.value)}
+            onKeyDown={event => {
+              if (event.key === "Enter" && newHistoryViewName.trim() && !newHistoryViewNameDuplicate) {
+                event.preventDefault();
+                createHistoryView();
+              }
+            }}
+          />
+          <Group justify="flex-end">
+            <Button variant="light" color="gray" onClick={() => setNewHistoryViewOpened(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!newHistoryViewName.trim() || newHistoryViewNameDuplicate}
+              onClick={createHistoryView}
+            >
+              Create
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={deleteHistoryViewOpened}
+        onClose={() => setDeleteHistoryViewOpened(false)}
+        title="Delete History view"
+        centered
+      >
+        <Stack>
+          <Text>
+            Delete <strong>{activeView?.name}</strong> and all of its tabs and graphs? This cannot be undone.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="light" color="gray" onClick={() => setDeleteHistoryViewOpened(false)}>
+              Cancel
+            </Button>
+            <Button color="red" onClick={deleteActiveHistoryView}>
+              Delete view
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
         opened={saveHistoryViewOpened}
         onClose={() => setSaveHistoryViewOpened(false)}
         title="Save as History view"
@@ -5057,23 +5207,9 @@ export function HistoryPanel({
       </Modal>
 
       <Group
-        justify="space-between"
+        justify="flex-end"
         align="flex-end"
       >
-        <div>
-          <Group gap="xs">
-              <NavigationIcon page="history" size={24} />
-              <Title order={2}>
-                {templateLaunch
-                  ? `Template History · ${templateLaunch.templateName}`
-                  : "History"}
-              </Title>
-            </Group>
-          <Text c="dimmed">
-            Organize independent graph dashboards in multiple History tabs
-          </Text>
-        </div>
-
         <Group
           gap="sm"
           align="flex-end"

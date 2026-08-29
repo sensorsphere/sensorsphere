@@ -776,8 +776,30 @@ export function AlertPanel({
       )
     );
 
+  const alertPageTitle =
+    activeAlertTab === "history"
+      ? "Alert history"
+      : activeAlertTab === "rules"
+        ? "Alert rules"
+        : "Active alerts";
+
+  const alertPageDescription =
+    activeAlertTab === "history"
+      ? "Recent alert events"
+      : activeAlertTab === "rules"
+        ? "Configured monitoring conditions"
+        : "Current conditions requiring attention";
+
   return (
     <>
+      <div style={{ marginBottom: 16 }}>
+        <Group gap="xs">
+          <NavigationIcon page="alerts" size={24} />
+          <Title order={2}>{alertPageTitle}</Title>
+        </Group>
+        <Text c="dimmed">{alertPageDescription}</Text>
+      </div>
+
       <Tabs
         value={
           activeAlertTab
@@ -827,22 +849,9 @@ export function AlertPanel({
         <div>
 
           <Group
-            justify="space-between"
+            justify="flex-end"
             mb="md"
           >
-            <div>
-              <Group gap="xs">
-                <NavigationIcon page="alerts" size={24} />
-                <Title order={2}>
-                  Active alerts
-                </Title>
-              </Group>
-
-              <Text c="dimmed">
-                Current conditions requiring attention
-              </Text>
-            </div>
-
             <Badge
               color={
                 activeAlerts.length > 0
@@ -1033,22 +1042,9 @@ export function AlertPanel({
         <div>
 
           <Group
-            justify="space-between"
+            justify="flex-end"
             mb="md"
           >
-            <div>
-              <Group gap="xs">
-                <NavigationIcon page="alerts" size={24} />
-                <Title order={2}>
-                  Alert history
-                </Title>
-              </Group>
-
-              <Text c="dimmed">
-                Recent alert events
-              </Text>
-            </div>
-
             <Group gap="xs">
 
               <SegmentedControl
@@ -1255,22 +1251,9 @@ export function AlertPanel({
         <div>
 
           <Group
-            justify="space-between"
+            justify="flex-end"
             mb="md"
           >
-            <div>
-              <Group gap="xs">
-                <NavigationIcon page="alerts" size={24} />
-                <Title order={2}>
-                  Alert rules
-                </Title>
-              </Group>
-
-              <Text c="dimmed">
-                Configured monitoring conditions
-              </Text>
-            </div>
-
             <Group gap="xs">
               <SegmentedControl
                 size="xs"
