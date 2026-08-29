@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.1.1";
+export const MODULE_VERSION = "1.2.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.2.0": {
+    releasedAt: "2026-08-29T20:30:00+02:00",
+    patch: "PR-134-history-view-groups-v2.patch",
+    changes: [
+      { type: "changed", description: "History configuration API accepts grouped version 4 History views while retaining legacy formats" }
+    ]
+  },
   "1.1.1": {
     releasedAt: "2026-08-29T15:55:00+02:00",
     patch: "PR-132-dashboard-template-ephemeral-history-v4.patch",

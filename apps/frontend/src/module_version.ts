@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.7.1";
+export const MODULE_VERSION = "1.8.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.8.0": {
+    releasedAt: "2026-08-29T20:30:00+02:00",
+    patch: "PR-134-history-view-groups-v2.patch",
+    changes: [
+      { type: "added", description: "History groups tabs into named views with My Views preserving the existing configuration" },
+      { type: "added", description: "Template History sessions can be saved as independent persistent History views" }
+    ]
+  },
   "1.7.1": {
     releasedAt: "2026-08-29T15:55:00+02:00",
     patch: "PR-132-dashboard-template-ephemeral-history-v4.patch",

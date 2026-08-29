@@ -102,11 +102,19 @@ interface HistoryTabConfig {
   graphs: HistoryGraphConfig[];
 }
 
-interface HistoryConfig {
-  version: 3;
+interface HistoryViewConfig {
+  id: string;
+  name: string;
   activeTabId: string;
-  refreshIntervalMs: number;
   tabs: HistoryTabConfig[];
+  source?: "manual" | "dashboard-template";
+}
+
+interface HistoryConfig {
+  version: 4;
+  activeViewId: string;
+  refreshIntervalMs: number;
+  views: HistoryViewConfig[];
 }
 
 export interface HistoryTemplateLaunchGraph {
@@ -601,6 +609,43 @@ function isHistoryTabs(
   );
 }
 
+function isHistoryViews(
+  value: unknown
+): value is HistoryViewConfig[] {
+
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every(item => {
+      if (typeof item !== "object" || item === null) return false;
+      const view = item as Partial<HistoryViewConfig>;
+      return (
+        typeof view.id === "string" &&
+        typeof view.name === "string" &&
+        view.name.trim().length > 0 &&
+        typeof view.activeTabId === "string" &&
+        isHistoryTabs(view.tabs)
+      );
+    })
+  );
+}
+
+function normalizeHistoryViews(
+  views: HistoryViewConfig[]
+): HistoryViewConfig[] {
+  return views.map(view => {
+    const tabs = normalizeHistoryTabs(view.tabs);
+    return {
+      ...view,
+      name: view.name.trim(),
+      activeTabId: tabs.some(tab => tab.id === view.activeTabId)
+        ? view.activeTabId
+        : tabs[0].id,
+      tabs
+    };
+  });
+}
+
 function normalizeHistoryTabs(
   tabs: HistoryTabConfig[]
 ): HistoryTabConfig[] {
@@ -648,102 +693,93 @@ function normalizeHistoryTabs(
 function normalizeHistoryConfig(
   value: unknown
 ): HistoryConfig | null {
+  if (typeof value !== "object" || value === null) return null;
+
+  const config = value as {
+    version?: unknown;
+    activeViewId?: unknown;
+    activeTabId?: unknown;
+    refreshIntervalMs?: unknown;
+    views?: unknown;
+    tabs?: unknown;
+  };
+
+  if (!isRefreshInterval(config.refreshIntervalMs)) return null;
 
   if (
-    typeof value !== "object" ||
-    value === null
+    config.version === 4 &&
+    typeof config.activeViewId === "string" &&
+    isHistoryViews(config.views)
   ) {
-    return null;
-  }
-
-  const config =
-    value as {
-      version?: unknown;
-      activeTabId?: unknown;
-      refreshIntervalMs?: unknown;
-      tabs?: unknown;
+    const views = normalizeHistoryViews(config.views);
+    return {
+      version: 4,
+      activeViewId: views.some(view => view.id === config.activeViewId)
+        ? config.activeViewId
+        : views[0].id,
+      refreshIntervalMs: config.refreshIntervalMs,
+      views
     };
-
-  if (
-    (
-      config.version !== 1 &&
-      config.version !== 2 &&
-      config.version !== 3
-    ) ||
-    typeof config.activeTabId !== "string" ||
-    !isRefreshInterval(
-      config.refreshIntervalMs
-    ) ||
-    !isHistoryTabs(
-      config.tabs
-    )
-  ) {
-    return null;
   }
 
-  const normalizedTabs =
-    normalizeHistoryTabs(
-      config.tabs
-    );
-
-  const migratedTabs =
-    config.version < 3
-      ? normalizedTabs.map(
-          tab => ({
-            ...tab,
-            graphs:
-              tab.graphs.map(
-                graph => {
-                  const smoothing =
-                    graph.smoothing;
-
-                  const usesLegacyDefault =
-                    !smoothing ||
-                    (
-                      smoothing.method === "none" &&
-                      smoothing.window === 3
-                    );
-
-                  return usesLegacyDefault
-                    ? {
-                        ...graph,
-                        curveStyle: "smooth",
-                        smoothing: {
-                          method: "moving_average",
-                          window: 7
-                        }
-                      }
-                    : graph;
+  if (
+    (config.version === 1 || config.version === 2 || config.version === 3) &&
+    typeof config.activeTabId === "string" &&
+    isHistoryTabs(config.tabs)
+  ) {
+    const normalizedTabs = normalizeHistoryTabs(config.tabs);
+    const migratedTabs = config.version < 3
+      ? normalizedTabs.map(tab => ({
+          ...tab,
+          graphs: tab.graphs.map(graph => {
+            const smoothing = graph.smoothing;
+            const usesLegacyDefault = !smoothing ||
+              (smoothing.method === "none" && smoothing.window === 3);
+            return usesLegacyDefault
+              ? {
+                  ...graph,
+                  curveStyle: "smooth" as const,
+                  smoothing: { method: "moving_average" as const, window: 7 as const }
                 }
-              )
+              : graph;
           })
-        )
+        }))
       : normalizedTabs;
 
-  return {
-    version: 3,
-    activeTabId:
-      config.activeTabId,
-    refreshIntervalMs:
-      config.refreshIntervalMs,
-    tabs: migratedTabs
-  };
+    const activeTabId = migratedTabs.some(tab => tab.id === config.activeTabId)
+      ? config.activeTabId
+      : migratedTabs[0].id;
+
+    return {
+      version: 4,
+      activeViewId: "history-view-my-views",
+      refreshIntervalMs: config.refreshIntervalMs,
+      views: [{
+        id: "history-view-my-views",
+        name: "My Views",
+        activeTabId,
+        tabs: migratedTabs,
+        source: "manual"
+      }]
+    };
+  }
+
+  return null;
 }
 
 function createHistoryConfig(
-  activeTabId: string,
+  activeViewId: string,
   refreshIntervalMs: number,
-  tabs: HistoryTabConfig[]
+  views: HistoryViewConfig[]
 ): HistoryConfig {
-
+  const normalizedViews = normalizeHistoryViews(views);
   return {
-    version: 3,
-    activeTabId,
+    version: 4,
+    activeViewId: normalizedViews.some(view => view.id === activeViewId)
+      ? activeViewId
+      : normalizedViews[0].id,
     refreshIntervalMs,
-    tabs:
-      normalizeHistoryTabs(
-        tabs
-      )
+    views: normalizedViews
   };
 }
 
@@ -751,26 +787,31 @@ function createTemplateHistoryConfig(
   launch: HistoryTemplateLaunchConfig,
   refreshIntervalMs: number
 ): HistoryConfig {
-  const tabs: HistoryTabConfig[] =
-    launch.tabs.map(tab => ({
-      id: tab.id,
-      name: tab.name,
-      graphs: tab.graphs.map(graph => ({
-        ...newGraph(),
-        id: graph.id,
-        name: graph.name,
-        mode: "metric_sensors",
-        assetId: "",
-        metricIds: [],
-        metricKey: graph.metricKey,
-        assetIds: [...graph.assetIds]
-      }))
-    }));
-
+  const tabs: HistoryTabConfig[] = launch.tabs.map(tab => ({
+    id: tab.id,
+    name: tab.name,
+    graphs: tab.graphs.map(graph => ({
+      ...newGraph(),
+      id: graph.id,
+      name: graph.name,
+      mode: "metric_sensors",
+      assetId: "",
+      metricIds: [],
+      metricKey: graph.metricKey,
+      assetIds: [...graph.assetIds]
+    }))
+  }));
+  const activeTabId = tabs[0]?.id ?? "history-tab-default";
   return createHistoryConfig(
-    tabs[0]?.id ?? "history-tab-default",
+    "history-view-template",
     refreshIntervalMs,
-    tabs
+    [{
+      id: "history-view-template",
+      name: launch.templateName,
+      activeTabId,
+      tabs,
+      source: "dashboard-template"
+    }]
   );
 }
 
@@ -3193,6 +3234,9 @@ export function HistoryPanel({
         }
     });
 
+  const [saveHistoryViewOpened, setSaveHistoryViewOpened] = React.useState(false);
+  const [saveHistoryViewName, setSaveHistoryViewName] = React.useState("");
+
   const [
     persistedTabs,
     setPersistedTabs
@@ -3226,45 +3270,82 @@ export function HistoryPanel({
     );
 
   const [
+    persistedViews,
+    setPersistedViews
+  ] = React.useState<HistoryViewConfig[]>([
+    {
+      id: "history-view-my-views",
+      name: "My Views",
+      activeTabId: persistedActiveTabId,
+      tabs: persistedTabs,
+      source: "manual"
+    }
+  ]);
+
+  const [
+    persistedActiveViewId,
+    setPersistedActiveViewId
+  ] = usePersistentState<string>(
+    "history.activeViewId",
+    "history-view-my-views",
+    (value): value is string => typeof value === "string"
+  );
+
+  const [
     ephemeralConfig,
     setEphemeralConfig
   ] = React.useState<HistoryConfig | null>(null);
 
-  const tabs =
-    ephemeralConfig?.tabs ?? persistedTabs;
+  const views = ephemeralConfig?.views ?? persistedViews;
+  const activeViewId = ephemeralConfig?.activeViewId ?? persistedActiveViewId;
+  const activeView = views.find(view => view.id === activeViewId) ?? views[0];
+  const tabs = activeView?.tabs ?? [];
+  const activeTabId = activeView?.activeTabId ?? tabs[0]?.id ?? "history-tab-default";
 
-  const activeTabId =
-    ephemeralConfig?.activeTabId ?? persistedActiveTabId;
+  const setViews = (nextViews: HistoryViewConfig[]): void => {
+    const normalized = normalizeHistoryViews(nextViews);
+    if (ephemeralConfig) {
+      setEphemeralConfig(current => current ? {
+        ...current,
+        activeViewId: normalized.some(view => view.id === current.activeViewId)
+          ? current.activeViewId
+          : normalized[0].id,
+        views: normalized
+      } : current);
+      return;
+    }
+    setPersistedViews(normalized);
+  };
 
-  const setTabs =
-    (nextTabs: HistoryTabConfig[]): void => {
-      if (ephemeralConfig) {
-        setEphemeralConfig(current => {
-          if (!current) return current;
-          const normalizedTabs = normalizeHistoryTabs(nextTabs);
-          return {
-            ...current,
-            activeTabId: normalizedTabs.some(tab => tab.id === current.activeTabId)
-              ? current.activeTabId
-              : normalizedTabs[0]?.id ?? current.activeTabId,
-            tabs: normalizedTabs
-          };
-        });
-        return;
-      }
-      setPersistedTabs(nextTabs);
-    };
+  const setActiveViewId = (nextActiveViewId: string): void => {
+    if (ephemeralConfig) {
+      setEphemeralConfig(current => current ? { ...current, activeViewId: nextActiveViewId } : current);
+      return;
+    }
+    setPersistedActiveViewId(nextActiveViewId);
+  };
 
-  const setActiveTabId =
-    (nextActiveTabId: string): void => {
-      if (ephemeralConfig) {
-        setEphemeralConfig(current => current
-          ? { ...current, activeTabId: nextActiveTabId }
-          : current);
-        return;
-      }
+  const setTabs = (nextTabs: HistoryTabConfig[]): void => {
+    if (!activeView) return;
+    const normalizedTabs = normalizeHistoryTabs(nextTabs);
+    setViews(views.map(view => view.id === activeView.id ? {
+      ...view,
+      activeTabId: normalizedTabs.some(tab => tab.id === view.activeTabId)
+        ? view.activeTabId
+        : normalizedTabs[0].id,
+      tabs: normalizedTabs
+    } : view));
+  };
+
+  const setActiveTabId = (nextActiveTabId: string): void => {
+    if (!activeView) return;
+    setViews(views.map(view => view.id === activeView.id
+      ? { ...view, activeTabId: nextActiveTabId }
+      : view));
+    if (!ephemeralConfig && activeView.id === "history-view-my-views") {
       setPersistedActiveTabId(nextActiveTabId);
-    };
+    }
+  };
 
   const activeTab =
     tabs.find(
@@ -3415,10 +3496,13 @@ export function HistoryPanel({
             }
 
             if (!cancelled) {
-              setPersistedTabs(config.tabs);
-              setPersistedActiveTabId(
-                config.activeTabId
-              );
+              setPersistedViews(config.views);
+              setPersistedActiveViewId(config.activeViewId);
+              const myViews = config.views.find(view => view.id === "history-view-my-views");
+              if (myViews) {
+                setPersistedTabs(myViews.tabs);
+                setPersistedActiveTabId(myViews.activeTabId);
+              }
               setPersistedRefreshIntervalMs(
                 config.refreshIntervalMs
               );
@@ -3426,9 +3510,15 @@ export function HistoryPanel({
           } else if (response.status === 404) {
             const localConfig =
               createHistoryConfig(
-                persistedActiveTabId,
+                "history-view-my-views",
                 persistedRefreshIntervalMs,
-                persistedTabs
+                [{
+                  id: "history-view-my-views",
+                  name: "My Views",
+                  activeTabId: persistedActiveTabId,
+                  tabs: persistedTabs,
+                  source: "manual"
+                }]
               );
 
             const saveResponse =
@@ -3489,9 +3579,9 @@ export function HistoryPanel({
           () => {
             const config =
               createHistoryConfig(
-                persistedActiveTabId,
+                persistedActiveViewId,
                 persistedRefreshIntervalMs,
-                persistedTabs
+                persistedViews
               );
 
             void fetch(
@@ -3535,9 +3625,9 @@ export function HistoryPanel({
         );
     }, [
       historyConfigReady,
-      persistedActiveTabId,
+      persistedActiveViewId,
       persistedRefreshIntervalMs,
-      persistedTabs
+      persistedViews
     ]
   );
 
@@ -3731,9 +3821,9 @@ export function HistoryPanel({
       downloadJson(
         "sensorsphere-history-config.json",
         createHistoryConfig(
-          activeTabId,
+          activeViewId,
           refreshIntervalMs,
-          tabs
+          views
         )
       );
     };
@@ -3963,13 +4053,13 @@ export function HistoryPanel({
           importPayload as
             HistoryConfig;
 
-        setTabs(config.tabs);
-        setActiveTabId(
-          config.activeTabId
-        );
-        setRefreshIntervalMs(
-          config.refreshIntervalMs
-        );
+        if (ephemeralConfig) {
+          setEphemeralConfig(config);
+        } else {
+          setPersistedViews(config.views);
+          setPersistedActiveViewId(config.activeViewId);
+        }
+        setRefreshIntervalMs(config.refreshIntervalMs);
       }
 
       setImportDialogOpened(false);
@@ -3979,6 +4069,44 @@ export function HistoryPanel({
       setImportTargetGraphId(null);
       setHistoryConfigError(null);
     };
+
+  const openSaveHistoryView = (): void => {
+    if (!templateLaunch || !ephemeralConfig) return;
+    const base = `${templateLaunch.templateName} - History`;
+    const names = new Set(persistedViews.map(view => view.name.toLocaleLowerCase()));
+    let candidate = base;
+    let suffix = 2;
+    while (names.has(candidate.toLocaleLowerCase())) {
+      candidate = `${base} (${suffix++})`;
+    }
+    setSaveHistoryViewName(candidate);
+    setSaveHistoryViewOpened(true);
+  };
+
+  const saveTemplateHistoryView = (): void => {
+    const name = saveHistoryViewName.trim();
+    if (!name || !activeView) return;
+    const stamp = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const remappedTabs = activeView.tabs.map((tab, tabIndex) => ({
+      ...tab,
+      id: `history-tab-${stamp}-${tabIndex}`,
+      graphs: tab.graphs.map((graph, graphIndex) => ({
+        ...graph,
+        id: `history-graph-${stamp}-${tabIndex}-${graphIndex}`
+      }))
+    }));
+    const view: HistoryViewConfig = {
+      id: `history-view-${stamp}`,
+      name,
+      activeTabId: remappedTabs[0].id,
+      tabs: remappedTabs,
+      source: "dashboard-template"
+    };
+    setPersistedViews(current => [...current, view]);
+    setPersistedActiveViewId(view.id);
+    setSaveHistoryViewOpened(false);
+    setSaveHistoryViewName("");
+  };
 
   const addTab =
     (): void => {
@@ -4291,6 +4419,20 @@ export function HistoryPanel({
         align="center"
         wrap="wrap"
       >
+        {!templateLaunch && (
+          <>
+            <Text size="xs" fw={600}>View</Text>
+            <Select
+            size="xs"
+            aria-label="History view"
+            value={activeView?.id ?? null}
+            data={views.map(view => ({ value: view.id, label: view.name }))}
+            onChange={value => value && setActiveViewId(value)}
+            w={210}
+            allowDeselect={false}
+            />
+          </>
+        )}
         {
           tabs.map(
             tab => (
@@ -4558,6 +4700,9 @@ export function HistoryPanel({
         {templateLaunch && (
           <>
             <Text size="sm" c="dimmed" aria-hidden="true">|</Text>
+            <Button size="xs" variant="light" color="violet" onClick={openSaveHistoryView}>
+              Save as History view
+            </Button>
             <Button size="xs" variant="light" onClick={resetTemplateHistory}>
               Reset from template
             </Button>
@@ -4704,7 +4849,7 @@ export function HistoryPanel({
                 color="yellow"
                 title="Replace complete History configuration?"
               >
-                This import replaces all History tabs and graphs.
+                This import replaces all History views, tabs and graphs.
               </Alert>
             )
           }
@@ -4735,6 +4880,30 @@ export function HistoryPanel({
               }
             >
               Import
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={saveHistoryViewOpened}
+        onClose={() => setSaveHistoryViewOpened(false)}
+        title="Save as History view"
+        centered
+      >
+        <Stack gap="md">
+          <TextInput
+            label="View name"
+            value={saveHistoryViewName}
+            onChange={event => setSaveHistoryViewName(event.currentTarget.value)}
+            autoFocus
+          />
+          <Group justify="flex-end">
+            <Button variant="light" color="gray" onClick={() => setSaveHistoryViewOpened(false)}>
+              Cancel
+            </Button>
+            <Button disabled={!saveHistoryViewName.trim()} onClick={saveTemplateHistoryView}>
+              Save view
             </Button>
           </Group>
         </Stack>

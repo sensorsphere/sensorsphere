@@ -865,8 +865,10 @@ app.get("/api/v1/history-config", async (_request, reply) => {
 app.put("/api/v1/history-config", async (request, reply) => {
   const body = request.body as {
     version?: unknown;
+    activeViewId?: unknown;
     activeTabId?: unknown;
     refreshIntervalMs?: unknown;
+    views?: unknown;
     tabs?: unknown;
   } | null;
 
@@ -875,11 +877,15 @@ app.put("/api/v1/history-config", async (request, reply) => {
     (
       body.version !== 1 &&
       body.version !== 2 &&
-      body.version !== 3
+      body.version !== 3 &&
+      body.version !== 4
     ) ||
-    typeof body.activeTabId !== "string" ||
     typeof body.refreshIntervalMs !== "number" ||
-    !Array.isArray(body.tabs)
+    (
+      body.version === 4
+        ? (typeof body.activeViewId !== "string" || !Array.isArray(body.views))
+        : (typeof body.activeTabId !== "string" || !Array.isArray(body.tabs))
+    )
   ) {
     return reply.code(400).send({
       error: "invalid_history_config"
