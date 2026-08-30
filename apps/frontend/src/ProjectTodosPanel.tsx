@@ -987,8 +987,7 @@ export function ProjectTodosPanel() {
             <TextInput label="Patch" placeholder="PR-083-….patch" value={taskForm.patchReference ?? ""} onChange={event => setTaskForm(current => ({ ...current, patchReference: event.currentTarget.value || null }))} />
           </Group>
           <Group justify="flex-end">
-            <Button variant="light" onClick={() => setTaskModalOpen(false)}>Cancel</Button>
-            color="gray"
+            <Button variant="light" color="gray" onClick={() => setTaskModalOpen(false)}>Cancel</Button>
             <Button
               disabled={!taskForm.title.trim() || !taskForm.sectionId}
               onClick={saveTask}
@@ -1001,8 +1000,7 @@ export function ProjectTodosPanel() {
         <Stack>
           <TextInput label="Name" value={sectionName} onChange={event => setSectionName(event.currentTarget.value)} autoFocus />
           <Group justify="flex-end">
-            <Button variant="light" onClick={() => setSectionModalOpen(false)}>Cancel</Button>
-            color="gray"
+            <Button variant="light" color="gray" onClick={() => setSectionModalOpen(false)}>Cancel</Button>
             <Button disabled={!sectionName.trim()} onClick={async () => {
               if (editingSection) await updateProjectTodoSection(editingSection.id, { name: sectionName.trim() });
               else await createProjectTodoSection({ name: sectionName.trim() });
@@ -1026,8 +1024,7 @@ export function ProjectTodosPanel() {
           />
           <Textarea label="Markdown" minRows={14} value={importMarkdown} onChange={event => setImportMarkdown(event.currentTarget.value)} placeholder="## Todos\n\n### SensorSphere App\n\n* [ ] My task" />
           <Group justify="flex-end">
-            <Button variant="light" onClick={() => setImportModalOpen(false)}>Cancel</Button>
-            color="gray"
+            <Button variant="light" color="gray" onClick={() => setImportModalOpen(false)}>Cancel</Button>
             <Button color="orange" disabled={!importMarkdown.trim()} onClick={async () => {
               if (!window.confirm("Replace all current Project Todos with this Markdown import?")) return;
               const result = await importProjectTodosMarkdown(importMarkdown);

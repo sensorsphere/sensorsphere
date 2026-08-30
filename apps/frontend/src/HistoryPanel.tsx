@@ -140,7 +140,7 @@ export interface HistoryTemplateLaunchConfig {
 interface HistoryPanelProps {
   templateLaunch?: HistoryTemplateLaunchConfig | null;
   onCloseTemplateLaunch?: () => void;
-  onTemplateViewSaved?: () => void;
+  onTemplateViewSaved?: (viewId: string) => void;
 }
 
 const PERIODS = [
@@ -3243,8 +3243,12 @@ export function HistoryPanel({
 
   const [saveHistoryViewOpened, setSaveHistoryViewOpened] = React.useState(false);
   const [saveHistoryViewName, setSaveHistoryViewName] = React.useState("");
+  const saveHistoryViewNameRef = React.useRef<HTMLInputElement>(null);
   const [newHistoryViewOpened, setNewHistoryViewOpened] = React.useState(false);
   const [newHistoryViewName, setNewHistoryViewName] = React.useState("");
+  const [renameHistoryViewOpened, setRenameHistoryViewOpened] = React.useState(false);
+  const [renameHistoryViewName, setRenameHistoryViewName] = React.useState("");
+  const renameHistoryViewNameRef = React.useRef<HTMLInputElement>(null);
   const [deleteHistoryViewOpened, setDeleteHistoryViewOpened] = React.useState(false);
   const [deleteHistoryTabTarget, setDeleteHistoryTabTarget] = React.useState<{ id: string; name: string } | null>(null);
 
@@ -3308,11 +3312,9 @@ export function HistoryPanel({
   ] = React.useState<HistoryConfig | null>(null);
 
   const views = ephemeralConfig?.views ?? persistedViews;
-  const orderedViews = [...views].sort((left, right) => {
-    if (left.id === "history-view-my-views") return -1;
-    if (right.id === "history-view-my-views") return 1;
-    return left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
-  });
+  const orderedViews = [...views].sort((left, right) =>
+    left.name.localeCompare(right.name, undefined, { sensitivity: "base" })
+  );
   const activeViewId = ephemeralConfig?.activeViewId ?? persistedActiveViewId;
   const activeView = views.find(view => view.id === activeViewId) ?? views[0];
   const tabs = activeView?.tabs ?? [];
@@ -3399,6 +3401,27 @@ export function HistoryPanel({
     setNewHistoryViewOpened(false);
   };
 
+  const openRenameHistoryView = (): void => {
+    if (!activeView) return;
+    setRenameHistoryViewName(activeView.name);
+    setRenameHistoryViewOpened(true);
+  };
+
+  const renameActiveHistoryView = (): void => {
+    if (!activeView) return;
+    const name = renameHistoryViewName.trim();
+    if (!name) return;
+    const duplicate = persistedViews.some(
+      view => view.id !== activeView.id && view.name.toLocaleLowerCase() === name.toLocaleLowerCase()
+    );
+    if (duplicate) return;
+
+    setPersistedViews(current => normalizeHistoryViews(
+      current.map(view => view.id === activeView.id ? { ...view, name } : view)
+    ));
+    setRenameHistoryViewOpened(false);
+  };
+
   const deleteActiveHistoryView = (): void => {
     if (!activeView || activeView.id === "history-view-my-views") return;
 
@@ -3413,6 +3436,27 @@ export function HistoryPanel({
     persistedViews.some(
       view => view.name.toLocaleLowerCase() === newHistoryViewName.trim().toLocaleLowerCase()
     );
+
+  const renameHistoryViewNameDuplicate = renameHistoryViewName.trim().length > 0 &&
+    persistedViews.some(
+      view => view.id !== activeView?.id &&
+        view.name.toLocaleLowerCase() === renameHistoryViewName.trim().toLocaleLowerCase()
+    );
+
+  React.useEffect(() => {
+    if (!saveHistoryViewOpened) return;
+    const timeout = window.setTimeout(() => saveHistoryViewNameRef.current?.focus(), 80);
+    return () => window.clearTimeout(timeout);
+  }, [saveHistoryViewOpened]);
+
+  React.useEffect(() => {
+    if (!renameHistoryViewOpened) return;
+    const timeout = window.setTimeout(() => {
+      renameHistoryViewNameRef.current?.focus();
+      renameHistoryViewNameRef.current?.select();
+    }, 80);
+    return () => window.clearTimeout(timeout);
+  }, [renameHistoryViewOpened]);
 
   const activeTab =
     tabs.find(
@@ -4194,7 +4238,7 @@ export function HistoryPanel({
       setSaveHistoryViewOpened(false);
       setSaveHistoryViewName("");
       setHistoryConfigError(null);
-      onTemplateViewSaved?.();
+      onTemplateViewSaved?.(view.id);
     } catch (error) {
       setHistoryConfigError(
         error instanceof Error
@@ -4580,6 +4624,8 @@ export function HistoryPanel({
           <>
             <Text size="xs" fw={600}>View</Text>
             <Select
+            id="history-view-select"
+            name="historyView"
             size="xs"
             aria-label="History view"
             value={activeView?.id ?? null}
@@ -4602,7 +4648,22 @@ export function HistoryPanel({
                 +
               </ActionIcon>
             </Tooltip>
-            <Tooltip label={activeView?.id === "history-view-my-views" ? "My Views cannot be deleted" : "Delete view"}>
+            <Tooltip label="Rename view">
+              <ActionIcon
+                size="sm"
+                variant="light"
+                color="blue"
+                aria-label="Rename view"
+                disabled={!activeView}
+                onClick={openRenameHistoryView}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label={activeView?.id === "history-view-my-views" ? "Built-in view cannot be deleted" : "Delete view"}>
               <ActionIcon
                 size="sm"
                 variant="light"
@@ -5089,6 +5150,8 @@ export function HistoryPanel({
         <Stack>
           <TextInput
             ref={newHistoryViewNameRef}
+            id="new-history-view-name"
+            name="historyViewName"
             autoFocus
             label="Name"
             placeholder="My new view"
@@ -5145,6 +5208,40 @@ export function HistoryPanel({
       </Modal>
 
       <Modal
+        opened={renameHistoryViewOpened}
+        onClose={() => setRenameHistoryViewOpened(false)}
+        title="Rename History view"
+        centered
+      >
+        <Stack>
+          <TextInput
+            ref={renameHistoryViewNameRef}
+            label="View name"
+            value={renameHistoryViewName}
+            error={renameHistoryViewNameDuplicate ? "A History view with this name already exists." : undefined}
+            onChange={event => setRenameHistoryViewName(event.currentTarget.value)}
+            onKeyDown={event => {
+              if (event.key === "Enter" && renameHistoryViewName.trim() && !renameHistoryViewNameDuplicate) {
+                event.preventDefault();
+                renameActiveHistoryView();
+              }
+            }}
+          />
+          <Group justify="flex-end">
+            <Button variant="light" color="gray" onClick={() => setRenameHistoryViewOpened(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!renameHistoryViewName.trim() || renameHistoryViewNameDuplicate}
+              onClick={renameActiveHistoryView}
+            >
+              Save
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
         opened={deleteHistoryViewOpened}
         onClose={() => setDeleteHistoryViewOpened(false)}
         title="Delete History view"
@@ -5173,6 +5270,9 @@ export function HistoryPanel({
       >
         <Stack gap="md">
           <TextInput
+            ref={saveHistoryViewNameRef}
+            id="save-history-view-name"
+            name="historyViewName"
             label="View name"
             value={saveHistoryViewName}
             onChange={event => setSaveHistoryViewName(event.currentTarget.value)}

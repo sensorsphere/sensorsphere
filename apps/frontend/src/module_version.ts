@@ -18,10 +18,21 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.9.2";
+export const MODULE_VERSION = "1.10.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.10.0": {
+    releasedAt: "2026-08-30T07:05:00+02:00",
+    patch: "PR-138-history-view-rename-dialog-focus-v1.patch",
+    changes: [
+      { type: "fixed", description: "Project Todos dialogs no longer render stray color attribute text beside action buttons" },
+      { type: "changed", description: "History views are sorted alphabetically including the built-in My Views entry" },
+      { type: "added", description: "History views can be renamed from a blue edit action without changing their stable identity" },
+      { type: "changed", description: "Dialogs automatically focus their first editable field, including History view creation, rename and save dialogs" },
+      { type: "changed", description: "History view controls expose stable form identifiers for more consistent browser and accessibility integration" }
+    ]
+  },
   "1.9.2": {
     releasedAt: "2026-08-30T06:55:00+02:00",
     patch: "PR-137-history-view-interactions-v1.patch",
