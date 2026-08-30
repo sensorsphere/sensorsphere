@@ -18,10 +18,21 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.9.1";
+export const MODULE_VERSION = "1.9.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.9.2": {
+    releasedAt: "2026-08-30T06:55:00+02:00",
+    patch: "PR-137-history-view-interactions-v1.patch",
+    changes: [
+      { type: "fixed", description: "New History tabs and views start with one empty graph instead of preselecting the first Asset metrics" },
+      { type: "fixed", description: "The active History tab can be deleted without stale state restoring it" },
+      { type: "changed", description: "Saving Template History now persists immediately and opens the new view in regular History" },
+      { type: "changed", description: "History view choices are alphabetically sorted with My Views kept first" },
+      { type: "fixed", description: "New History view name input reliably receives focus when its dialog opens" }
+    ]
+  },
   "1.9.1": {
     releasedAt: "2026-08-29T23:15:00+02:00",
     patch: "PR-136-history-tabs-navigation-v1.patch",

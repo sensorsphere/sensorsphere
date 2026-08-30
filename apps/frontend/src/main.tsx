@@ -4874,6 +4874,11 @@ function Dashboard() {
                     setTemplateHistoryActive(false);
                     navigateTo("dashboards");
                   }}
+                  onTemplateViewSaved={() => {
+                    setHistoryTemplateLaunch(null);
+                    setTemplateHistoryActive(false);
+                    navigateTo("history");
+                  }}
                 />
               )
             }

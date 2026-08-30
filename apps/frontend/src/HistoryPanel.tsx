@@ -140,6 +140,7 @@ export interface HistoryTemplateLaunchConfig {
 interface HistoryPanelProps {
   templateLaunch?: HistoryTemplateLaunchConfig | null;
   onCloseTemplateLaunch?: () => void;
+  onTemplateViewSaved?: () => void;
 }
 
 const PERIODS = [
@@ -3068,7 +3069,8 @@ function formatCurrentValue(
 
 export function HistoryPanel({
   templateLaunch = null,
-  onCloseTemplateLaunch
+  onCloseTemplateLaunch,
+  onTemplateViewSaved
 }: HistoryPanelProps = {}) {
 
   const queryClient =
@@ -3109,6 +3111,11 @@ export function HistoryPanel({
   );
 
   const importInputRef =
+    React.useRef<HTMLInputElement>(
+      null
+    );
+
+  const newHistoryViewNameRef =
     React.useRef<HTMLInputElement>(
       null
     );
@@ -3301,6 +3308,11 @@ export function HistoryPanel({
   ] = React.useState<HistoryConfig | null>(null);
 
   const views = ephemeralConfig?.views ?? persistedViews;
+  const orderedViews = [...views].sort((left, right) => {
+    if (left.id === "history-view-my-views") return -1;
+    if (right.id === "history-view-my-views") return 1;
+    return left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+  });
   const activeViewId = ephemeralConfig?.activeViewId ?? persistedActiveViewId;
   const activeView = views.find(view => view.id === activeViewId) ?? views[0];
   const tabs = activeView?.tabs ?? [];
@@ -3351,6 +3363,14 @@ export function HistoryPanel({
     }
   };
 
+  React.useEffect(() => {
+    if (!newHistoryViewOpened) return;
+    const timeout = window.setTimeout(() => {
+      newHistoryViewNameRef.current?.focus();
+    }, 80);
+    return () => window.clearTimeout(timeout);
+  }, [newHistoryViewOpened]);
+
   const createHistoryView = (): void => {
     const name = newHistoryViewName.trim();
     if (!name) return;
@@ -3360,7 +3380,10 @@ export function HistoryPanel({
     );
     if (duplicate) return;
 
-    const tab = newTab(1);
+    const tab = {
+      ...newTab(1),
+      graphs: [newGraph()]
+    };
     const viewId = `history-view-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const view: HistoryViewConfig = {
       id: viewId,
@@ -4127,7 +4150,7 @@ export function HistoryPanel({
     setSaveHistoryViewOpened(true);
   };
 
-  const saveTemplateHistoryView = (): void => {
+  const saveTemplateHistoryView = async (): Promise<void> => {
     const name = saveHistoryViewName.trim();
     if (!name || !activeView) return;
     const stamp = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -4146,10 +4169,39 @@ export function HistoryPanel({
       tabs: remappedTabs,
       source: "dashboard-template"
     };
-    setPersistedViews(current => [...current, view]);
-    setPersistedActiveViewId(view.id);
-    setSaveHistoryViewOpened(false);
-    setSaveHistoryViewName("");
+    const nextViews = normalizeHistoryViews([...persistedViews, view]);
+    const config = createHistoryConfig(
+      view.id,
+      persistedRefreshIntervalMs,
+      nextViews
+    );
+
+    try {
+      const response = await fetch(
+        "/api/v1/history-config",
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(config)
+        }
+      );
+      if (!response.ok) {
+        throw new Error(`Unable to save History configuration (${response.status}).`);
+      }
+
+      setPersistedViews(nextViews);
+      setPersistedActiveViewId(view.id);
+      setSaveHistoryViewOpened(false);
+      setSaveHistoryViewName("");
+      setHistoryConfigError(null);
+      onTemplateViewSaved?.();
+    } catch (error) {
+      setHistoryConfigError(
+        error instanceof Error
+          ? error.message
+          : "Unable to save History configuration."
+      );
+    }
   };
 
   const addTab =
@@ -4159,10 +4211,12 @@ export function HistoryPanel({
         return;
       }
 
-      const tab =
-        newTab(
+      const tab = {
+        ...newTab(
           tabs.length + 1
-        );
+        ),
+        graphs: [newGraph()]
+      };
 
       const nextTabs =
         normalizeHistoryTabs([
@@ -4247,6 +4301,7 @@ export function HistoryPanel({
     ): void => {
 
       if (
+        !activeView ||
         tabs.length <= 1
       ) {
         return;
@@ -4259,26 +4314,46 @@ export function HistoryPanel({
         );
 
       const nextTabs =
-        tabs.filter(
-          tab =>
-            tab.id !== tabId
+        normalizeHistoryTabs(
+          tabs.filter(
+            tab =>
+              tab.id !== tabId
+          )
         );
 
-      setTabs(
-        nextTabs
+      const nextActiveTabId =
+        activeTabId === tabId
+          ? (
+              nextTabs[
+                Math.max(
+                  0,
+                  currentIndex - 1
+                )
+              ]?.id
+              ?? nextTabs[0].id
+            )
+          : activeTabId;
+
+      setViews(
+        views.map(
+          view =>
+            view.id === activeView.id
+              ? {
+                  ...view,
+                  activeTabId: nextActiveTabId,
+                  tabs: nextTabs
+                }
+              : view
+        )
       );
 
       if (
-        activeTabId === tabId
+        !ephemeralConfig &&
+        activeView.id ===
+          "history-view-my-views"
       ) {
-        setActiveTabId(
-          nextTabs[
-            Math.max(
-              0,
-              currentIndex - 1
-            )
-          ]?.id
-          ?? nextTabs[0].id
+        setPersistedActiveTabId(
+          nextActiveTabId
         );
       }
     };
@@ -4508,7 +4583,7 @@ export function HistoryPanel({
             size="xs"
             aria-label="History view"
             value={activeView?.id ?? null}
-            data={views.map(view => ({ value: view.id, label: view.name }))}
+            data={orderedViews.map(view => ({ value: view.id, label: view.name }))}
             onChange={value => value && setActiveViewId(value)}
             w={210}
             allowDeselect={false}
@@ -5013,6 +5088,7 @@ export function HistoryPanel({
       >
         <Stack>
           <TextInput
+            ref={newHistoryViewNameRef}
             autoFocus
             label="Name"
             placeholder="My new view"
@@ -5106,7 +5182,7 @@ export function HistoryPanel({
             <Button variant="light" color="gray" onClick={() => setSaveHistoryViewOpened(false)}>
               Cancel
             </Button>
-            <Button disabled={!saveHistoryViewName.trim()} onClick={saveTemplateHistoryView}>
+            <Button disabled={!saveHistoryViewName.trim()} onClick={() => void saveTemplateHistoryView()}>
               Save view
             </Button>
           </Group>
