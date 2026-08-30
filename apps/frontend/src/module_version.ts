@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.10.0";
+export const MODULE_VERSION = "1.10.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.10.1": {
+    releasedAt: "2026-08-30T07:25:00+02:00",
+    patch: "PR-139-dialog-focus-history-restore-v1.patch",
+    changes: [
+      { type: "fixed", description: "Dialogs now move focus from framework controls such as the close button to the first editable field" },
+      { type: "fixed", description: "Dialogs whose editable content mounts after the dialog container also receive consistent first-field focus" },
+      { type: "fixed", description: "History waits for the persisted configuration before rendering so returning to History no longer flashes My Views before the previously selected view" }
+    ]
+  },
   "1.10.0": {
     releasedAt: "2026-08-30T07:05:00+02:00",
     patch: "PR-138-history-view-rename-dialog-focus-v1.patch",

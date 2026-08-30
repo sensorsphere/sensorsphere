@@ -497,26 +497,40 @@ function emptyClassificationEditor(kind: ClassificationKind): ClassificationEdit
 function Dashboard() {
 
   React.useEffect(() => {
+    const editableFieldSelector =
+      'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), [role="combobox"]:not([aria-disabled="true"]), select:not([disabled])';
+
     const focusFirstField = (dialog: Element): void => {
       window.requestAnimationFrame(() => {
         const active = document.activeElement;
-        if (active && dialog.contains(active)) return;
+        if (
+          active instanceof HTMLElement &&
+          dialog.contains(active) &&
+          active.matches(editableFieldSelector)
+        ) {
+          return;
+        }
 
-        const field = dialog.querySelector<HTMLElement>(
-          'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), [role="combobox"]:not([aria-disabled="true"]), select:not([disabled])'
-        );
-        field?.focus();
+        dialog.querySelector<HTMLElement>(editableFieldSelector)?.focus();
       });
     };
 
     const observer = new MutationObserver(mutations => {
+      const dialogs = new Set<Element>();
+
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
           if (!(node instanceof Element)) continue;
-          if (node.matches('[role="dialog"]')) focusFirstField(node);
-          node.querySelectorAll('[role="dialog"]').forEach(focusFirstField);
+
+          if (node.matches('[role="dialog"]')) dialogs.add(node);
+          node.querySelectorAll('[role="dialog"]').forEach(dialog => dialogs.add(dialog));
+
+          const containingDialog = node.closest('[role="dialog"]');
+          if (containingDialog) dialogs.add(containingDialog);
         }
       }
+
+      dialogs.forEach(focusFirstField);
     });
 
     observer.observe(document.body, { childList: true, subtree: true });

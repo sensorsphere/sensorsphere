@@ -3849,7 +3849,11 @@ export function HistoryPanel({
     ]
   );
 
-  if (assetsQuery.isLoading) {
+  if (
+    (!templateLaunch && !historyConfigReady) ||
+    (templateLaunch && !ephemeralConfig) ||
+    assetsQuery.isLoading
+  ) {
     return <Loader />;
   }
 
