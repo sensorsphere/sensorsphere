@@ -4602,7 +4602,7 @@ export function HistoryPanel({
     };
 
   return (
-    <Stack gap="lg">
+    <Stack gap="sm">
 
       <div>
         <Group gap="xs">
@@ -4618,7 +4618,7 @@ export function HistoryPanel({
         </Text>
       </div>
 
-      <div className="page-sticky-controls page-sticky-controls-gap-lg history-sticky-controls">
+      <div className="page-sticky-controls page-sticky-controls-gap-md history-sticky-controls">
       <Group
         gap="xs"
         align="center"
@@ -4873,7 +4873,7 @@ export function HistoryPanel({
                       <ActionIcon
                         size="sm"
                         variant="subtle"
-                        color="green"
+                        color="blue"
                         aria-label="Rename tab"
                         onClick={
                           () =>

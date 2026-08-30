@@ -222,6 +222,13 @@ export function MetricRoutingPanel() {
   if (view === "traffic") {
     return (
       <Stack gap="lg" className="metric-routing-panel metric-routing-traffic-panel">
+        <div className="metric-routing-title">
+          <Group gap="xs">
+            <NavigationIcon page="metric-routing" size={24} />
+            <Title order={2}>Metric Routing</Title>
+          </Group>
+          <Text c="dimmed">Observe routing decisions and raw gateway MQTT traffic.</Text>
+        </div>
         <SegmentedControl
           className="metric-routing-tabs"
           value={view}
@@ -239,6 +246,15 @@ export function MetricRoutingPanel() {
 
   return (
     <Stack gap="lg" className="metric-routing-panel">
+      <div className="metric-routing-title">
+        <Group gap="xs">
+          <NavigationIcon page="metric-routing" size={24} />
+          <Title order={2}>Metric Routing</Title>
+        </Group>
+        <Text c="dimmed">
+          Observe how gateway-qualified MQTT metrics would be routed before activation.
+        </Text>
+      </div>
       <SegmentedControl
         className="metric-routing-tabs"
         value={view}
@@ -249,16 +265,7 @@ export function MetricRoutingPanel() {
         ]}
         style={{ alignSelf: "flex-start" }}
       />
-      <Group className="metric-routing-header" justify="space-between" align="flex-end">
-        <div>
-          <Group gap="xs">
-            <NavigationIcon page="metric-routing" size={24} />
-            <Title order={2}>Metric Routing</Title>
-          </Group>
-          <Text c="dimmed">
-            Observe how gateway-qualified MQTT metrics would be routed before activation.
-          </Text>
-        </div>
+      <Group className="metric-routing-header" justify="flex-end" align="flex-end">
         <Group align="flex-end" wrap="wrap">
           <Stack gap={2}>
             <Text size="xs" fw={500}>Period</Text>

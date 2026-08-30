@@ -326,3 +326,69 @@ body { background: var(--ss-page-bg); }
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
+
+
+/* PR-140 UI harmonization */
+.build-info-row > :last-child {
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.asset-editor-modal-content {
+  max-height: calc(100dvh - 24px);
+  overflow: hidden;
+}
+.asset-editor-modal-body {
+  overflow: hidden;
+}
+
+.history-sticky-controls {
+  gap: var(--mantine-spacing-xs);
+}
+
+.metric-routing-title {
+  flex: 0 0 auto;
+}
+
+.overview-main {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.overview-page-container {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.overview-page-stack {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.overview-page-stack > :not(.overview-current-readings),
+.overview-summary,
+.overview-current-readings-controls {
+  flex: 0 0 auto;
+}
+.overview-current-readings {
+  flex: 1 1 0;
+  min-height: 0;
+  height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.overview-current-readings-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
+}

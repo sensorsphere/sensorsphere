@@ -77,6 +77,7 @@ import {
   AddMetricToDashboardModal
 } from "./AddMetricToDashboardModal";
 import { DashboardMetricAction } from "./DashboardMetricAction";
+import { EditActionIcon } from "./TableActionIcons";
 
 import {
   SensorCatalog
@@ -2289,18 +2290,11 @@ function Dashboard() {
                 page="topology"
               />
             }
-            title="Topology"
-            aria-label="Topology"
-            active={
-              activePage ===
-              "topology"
-            }
-            onClick={
-              () =>
-                navigateTo(
-                  "topology"
-                )
-            }
+            title="Topology (available later)"
+            aria-label="Topology (available later)"
+            active={false}
+            disabled
+            onClick={() => undefined}
           />
 
           <NavLink
@@ -2362,31 +2356,6 @@ function Dashboard() {
             label={
               navbarCollapsed
                 ? null
-                : "Versions"
-            }
-            leftSection={
-              <NavigationIcon
-                page="versions"
-              />
-            }
-            title="Versions"
-            aria-label="Versions"
-            active={
-              activePage ===
-              "versions"
-            }
-            onClick={
-              () =>
-                navigateTo(
-                  "versions"
-                )
-            }
-          />
-
-          <NavLink
-            label={
-              navbarCollapsed
-                ? null
                 : "Project Todos"
             }
             leftSection={
@@ -2418,6 +2387,31 @@ function Dashboard() {
             }
           />
 
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Versions"
+            }
+            leftSection={
+              <NavigationIcon
+                page="versions"
+              />
+            }
+            title="Versions"
+            aria-label="Versions"
+            active={
+              activePage ===
+              "versions"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "versions"
+                )
+            }
+          />
+
           {!navbarCollapsed && (
             <Stack
               gap={2}
@@ -2431,21 +2425,21 @@ function Dashboard() {
                 Build information
               </Text>
 
-              <Group justify="space-between" gap="xs" wrap="nowrap">
+              <Group className="build-info-row" justify="space-between" gap="xs" wrap="nowrap">
                 <Text size="xs" c="dimmed">Frontend</Text>
                 <Text size="xs" c="dimmed" ta="right">
                   {FRONTEND_MODULE_VERSION} · {formatBuildDate(frontendBuildQuery.data)}
                 </Text>
               </Group>
 
-              <Group justify="space-between" gap="xs" wrap="nowrap">
+              <Group className="build-info-row" justify="space-between" gap="xs" wrap="nowrap">
                 <Text size="xs" c="dimmed">API</Text>
                 <Text size="xs" c="dimmed" ta="right">
                   {apiModuleVersion ?? "—"} · {formatBuildDate(apiBuildDate)}
                 </Text>
               </Group>
 
-              <Group justify="space-between" gap="xs" wrap="nowrap">
+              <Group className="build-info-row" justify="space-between" gap="xs" wrap="nowrap">
                 <Text size="xs" c="dimmed">Ingestion</Text>
                 <Text size="xs" c="dimmed" ta="right">
                   {ingestionModuleVersion ?? "—"} · {formatBuildDate(ingestionBuildDate)}
@@ -2458,8 +2452,10 @@ function Dashboard() {
 
       <AppShell.Main
         className={
-          activePage === "gateway-coverage"
-            ? "gateway-coverage-main"
+          activePage === "dashboard"
+            ? "overview-main"
+            : activePage === "gateway-coverage"
+              ? "gateway-coverage-main"
             : activePage === "metric-routing"
               ? "metric-routing-main"
               : activePage === "todos"
@@ -2473,8 +2469,10 @@ function Dashboard() {
           py="xl"
           px="md"
           className={
-            activePage === "gateway-coverage"
-              ? "gateway-coverage-page-container"
+            activePage === "dashboard"
+              ? "overview-page-container"
+              : activePage === "gateway-coverage"
+                ? "gateway-coverage-page-container"
               : activePage === "metric-routing"
                 ? "metric-routing-page-container"
                 : activePage === "todos"
@@ -2486,8 +2484,10 @@ function Dashboard() {
           <Stack
             gap="xl"
             className={
-              activePage === "gateway-coverage"
-                ? "gateway-coverage-page-stack"
+              activePage === "dashboard"
+                ? "overview-page-stack"
+                : activePage === "gateway-coverage"
+                  ? "gateway-coverage-page-stack"
                 : activePage === "metric-routing"
                   ? "metric-routing-page-stack"
                   : activePage === "todos"
@@ -2499,7 +2499,7 @@ function Dashboard() {
             {
               activePage ===
                 "dashboard" && (
-            <div>
+            <div className="overview-summary">
 
               <Group
                 justify="space-between"
@@ -2545,15 +2545,10 @@ function Dashboard() {
                     variant="light"
                     loading={dashboardRefreshing}
                     onClick={() => void refreshDashboard()}
+                    title={dashboardRefreshedAt ? `Last refreshed ${dashboardRefreshedAt.toLocaleTimeString()}` : undefined}
                   >
-                    Refresh
+                    Refresh (auto 30 s)
                   </Button>
-
-                  <Text size="xs" c="dimmed">
-                    {dashboardRefreshedAt
-                      ? `Refreshed ${dashboardRefreshedAt.toLocaleTimeString()}`
-                      : "Auto refresh: 30 s"}
-                  </Text>
                 </Group>
               </Group>
 
@@ -3205,9 +3200,10 @@ function Dashboard() {
             {
               activePage ===
                 "dashboard" && (
-                <div>
+                <div className="overview-current-readings">
 
                   <Group
+                    className="overview-current-readings-controls"
                     justify="space-between"
                     mb="md"
                   >
@@ -3323,6 +3319,7 @@ function Dashboard() {
                     </Group>
                   </Group>
 
+                  <div className="overview-current-readings-scroll">
                   <SimpleGrid
                     cols={{
                       base: 1,
@@ -3823,6 +3820,7 @@ function Dashboard() {
                       )
                     }
                   </SimpleGrid>
+                  </div>
 
                 </div>
               )
@@ -4313,18 +4311,13 @@ function Dashboard() {
                                         </Badge>
                                       </Table.Td>
                                       <Table.Td>
-                                        <Button
-                                          size="compact-xs"
-                                          color="blue"
-                                          variant="light"
+                                        <EditActionIcon
                                           onClick={() =>
                                             setAssetForm(
                                               assetFormFromAsset(asset)
                                             )
                                           }
-                                        >
-                                          Edit
-                                        </Button>
+                                        />
                                       </Table.Td>
                                     </Table.Tr>
                                   );
@@ -4604,10 +4597,12 @@ function Dashboard() {
                   ? "Edit asset"
                   : "Add asset"
               }
-              size="lg"
+              size="xl"
+              centered
+              classNames={{ content: "asset-editor-modal-content", body: "asset-editor-modal-body" }}
             >
               {assetForm && (
-                <Stack gap="md">
+                <Stack gap="sm">
                   <SimpleGrid cols={{ base: 1, sm: 2 }}>
                     <TextInput
                       label="Asset ID"

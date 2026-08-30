@@ -18,10 +18,24 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.10.1";
+export const MODULE_VERSION = "1.11.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.11.0": {
+    releasedAt: "2026-08-30T20:32:00+02:00",
+    patch: "PR-140-ui-harmonization-v1.patch",
+    changes: [
+      { type: "changed", description: "Overview keeps summary, attention and alerts visible while Current readings scroll independently" },
+      { type: "changed", description: "Dashboard and Overview refresh actions display their automatic refresh interval inside the button" },
+      { type: "changed", description: "Dashboard actions use compact icons beside the dashboard group instead of occupying the page header" },
+      { type: "changed", description: "History controls use a denser vertical layout and blue edit actions" },
+      { type: "changed", description: "Assets compact view uses the shared pencil edit action and the Asset editor fits the viewport without an internal scrollbar" },
+      { type: "changed", description: "Topology navigation is temporarily disabled and Versions now appears below Project Todos" },
+      { type: "fixed", description: "Metric Routing title appears above routing tabs and stray color attribute text is removed" },
+      { type: "fixed", description: "Navbar build information stays on one line for each module" }
+    ]
+  },
   "1.10.1": {
     releasedAt: "2026-08-30T07:25:00+02:00",
     patch: "PR-139-dialog-focus-history-restore-v1.patch",

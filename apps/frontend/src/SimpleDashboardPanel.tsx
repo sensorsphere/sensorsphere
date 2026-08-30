@@ -849,52 +849,8 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
               ]);
             }}
           >
-            Refresh
+            Refresh (auto 15 s)
           </Button>
-          {activeDashboard && (
-            <>
-              {!activeDashboardIsTemplateInstance && (
-                <Button
-                  size="xs"
-                  variant="light"
-                  color="orange"
-                  onClick={() => {
-                    setConvertTemplateName(activeDashboard.name);
-                    setConvertCreateInstance(false);
-                    setConvertMetricKey(convertMetricOptions[0]?.value ?? null);
-                    setConvertTemplateOpen(true);
-                  }}
-                >
-                  ▦ Convert to template
-                </Button>
-              )}
-              <Button
-                size="xs"
-                variant="light"
-                color="blue"
-                onClick={() => {
-                  setDashboardName(activeDashboard.name);
-                  setDashboardModalMode("rename");
-                }}
-              >
-                Edit
-              </Button>
-              <Button
-                size="xs"
-                variant="light"
-                color="red"
-                onClick={() =>
-                  setDeleteTarget({
-                    type: "dashboard",
-                    id: activeDashboard.id,
-                    name: activeDashboard.name
-                  })
-                }
-              >
-                Delete
-              </Button>
-            </>
-          )}
         </Group>
       </Group>
 
@@ -908,7 +864,21 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
             <Stack gap={4}>
               {standardDashboards.length > 0 && (
                 <Group align="flex-start" gap="sm" wrap="nowrap">
-                  <Text size="xs" fw={700} c="dimmed" style={{ width: 240, flexShrink: 0, paddingTop: 8 }}>Standard</Text>
+                  <Group gap={4} wrap="nowrap" style={{ width: 240, flexShrink: 0, paddingTop: 4 }}>
+                    <Text size="xs" fw={700} c="dimmed" style={{ flex: 1 }}>Standard</Text>
+                    {activeDashboard && !activeDashboardIsTemplateInstance && (
+                      <Group gap={2} wrap="nowrap">
+                        <ActionIcon size="xs" variant="light" color="orange" title="Convert to template" aria-label="Convert to template" onClick={() => {
+                          setConvertTemplateName(activeDashboard.name);
+                          setConvertCreateInstance(false);
+                          setConvertMetricKey(convertMetricOptions[0]?.value ?? null);
+                          setConvertTemplateOpen(true);
+                        }}>▦</ActionIcon>
+                        <ActionIcon size="xs" variant="light" color="blue" title="Edit dashboard" aria-label="Edit dashboard" onClick={() => { setDashboardName(activeDashboard.name); setDashboardModalMode("rename"); }}><PencilIcon /></ActionIcon>
+                        <ActionIcon size="xs" variant="light" color="red" title="Delete dashboard" aria-label="Delete dashboard" onClick={() => setDeleteTarget({ type: "dashboard", id: activeDashboard.id, name: activeDashboard.name })}><TrashIcon /></ActionIcon>
+                      </Group>
+                    )}
+                  </Group>
                   <Tabs.List style={{ flex: 1, flexWrap: "wrap", overflow: "visible" }}>
                     {standardDashboards.map(dashboard => (
                       <Tabs.Tab
@@ -977,6 +947,21 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                         }}
                       >
                         <NavigationIcon page="history" size={14} />
+                      </ActionIcon>
+                      <ActionIcon
+                        size="xs"
+                        variant="light"
+                        color="blue"
+                        title={templateSelected ? "Rename selected dashboard" : "Select a template metric before renaming"}
+                        aria-label="Rename selected dashboard"
+                        disabled={!templateSelected || !activeDashboard}
+                        onClick={() => {
+                          if (!activeDashboard) return;
+                          setDashboardName(activeDashboard.name);
+                          setDashboardModalMode("rename");
+                        }}
+                      >
+                        <PencilIcon />
                       </ActionIcon>
                       <ActionIcon
                         size="xs"
