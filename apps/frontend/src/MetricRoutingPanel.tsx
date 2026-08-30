@@ -377,7 +377,6 @@ export function MetricRoutingPanel() {
               <Group gap={4} wrap="nowrap">
                 <Menu withinPortal closeOnItemClick={false}>
                   <Menu.Target><Button variant="light" justify="flex-start" style={{ flex: 1 }} styles={{ root: decisionFilters.length ? { border: "2px solid var(--mantine-color-blue-6)" } : undefined }}>{decisionFilters.length ? <Group gap={4}>{decisionFilters.map(value => <Badge key={value} color={decisionColor(value)} variant="light">{value}</Badge>)}</Group> : <Text size="sm" c="dimmed" fw={400}>All decisions</Text>}</Button></Menu.Target>
-                  color="gray"
                   <Menu.Dropdown>{DECISIONS.map(value => <Menu.Item key={value} leftSection={decisionFilters.includes(value) ? "✓" : undefined} onClick={() => setDecisionFilter(decisionFilters.includes(value) ? decisionFilters.filter(item => item !== value).join(",") : [...decisionFilters, value].join(","))}><Badge color={decisionColor(value)} variant="light">{value}</Badge></Menu.Item>)}</Menu.Dropdown>
                 </Menu>
                 {decisionFilters.length > 0 && <ActionIcon variant="subtle" onClick={() => setDecisionFilter("")}>×</ActionIcon>}

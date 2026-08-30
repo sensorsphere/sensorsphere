@@ -19,7 +19,8 @@ import {
   SimpleGrid,
   Stack,
   Text,
-  Title
+  Title,
+  Tooltip
 } from "@mantine/core";
 
 import {
@@ -41,6 +42,7 @@ import {
   getLocationIconName
 } from "./LocationIcon";
 import { DashboardMetricAction } from "./DashboardMetricAction";
+import { EditActionIcon } from "./TableActionIcons";
 
 interface Props {
   asset: Asset;
@@ -198,6 +200,16 @@ function qualityColor(
     case "UNKNOWN":
       return null;
   }
+}
+
+function DetailsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 10v6" />
+      <path d="M12 7h.01" />
+    </svg>
+  );
 }
 
 export function AssetLatestCard({
@@ -689,30 +701,24 @@ export function AssetLatestCard({
             </SimpleGrid>
           )}
 
-        <Group justify="flex-end">
+        <Group justify="flex-end" gap="xs">
           {onEdit && (
-            <Button
-              size="xs"
-              color="blue"
-              variant="light"
+            <EditActionIcon
               onClick={() => onEdit(asset)}
-            >
-              Edit
-            </Button>
+            />
           )}
 
-          <Button
-            size="xs"
-            variant="light"
-            onClick={
-              () =>
-                setDetailsOpened(
-                  true
-                )
-            }
-          >
-            View details
-          </Button>
+          <Tooltip label="View details">
+            <ActionIcon
+              size="sm"
+              variant="light"
+              color="blue"
+              aria-label="View details"
+              onClick={() => setDetailsOpened(true)}
+            >
+              <DetailsIcon />
+            </ActionIcon>
+          </Tooltip>
         </Group>
 
         <Text

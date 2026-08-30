@@ -104,6 +104,17 @@ function PencilIcon() {
   );
 }
 
+function TemplateEditIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2.5" y="2.5" width="4" height="4" rx="0.7" />
+      <rect x="9.5" y="2.5" width="4" height="4" rx="0.7" />
+      <rect x="2.5" y="9.5" width="4" height="4" rx="0.7" />
+      <path d="M10 12.7 13.2 9.5l1.3 1.3-3.2 3.2-1.8.5Z" />
+    </svg>
+  );
+}
+
 function DetachIcon() {
   return (
     <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -866,18 +877,48 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                 <Group align="flex-start" gap="sm" wrap="nowrap">
                   <Group gap={4} wrap="nowrap" style={{ width: 240, flexShrink: 0, paddingTop: 4 }}>
                     <Text size="xs" fw={700} c="dimmed" style={{ flex: 1 }}>Standard</Text>
-                    {activeDashboard && !activeDashboardIsTemplateInstance && (
-                      <Group gap={2} wrap="nowrap">
-                        <ActionIcon size="xs" variant="light" color="orange" title="Convert to template" aria-label="Convert to template" onClick={() => {
+                    <Group gap={2} wrap="nowrap">
+                      <ActionIcon
+                        size="xs"
+                        variant="light"
+                        color="orange"
+                        title={!activeDashboardIsTemplateInstance && activeDashboard ? "Convert to template" : "Select a Standard dashboard before converting"}
+                        aria-label="Convert to template"
+                        disabled={!activeDashboard || activeDashboardIsTemplateInstance}
+                        onClick={() => {
+                          if (!activeDashboard || activeDashboardIsTemplateInstance) return;
                           setConvertTemplateName(activeDashboard.name);
                           setConvertCreateInstance(false);
                           setConvertMetricKey(convertMetricOptions[0]?.value ?? null);
                           setConvertTemplateOpen(true);
-                        }}>▦</ActionIcon>
-                        <ActionIcon size="xs" variant="light" color="blue" title="Edit dashboard" aria-label="Edit dashboard" onClick={() => { setDashboardName(activeDashboard.name); setDashboardModalMode("rename"); }}><PencilIcon /></ActionIcon>
-                        <ActionIcon size="xs" variant="light" color="red" title="Delete dashboard" aria-label="Delete dashboard" onClick={() => setDeleteTarget({ type: "dashboard", id: activeDashboard.id, name: activeDashboard.name })}><TrashIcon /></ActionIcon>
-                      </Group>
-                    )}
+                        }}
+                      >▦</ActionIcon>
+                      <ActionIcon
+                        size="xs"
+                        variant="light"
+                        color="blue"
+                        title={!activeDashboardIsTemplateInstance && activeDashboard ? "Rename selected dashboard" : "Select a Standard dashboard before renaming"}
+                        aria-label="Rename selected dashboard"
+                        disabled={!activeDashboard || activeDashboardIsTemplateInstance}
+                        onClick={() => {
+                          if (!activeDashboard || activeDashboardIsTemplateInstance) return;
+                          setDashboardName(activeDashboard.name);
+                          setDashboardModalMode("rename");
+                        }}
+                      ><PencilIcon /></ActionIcon>
+                      <ActionIcon
+                        size="xs"
+                        variant="light"
+                        color="red"
+                        title={!activeDashboardIsTemplateInstance && activeDashboard ? "Delete selected dashboard" : "Select a Standard dashboard before deleting"}
+                        aria-label="Delete selected dashboard"
+                        disabled={!activeDashboard || activeDashboardIsTemplateInstance}
+                        onClick={() => {
+                          if (!activeDashboard || activeDashboardIsTemplateInstance) return;
+                          setDeleteTarget({ type: "dashboard", id: activeDashboard.id, name: activeDashboard.name });
+                        }}
+                      ><TrashIcon /></ActionIcon>
+                    </Group>
                   </Group>
                   <Tabs.List style={{ flex: 1, flexWrap: "wrap", overflow: "visible" }}>
                     {standardDashboards.map(dashboard => (
@@ -933,7 +974,7 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                         aria-label={`Edit template: ${group.templateName}`}
                         onClick={() => { setTemplateManagerInitialId(group.templateId); setTemplateManagerOpened(true); }}
                       >
-                        <PencilIcon />
+                        <TemplateEditIcon />
                       </ActionIcon>
                       <ActionIcon
                         size="xs"

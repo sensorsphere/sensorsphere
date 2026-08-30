@@ -3207,15 +3207,21 @@ function Dashboard() {
                     justify="space-between"
                     mb="md"
                   >
-                    <div>
-                      <Title order={2}>
-                        Current readings
-                      </Title>
+                    <Group gap="sm" align="center" wrap="nowrap">
+                      <div>
+                        <Title order={2}>
+                          Current readings
+                        </Title>
 
-                      <Text c="dimmed">
-                        Latest temperature and humidity by asset
-                      </Text>
-                    </div>
+                        <Text c="dimmed">
+                          Latest temperature and humidity by asset
+                        </Text>
+                      </div>
+
+                      <Badge variant="light">
+                        {currentReadingAssets.length} / {assets.length} assets
+                      </Badge>
+                    </Group>
 
                     <Group
                       gap="sm"
@@ -3310,12 +3316,6 @@ function Dashboard() {
                         styles={activeFilterStyles(currentReadingHealth !== "all")}
                       />
 
-
-                      <Badge variant="light">
-                        {
-                          currentReadingAssets.length
-                        } / {assets.length} assets
-                      </Badge>
                     </Group>
                   </Group>
 

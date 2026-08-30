@@ -18,10 +18,21 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.11.0";
+export const MODULE_VERSION = "1.11.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.11.1": {
+    releasedAt: "2026-08-30T20:45:00+02:00",
+    patch: "PR-141-ui-consistency-followup-v1.patch",
+    changes: [
+      { type: "fixed", description: "Metric Routing no longer renders a stray color attribute beside the Decision filter" },
+      { type: "changed", description: "Overview places the Current readings asset counter beside the section heading instead of consuming filter-row width" },
+      { type: "changed", description: "Standard dashboard actions remain visible while another dashboard group is selected and disable when they have no Standard target" },
+      { type: "changed", description: "Dashboard template editing uses a distinct template-grid edit icon instead of the dashboard rename pencil" },
+      { type: "changed", description: "Asset cards use compact icon actions for Edit and View details to match other catalog views" }
+    ]
+  },
   "1.11.0": {
     releasedAt: "2026-08-30T20:32:00+02:00",
     patch: "PR-140-ui-harmonization-v1.patch",
