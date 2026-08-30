@@ -40,6 +40,13 @@ body { background: var(--ss-page-bg); }
 }
 .mantine-AppShell-header { box-shadow: 0 1px 0 var(--ss-border); }
 .mantine-NavLink-root { border-radius: 8px; margin-bottom: 2px; }
+
+/* Keep navigation labels on one line across the expanded sidebar. */
+.mantine-NavLink-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .mantine-NavLink-root[data-active] {
   background: var(--ss-active-bg);
   color: var(--ss-active-text);

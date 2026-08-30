@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.11.3";
+export const MODULE_VERSION = "1.11.4";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.11.4": {
+    releasedAt: "2026-08-30T23:40:00+02:00",
+    patch: "PR-144-navigation-history-controls-ui-v1.patch",
+    changes: [
+      { type: "changed", description: "Expanded navigation labels stay on a single line instead of wrapping" },
+      { type: "changed", description: "History toolbar buttons and refresh interval selector use the same compact sizing as Add graph" }
+    ]
+  },
   "1.11.3": {
     releasedAt: "2026-08-30T23:25:00+02:00",
     patch: "PR-143-asset-detail-chart-single-mount-v1.patch",

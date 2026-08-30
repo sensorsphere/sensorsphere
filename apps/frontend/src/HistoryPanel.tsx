@@ -5459,6 +5459,7 @@ export function HistoryPanel({
           align="flex-end"
         >
           <Button
+            size="xs"
             variant="light"
             color="gray"
             onClick={
@@ -5469,6 +5470,7 @@ export function HistoryPanel({
           </Button>
 
           <Button
+            size="xs"
             variant="light"
             color="gray"
             onClick={
@@ -5480,6 +5482,7 @@ export function HistoryPanel({
           </Button>
 
           <Button
+            size="xs"
             variant="light"
             color="gray"
             onClick={
@@ -5490,7 +5493,9 @@ export function HistoryPanel({
           </Button>
 
           <Select
-            label="Refresh"
+            size="xs"
+            aria-label="Refresh interval"
+            title="Refresh interval"
             value={
               String(
                 refreshIntervalMs
@@ -5508,10 +5513,11 @@ export function HistoryPanel({
                   )
                 )
             }
-            w={120}
+            w={96}
           />
 
           <Button
+            size="xs"
             variant="light"
             color="gray"
             loading={
@@ -5528,6 +5534,7 @@ export function HistoryPanel({
           </Button>
 
           <Button
+            size="xs"
             variant="light"
             color="gray"
             onClick={
@@ -5548,6 +5555,7 @@ export function HistoryPanel({
           </Button>
 
           <Button
+            size="xs"
             variant="light"
             color="gray"
             onClick={
