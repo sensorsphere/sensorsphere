@@ -3239,6 +3239,7 @@ export function HistoryPanel({
   const [newHistoryViewOpened, setNewHistoryViewOpened] = React.useState(false);
   const [newHistoryViewName, setNewHistoryViewName] = React.useState("");
   const [deleteHistoryViewOpened, setDeleteHistoryViewOpened] = React.useState(false);
+  const [deleteHistoryTabTarget, setDeleteHistoryTabTarget] = React.useState<{ id: string; name: string } | null>(null);
 
   const [
     persistedTabs,
@@ -4154,19 +4155,43 @@ export function HistoryPanel({
   const addTab =
     (): void => {
 
+      if (!activeView) {
+        return;
+      }
+
       const tab =
         newTab(
           tabs.length + 1
         );
 
-      setTabs([
-        ...tabs,
-        tab
-      ]);
+      const nextTabs =
+        normalizeHistoryTabs([
+          ...tabs,
+          tab
+        ]);
 
-      setActiveTabId(
-        tab.id
+      setViews(
+        views.map(
+          view =>
+            view.id === activeView.id
+              ? {
+                  ...view,
+                  activeTabId: tab.id,
+                  tabs: nextTabs
+                }
+              : view
+        )
       );
+
+      if (
+        !ephemeralConfig &&
+        activeView.id ===
+          "history-view-my-views"
+      ) {
+        setPersistedActiveTabId(
+          tab.id
+        );
+      }
     };
 
   const startRenameTab =
@@ -4744,9 +4769,10 @@ export function HistoryPanel({
                     aria-label="Delete tab"
                     onClick={
                       () =>
-                        removeTab(
-                          tab.id
-                        )
+                        setDeleteHistoryTabTarget({
+                          id: tab.id,
+                          name: tab.name
+                        })
                     }
                   >
                     <svg
@@ -5009,6 +5035,34 @@ export function HistoryPanel({
               onClick={createHistoryView}
             >
               Create
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={deleteHistoryTabTarget !== null}
+        onClose={() => setDeleteHistoryTabTarget(null)}
+        title="Delete History tab"
+        centered
+      >
+        <Stack>
+          <Text>
+            Delete <strong>{deleteHistoryTabTarget?.name}</strong> and all of its graphs? This cannot be undone.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="light" color="gray" onClick={() => setDeleteHistoryTabTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              onClick={() => {
+                if (!deleteHistoryTabTarget) return;
+                removeTab(deleteHistoryTabTarget.id);
+                setDeleteHistoryTabTarget(null);
+              }}
+            >
+              Delete tab
             </Button>
           </Group>
         </Stack>

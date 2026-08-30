@@ -2075,6 +2075,43 @@ function Dashboard() {
             }
           />
 
+
+          {historyTemplateLaunch && (
+            <NavLink
+              label={
+                navbarCollapsed
+                  ? null
+                  : "Template History"
+              }
+              leftSection={
+                <NavigationIcon
+                  page="history"
+                />
+              }
+              rightSection={
+                navbarCollapsed
+                  ? null
+                  : (
+                    <Badge
+                      size="xs"
+                      color="violet"
+                      variant="light"
+                    >
+                      Temp
+                    </Badge>
+                  )
+              }
+              title={`Template History · ${historyTemplateLaunch.templateName}`}
+              aria-label={`Template History · ${historyTemplateLaunch.templateName}`}
+              active={templateHistoryActive}
+              onClick={() => {
+                setActivePage("dashboards");
+                setTemplateHistoryActive(true);
+                setNavbarOpened(false);
+              }}
+            />
+          )}
+
           <NavLink
             label={
               navbarCollapsed
@@ -2275,43 +2312,6 @@ function Dashboard() {
             }
           />
 
-
-
-          {historyTemplateLaunch && (
-            <NavLink
-              label={
-                navbarCollapsed
-                  ? null
-                  : "Template History"
-              }
-              leftSection={
-                <NavigationIcon
-                  page="history"
-                />
-              }
-              rightSection={
-                navbarCollapsed
-                  ? null
-                  : (
-                    <Badge
-                      size="xs"
-                      color="violet"
-                      variant="light"
-                    >
-                      Temp
-                    </Badge>
-                  )
-              }
-              title={`Template History · ${historyTemplateLaunch.templateName}`}
-              aria-label={`Template History · ${historyTemplateLaunch.templateName}`}
-              active={templateHistoryActive}
-              onClick={() => {
-                setActivePage("dashboards");
-                setTemplateHistoryActive(true);
-                setNavbarOpened(false);
-              }}
-            />
-          )}
 
 
         </Stack>
