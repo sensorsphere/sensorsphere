@@ -2186,14 +2186,24 @@ function HistoryGraph({
                     : "Use full width"
                 }
                 onClick={
-                  () =>
-                    updateDraft({
-                      ...workingGraph,
-                      layout:
-                        layout === "full"
-                          ? "half"
-                          : "full"
-                    })
+                  () => {
+                    const nextLayout: HistoryGraphLayout =
+                      layout === "full"
+                        ? "half"
+                        : "full";
+
+                    onChange({
+                      ...graph,
+                      layout: nextLayout
+                    });
+
+                    if (draftGraph) {
+                      updateDraft({
+                        ...workingGraph,
+                        layout: nextLayout
+                      });
+                    }
+                  }
                 }
               >
                 {

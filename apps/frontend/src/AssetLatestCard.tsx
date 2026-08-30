@@ -13,6 +13,7 @@ import {
   Card,
   Divider,
   Group,
+  Loader,
   Modal,
   NumberInput,
   SegmentedControl,
@@ -311,7 +312,12 @@ export function AssetLatestCard({
         Boolean(
           temperatureMetric?.id
         ) &&
-        !useAggregates
+        !useAggregates,
+
+      staleTime: 30_000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false
     });
 
   const humidityHistoryQuery =
@@ -335,7 +341,12 @@ export function AssetLatestCard({
         Boolean(
           humidityMetric?.id
         ) &&
-        !useAggregates
+        !useAggregates,
+
+      staleTime: 30_000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false
     });
 
   const temperatureAggregateQuery =
@@ -361,7 +372,12 @@ export function AssetLatestCard({
         Boolean(
           temperatureMetric?.id
         ) &&
-        useAggregates
+        useAggregates,
+
+      staleTime: 30_000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false
     });
 
   const humidityAggregateQuery =
@@ -387,8 +403,30 @@ export function AssetLatestCard({
         Boolean(
           humidityMetric?.id
         ) &&
-        useAggregates
+        useAggregates,
+
+      staleTime: 30_000,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false
     });
+
+  const detailHistoryLoading =
+    useAggregates
+      ? (
+          Boolean(temperatureMetric?.id) &&
+          temperatureAggregateQuery.isLoading
+        ) || (
+          Boolean(humidityMetric?.id) &&
+          humidityAggregateQuery.isLoading
+        )
+      : (
+          Boolean(temperatureMetric?.id) &&
+          temperatureHistoryQuery.isLoading
+        ) || (
+          Boolean(humidityMetric?.id) &&
+          humidityHistoryQuery.isLoading
+        );
 
   const healthMutation =
     useMutation({
@@ -1184,27 +1222,34 @@ export function AssetLatestCard({
                   No temperature or humidity metrics are available.
                 </Text>
               )
-              : (
-                <SensorChart
-                  hours={hours}
-                  temperature={
-                    temperatureHistoryQuery.data
-                    ?? []
-                  }
-                  humidity={
-                    humidityHistoryQuery.data
-                    ?? []
-                  }
-                  temperatureAggregates={
-                    temperatureAggregateQuery.data
-                    ?? []
-                  }
-                  humidityAggregates={
-                    humidityAggregateQuery.data
-                    ?? []
-                  }
-                />
-              )
+              : detailHistoryLoading
+                ? (
+                  <Group justify="center" py="xl">
+                    <Loader size="sm" />
+                    <Text size="sm" c="dimmed">Loading history…</Text>
+                  </Group>
+                )
+                : (
+                  <SensorChart
+                    hours={hours}
+                    temperature={
+                      temperatureHistoryQuery.data
+                      ?? []
+                    }
+                    humidity={
+                      humidityHistoryQuery.data
+                      ?? []
+                    }
+                    temperatureAggregates={
+                      temperatureAggregateQuery.data
+                      ?? []
+                    }
+                    humidityAggregates={
+                      humidityAggregateQuery.data
+                      ?? []
+                    }
+                  />
+                )
           }
 
         </div>

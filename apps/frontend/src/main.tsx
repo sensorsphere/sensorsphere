@@ -538,6 +538,44 @@ function Dashboard() {
     return () => observer.disconnect();
   }, []);
 
+  React.useEffect(() => {
+    const handleDialogSaveShortcut = (event: KeyboardEvent): void => {
+      if (
+        event.repeat ||
+        !(event.ctrlKey || event.metaKey) ||
+        event.key.toLowerCase() !== "s"
+      ) {
+        return;
+      }
+
+      const dialogs = Array.from(
+        document.querySelectorAll<HTMLElement>('[role="dialog"]')
+      ).filter(dialog => {
+        const style = window.getComputedStyle(dialog);
+        return style.display !== "none" && style.visibility !== "hidden";
+      });
+
+      const dialog = dialogs.at(-1);
+      if (!dialog) return;
+
+      const saveButton = Array.from(
+        dialog.querySelectorAll<HTMLButtonElement>("button")
+      ).find(button =>
+        !button.disabled &&
+        button.textContent?.trim() === "Save"
+      );
+
+      if (!saveButton) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      saveButton.click();
+    };
+
+    window.addEventListener("keydown", handleDialogSaveShortcut, true);
+    return () => window.removeEventListener("keydown", handleDialogSaveShortcut, true);
+  }, []);
+
   const [
     dashboardRefreshing,
     setDashboardRefreshing

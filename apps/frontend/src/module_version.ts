@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.11.1";
+export const MODULE_VERSION = "1.11.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.11.2": {
+    releasedAt: "2026-08-30T20:55:00+02:00",
+    patch: "PR-142-dialog-save-asset-history-interactions-v1.patch",
+    changes: [
+      { type: "fixed", description: "Asset detail History waits for all requested series before rendering and avoids immediate duplicate modal refetches" },
+      { type: "added", description: "Ctrl+S activates the Save action in frontend dialogs that expose a Save button" },
+      { type: "fixed", description: "History graph half/full width changes apply immediately without requiring Save" }
+    ]
+  },
   "1.11.1": {
     releasedAt: "2026-08-30T20:45:00+02:00",
     patch: "PR-141-ui-consistency-followup-v1.patch",
