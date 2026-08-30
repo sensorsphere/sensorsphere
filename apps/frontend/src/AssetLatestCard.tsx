@@ -264,6 +264,29 @@ export function AssetLatestCard({
     React.useState(false);
 
   const [
+    detailsChartReady,
+    setDetailsChartReady
+  ] =
+    React.useState(false);
+
+  const [
+    detailsChartTo,
+    setDetailsChartTo
+  ] =
+    React.useState(() => Date.now());
+
+  const openDetails = (): void => {
+    setDetailsChartReady(false);
+    setDetailsChartTo(Date.now());
+    setDetailsOpened(true);
+  };
+
+  const closeDetails = (): void => {
+    setDetailsChartReady(false);
+    setDetailsOpened(false);
+  };
+
+  const [
     hours,
     setHours
   ] =
@@ -752,7 +775,7 @@ export function AssetLatestCard({
               variant="light"
               color="blue"
               aria-label="View details"
-              onClick={() => setDetailsOpened(true)}
+              onClick={openDetails}
             >
               <DetailsIcon />
             </ActionIcon>
@@ -779,12 +802,9 @@ export function AssetLatestCard({
 
     <Modal
       opened={detailsOpened}
-      onClose={
-        () =>
-          setDetailsOpened(
-            false
-          )
-      }
+      onClose={closeDetails}
+      onEnterTransitionEnd={() => setDetailsChartReady(true)}
+      onExitTransitionEnd={() => setDetailsChartReady(false)}
       title={
         asset.sensor?.name
         ?? asset.externalId
@@ -1222,7 +1242,8 @@ export function AssetLatestCard({
                   No temperature or humidity metrics are available.
                 </Text>
               )
-              : detailHistoryLoading
+              : detailHistoryLoading ||
+                !detailsChartReady
                 ? (
                   <Group justify="center" py="xl">
                     <Loader size="sm" />
@@ -1232,6 +1253,7 @@ export function AssetLatestCard({
                 : (
                   <SensorChart
                     hours={hours}
+                    toTimestamp={detailsChartTo}
                     temperature={
                       temperatureHistoryQuery.data
                       ?? []

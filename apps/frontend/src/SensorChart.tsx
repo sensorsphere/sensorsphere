@@ -11,6 +11,7 @@ import type {
 
 interface Props {
   hours: number;
+  toTimestamp: number;
 
   temperature:
     ObservationHistoryPoint[];
@@ -63,6 +64,7 @@ function aggregateSeries(
 
 export function SensorChart({
   hours,
+  toTimestamp,
   temperature,
   humidity,
   temperatureAggregates = [],
@@ -94,7 +96,7 @@ export function SensorChart({
         );
 
   const to =
-    new Date();
+    new Date(toTimestamp);
 
   const from =
     new Date(

@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.11.2";
+export const MODULE_VERSION = "1.11.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.11.3": {
+    releasedAt: "2026-08-30T23:25:00+02:00",
+    patch: "PR-143-asset-detail-chart-single-mount-v1.patch",
+    changes: [
+      { type: "fixed", description: "Asset detail History mounts its ECharts graph only after the details modal enter transition completes" },
+      { type: "fixed", description: "Asset detail History keeps a stable time-window endpoint for the lifetime of each details dialog opening" }
+    ]
+  },
   "1.11.2": {
     releasedAt: "2026-08-30T20:55:00+02:00",
     patch: "PR-142-dialog-save-asset-history-interactions-v1.patch",
