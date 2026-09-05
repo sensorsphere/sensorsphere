@@ -64,8 +64,10 @@ const healthProfileBaseSchema = z.object({
   rssiCritical: z.number().nullable().optional()
 }).strict();
 
+type HealthProfileThresholdInput = Partial<z.infer<typeof healthProfileBaseSchema>>;
+
 function validateHealthProfileThresholds(
-  value: z.infer<typeof healthProfileBaseSchema>,
+  value: HealthProfileThresholdInput,
   context: z.RefinementCtx
 ): void {
   if (

@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.3.1";
+export const MODULE_VERSION = "1.3.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.3.2": {
+    releasedAt: "2026-09-05T20:05:00+02:00",
+    patch: "PR-145-device-registry-foundation-v3.patch",
+    changes: [
+      { type: "fixed", description: "Device Registry health profile threshold validation now accepts partial update payloads under TypeScript" }
+    ]
+  },
   "1.3.1": {
     releasedAt: "2026-09-05T19:30:00+02:00",
     patch: "PR-145-device-registry-foundation-v2.patch",
