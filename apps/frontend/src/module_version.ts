@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.11.4";
+export const MODULE_VERSION = "1.12.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.12.0": {
+    releasedAt: "2026-09-05T19:05:00+02:00",
+    patch: "PR-145-device-registry-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Device Registry foundation for IoT, network, compute, infrastructure and virtual equipment" },
+      { type: "added", description: "Device inventory supports identities, parent relationships, locations, health profiles and optional SensorSphere Sensor, Asset and Gateway links" },
+      { type: "added", description: "Device health overview evaluates last-seen, battery and RSSI thresholds while preserving UNKNOWN and DISABLED states" }
+    ]
+  },
   "1.11.4": {
     releasedAt: "2026-08-30T23:40:00+02:00",
     patch: "PR-144-navigation-history-controls-ui-v1.patch",

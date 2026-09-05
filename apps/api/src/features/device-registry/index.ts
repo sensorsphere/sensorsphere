@@ -1,0 +1,527 @@
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { Pool, PoolClient } from "pg";
+import { z } from "zod";
+
+export interface DeviceRegistryFeatureOptions {
+  pool: Pool;
+}
+
+const deviceClassSchema = z.enum([
+  "IOT",
+  "NETWORK",
+  "COMPUTE",
+  "VIRTUAL",
+  "INFRASTRUCTURE",
+  "OTHER"
+]);
+
+const linkTypeSchema = z.enum(["sensor", "asset", "gateway"]);
+
+const identitySchema = z.object({
+  identityType: z.string().trim().min(1).max(100),
+  value: z.string().trim().min(1).max(500),
+  source: z.string().trim().max(200).nullable().optional()
+}).strict();
+
+const linkSchema = z.object({
+  targetType: linkTypeSchema,
+  targetId: z.string().uuid()
+}).strict();
+
+const deviceCreateSchema = z.object({
+  name: z.string().trim().min(1).max(300),
+  deviceClass: deviceClassSchema,
+  deviceType: z.string().trim().min(1).max(200),
+  technology: z.string().trim().max(200).nullable().optional(),
+  manufacturer: z.string().trim().max(300).nullable().optional(),
+  model: z.string().trim().max(300).nullable().optional(),
+  firmwareVersion: z.string().trim().max(300).nullable().optional(),
+  description: z.string().trim().max(5000).nullable().optional(),
+  locationId: z.string().uuid().nullable().optional(),
+  parentDeviceId: z.string().uuid().nullable().optional(),
+  healthProfileId: z.string().uuid().nullable().optional(),
+  enabled: z.boolean().optional(),
+  lastSeenAt: z.string().datetime({ offset: true }).nullable().optional(),
+  batteryPercent: z.number().min(0).max(100).nullable().optional(),
+  rssi: z.number().nullable().optional(),
+  identities: z.array(identitySchema).max(100).optional(),
+  links: z.array(linkSchema).max(500).optional()
+}).strict();
+
+const deviceUpdateSchema = deviceCreateSchema.partial().strict().refine(
+  value => Object.keys(value).length > 0,
+  "At least one field is required"
+);
+
+const healthProfileCreateSchema = z.object({
+  name: z.string().trim().min(1).max(300),
+  description: z.string().trim().max(5000).nullable().optional(),
+  warningAfterSeconds: z.number().int().positive().nullable().optional(),
+  offlineAfterSeconds: z.number().int().positive().nullable().optional(),
+  batteryWarningPercent: z.number().min(0).max(100).nullable().optional(),
+  batteryCriticalPercent: z.number().min(0).max(100).nullable().optional(),
+  rssiWarning: z.number().nullable().optional(),
+  rssiCritical: z.number().nullable().optional()
+}).strict().superRefine((value, context) => {
+  if (
+    value.warningAfterSeconds != null &&
+    value.offlineAfterSeconds != null &&
+    value.warningAfterSeconds >= value.offlineAfterSeconds
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Warning timeout must be lower than offline timeout",
+      path: ["warningAfterSeconds"]
+    });
+  }
+  if (
+    value.batteryWarningPercent != null &&
+    value.batteryCriticalPercent != null &&
+    value.batteryCriticalPercent > value.batteryWarningPercent
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Critical battery threshold must not exceed warning threshold",
+      path: ["batteryCriticalPercent"]
+    });
+  }
+});
+
+const healthProfileUpdateSchema = healthProfileCreateSchema.partial().strict().refine(
+  value => Object.keys(value).length > 0,
+  "At least one field is required"
+);
+
+type HealthStatus = "ONLINE" | "WARNING" | "OFFLINE" | "UNKNOWN" | "DISABLED";
+
+interface DeviceRow {
+  id: string;
+  name: string;
+  device_class: string;
+  device_type: string;
+  technology: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  firmware_version: string | null;
+  description: string | null;
+  location_id: string | null;
+  location_name: string | null;
+  parent_device_id: string | null;
+  parent_device_name: string | null;
+  health_profile_id: string | null;
+  health_profile_name: string | null;
+  enabled: boolean;
+  last_seen_at: Date | null;
+  battery_percent: number | null;
+  rssi: number | null;
+  warning_after_seconds: number | null;
+  offline_after_seconds: number | null;
+  battery_warning_percent: number | null;
+  battery_critical_percent: number | null;
+  rssi_warning: number | null;
+  rssi_critical: number | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+interface IdentityRow {
+  id: string;
+  device_id: string;
+  identity_type: string;
+  value: string;
+  source: string | null;
+}
+
+interface LinkRow {
+  id: string;
+  device_id: string;
+  target_type: "sensor" | "asset" | "gateway";
+  target_id: string;
+}
+
+function evaluateHealth(row: DeviceRow): { status: HealthStatus; reasons: string[] } {
+  if (!row.enabled) return { status: "DISABLED", reasons: ["Device disabled"] };
+
+  const reasons: string[] = [];
+  const ageSeconds = row.last_seen_at
+    ? Math.max(0, (Date.now() - row.last_seen_at.getTime()) / 1000)
+    : null;
+
+  if (ageSeconds != null && row.offline_after_seconds != null && ageSeconds > row.offline_after_seconds) {
+    return { status: "OFFLINE", reasons: [`Last seen ${Math.round(ageSeconds)} seconds ago`] };
+  }
+
+  if (ageSeconds != null && row.warning_after_seconds != null && ageSeconds > row.warning_after_seconds) {
+    reasons.push(`Last seen ${Math.round(ageSeconds)} seconds ago`);
+  }
+
+  if (
+    row.battery_percent != null &&
+    row.battery_critical_percent != null &&
+    row.battery_percent <= row.battery_critical_percent
+  ) {
+    reasons.push(`Battery critical (${row.battery_percent}%)`);
+  } else if (
+    row.battery_percent != null &&
+    row.battery_warning_percent != null &&
+    row.battery_percent <= row.battery_warning_percent
+  ) {
+    reasons.push(`Battery low (${row.battery_percent}%)`);
+  }
+
+  if (
+    row.rssi != null &&
+    row.rssi_critical != null &&
+    row.rssi <= row.rssi_critical
+  ) {
+    reasons.push(`Signal critical (${row.rssi} dBm)`);
+  } else if (
+    row.rssi != null &&
+    row.rssi_warning != null &&
+    row.rssi <= row.rssi_warning
+  ) {
+    reasons.push(`Signal weak (${row.rssi} dBm)`);
+  }
+
+  if (reasons.length > 0) return { status: "WARNING", reasons };
+  if (!row.last_seen_at) return { status: "UNKNOWN", reasons: ["No health observation yet"] };
+  return { status: "ONLINE", reasons: [] };
+}
+
+async function listDeviceRows(pool: Pool): Promise<DeviceRow[]> {
+  const result = await pool.query<DeviceRow>(`
+    SELECT
+      d.id,
+      d.name,
+      d.device_class,
+      d.device_type,
+      d.technology,
+      d.manufacturer,
+      d.model,
+      d.firmware_version,
+      d.description,
+      d.location_id,
+      l.name AS location_name,
+      d.parent_device_id,
+      parent.name AS parent_device_name,
+      d.health_profile_id,
+      hp.name AS health_profile_name,
+      d.enabled,
+      d.last_seen_at,
+      d.battery_percent,
+      d.rssi,
+      hp.warning_after_seconds,
+      hp.offline_after_seconds,
+      hp.battery_warning_percent,
+      hp.battery_critical_percent,
+      hp.rssi_warning,
+      hp.rssi_critical,
+      d.created_at,
+      d.updated_at
+    FROM device_registry_devices d
+    LEFT JOIN locations l ON l.id = d.location_id
+    LEFT JOIN device_registry_devices parent ON parent.id = d.parent_device_id
+    LEFT JOIN device_health_profiles hp ON hp.id = d.health_profile_id
+    ORDER BY LOWER(d.name), d.id
+  `);
+  return result.rows;
+}
+
+async function getDeviceRow(pool: Pool, id: string): Promise<DeviceRow | null> {
+  const rows = await listDeviceRows(pool);
+  return rows.find(row => row.id === id) ?? null;
+}
+
+function mapDevice(row: DeviceRow, identities: IdentityRow[], links: LinkRow[]) {
+  const health = evaluateHealth(row);
+  return {
+    id: row.id,
+    name: row.name,
+    deviceClass: row.device_class,
+    deviceType: row.device_type,
+    technology: row.technology,
+    manufacturer: row.manufacturer,
+    model: row.model,
+    firmwareVersion: row.firmware_version,
+    description: row.description,
+    location: row.location_id ? { id: row.location_id, name: row.location_name ?? row.location_id } : null,
+    parentDevice: row.parent_device_id ? { id: row.parent_device_id, name: row.parent_device_name ?? row.parent_device_id } : null,
+    healthProfile: row.health_profile_id ? { id: row.health_profile_id, name: row.health_profile_name ?? row.health_profile_id } : null,
+    enabled: row.enabled,
+    lastSeenAt: row.last_seen_at?.toISOString() ?? null,
+    batteryPercent: row.battery_percent,
+    rssi: row.rssi,
+    health,
+    identities: identities.filter(item => item.device_id === row.id).map(item => ({
+      id: item.id,
+      identityType: item.identity_type,
+      value: item.value,
+      source: item.source
+    })),
+    links: links.filter(item => item.device_id === row.id).map(item => ({
+      id: item.id,
+      targetType: item.target_type,
+      targetId: item.target_id
+    })),
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString()
+  };
+}
+
+async function replaceChildren(
+  client: PoolClient,
+  deviceId: string,
+  identities: z.infer<typeof identitySchema>[] | undefined,
+  links: z.infer<typeof linkSchema>[] | undefined
+): Promise<void> {
+  if (identities !== undefined) {
+    await client.query("DELETE FROM device_registry_identities WHERE device_id = $1", [deviceId]);
+    for (const identity of identities) {
+      await client.query(`
+        INSERT INTO device_registry_identities (device_id, identity_type, value, source)
+        VALUES ($1, $2, $3, $4)
+      `, [deviceId, identity.identityType, identity.value, identity.source ?? null]);
+    }
+  }
+  if (links !== undefined) {
+    await client.query("DELETE FROM device_registry_links WHERE device_id = $1", [deviceId]);
+    for (const link of links) {
+      await client.query(`
+        INSERT INTO device_registry_links (device_id, target_type, target_id)
+        VALUES ($1, $2, $3)
+      `, [deviceId, link.targetType, link.targetId]);
+    }
+  }
+}
+
+async function sendDevice(pool: Pool, id: string, reply: FastifyReply) {
+  const row = await getDeviceRow(pool, id);
+  if (!row) return reply.code(404).send({ error: "Device not found" });
+  const [identityResult, linkResult] = await Promise.all([
+    pool.query<IdentityRow>("SELECT id, device_id, identity_type, value, source FROM device_registry_identities WHERE device_id = $1 ORDER BY identity_type, value", [id]),
+    pool.query<LinkRow>("SELECT id, device_id, target_type, target_id FROM device_registry_links WHERE device_id = $1 ORDER BY target_type, target_id", [id])
+  ]);
+  return reply.send(mapDevice(row, identityResult.rows, linkResult.rows));
+}
+
+export async function registerDeviceRegistryFeature(
+  app: FastifyInstance,
+  options: DeviceRegistryFeatureOptions
+): Promise<void> {
+  const { pool } = options;
+
+  app.get("/api/v1/device-registry/devices", async (_request, reply) => {
+    const rows = await listDeviceRows(pool);
+    const [identityResult, linkResult] = await Promise.all([
+      pool.query<IdentityRow>("SELECT id, device_id, identity_type, value, source FROM device_registry_identities ORDER BY identity_type, value"),
+      pool.query<LinkRow>("SELECT id, device_id, target_type, target_id FROM device_registry_links ORDER BY target_type, target_id")
+    ]);
+    return reply.send(rows.map(row => mapDevice(row, identityResult.rows, linkResult.rows)));
+  });
+
+  app.get("/api/v1/device-registry/devices/:id", async (
+    request: FastifyRequest<{ Params: { id: string } }>, reply
+  ) => sendDevice(pool, request.params.id, reply));
+
+  app.post("/api/v1/device-registry/devices", async (
+    request: FastifyRequest<{ Body: unknown }>, reply
+  ) => {
+    const parsed = deviceCreateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid device" });
+    const input = parsed.data;
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query<{ id: string }>(`
+        INSERT INTO device_registry_devices (
+          name, device_class, device_type, technology, manufacturer, model,
+          firmware_version, description, location_id, parent_device_id,
+          health_profile_id, enabled, last_seen_at, battery_percent, rssi
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        RETURNING id
+      `, [
+        input.name, input.deviceClass, input.deviceType, input.technology ?? null,
+        input.manufacturer ?? null, input.model ?? null, input.firmwareVersion ?? null,
+        input.description ?? null, input.locationId ?? null, input.parentDeviceId ?? null,
+        input.healthProfileId ?? null, input.enabled ?? true, input.lastSeenAt ?? null,
+        input.batteryPercent ?? null, input.rssi ?? null
+      ]);
+      const id = result.rows[0]!.id;
+      await replaceChildren(client, id, input.identities ?? [], input.links ?? []);
+      await client.query("COMMIT");
+      return sendDevice(pool, id, reply.code(201));
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+
+  app.patch("/api/v1/device-registry/devices/:id", async (
+    request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply
+  ) => {
+    const parsed = deviceUpdateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid device" });
+    const input = parsed.data;
+    const existing = await getDeviceRow(pool, request.params.id);
+    if (!existing) return reply.code(404).send({ error: "Device not found" });
+    if (input.parentDeviceId === request.params.id) return reply.code(400).send({ error: "A device cannot be its own parent" });
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`
+        UPDATE device_registry_devices SET
+          name = COALESCE($2, name),
+          device_class = COALESCE($3, device_class),
+          device_type = COALESCE($4, device_type),
+          technology = CASE WHEN $5 THEN $6 ELSE technology END,
+          manufacturer = CASE WHEN $7 THEN $8 ELSE manufacturer END,
+          model = CASE WHEN $9 THEN $10 ELSE model END,
+          firmware_version = CASE WHEN $11 THEN $12 ELSE firmware_version END,
+          description = CASE WHEN $13 THEN $14 ELSE description END,
+          location_id = CASE WHEN $15 THEN $16::uuid ELSE location_id END,
+          parent_device_id = CASE WHEN $17 THEN $18::uuid ELSE parent_device_id END,
+          health_profile_id = CASE WHEN $19 THEN $20::uuid ELSE health_profile_id END,
+          enabled = COALESCE($21, enabled),
+          last_seen_at = CASE WHEN $22 THEN $23::timestamptz ELSE last_seen_at END,
+          battery_percent = CASE WHEN $24 THEN $25::double precision ELSE battery_percent END,
+          rssi = CASE WHEN $26 THEN $27::double precision ELSE rssi END,
+          updated_at = NOW()
+        WHERE id = $1
+      `, [
+        request.params.id,
+        input.name ?? null,
+        input.deviceClass ?? null,
+        input.deviceType ?? null,
+        Object.prototype.hasOwnProperty.call(input, "technology"), input.technology ?? null,
+        Object.prototype.hasOwnProperty.call(input, "manufacturer"), input.manufacturer ?? null,
+        Object.prototype.hasOwnProperty.call(input, "model"), input.model ?? null,
+        Object.prototype.hasOwnProperty.call(input, "firmwareVersion"), input.firmwareVersion ?? null,
+        Object.prototype.hasOwnProperty.call(input, "description"), input.description ?? null,
+        Object.prototype.hasOwnProperty.call(input, "locationId"), input.locationId ?? null,
+        Object.prototype.hasOwnProperty.call(input, "parentDeviceId"), input.parentDeviceId ?? null,
+        Object.prototype.hasOwnProperty.call(input, "healthProfileId"), input.healthProfileId ?? null,
+        input.enabled ?? null,
+        Object.prototype.hasOwnProperty.call(input, "lastSeenAt"), input.lastSeenAt ?? null,
+        Object.prototype.hasOwnProperty.call(input, "batteryPercent"), input.batteryPercent ?? null,
+        Object.prototype.hasOwnProperty.call(input, "rssi"), input.rssi ?? null
+      ]);
+      await replaceChildren(client, request.params.id, input.identities, input.links);
+      await client.query("COMMIT");
+      return sendDevice(pool, request.params.id, reply);
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+
+  app.delete("/api/v1/device-registry/devices/:id", async (
+    request: FastifyRequest<{ Params: { id: string } }>, reply
+  ) => {
+    const result = await pool.query("DELETE FROM device_registry_devices WHERE id = $1", [request.params.id]);
+    if ((result.rowCount ?? 0) === 0) return reply.code(404).send({ error: "Device not found" });
+    return reply.code(204).send();
+  });
+
+  app.get("/api/v1/device-registry/health-profiles", async (_request, reply) => {
+    const result = await pool.query(`
+      SELECT
+        id, name, description,
+        warning_after_seconds AS "warningAfterSeconds",
+        offline_after_seconds AS "offlineAfterSeconds",
+        battery_warning_percent AS "batteryWarningPercent",
+        battery_critical_percent AS "batteryCriticalPercent",
+        rssi_warning AS "rssiWarning",
+        rssi_critical AS "rssiCritical",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM device_health_profiles
+      ORDER BY LOWER(name), id
+    `);
+    return reply.send(result.rows);
+  });
+
+  app.post("/api/v1/device-registry/health-profiles", async (
+    request: FastifyRequest<{ Body: unknown }>, reply
+  ) => {
+    const parsed = healthProfileCreateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid health profile" });
+    const input = parsed.data;
+    const result = await pool.query(`
+      INSERT INTO device_health_profiles (
+        name, description, warning_after_seconds, offline_after_seconds,
+        battery_warning_percent, battery_critical_percent, rssi_warning, rssi_critical
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      RETURNING
+        id, name, description,
+        warning_after_seconds AS "warningAfterSeconds",
+        offline_after_seconds AS "offlineAfterSeconds",
+        battery_warning_percent AS "batteryWarningPercent",
+        battery_critical_percent AS "batteryCriticalPercent",
+        rssi_warning AS "rssiWarning",
+        rssi_critical AS "rssiCritical",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+    `, [
+      input.name, input.description ?? null, input.warningAfterSeconds ?? null,
+      input.offlineAfterSeconds ?? null, input.batteryWarningPercent ?? null,
+      input.batteryCriticalPercent ?? null, input.rssiWarning ?? null, input.rssiCritical ?? null
+    ]);
+    return reply.code(201).send(result.rows[0]);
+  });
+
+  app.patch("/api/v1/device-registry/health-profiles/:id", async (
+    request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply
+  ) => {
+    const parsed = healthProfileUpdateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid health profile" });
+    const input = parsed.data;
+    const result = await pool.query(`
+      UPDATE device_health_profiles SET
+        name = COALESCE($2, name),
+        description = CASE WHEN $3 THEN $4 ELSE description END,
+        warning_after_seconds = CASE WHEN $5 THEN $6::integer ELSE warning_after_seconds END,
+        offline_after_seconds = CASE WHEN $7 THEN $8::integer ELSE offline_after_seconds END,
+        battery_warning_percent = CASE WHEN $9 THEN $10::double precision ELSE battery_warning_percent END,
+        battery_critical_percent = CASE WHEN $11 THEN $12::double precision ELSE battery_critical_percent END,
+        rssi_warning = CASE WHEN $13 THEN $14::double precision ELSE rssi_warning END,
+        rssi_critical = CASE WHEN $15 THEN $16::double precision ELSE rssi_critical END,
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING
+        id, name, description,
+        warning_after_seconds AS "warningAfterSeconds",
+        offline_after_seconds AS "offlineAfterSeconds",
+        battery_warning_percent AS "batteryWarningPercent",
+        battery_critical_percent AS "batteryCriticalPercent",
+        rssi_warning AS "rssiWarning",
+        rssi_critical AS "rssiCritical",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+    `, [
+      request.params.id,
+      input.name ?? null,
+      Object.prototype.hasOwnProperty.call(input, "description"), input.description ?? null,
+      Object.prototype.hasOwnProperty.call(input, "warningAfterSeconds"), input.warningAfterSeconds ?? null,
+      Object.prototype.hasOwnProperty.call(input, "offlineAfterSeconds"), input.offlineAfterSeconds ?? null,
+      Object.prototype.hasOwnProperty.call(input, "batteryWarningPercent"), input.batteryWarningPercent ?? null,
+      Object.prototype.hasOwnProperty.call(input, "batteryCriticalPercent"), input.batteryCriticalPercent ?? null,
+      Object.prototype.hasOwnProperty.call(input, "rssiWarning"), input.rssiWarning ?? null,
+      Object.prototype.hasOwnProperty.call(input, "rssiCritical"), input.rssiCritical ?? null
+    ]);
+    if (!result.rows[0]) return reply.code(404).send({ error: "Health profile not found" });
+    return reply.send(result.rows[0]);
+  });
+
+  app.delete("/api/v1/device-registry/health-profiles/:id", async (
+    request: FastifyRequest<{ Params: { id: string } }>, reply
+  ) => {
+    const result = await pool.query("DELETE FROM device_health_profiles WHERE id = $1", [request.params.id]);
+    if ((result.rowCount ?? 0) === 0) return reply.code(404).send({ error: "Health profile not found" });
+    return reply.code(204).send();
+  });
+}

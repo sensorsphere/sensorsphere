@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.2.0";
+export const MODULE_VERSION = "1.3.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.3.0": {
+    releasedAt: "2026-09-05T19:05:00+02:00",
+    patch: "PR-145-device-registry-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Device Registry CRUD API with generic technical inventory, identities, hierarchy and health profiles" },
+      { type: "added", description: "Optional typed links connect registry devices to existing Sensor, Asset and Gateway records without coupling the registry schema to those domains" },
+      { type: "added", description: "Health evaluation derives ONLINE, WARNING, OFFLINE, UNKNOWN and DISABLED states from profile thresholds" }
+    ]
+  },
   "1.2.0": {
     releasedAt: "2026-08-29T20:30:00+02:00",
     patch: "PR-134-history-view-groups-v2.patch",

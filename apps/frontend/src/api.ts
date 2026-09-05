@@ -45,7 +45,13 @@ import type {
   SimpleDashboardTemplate,
   SimpleDashboardTemplateCard,
   SimpleDashboardTemplateData,
-  SimpleDashboardTemplateSection
+  SimpleDashboardTemplateSection,
+  DeviceRegistryDevice,
+  DeviceHealthProfile,
+  CreateDeviceRegistryDeviceInput,
+  UpdateDeviceRegistryDeviceInput,
+  CreateDeviceHealthProfileInput,
+  UpdateDeviceHealthProfileInput
 } from "./types";
 
 async function readJson<T>(
@@ -1451,4 +1457,65 @@ export async function reorderSimpleDashboardTemplateAssets(templateId: string, c
   await readJson<{ status: string }>(await fetch(`/api/v1/simple-dashboard-templates/${encodeURIComponent(templateId)}/cards/order`, {
     method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cardIds })
   }));
+}
+
+
+export async function getDeviceRegistryDevices(): Promise<DeviceRegistryDevice[]> {
+  return readJson<DeviceRegistryDevice[]>(await fetch("/api/v1/device-registry/devices"));
+}
+
+export async function createDeviceRegistryDevice(
+  input: CreateDeviceRegistryDeviceInput
+): Promise<DeviceRegistryDevice> {
+  return readJson<DeviceRegistryDevice>(await fetch("/api/v1/device-registry/devices", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  }));
+}
+
+export async function updateDeviceRegistryDevice(
+  id: string,
+  input: UpdateDeviceRegistryDeviceInput
+): Promise<DeviceRegistryDevice> {
+  return readJson<DeviceRegistryDevice>(await fetch(`/api/v1/device-registry/devices/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  }));
+}
+
+export async function deleteDeviceRegistryDevice(id: string): Promise<void> {
+  const response = await fetch(`/api/v1/device-registry/devices/${id}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
+}
+
+export async function getDeviceHealthProfiles(): Promise<DeviceHealthProfile[]> {
+  return readJson<DeviceHealthProfile[]>(await fetch("/api/v1/device-registry/health-profiles"));
+}
+
+export async function createDeviceHealthProfile(
+  input: CreateDeviceHealthProfileInput
+): Promise<DeviceHealthProfile> {
+  return readJson<DeviceHealthProfile>(await fetch("/api/v1/device-registry/health-profiles", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  }));
+}
+
+export async function updateDeviceHealthProfile(
+  id: string,
+  input: UpdateDeviceHealthProfileInput
+): Promise<DeviceHealthProfile> {
+  return readJson<DeviceHealthProfile>(await fetch(`/api/v1/device-registry/health-profiles/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  }));
+}
+
+export async function deleteDeviceHealthProfile(id: string): Promise<void> {
+  const response = await fetch(`/api/v1/device-registry/health-profiles/${id}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
 }

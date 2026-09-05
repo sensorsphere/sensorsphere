@@ -47,6 +47,10 @@ import {
   registerSimpleDashboardFeature
 } from "./features/simple-dashboards/index.js";
 
+import {
+  registerDeviceRegistryFeature
+} from "./features/device-registry/index.js";
+
 
 import {
   loadApiConfig
@@ -1007,6 +1011,13 @@ await registerProjectTodoFeature(
 );
 
 await registerSimpleDashboardFeature(
+  app,
+  {
+    pool
+  }
+);
+
+await registerDeviceRegistryFeature(
   app,
   {
     pool

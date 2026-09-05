@@ -672,3 +672,107 @@ export interface SimpleDashboardTemplateData {
   sections: SimpleDashboardTemplateSection[];
   cards: SimpleDashboardTemplateCard[];
 }
+
+export type DeviceRegistryClass =
+  | "IOT"
+  | "NETWORK"
+  | "COMPUTE"
+  | "VIRTUAL"
+  | "INFRASTRUCTURE"
+  | "OTHER";
+
+export type DeviceHealthStatus =
+  | "ONLINE"
+  | "WARNING"
+  | "OFFLINE"
+  | "UNKNOWN"
+  | "DISABLED";
+
+export interface DeviceIdentity {
+  id?: string;
+  identityType: string;
+  value: string;
+  source: string | null;
+}
+
+export interface DeviceLink {
+  id?: string;
+  targetType: "sensor" | "asset" | "gateway";
+  targetId: string;
+}
+
+export interface DeviceHealthProfile {
+  id: string;
+  name: string;
+  description: string | null;
+  warningAfterSeconds: number | null;
+  offlineAfterSeconds: number | null;
+  batteryWarningPercent: number | null;
+  batteryCriticalPercent: number | null;
+  rssiWarning: number | null;
+  rssiCritical: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeviceRegistryDevice {
+  id: string;
+  name: string;
+  deviceClass: DeviceRegistryClass;
+  deviceType: string;
+  technology: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  firmwareVersion: string | null;
+  description: string | null;
+  location: { id: string; name: string } | null;
+  parentDevice: { id: string; name: string } | null;
+  healthProfile: { id: string; name: string } | null;
+  enabled: boolean;
+  lastSeenAt: string | null;
+  batteryPercent: number | null;
+  rssi: number | null;
+  health: {
+    status: DeviceHealthStatus;
+    reasons: string[];
+  };
+  identities: DeviceIdentity[];
+  links: DeviceLink[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDeviceRegistryDeviceInput {
+  name: string;
+  deviceClass: DeviceRegistryClass;
+  deviceType: string;
+  technology?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  firmwareVersion?: string | null;
+  description?: string | null;
+  locationId?: string | null;
+  parentDeviceId?: string | null;
+  healthProfileId?: string | null;
+  enabled?: boolean;
+  lastSeenAt?: string | null;
+  batteryPercent?: number | null;
+  rssi?: number | null;
+  identities?: DeviceIdentity[];
+  links?: DeviceLink[];
+}
+
+export type UpdateDeviceRegistryDeviceInput = Partial<CreateDeviceRegistryDeviceInput>;
+
+export interface CreateDeviceHealthProfileInput {
+  name: string;
+  description?: string | null;
+  warningAfterSeconds?: number | null;
+  offlineAfterSeconds?: number | null;
+  batteryWarningPercent?: number | null;
+  batteryCriticalPercent?: number | null;
+  rssiWarning?: number | null;
+  rssiCritical?: number | null;
+}
+
+export type UpdateDeviceHealthProfileInput = Partial<CreateDeviceHealthProfileInput>;

@@ -92,6 +92,10 @@ import {
 } from "./InventoryPanel";
 
 import {
+  DeviceRegistryPanel
+} from "./DeviceRegistryPanel";
+
+import {
   TopologyPanel
 } from "./TopologyPanel";
 
@@ -244,6 +248,9 @@ Record<PageKey, string> = {
   assets:
     "Assets",
 
+  devices:
+    "Device Registry",
+
   history:
     "History",
 
@@ -283,6 +290,7 @@ function isPageKey(
     value === "dashboard" ||
     value === "dashboards" ||
     value === "assets" ||
+    value === "devices" ||
     value === "history" ||
     value === "alerts" ||
     value === "inventory" ||
@@ -2238,6 +2246,31 @@ function Dashboard() {
               () =>
                 navigateTo(
                   "assets"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Device Registry"
+            }
+            leftSection={
+              <NavigationIcon
+                page="devices"
+              />
+            }
+            title="Device Registry"
+            aria-label="Device Registry"
+            active={
+              activePage ===
+              "devices"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "devices"
                 )
             }
           />
@@ -4975,6 +5008,13 @@ function Dashboard() {
                     }
                   }}
                 />
+              )
+            }
+
+            {
+              activePage ===
+                "devices" && (
+                <DeviceRegistryPanel />
               )
             }
 
