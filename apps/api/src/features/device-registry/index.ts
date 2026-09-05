@@ -53,7 +53,7 @@ const deviceUpdateSchema = deviceCreateSchema.partial().strict().refine(
   "At least one field is required"
 );
 
-const healthProfileCreateSchema = z.object({
+const healthProfileBaseSchema = z.object({
   name: z.string().trim().min(1).max(300),
   description: z.string().trim().max(5000).nullable().optional(),
   warningAfterSeconds: z.number().int().positive().nullable().optional(),
@@ -62,7 +62,12 @@ const healthProfileCreateSchema = z.object({
   batteryCriticalPercent: z.number().min(0).max(100).nullable().optional(),
   rssiWarning: z.number().nullable().optional(),
   rssiCritical: z.number().nullable().optional()
-}).strict().superRefine((value, context) => {
+}).strict();
+
+function validateHealthProfileThresholds(
+  value: z.infer<typeof healthProfileBaseSchema>,
+  context: z.RefinementCtx
+): void {
   if (
     value.warningAfterSeconds != null &&
     value.offlineAfterSeconds != null &&
@@ -85,12 +90,20 @@ const healthProfileCreateSchema = z.object({
       path: ["batteryCriticalPercent"]
     });
   }
-});
+}
 
-const healthProfileUpdateSchema = healthProfileCreateSchema.partial().strict().refine(
-  value => Object.keys(value).length > 0,
-  "At least one field is required"
+const healthProfileCreateSchema = healthProfileBaseSchema.superRefine(
+  validateHealthProfileThresholds
 );
+
+const healthProfileUpdateSchema = healthProfileBaseSchema
+  .partial()
+  .strict()
+  .refine(
+    value => Object.keys(value).length > 0,
+    "At least one field is required"
+  )
+  .superRefine(validateHealthProfileThresholds);
 
 type HealthStatus = "ONLINE" | "WARNING" | "OFFLINE" | "UNKNOWN" | "DISABLED";
 
