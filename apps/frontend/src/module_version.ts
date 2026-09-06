@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.15.6";
+export const MODULE_VERSION = "1.15.7";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.15.7": {
+    releasedAt: "2026-09-06T10:55:00+02:00",
+    patch: "PR-148-device-registry-usability-multi-identities-v7.patch",
+    changes: [
+      { type: "added", description: "Network taxonomy includes a KVM device type" },
+      { type: "changed", description: "Device table displays the configured Location icon and uses green for the Copy action" },
+      { type: "changed", description: "Copy Device keeps original identity/address values so uniqueness checks can identify conflicts explicitly" },
+      { type: "fixed", description: "Legacy global identity uniqueness is removed so duplicate non-hardware identities such as IP addresses no longer cause database 500 errors" }
+    ]
+  },
   "1.15.6": {
     releasedAt: "2026-09-06T09:20:00+02:00",
     patch: "PR-148-device-registry-usability-multi-identities-v6.patch",

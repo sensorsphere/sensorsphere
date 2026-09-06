@@ -94,29 +94,12 @@ function deviceAddressSearchText(device: DeviceRegistryDevice): string {
   ].join(" ").toLowerCase();
 }
 
-function neutralIdentityValue(identityType: string): string {
-  switch (identityType.toUpperCase()) {
-    case "MAC": return "00:00:00:00:00:00";
-    case "IP": return "0.0.0.0";
-    case "IEEE": return "0x0000000000000000";
-    case "FQDN": return "device.local";
-    case "HOSTNAME": return "device";
-    case "SERIAL": return "00000000";
-    case "ESPHOME_NODE": return "device";
-    case "MQTT_CLIENT_ID": return "device";
-    default: return "00000000";
-  }
-}
-
 function copyDeviceToForm(device: DeviceRegistryDevice): DeviceFormState {
   const form = deviceToForm(device);
   return {
     ...form,
     name: `${device.name} (copy)`,
-    identities: device.identities.map(({ id: _id, ...identity }) => ({
-      ...identity,
-      value: neutralIdentityValue(identity.identityType)
-    })),
+    identities: device.identities.map(({ id: _id, ...identity }) => ({ ...identity })),
     accessLinks: device.accessLinks.map(({ id: _id, ...link }) => ({ ...link })),
     sensorIds: [],
     assetIds: [],
@@ -550,7 +533,7 @@ export function DeviceRegistryPanel() {
                             </Group>
                           ) : "—"}
                         </Table.Td>
-                        <Table.Td>{device.location?.name ?? "—"}</Table.Td>
+                        <Table.Td>{device.location ? <Group gap={6} wrap="nowrap"><LocationIcon name={getLocationIconName(device.location)} size={16} /><Text size="sm">{device.location.name}</Text></Group> : "—"}</Table.Td>
                         <Table.Td>{device.parentDevice?.name ?? "—"}</Table.Td>
                         <Table.Td>{device.batteryPercent == null ? "—" : `${device.batteryPercent}%`}</Table.Td>
                         <Table.Td title={device.lastSeenAt ?? undefined}>{compactDate(device.lastSeenAt)}</Table.Td>
@@ -570,7 +553,7 @@ export function DeviceRegistryPanel() {
                         </Table.Td>
                         <Table.Td>
                           <Group gap={4} wrap="nowrap">
-                            <Tooltip label="Copy device"><ActionIcon variant="subtle" color="blue" onClick={() => openCopyDevice(device)} aria-label={`Copy ${device.name}`}><DeviceGlyph icon="copy" color="blue" size={16} /></ActionIcon></Tooltip>
+                            <Tooltip label="Copy device"><ActionIcon variant="subtle" color="green" onClick={() => openCopyDevice(device)} aria-label={`Copy ${device.name}`}><DeviceGlyph icon="copy" color="green" size={16} /></ActionIcon></Tooltip>
                             <EditActionIcon onClick={() => openEditDevice(device)} />
                             <DeleteActionIcon onClick={() => { setError(null); setDeleteDeviceTarget(device); }} />
                           </Group>
