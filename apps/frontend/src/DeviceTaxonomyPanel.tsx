@@ -10,6 +10,7 @@ import {
 import type { DeviceClassReference, DeviceTechnologyReference, DeviceTypeReference } from "./types";
 import { DeleteActionIcon, EditActionIcon } from "./TableActionIcons";
 import { DEVICE_ICON_OPTIONS, DeviceGlyph } from "./DeviceGlyph";
+import { usePersistentState } from "./preferences/usePersistentState";
 
 const COLOR_OPTIONS = ["gray","red","pink","grape","violet","indigo","blue","cyan","teal","green","lime","yellow","orange"].map(value => ({ value, label: value }));
 
@@ -22,7 +23,7 @@ export function DeviceTaxonomyPanel() {
   const classes = useQuery({ queryKey:["device-registry","taxonomy","classes"], queryFn:getDeviceTaxonomyClasses });
   const types = useQuery({ queryKey:["device-registry","taxonomy","types"], queryFn:getDeviceTaxonomyTypes });
   const technologies = useQuery({ queryKey:["device-registry","taxonomy","technologies"], queryFn:getDeviceTaxonomyTechnologies });
-  const [tab,setTab]=React.useState<string|null>("classes");
+  const [tab,setTab]=usePersistentState<string|null>("device-registry.taxonomy.tab","classes");
   const [kind,setKind]=React.useState<Kind>("class");
   const [editingCode,setEditingCode]=React.useState<string|null>(null);
   const [form,setForm]=React.useState<FormState>(emptyForm());

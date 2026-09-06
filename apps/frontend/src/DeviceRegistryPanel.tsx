@@ -66,6 +66,7 @@ import { DeviceAccessLinksEditor, openDeviceAccessUrl, resolveDeviceAccessUrl } 
 import { DeviceIdentitiesEditor, primaryIdentity } from "./DeviceIdentitiesEditor";
 import { LocationIcon, getLocationIconName } from "./LocationIcon";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
+import { usePersistentState } from "./preferences/usePersistentState";
 
 
 type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "battery" | "lastSeen" | "health";
@@ -289,15 +290,15 @@ function TaxonomyOption({ icon, color, label, suffix }: { icon: string; color: s
 
 export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOpened, onDeviceSaved }: { openDeviceId?: string | null; openAccessLinkId?: string | null; onDeviceOpened?: () => void; onDeviceSaved?: () => void } = {}) {
   const queryClient = useQueryClient();
-  const [tab, setTab] = React.useState<string | null>("devices");
-  const [nameFilter, setNameFilter] = React.useState("");
-  const [addressFilter, setAddressFilter] = React.useState("");
-  const [sortKey, setSortKey] = React.useState<DeviceSortKey>("name");
-  const [sortDirection, setSortDirection] = React.useState<SortDirection>("asc");
-  const [classFilter, setClassFilter] = React.useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = React.useState<string | null>(null);
-  const [technologyFilter, setTechnologyFilter] = React.useState<string | null>(null);
-  const [healthFilter, setHealthFilter] = React.useState<string | null>(null);
+  const [tab, setTab] = usePersistentState<string | null>("device-registry.tab", "devices");
+  const [nameFilter, setNameFilter] = usePersistentState("device-registry.filter.name", "");
+  const [addressFilter, setAddressFilter] = usePersistentState("device-registry.filter.address", "");
+  const [sortKey, setSortKey] = usePersistentState<DeviceSortKey>("device-registry.sort.key", "name");
+  const [sortDirection, setSortDirection] = usePersistentState<SortDirection>("device-registry.sort.direction", "asc");
+  const [classFilter, setClassFilter] = usePersistentState<string | null>("device-registry.filter.class", null);
+  const [typeFilter, setTypeFilter] = usePersistentState<string | null>("device-registry.filter.type", null);
+  const [technologyFilter, setTechnologyFilter] = usePersistentState<string | null>("device-registry.filter.technology", null);
+  const [healthFilter, setHealthFilter] = usePersistentState<string | null>("device-registry.filter.health", null);
   const [editingDevice, setEditingDevice] = React.useState<DeviceRegistryDevice | null>(null);
   const [deviceModalOpen, setDeviceModalOpen] = React.useState(false);
   const [deleteDeviceTarget, setDeleteDeviceTarget] = React.useState<DeviceRegistryDevice | null>(null);
@@ -481,16 +482,13 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
 
         <Tabs.Panel value="devices" pt="md" className="device-registry-devices-panel">
           <Stack gap="sm" className="device-registry-devices-stack">
-            <Group justify="space-between">
-              <Group gap="xs">
-                {(["ONLINE", "WARNING", "OFFLINE", "UNKNOWN", "DISABLED"] as DeviceHealthStatus[]).map(status => (
-                  <Badge key={status} color={HEALTH_COLORS[status]} variant="light">
-                    {healthCounts[status]} {status}
-                  </Badge>
-                ))}
-              </Group>
-              <Button size="compact-sm" onClick={openCreateDevice}>+ Add device</Button>
-            </Group>
+            <Group justify="flex-end"><Button size="compact-sm" onClick={openCreateDevice}>+ Add device</Button></Group>
+            <SimpleGrid cols={{ base: 2, sm: 3, lg: 6 }} spacing="xs">
+              <Card withBorder padding="xs" style={{ cursor: "pointer" }} onClick={() => setHealthFilter(null)}><Text size="xs" c="dimmed">Total devices</Text><Text fw={700} size="lg">{devices.length}</Text></Card>
+              {(["ONLINE", "WARNING", "OFFLINE", "UNKNOWN", "DISABLED"] as DeviceHealthStatus[]).map(status => (
+                <Card key={status} withBorder padding="xs" style={{ cursor: "pointer" }} onClick={() => setHealthFilter(status)}><Text size="xs" c="dimmed">{status}</Text><Text fw={700} size="lg" c={HEALTH_COLORS[status]}>{healthCounts[status]}</Text></Card>
+              ))}
+            </SimpleGrid>
 
             <Group gap="sm">
               <TextInput placeholder="Name" value={nameFilter} onChange={event => setNameFilter(event.currentTarget.value)} style={{ flex: 1, minWidth: 180 }} />
@@ -499,6 +497,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
               <Select placeholder="All types" searchable clearable value={typeFilter} onChange={setTypeFilter} data={(deviceTypesQuery.data ?? []).map(type => ({ value: type.code, label: type.label }))} leftSection={typeFilter ? <DeviceGlyph icon={(deviceTypesQuery.data ?? []).find(item => item.code === typeFilter)?.icon ?? "device"} color={(deviceTypesQuery.data ?? []).find(item => item.code === typeFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (deviceTypesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={190} />
               <Select placeholder="All technologies" searchable clearable value={technologyFilter} onChange={setTechnologyFilter} data={(technologiesQuery.data ?? []).map(technology => ({ value: technology.code, label: technology.label }))} leftSection={technologyFilter ? <DeviceGlyph icon={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.icon ?? "link"} color={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (technologiesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={205} />
               <Select placeholder="All health" clearable value={healthFilter} onChange={setHealthFilter} data={Object.keys(HEALTH_COLORS)} w={150} />
+              <Button variant="subtle" size="compact-sm" onClick={() => { setNameFilter(""); setAddressFilter(""); setClassFilter(null); setTypeFilter(null); setTechnologyFilter(null); setHealthFilter(null); }}>Reset filters</Button>
             </Group>
 
             <Card withBorder padding={0} className="device-registry-table-card">

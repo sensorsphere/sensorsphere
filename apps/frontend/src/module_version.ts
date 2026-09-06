@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.18.2";
+export const MODULE_VERSION = "1.19.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.19.0": {
+    releasedAt: "2026-09-06T14:10:00+02:00",
+    patch: "PR-149-service-registry-foundation-v8.patch",
+    changes: [
+      { type: "added", description: "Device and Service Registry pages add compact summary statistic cards" },
+      { type: "added", description: "Registry tabs including taxonomy sub-tabs, filters and table sort preferences persist across navigation and reloads" },
+      { type: "changed", description: "Device access-link tables show a compact published-service indicator" }
+    ]
+  },
   "1.18.2": {
     releasedAt: "2026-09-06T13:40:00+02:00",
     patch: "PR-149-service-registry-foundation-v7.patch",
