@@ -96,6 +96,10 @@ import {
 } from "./DeviceRegistryPanel";
 
 import {
+  ServiceRegistryPanel
+} from "./ServiceRegistryPanel";
+
+import {
   TopologyPanel
 } from "./TopologyPanel";
 
@@ -251,6 +255,9 @@ Record<PageKey, string> = {
   devices:
     "Device Registry",
 
+  services:
+    "Service Registry",
+
   history:
     "History",
 
@@ -291,6 +298,7 @@ function isPageKey(
     value === "dashboards" ||
     value === "assets" ||
     value === "devices" ||
+    value === "services" ||
     value === "history" ||
     value === "alerts" ||
     value === "inventory" ||
@@ -2418,6 +2426,31 @@ function Dashboard() {
             }
           />
 
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Service Registry"
+            }
+            leftSection={
+              <NavigationIcon
+                page="services"
+              />
+            }
+            title="Service Registry"
+            aria-label="Service Registry"
+            active={
+              activePage ===
+              "services"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "services"
+                )
+            }
+          />
+
 
 
         </Stack>
@@ -2531,7 +2564,7 @@ function Dashboard() {
               ? "metric-routing-main"
               : activePage === "todos"
                 ? "project-todos-main"
-                : activePage === "devices"
+                : activePage === "devices" || activePage === "services"
                   ? "device-registry-main"
                   : undefined
         }
@@ -2550,7 +2583,7 @@ function Dashboard() {
                 ? "metric-routing-page-container"
                 : activePage === "todos"
                   ? "project-todos-page-container"
-                  : activePage === "devices"
+                  : activePage === "devices" || activePage === "services"
                     ? "device-registry-page-container"
                     : undefined
           }
@@ -2567,7 +2600,7 @@ function Dashboard() {
                   ? "metric-routing-page-stack"
                   : activePage === "todos"
                     ? "project-todos-page-stack"
-                    : activePage === "devices"
+                    : activePage === "devices" || activePage === "services"
                       ? "device-registry-page-stack"
                       : undefined
             }
@@ -5021,6 +5054,13 @@ function Dashboard() {
               activePage ===
                 "devices" && (
                 <DeviceRegistryPanel />
+              )
+            }
+
+            {
+              activePage ===
+                "services" && (
+                <ServiceRegistryPanel />
               )
             }
 

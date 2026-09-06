@@ -841,3 +841,95 @@ export interface CreateDeviceHealthProfileInput {
 }
 
 export type UpdateDeviceHealthProfileInput = Partial<CreateDeviceHealthProfileInput>;
+
+export type ServiceHealthStatus = "ONLINE" | "WARNING" | "OFFLINE" | "UNKNOWN" | "DISABLED";
+
+export interface ServiceClassReference {
+  code: string;
+  label: string;
+  description: string | null;
+  icon: string;
+  color: string;
+  enabled: boolean;
+  sortOrder: number;
+}
+
+export interface ServiceTypeReference {
+  code: string;
+  label: string;
+  serviceClass: string;
+  description: string | null;
+  icon: string;
+  color: string;
+  enabled: boolean;
+  sortOrder: number;
+}
+
+export interface ServiceRegistryAccessLink {
+  id?: string;
+  name: string;
+  linkType: string;
+  urlTemplate: string;
+  username: string | null;
+  port: number | null;
+  parameters: Record<string, string>;
+  icon: string;
+  color: string;
+  enabled: boolean;
+  sortOrder: number;
+}
+
+export interface ServiceRegistryResource {
+  id?: string;
+  name: string;
+  resourceType: string;
+  externalId: string | null;
+  description: string | null;
+  linkedDeviceId: string | null;
+  enabled: boolean;
+  sortOrder: number;
+}
+
+export interface ServiceRegistryAccount {
+  id?: string;
+  name: string;
+  accountIdentifier: string | null;
+  contractIdentifier: string | null;
+  description: string | null;
+  enabled: boolean;
+  sortOrder: number;
+  resources: ServiceRegistryResource[];
+}
+
+export interface ServiceRegistryService {
+  id: string;
+  name: string;
+  serviceClass: string;
+  serviceClassInfo: Pick<ServiceClassReference, "code" | "label" | "icon" | "color">;
+  serviceType: string;
+  serviceTypeInfo: Pick<ServiceTypeReference, "code" | "label" | "icon" | "color">;
+  provider: string | null;
+  description: string | null;
+  enabled: boolean;
+  healthStatus: ServiceHealthStatus;
+  lastCheckedAt: string | null;
+  accounts: ServiceRegistryAccount[];
+  accessLinks: ServiceRegistryAccessLink[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateServiceRegistryServiceInput {
+  name: string;
+  serviceClass: string;
+  serviceType: string;
+  provider?: string | null;
+  description?: string | null;
+  enabled?: boolean;
+  healthStatus?: ServiceHealthStatus;
+  lastCheckedAt?: string | null;
+  accounts?: ServiceRegistryAccount[];
+  accessLinks?: ServiceRegistryAccessLink[];
+}
+
+export type UpdateServiceRegistryServiceInput = Partial<CreateServiceRegistryServiceInput>;

@@ -55,7 +55,12 @@ import type {
   CreateDeviceRegistryDeviceInput,
   UpdateDeviceRegistryDeviceInput,
   CreateDeviceHealthProfileInput,
-  UpdateDeviceHealthProfileInput
+  UpdateDeviceHealthProfileInput,
+  ServiceRegistryService,
+  ServiceClassReference,
+  ServiceTypeReference,
+  CreateServiceRegistryServiceInput,
+  UpdateServiceRegistryServiceInput
 } from "./types";
 
 async function readJson<T>(
@@ -1603,3 +1608,35 @@ export async function deleteDeviceHealthProfile(id: string): Promise<void> {
   const response = await fetch(`/api/v1/device-registry/health-profiles/${id}`, { method: "DELETE" });
   if (!response.ok) await readJson<unknown>(response);
 }
+
+
+export async function getServiceClassReferences(): Promise<ServiceClassReference[]> {
+  return readJson<ServiceClassReference[]>(await fetch("/api/v1/service-registry/reference/service-classes"));
+}
+export async function getServiceTypeReferences(): Promise<ServiceTypeReference[]> {
+  return readJson<ServiceTypeReference[]>(await fetch("/api/v1/service-registry/reference/service-types"));
+}
+export async function getServiceTaxonomyClasses(): Promise<ServiceClassReference[]> {
+  return readJson<ServiceClassReference[]>(await fetch("/api/v1/service-registry/taxonomy/classes"));
+}
+export async function getServiceTaxonomyTypes(): Promise<ServiceTypeReference[]> {
+  return readJson<ServiceTypeReference[]>(await fetch("/api/v1/service-registry/taxonomy/types"));
+}
+export async function createServiceTaxonomyClass(input: ServiceClassReference): Promise<ServiceClassReference> {
+  return readJson<ServiceClassReference>(await fetch("/api/v1/service-registry/taxonomy/classes", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(input) }));
+}
+export async function updateServiceTaxonomyClass(code:string,input:Partial<Omit<ServiceClassReference,"code">>):Promise<ServiceClassReference>{
+  return readJson<ServiceClassReference>(await fetch(`/api/v1/service-registry/taxonomy/classes/${encodeURIComponent(code)}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(input)}));
+}
+export async function deleteServiceTaxonomyClass(code:string):Promise<void>{ const r=await fetch(`/api/v1/service-registry/taxonomy/classes/${encodeURIComponent(code)}`,{method:"DELETE"}); if(!r.ok) await readJson<unknown>(r); }
+export async function createServiceTaxonomyType(input: ServiceTypeReference): Promise<ServiceTypeReference> {
+  return readJson<ServiceTypeReference>(await fetch("/api/v1/service-registry/taxonomy/types", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(input) }));
+}
+export async function updateServiceTaxonomyType(code:string,input:Partial<Omit<ServiceTypeReference,"code">>):Promise<ServiceTypeReference>{
+  return readJson<ServiceTypeReference>(await fetch(`/api/v1/service-registry/taxonomy/types/${encodeURIComponent(code)}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(input)}));
+}
+export async function deleteServiceTaxonomyType(code:string):Promise<void>{ const r=await fetch(`/api/v1/service-registry/taxonomy/types/${encodeURIComponent(code)}`,{method:"DELETE"}); if(!r.ok) await readJson<unknown>(r); }
+export async function getServiceRegistryServices():Promise<ServiceRegistryService[]>{ return readJson<ServiceRegistryService[]>(await fetch("/api/v1/service-registry/services")); }
+export async function createServiceRegistryService(input:CreateServiceRegistryServiceInput):Promise<ServiceRegistryService>{ return readJson<ServiceRegistryService>(await fetch("/api/v1/service-registry/services",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(input)})); }
+export async function updateServiceRegistryService(id:string,input:UpdateServiceRegistryServiceInput):Promise<ServiceRegistryService>{ return readJson<ServiceRegistryService>(await fetch(`/api/v1/service-registry/services/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(input)})); }
+export async function deleteServiceRegistryService(id:string):Promise<void>{ const r=await fetch(`/api/v1/service-registry/services/${id}`,{method:"DELETE"}); if(!r.ok) await readJson<unknown>(r); }

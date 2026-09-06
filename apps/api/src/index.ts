@@ -51,6 +51,10 @@ import {
   registerDeviceRegistryFeature
 } from "./features/device-registry/index.js";
 
+import {
+  registerServiceRegistryFeature
+} from "./features/service-registry/index.js";
+
 
 import {
   loadApiConfig
@@ -1018,6 +1022,13 @@ await registerSimpleDashboardFeature(
 );
 
 await registerDeviceRegistryFeature(
+  app,
+  {
+    pool
+  }
+);
+
+await registerServiceRegistryFeature(
   app,
   {
     pool

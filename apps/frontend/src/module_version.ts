@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.15.8";
+export const MODULE_VERSION = "1.16.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.16.0": {
+    releasedAt: "2026-09-06T12:00:00+02:00",
+    patch: "PR-149-service-registry-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Add Service Registry UI for services, accounts, resources, access links and Device Registry links" },
+      { type: "added", description: "Add managed Service Registry classes and types with icon/color taxonomy" }
+    ]
+  },
   "1.15.8": {
     releasedAt: "2026-09-06T11:15:00+02:00",
     patch: "PR-148-device-registry-usability-multi-identities-v8.patch",

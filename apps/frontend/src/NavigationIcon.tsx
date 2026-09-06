@@ -5,6 +5,7 @@ export type PageKey =
   | "dashboards"
   | "assets"
   | "devices"
+  | "services"
   | "history"
   | "alerts"
   | "inventory"
@@ -21,6 +22,7 @@ const PAGE_COLORS: Record<PageKey, string> = {
   dashboards: "var(--mantine-color-orange-6)",
   assets: "var(--mantine-color-blue-6)",
   devices: "var(--mantine-color-cyan-6)",
+  services: "var(--mantine-color-indigo-6)",
   history: "var(--mantine-color-violet-6)",
   alerts: "var(--mantine-color-red-6)",
   inventory: "var(--mantine-color-orange-6)",
@@ -95,6 +97,15 @@ export function NavigationIcon({
           <path d="M8 9h8" />
           <path d="M8 13h4" />
           <circle cx="16.5" cy="14" r="1.5" />
+        </svg>
+      );
+
+    case "services":
+      return (
+        <svg {...common}>
+          <path d="M7 18h10a4 4 0 0 0 .6-8A6 6 0 0 0 6.2 8.5 4.5 4.5 0 0 0 7 18Z" />
+          <path d="M9 14h6" />
+          <path d="M12 11v6" />
         </svg>
       );
 

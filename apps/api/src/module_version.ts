@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.6.4";
+export const MODULE_VERSION = "1.7.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.7.0": {
+    releasedAt: "2026-09-06T12:00:00+02:00",
+    patch: "PR-149-service-registry-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Add Service Registry CRUD APIs for services, accounts, resources and access links" },
+      { type: "added", description: "Add managed Service Registry class/type reference APIs with weak Device Registry resource links" }
+    ]
+  },
   "1.6.4": {
     releasedAt: "2026-09-06T11:15:00+02:00",
     patch: "PR-148-device-registry-usability-multi-identities-v8.patch",

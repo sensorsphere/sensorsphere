@@ -7,9 +7,9 @@ export function deviceColor(color: string): string {
 }
 
 const DEVICE_ICON_NAMES = [
-  "activity", "antenna", "battery", "bluetooth", "bulb", "button", "camera", "chip",
+  "activity", "antenna", "battery", "bluetooth", "bulb", "button", "camera", "chip", "cloud", "cloud-network", "code",
   "contact", "container", "controller", "copy", "device", "display", "droplet", "ethernet",
-  "gateway", "globe", "globe-lock", "infrastructure", "link", "message", "motion", "network",
+  "gateway", "globe", "globe-lock", "infrastructure", "key", "link", "mail", "message", "motion", "network",
   "plug", "printer", "router", "sensor", "server", "server-stack", "shield", "storage", "switch",
   "switch-toggle", "terminal", "thermometer", "thermostat", "virtual", "wifi"
 ];
@@ -30,6 +30,16 @@ export function DeviceGlyph({ icon, color = "gray", size = 18 }: { icon: string;
   };
 
   switch (icon) {
+    case "cloud":
+      return <svg {...common}><path d="M7 18h10a4 4 0 0 0 .6-8A6 6 0 0 0 6.2 8.5 4.5 4.5 0 0 0 7 18Z"/></svg>;
+    case "cloud-network":
+      return <svg {...common}><path d="M7 15h10a4 4 0 0 0 .5-8A6 6 0 0 0 6 6.5 4 4 0 0 0 7 15Z"/><path d="M8 19h8M12 15v4"/></svg>;
+    case "key":
+      return <svg {...common}><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8M15 8l2 2M17 6l2 2"/></svg>;
+    case "code":
+      return <svg {...common}><path d="m8 9-4 3 4 3M16 9l4 3-4 3M14 5l-4 14"/></svg>;
+    case "mail":
+      return <svg {...common}><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>;
     case "router":
       return <svg {...common}><rect x="3" y="8" width="18" height="9" rx="2"/><path d="M7 12h.01M11 12h.01M15 12h2M7 8V5M17 8V5"/></svg>;
     case "switch":
