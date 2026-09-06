@@ -60,7 +60,14 @@ import type {
   ServiceClassReference,
   ServiceTypeReference,
   CreateServiceRegistryServiceInput,
-  UpdateServiceRegistryServiceInput
+  UpdateServiceRegistryServiceInput,
+  MonitoringAgent,
+  MonitoringAgentTokenResponse,
+  MonitoringCheck,
+  CreateMonitoringAgentInput,
+  UpdateMonitoringAgentInput,
+  CreateMonitoringCheckInput,
+  UpdateMonitoringCheckInput
 } from "./types";
 
 async function readJson<T>(
@@ -1640,3 +1647,50 @@ export async function getServiceRegistryServices():Promise<ServiceRegistryServic
 export async function createServiceRegistryService(input:CreateServiceRegistryServiceInput):Promise<ServiceRegistryService>{ return readJson<ServiceRegistryService>(await fetch("/api/v1/service-registry/services",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(input)})); }
 export async function updateServiceRegistryService(id:string,input:UpdateServiceRegistryServiceInput):Promise<ServiceRegistryService>{ return readJson<ServiceRegistryService>(await fetch(`/api/v1/service-registry/services/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(input)})); }
 export async function deleteServiceRegistryService(id:string):Promise<void>{ const r=await fetch(`/api/v1/service-registry/services/${id}`,{method:"DELETE"}); if(!r.ok) await readJson<unknown>(r); }
+
+
+export async function getMonitoringAgents(): Promise<MonitoringAgent[]> {
+  return readJson<MonitoringAgent[]>(await fetch("/api/v1/monitoring/agents"));
+}
+
+export async function createMonitoringAgent(input: CreateMonitoringAgentInput): Promise<MonitoringAgentTokenResponse> {
+  return readJson<MonitoringAgentTokenResponse>(await fetch("/api/v1/monitoring/agents", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input)
+  }));
+}
+
+export async function updateMonitoringAgent(id: string, input: UpdateMonitoringAgentInput): Promise<MonitoringAgent> {
+  return readJson<MonitoringAgent>(await fetch(`/api/v1/monitoring/agents/${id}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input)
+  }));
+}
+
+export async function regenerateMonitoringAgentToken(id: string): Promise<MonitoringAgentTokenResponse> {
+  return readJson<MonitoringAgentTokenResponse>(await fetch(`/api/v1/monitoring/agents/${id}/regenerate-token`, { method: "POST" }));
+}
+
+export async function deleteMonitoringAgent(id: string): Promise<void> {
+  const response = await fetch(`/api/v1/monitoring/agents/${id}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
+}
+
+export async function getMonitoringChecks(): Promise<MonitoringCheck[]> {
+  return readJson<MonitoringCheck[]>(await fetch("/api/v1/monitoring/checks"));
+}
+
+export async function createMonitoringCheck(input: CreateMonitoringCheckInput): Promise<MonitoringCheck> {
+  return readJson<MonitoringCheck>(await fetch("/api/v1/monitoring/checks", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input)
+  }));
+}
+
+export async function updateMonitoringCheck(id: string, input: UpdateMonitoringCheckInput): Promise<MonitoringCheck> {
+  return readJson<MonitoringCheck>(await fetch(`/api/v1/monitoring/checks/${id}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input)
+  }));
+}
+
+export async function deleteMonitoringCheck(id: string): Promise<void> {
+  const response = await fetch(`/api/v1/monitoring/checks/${id}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
+}

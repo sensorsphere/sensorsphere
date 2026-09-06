@@ -54,6 +54,9 @@ import {
 import {
   registerServiceRegistryFeature
 } from "./features/service-registry/index.js";
+import {
+  registerMonitoringFeature
+} from "./features/monitoring/index.js";
 
 
 import {
@@ -1029,6 +1032,13 @@ await registerDeviceRegistryFeature(
 );
 
 await registerServiceRegistryFeature(
+  app,
+  {
+    pool
+  }
+);
+
+await registerMonitoringFeature(
   app,
   {
     pool

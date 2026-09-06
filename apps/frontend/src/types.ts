@@ -942,3 +942,105 @@ export interface CreateServiceRegistryServiceInput {
 }
 
 export type UpdateServiceRegistryServiceInput = Partial<CreateServiceRegistryServiceInput>;
+
+export type MonitoringCheckType = "PING" | "TCP" | "HTTP" | "HTTPS";
+export type MonitoringTargetMode = "PRIMARY_IP" | "PRIMARY_FQDN" | "PRIMARY_ADDRESS" | "CUSTOM";
+export type MonitoringExecutionMode = "FAILOVER" | "ALL";
+export type MonitoringResultStatus = "UP" | "DOWN" | "UNKNOWN";
+
+export interface MonitoringAgent {
+  id: string;
+  name: string;
+  enabled: boolean;
+  labels: Record<string, string>;
+  version: string | null;
+  hostname: string | null;
+  lastIp: string | null;
+  lastSeenAt: string | null;
+  heartbeatTimeoutSeconds: number;
+  configRevision: number;
+  online: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MonitoringAgentTokenResponse {
+  agent: MonitoringAgent;
+  token: string;
+}
+
+export interface MonitoringCheckAssignment {
+  agentId: string;
+  agentName?: string;
+  enabled?: boolean;
+  priority?: number;
+}
+
+export interface MonitoringCheckState {
+  agentId: string;
+  agentName: string;
+  status: MonitoringResultStatus;
+  latencyMs: number | null;
+  message: string | null;
+  lastCheckAt: string | null;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  consecutiveSuccesses: number;
+  consecutiveFailures: number;
+}
+
+export interface MonitoringCheck {
+  id: string;
+  deviceId: string;
+  deviceName: string;
+  name: string;
+  enabled: boolean;
+  checkType: MonitoringCheckType;
+  targetMode: MonitoringTargetMode;
+  targetValue: string | null;
+  port: number | null;
+  path: string | null;
+  intervalSeconds: number;
+  timeoutSeconds: number;
+  failureThreshold: number;
+  recoveryThreshold: number;
+  executionMode: MonitoringExecutionMode;
+  config: Record<string, unknown>;
+  assignments: MonitoringCheckAssignment[];
+  states: MonitoringCheckState[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateMonitoringAgentInput {
+  name: string;
+  labels?: Record<string, string>;
+  heartbeatTimeoutSeconds?: number;
+}
+
+export interface UpdateMonitoringAgentInput {
+  name?: string;
+  enabled?: boolean;
+  labels?: Record<string, string>;
+  heartbeatTimeoutSeconds?: number;
+}
+
+export interface CreateMonitoringCheckInput {
+  deviceId: string;
+  name: string;
+  enabled?: boolean;
+  checkType: MonitoringCheckType;
+  targetMode: MonitoringTargetMode;
+  targetValue?: string | null;
+  port?: number | null;
+  path?: string | null;
+  intervalSeconds: number;
+  timeoutSeconds: number;
+  failureThreshold: number;
+  recoveryThreshold: number;
+  executionMode: MonitoringExecutionMode;
+  assignments: MonitoringCheckAssignment[];
+  config?: Record<string, unknown>;
+}
+
+export type UpdateMonitoringCheckInput = Partial<CreateMonitoringCheckInput>;

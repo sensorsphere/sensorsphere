@@ -68,6 +68,7 @@ import { LocationIcon, getLocationIconName } from "./LocationIcon";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import { usePersistentState } from "./preferences/usePersistentState";
 import { ResetFiltersAction } from "./ResetFiltersAction";
+import { MonitoringPanel } from "./MonitoringPanel";
 
 
 type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "battery" | "lastSeen" | "health";
@@ -476,6 +477,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       <Tabs value={tab} onChange={setTab} className="device-registry-tabs">
         <Tabs.List>
           <Tabs.Tab value="devices">Devices</Tabs.Tab>
+          <Tabs.Tab value="monitoring">Monitoring</Tabs.Tab>
           <Tabs.Tab value="discovery">Discovery</Tabs.Tab>
           <Tabs.Tab value="health-profiles">Health Profiles</Tabs.Tab>
           <Tabs.Tab value="taxonomy">Taxonomy</Tabs.Tab>
@@ -616,6 +618,10 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
               </div>
             </Card>
           </Stack>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="monitoring" pt="md">
+          <MonitoringPanel />
         </Tabs.Panel>
 
         <Tabs.Panel value="discovery" pt="md">

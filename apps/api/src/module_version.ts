@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.8.3";
+export const MODULE_VERSION = "1.9.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.9.0": {
+    releasedAt: "2026-09-06T14:45:00+02:00",
+    patch: "PR-150-monitoring-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Add pull-based Monitoring Agent APIs with hashed bearer-token authentication, heartbeat and configuration revisions" },
+      { type: "added", description: "Add generic multi-agent device monitoring checks with FAILOVER/ALL execution modes and current result state tracking" }
+    ]
+  },
   "1.8.3": {
     releasedAt: "2026-09-06T13:40:00+02:00",
     patch: "PR-149-service-registry-foundation-v7.patch",

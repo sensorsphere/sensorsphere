@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.19.1";
+export const MODULE_VERSION = "1.20.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.20.0": {
+    releasedAt: "2026-09-06T14:45:00+02:00",
+    patch: "PR-150-monitoring-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Add Device Registry Monitoring tab for agents, token provisioning and generic device checks" },
+      { type: "added", description: "Add monitoring summary cards, multi-agent assignment and failover configuration UI" }
+    ]
+  },
   "1.19.1": {
     releasedAt: "2026-09-06T15:00:00+02:00",
     patch: "PR-149-service-registry-foundation-v9.patch",
