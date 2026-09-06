@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.20.2";
+export const MODULE_VERSION = "1.20.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.20.3": {
+    releasedAt: "2026-09-06T15:35:00+02:00",
+    patch: "PR-150-monitoring-foundation-v4.patch",
+    changes: [
+      { type: "changed", description: "Use the current SensorSphere browser origin in generated monitor-agent environment variables" },
+      { type: "added", description: "Add copy actions for monitoring agents and monitoring checks" }
+    ]
+  },
   "1.20.2": {
     releasedAt: "2026-09-06T15:20:00+02:00",
     patch: "PR-150-monitoring-foundation-v3.patch",

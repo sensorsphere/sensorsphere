@@ -303,12 +303,29 @@ export function MonitoringPanel() {
   const openEditAgent = (agent: MonitoringAgent) => {
     setEditingAgent(agent); setAgentForm(agentToForm(agent)); setError(null); setAgentModalOpen(true);
   };
+  const openCopyAgent = (agent: MonitoringAgent) => {
+    setEditingAgent(null);
+    setAgentForm({ ...agentToForm(agent), name: `${agent.name} (copy)` });
+    setError(null);
+    setAgentModalOpen(true);
+  };
   const openCreateCheck = () => {
     setEditingCheck(null); setCheckForm(emptyCheckForm()); setError(null); setCheckModalOpen(true);
   };
   const openEditCheck = (check: MonitoringCheck) => {
     setEditingCheck(check); setCheckForm(checkToForm(check)); setError(null); setCheckModalOpen(true);
   };
+  const openCopyCheck = (check: MonitoringCheck) => {
+    setEditingCheck(null);
+    setCheckForm({ ...checkToForm(check), name: `${check.name} (copy)` });
+    setError(null);
+    setCheckModalOpen(true);
+  };
+
+  const sensorsphereUrl = typeof window === "undefined" ? "" : window.location.origin;
+  const agentEnvironment = tokenInfo
+    ? `SENSORSPHERE_URL=${sensorsphereUrl}\nSENSORSPHERE_AGENT_ID=${tokenInfo.agentName}\nSENSORSPHERE_AGENT_TOKEN=${tokenInfo.token}`
+    : "";
 
   return (
     <Stack gap="md">
@@ -348,6 +365,7 @@ export function MonitoringPanel() {
                 <Table.Td><Text size="xs">{Object.entries(agent.labels).map(([k, v]) => `${k}=${v}`).join(", ") || "—"}</Text></Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap">
                   <EditActionIcon onClick={() => openEditAgent(agent)} />
+                  <Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip>
                   <Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip>
                   <DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} />
                 </Group></Table.Td>
@@ -376,7 +394,7 @@ export function MonitoringPanel() {
                 <Table.Td><Text size="xs">{check.assignments.map(item => item.agentName ?? item.agentId).join(" → ")}</Text></Table.Td>
                 <Table.Td><Badge size="sm" variant="light">{check.executionMode}</Badge></Table.Td>
                 <Table.Td><Badge size="sm" color={STATUS_COLORS[status]}>{status}</Badge></Table.Td>
-                <Table.Td><Group gap={4}><EditActionIcon onClick={() => openEditCheck(check)} /><DeleteActionIcon onClick={() => setCheckDeleteTarget(check)} /></Group></Table.Td>
+                <Table.Td><Group gap={4}><EditActionIcon onClick={() => openEditCheck(check)} /><Tooltip label="Copy monitoring check"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring check" onClick={() => openCopyCheck(check)}>⧉</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setCheckDeleteTarget(check)} /></Group></Table.Td>
               </Table.Tr>;
             })}
             {checks.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text ta="center" c="dimmed" py="xl">No monitoring checks yet.</Text></Table.Td></Table.Tr>}
@@ -420,13 +438,13 @@ export function MonitoringPanel() {
                 <ActionIcon
                   variant="subtle"
                   aria-label="Copy all environment variables"
-                  onClick={() => tokenInfo && void writeClipboardText(`SENSORSPHERE_URL=https://<sensorsphere-host>\nSENSORSPHERE_AGENT_ID=${tokenInfo.agentName}\nSENSORSPHERE_AGENT_TOKEN=${tokenInfo.token}`)}
+                  onClick={() => tokenInfo && void writeClipboardText(agentEnvironment)}
                 >
                   ⧉
                 </ActionIcon>
               </Tooltip>
             </Group>
-            <Code block>{`SENSORSPHERE_URL=https://<sensorsphere-host>\nSENSORSPHERE_AGENT_ID=${tokenInfo?.agentName ?? "agent"}\nSENSORSPHERE_AGENT_TOKEN=${tokenInfo?.token ?? ""}`}</Code>
+            <Code block>{agentEnvironment}</Code>
           </Stack>
           <Group justify="flex-end"><Button onClick={() => setTokenInfo(null)}>Close</Button></Group>
         </Stack>
