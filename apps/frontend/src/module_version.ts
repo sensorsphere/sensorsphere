@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.15.0";
+export const MODULE_VERSION = "1.15.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.15.1": {
+    releasedAt: "2026-09-06T07:30:00+02:00",
+    patch: "PR-148-device-registry-usability-multi-identities-v2.patch",
+    changes: [
+      { type: "fixed", description: "Device Registry table viewport no longer collapses to zero height, so unfiltered devices are visible" },
+      { type: "changed", description: "Device technology values render with their taxonomy-defined icon and color in the device table" }
+    ]
+  },
   "1.15.0": {
     releasedAt: "2026-09-06T08:00:00+02:00",
     patch: "PR-148-device-registry-usability-multi-identities-v1.patch",

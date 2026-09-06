@@ -384,8 +384,8 @@ export function DeviceRegistryPanel() {
           <Tabs.Tab value="taxonomy">Taxonomy</Tabs.Tab>
         </Tabs.List>
 
-        <Tabs.Panel value="devices" pt="md" style={{ minHeight: 0, flex: "1 1 0", display: "flex" }}>
-          <Stack gap="sm" style={{ minHeight: 0, flex: "1 1 0", width: "100%" }}>
+        <Tabs.Panel value="devices" pt="md" style={{ minHeight: 0, height: "100%", flex: "1 1 0", display: "flex" }}>
+          <Stack gap="sm" style={{ minHeight: 0, height: "100%", flex: "1 1 0", width: "100%" }}>
             <Group justify="space-between">
               <Group gap="xs">
                 {(["ONLINE", "WARNING", "OFFLINE", "UNKNOWN", "DISABLED"] as DeviceHealthStatus[]).map(status => (
@@ -405,8 +405,8 @@ export function DeviceRegistryPanel() {
               <Select placeholder="All health" clearable value={healthFilter} onChange={setHealthFilter} data={Object.keys(HEALTH_COLORS)} w={150} />
             </Group>
 
-            <Card withBorder padding={0} style={{ minHeight: 0, flex: "1 1 0", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-              <div style={{ minHeight: 0, flex: "1 1 0", height: 0, overflow: "auto" }}>
+            <Card withBorder padding={0} style={{ minHeight: 0, height: "100%", flex: "1 1 0", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              <div style={{ minHeight: 0, flex: "1 1 auto", overflow: "auto" }}>
                 <Table striped highlightOnHover stickyHeader>
                   <Table.Thead>
                     <Table.Tr>
@@ -435,7 +435,17 @@ export function DeviceRegistryPanel() {
                         </Table.Td>
                         <Table.Td><Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceClassInfo.icon} color={device.deviceClassInfo.color} /><Badge size="sm" color={device.deviceClassInfo.color} variant="light">{device.deviceClassInfo.label}</Badge></Group></Table.Td>
                         <Table.Td><Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceTypeInfo.icon} color={device.deviceTypeInfo.color} /><Text size="sm">{device.deviceTypeInfo.label}</Text></Group></Table.Td>
-                        <Table.Td>{device.technologies.length ? device.technologies.map(item => item.label).join(", ") : "—"}</Table.Td>
+                        <Table.Td>
+                          {device.technologies.length ? (
+                            <Group gap={4} wrap="wrap">
+                              {device.technologies.map(item => (
+                                <Badge key={item.code} size="sm" color={item.color} variant="light" leftSection={<DeviceGlyph icon={item.icon} color={item.color} />}>
+                                  {item.label}
+                                </Badge>
+                              ))}
+                            </Group>
+                          ) : "—"}
+                        </Table.Td>
                         <Table.Td><Text size="sm" ff="monospace">{primaryIdentity(device.identities, "IP")?.value ?? primaryIdentity(device.identities, "FQDN")?.value ?? primaryIdentity(device.identities, "MAC")?.value ?? primaryIdentity(device.identities, "IEEE")?.value ?? "—"}</Text></Table.Td>
                         <Table.Td>{device.location?.name ?? "—"}</Table.Td>
                         <Table.Td>{device.parentDevice?.name ?? "—"}</Table.Td>
