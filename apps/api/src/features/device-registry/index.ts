@@ -480,7 +480,7 @@ async function prepareIdentities(
     }
   }
 
-  for (const identity of prepared.filter(item => item.identityType === "MAC" || item.identityType === "IEEE")) {
+  for (const identity of prepared.filter(item => item.identityType === "MAC" || item.identityType === "IEEE" || item.identityType === "IP")) {
     const conflict = await client.query<{ id: string; name: string }>(`
       SELECT d.id, d.name
       FROM device_registry_identities i

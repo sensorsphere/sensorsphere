@@ -65,7 +65,7 @@ export function DeviceIdentitiesEditor({
       ? "IEEE address must contain exactly 16 hexadecimal digits"
       : null;
 
-  const conflict = (form.identityType === "MAC" || form.identityType === "IEEE")
+  const conflict = (form.identityType === "MAC" || form.identityType === "IEEE" || form.identityType === "IP")
     ? devices.find(device => device.id !== currentDeviceId && device.identities.some(identity =>
         identity.identityType === form.identityType && normalizedForConflict(identity.identityType, identity.value) === normalized
       ))

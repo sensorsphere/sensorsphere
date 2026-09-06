@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.15.7";
+export const MODULE_VERSION = "1.15.8";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.15.8": {
+    releasedAt: "2026-09-06T11:15:00+02:00",
+    patch: "PR-148-device-registry-usability-multi-identities-v8.patch",
+    changes: [
+      { type: "fixed", description: "Enforce unique IP identities across devices and align KVM color with Network" }
+    ]
+  },
   "1.15.7": {
     releasedAt: "2026-09-06T10:55:00+02:00",
     patch: "PR-148-device-registry-usability-multi-identities-v7.patch",
