@@ -230,6 +230,8 @@ export function MonitoringPanel() {
   const [editingCheck, setEditingCheck] = React.useState<MonitoringCheck | null>(null);
   const [checkForm, setCheckForm] = React.useState<CheckFormState>(emptyCheckForm());
   const [checkDeleteTarget, setCheckDeleteTarget] = React.useState<MonitoringCheck | null>(null);
+  const [checkError, setCheckError] = React.useState<string | null>(null);
+  const [deviceDropdownOpened, setDeviceDropdownOpened] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const selectedDevice = (devicesQuery.data ?? []).find(device => device.id === checkForm.deviceId);
@@ -296,20 +298,25 @@ export function MonitoringPanel() {
 
   const saveCheck = useMutation({
     mutationFn: async () => {
+      if (!checkForm.deviceId) throw new Error("Device is required");
+      if (!checkForm.name.trim()) throw new Error("Check name is required");
       if (checkForm.targetMode === "EXISTING_IDENTITY" && !checkForm.targetValue) throw new Error("Existing identity is required");
+      if (checkForm.targetMode === "CUSTOM" && !checkForm.targetValue.trim()) throw new Error("Custom target is required");
       if (checkForm.targetMode === "CUSTOM" && checkForm.targetValue.trim().startsWith("{{identity:") && !identityTargetPattern.test(checkForm.targetValue.trim())) {
         throw new Error("Invalid identity target. Expected {{identity:TYPE:LABEL}}");
       }
+      if (checkForm.agentIds.length === 0) throw new Error("At least one monitoring agent is required");
       const payload = checkPayload(checkForm);
       return editingCheck ? updateMonitoringCheck(editingCheck.id, payload) : createMonitoringCheck(payload);
     },
     onSuccess: async () => {
       setCheckModalOpen(false);
       setEditingCheck(null);
-      setError(null);
+      setCheckError(null);
+      setDeviceDropdownOpened(false);
       await refresh();
     },
-    onError: cause => setError(cause instanceof Error ? cause.message : "Unable to save monitoring check")
+    onError: cause => setCheckError(cause instanceof Error ? cause.message : "Unable to save monitoring check")
   });
 
   const removeCheck = useMutation({
@@ -339,15 +346,24 @@ export function MonitoringPanel() {
     setAgentModalOpen(true);
   };
   const openCreateCheck = () => {
-    setEditingCheck(null); setCheckForm(emptyCheckForm()); setError(null); setCheckModalOpen(true);
+    setEditingCheck(null);
+    setCheckForm(emptyCheckForm());
+    setCheckError(null);
+    setDeviceDropdownOpened(false);
+    setCheckModalOpen(true);
   };
   const openEditCheck = (check: MonitoringCheck) => {
-    setEditingCheck(check); setCheckForm(checkToForm(check)); setError(null); setCheckModalOpen(true);
+    setEditingCheck(check);
+    setCheckForm(checkToForm(check));
+    setCheckError(null);
+    setDeviceDropdownOpened(false);
+    setCheckModalOpen(true);
   };
   const openCopyCheck = (check: MonitoringCheck) => {
     setEditingCheck(null);
     setCheckForm({ ...checkToForm(check), name: `${check.name} (copy)` });
-    setError(null);
+    setCheckError(null);
+    setDeviceDropdownOpened(false);
     setCheckModalOpen(true);
   };
 
@@ -479,13 +495,30 @@ export function MonitoringPanel() {
         </Stack>
       </Modal>
 
-      <Modal opened={checkModalOpen} onClose={() => setCheckModalOpen(false)} title={editingCheck ? "Edit monitoring check" : "Add monitoring check"} size="lg">
+      <Modal opened={checkModalOpen} onClose={() => { setCheckModalOpen(false); setCheckError(null); setDeviceDropdownOpened(false); }} title={editingCheck ? "Edit monitoring check" : "Add monitoring check"} size="lg">
         <Stack>
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
-            <Select label="Device" required searchable data={(devicesQuery.data ?? []).map(device => ({ value: device.id, label: device.name })).sort((a, b) => a.label.localeCompare(b.label))} value={checkForm.deviceId} onChange={value => setCheckForm(current => ({ ...current, deviceId: value, targetValue: current.targetMode === "EXISTING_IDENTITY" ? "" : current.targetValue }))} />
+            <Select
+              label="Device"
+              required
+              searchable
+              data={(devicesQuery.data ?? []).map(device => ({ value: device.id, label: device.name })).sort((a, b) => a.label.localeCompare(b.label))}
+              value={checkForm.deviceId}
+              dropdownOpened={deviceDropdownOpened}
+              onDropdownClose={() => setDeviceDropdownOpened(false)}
+              onClick={() => setDeviceDropdownOpened(true)}
+              onKeyDown={event => {
+                if (["ArrowDown", "Enter", " "].includes(event.key)) setDeviceDropdownOpened(true);
+                if (event.key === "Escape") setDeviceDropdownOpened(false);
+              }}
+              onChange={value => {
+                setDeviceDropdownOpened(false);
+                setCheckForm(current => ({ ...current, deviceId: value, targetValue: current.targetMode === "EXISTING_IDENTITY" ? "" : current.targetValue }));
+              }}
+            />
             <TextInput label="Check name" required autoFocus value={checkForm.name} onChange={event => { const value = event.currentTarget.value; setCheckForm(current => ({ ...current, name: value })); }} />
             <Select label="Check type" required data={["PING", "TCP", "HTTP", "HTTPS"]} value={checkForm.checkType} onChange={value => value && setCheckForm(current => ({ ...current, checkType: value as MonitoringCheckType, port: value === "PING" ? "" : current.port }))} allowDeselect={false} />
-            <Select label="Target" required data={[{ value: "PRIMARY_IP", label: "Primary IP" }, { value: "PRIMARY_FQDN", label: "Primary FQDN/hostname" }, { value: "PRIMARY_ADDRESS", label: "Primary IP or FQDN" }, { value: "EXISTING_IDENTITY", label: "Existing identity / address" }, { value: "CUSTOM", label: "Custom" }]} value={checkForm.targetMode} onChange={value => value && setCheckForm(current => ({ ...current, targetMode: value as CheckTargetSelectionMode, targetValue: value === "EXISTING_IDENTITY" ? "" : current.targetValue }))} allowDeselect={false} />
+            <Select label="Target" required data={[{ value: "PRIMARY_IP", label: "Primary IP" }, { value: "PRIMARY_FQDN", label: "Primary FQDN/hostname" }, { value: "PRIMARY_ADDRESS", label: "Primary IP or FQDN" }, { value: "EXISTING_IDENTITY", label: "Existing identity / address" }, { value: "CUSTOM", label: "Custom" }]} value={checkForm.targetMode} onChange={value => { setDeviceDropdownOpened(false); if (value) setCheckForm(current => ({ ...current, targetMode: value as CheckTargetSelectionMode, targetValue: value === "EXISTING_IDENTITY" ? "" : current.targetValue })); }} allowDeselect={false} />
             {checkForm.targetMode === "EXISTING_IDENTITY" && <Select label="Existing identity" required searchable disabled={!checkForm.deviceId} description={checkForm.deviceId ? "Uses the selected Device Registry identity. Labelled identities remain dynamic when their address changes." : "Select a device first."} placeholder={checkForm.deviceId ? "Select an IP or FQDN identity" : "Select a device first"} data={identityOptions} value={checkForm.targetValue || null} onChange={value => setCheckForm(current => ({ ...current, targetValue: value ?? "" }))} />}
             {checkForm.targetMode === "CUSTOM" && <Autocomplete label="Custom target" required description="Literal address/hostname or identity template. Available device identities are suggested below." placeholder="192.168.1.10 or {{identity:IP:VPN}}" data={identityOptions} value={checkForm.targetValue} onChange={value => setCheckForm(current => ({ ...current, targetValue: value }))} />}
             {checkForm.checkType !== "PING" && <NumberInput label="Port" min={1} max={65535} value={checkForm.port} onChange={value => setCheckForm(current => ({ ...current, port: value }))} />}
@@ -498,7 +531,8 @@ export function MonitoringPanel() {
           </SimpleGrid>
           <MultiSelect label="Monitoring agents" description={checkForm.executionMode === "FAILOVER" ? "Selection order defines failover priority." : "All selected agents execute this check."} required searchable data={agents.filter(agent => agent.enabled).map(agent => ({ value: agent.id, label: agent.name })).sort((a, b) => a.label.localeCompare(b.label))} value={checkForm.agentIds} onChange={value => setCheckForm(current => ({ ...current, agentIds: value }))} />
           <Checkbox label="Enabled" checked={checkForm.enabled} onChange={event => { const checked = event.currentTarget.checked; setCheckForm(current => ({ ...current, enabled: checked })); }} />
-          <Group justify="flex-end"><Button variant="light" color="gray" onClick={() => setCheckModalOpen(false)}>Cancel</Button><Button loading={saveCheck.isPending} onClick={() => saveCheck.mutate()}>Save</Button></Group>
+          {checkError && <Text c="red" size="sm">{checkError}</Text>}
+          <Group justify="flex-end"><Button variant="light" color="gray" onClick={() => { setCheckModalOpen(false); setCheckError(null); setDeviceDropdownOpened(false); }}>Cancel</Button><Button loading={saveCheck.isPending} onClick={() => saveCheck.mutate()}>Save</Button></Group>
         </Stack>
       </Modal>
 

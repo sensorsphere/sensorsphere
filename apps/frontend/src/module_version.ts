@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.21.0";
+export const MODULE_VERSION = "1.21.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.21.1": {
+    releasedAt: "2026-09-06T22:11:00+02:00",
+    patch: "PR-151-monitoring-identity-targets-service-table-fonts-v2.patch",
+    changes: [
+      { type: "fixed", description: "Monitoring Device selector opens only from explicit user interaction and stays closed during dialog rerenders and target changes" },
+      { type: "fixed", description: "Monitoring check validation and save errors are displayed inside the Add/Edit check dialog" }
+    ]
+  },
   "1.21.0": {
     releasedAt: "2026-09-06T22:15:00+02:00",
     patch: "PR-151-monitoring-identity-targets-service-table-fonts-v1.patch",
