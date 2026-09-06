@@ -64,6 +64,68 @@ import { DeviceGlyph } from "./DeviceGlyph";
 import { DeviceTaxonomyPanel } from "./DeviceTaxonomyPanel";
 import { DeviceAccessLinksEditor, openDeviceAccessUrl, resolveDeviceAccessUrl } from "./DeviceAccessLinksEditor";
 import { DeviceIdentitiesEditor, primaryIdentity } from "./DeviceIdentitiesEditor";
+import { LocationIcon, getLocationIconName } from "./LocationIcon";
+import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
+
+
+type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "battery" | "lastSeen" | "health";
+
+function deviceAddress(device: DeviceRegistryDevice): string {
+  return primaryIdentity(device.identities, "IP")?.value
+    ?? device.ipAddress
+    ?? primaryIdentity(device.identities, "FQDN")?.value
+    ?? device.fqdn
+    ?? primaryIdentity(device.identities, "MAC")?.value
+    ?? device.macAddress
+    ?? primaryIdentity(device.identities, "IEEE")?.value
+    ?? device.ieeeAddress
+    ?? "";
+}
+
+function deviceAddressSearchText(device: DeviceRegistryDevice): string {
+  return [
+    device.ipAddress ?? "",
+    device.fqdn ?? "",
+    device.macAddress ?? "",
+    device.ieeeAddress ?? "",
+    ...device.identities
+      .filter(identity => ["IP", "FQDN", "HOSTNAME", "MAC", "IEEE"].includes(identity.identityType.toUpperCase()))
+      .map(identity => `${identity.identityType} ${identity.label ?? ""} ${identity.value}`)
+  ].join(" ").toLowerCase();
+}
+
+function neutralIdentityValue(identityType: string): string {
+  switch (identityType.toUpperCase()) {
+    case "MAC": return "00:00:00:00:00:00";
+    case "IP": return "0.0.0.0";
+    case "IEEE": return "0x0000000000000000";
+    case "FQDN": return "device.local";
+    case "HOSTNAME": return "device";
+    case "SERIAL": return "00000000";
+    case "ESPHOME_NODE": return "device";
+    case "MQTT_CLIENT_ID": return "device";
+    default: return "00000000";
+  }
+}
+
+function copyDeviceToForm(device: DeviceRegistryDevice): DeviceFormState {
+  const form = deviceToForm(device);
+  return {
+    ...form,
+    name: `${device.name} (copy)`,
+    identities: device.identities.map(({ id: _id, ...identity }) => ({
+      ...identity,
+      value: neutralIdentityValue(identity.identityType)
+    })),
+    accessLinks: device.accessLinks.map(({ id: _id, ...link }) => ({ ...link })),
+    sensorIds: [],
+    assetIds: [],
+    gatewayIds: [],
+    lastSeenAt: "",
+    batteryPercent: "",
+    rssi: ""
+  };
+}
 
 const HEALTH_COLORS: Record<DeviceHealthStatus, string> = {
   ONLINE: "green",
@@ -245,7 +307,10 @@ function TaxonomyOption({ icon, color, label, suffix }: { icon: string; color: s
 export function DeviceRegistryPanel() {
   const queryClient = useQueryClient();
   const [tab, setTab] = React.useState<string | null>("devices");
-  const [search, setSearch] = React.useState("");
+  const [nameFilter, setNameFilter] = React.useState("");
+  const [addressFilter, setAddressFilter] = React.useState("");
+  const [sortKey, setSortKey] = React.useState<DeviceSortKey>("name");
+  const [sortDirection, setSortDirection] = React.useState<SortDirection>("asc");
   const [classFilter, setClassFilter] = React.useState<string | null>(null);
   const [typeFilter, setTypeFilter] = React.useState<string | null>(null);
   const [technologyFilter, setTechnologyFilter] = React.useState<string | null>(null);
@@ -321,25 +386,47 @@ export function DeviceRegistryPanel() {
 
   const devices = devicesQuery.data ?? [];
   const filteredDevices = devices.filter(device => {
-    const needle = search.trim().toLowerCase();
-    const matchesSearch = !needle || [
-      device.name,
-      device.deviceType,
-      device.technologies.map(item => item.label).join(" "),
-      device.manufacturer ?? "",
-      device.model ?? "",
-      device.macAddress ?? "",
-      device.ipAddress ?? "",
-      device.ieeeAddress ?? "",
-      device.fqdn ?? "",
-      ...device.identities.map(identity => `${identity.identityType} ${identity.value}`)
-    ].join(" ").toLowerCase().includes(needle);
-    return matchesSearch &&
+    const nameNeedle = nameFilter.trim().toLowerCase();
+    const addressNeedle = addressFilter.trim().toLowerCase();
+    const matchesName = !nameNeedle || device.name.toLowerCase().includes(nameNeedle);
+    const matchesAddress = !addressNeedle || deviceAddressSearchText(device).includes(addressNeedle);
+    return matchesName && matchesAddress &&
       (!classFilter || device.deviceClass === classFilter) &&
       (!typeFilter || device.deviceType === typeFilter) &&
       (!technologyFilter || device.technologies.some(item => item.code === technologyFilter)) &&
       (!healthFilter || device.health.status === healthFilter);
+  }).sort((left, right) => {
+    const leftValue = sortKey === "name" ? left.name
+      : sortKey === "address" ? deviceAddress(left)
+      : sortKey === "class" ? left.deviceClassInfo.label
+      : sortKey === "type" ? left.deviceTypeInfo.label
+      : sortKey === "technology" ? left.technologies.map(item => item.label).join(", ")
+      : sortKey === "location" ? left.location?.name ?? null
+      : sortKey === "parent" ? left.parentDevice?.name ?? null
+      : sortKey === "battery" ? left.batteryPercent
+      : sortKey === "lastSeen" ? (left.lastSeenAt ? new Date(left.lastSeenAt).getTime() : null)
+      : left.health.status;
+    const rightValue = sortKey === "name" ? right.name
+      : sortKey === "address" ? deviceAddress(right)
+      : sortKey === "class" ? right.deviceClassInfo.label
+      : sortKey === "type" ? right.deviceTypeInfo.label
+      : sortKey === "technology" ? right.technologies.map(item => item.label).join(", ")
+      : sortKey === "location" ? right.location?.name ?? null
+      : sortKey === "parent" ? right.parentDevice?.name ?? null
+      : sortKey === "battery" ? right.batteryPercent
+      : sortKey === "lastSeen" ? (right.lastSeenAt ? new Date(right.lastSeenAt).getTime() : null)
+      : right.health.status;
+    return compareTableValues(leftValue, rightValue, sortDirection);
   });
+
+  const toggleSort = (key: DeviceSortKey) => {
+    if (sortKey === key) {
+      setSortDirection(current => current === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDirection("asc");
+    }
+  };
 
   const healthCounts = devices.reduce<Record<DeviceHealthStatus, number>>((acc, device) => {
     acc[device.health.status] += 1;
@@ -356,6 +443,13 @@ export function DeviceRegistryPanel() {
   const openEditDevice = (device: DeviceRegistryDevice) => {
     setEditingDevice(device);
     setDeviceForm(deviceToForm(device));
+    setError(null);
+    setDeviceModalOpen(true);
+  };
+
+  const openCopyDevice = (device: DeviceRegistryDevice) => {
+    setEditingDevice(null);
+    setDeviceForm(copyDeviceToForm(device));
     setError(null);
     setDeviceModalOpen(true);
   };
@@ -405,7 +499,8 @@ export function DeviceRegistryPanel() {
             </Group>
 
             <Group gap="sm">
-              <TextInput placeholder="Search devices..." value={search} onChange={event => setSearch(event.currentTarget.value)} style={{ flex: 1 }} />
+              <TextInput placeholder="Name" value={nameFilter} onChange={event => setNameFilter(event.currentTarget.value)} style={{ flex: 1, minWidth: 180 }} />
+              <TextInput placeholder="Address" value={addressFilter} onChange={event => setAddressFilter(event.currentTarget.value)} style={{ flex: 1, minWidth: 180 }} />
               <Select placeholder="All classes" clearable value={classFilter} onChange={setClassFilter} data={(deviceClassesQuery.data ?? []).map(item => ({ value: item.code, label: item.label }))} leftSection={classFilter ? <DeviceGlyph icon={(deviceClassesQuery.data ?? []).find(item => item.code === classFilter)?.icon ?? "device"} color={(deviceClassesQuery.data ?? []).find(item => item.code === classFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (deviceClassesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={180} />
               <Select placeholder="All types" searchable clearable value={typeFilter} onChange={setTypeFilter} data={(deviceTypesQuery.data ?? []).map(type => ({ value: type.code, label: type.label }))} leftSection={typeFilter ? <DeviceGlyph icon={(deviceTypesQuery.data ?? []).find(item => item.code === typeFilter)?.icon ?? "device"} color={(deviceTypesQuery.data ?? []).find(item => item.code === typeFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (deviceTypesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={190} />
               <Select placeholder="All technologies" searchable clearable value={technologyFilter} onChange={setTechnologyFilter} data={(technologiesQuery.data ?? []).map(technology => ({ value: technology.code, label: technology.label }))} leftSection={technologyFilter ? <DeviceGlyph icon={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.icon ?? "link"} color={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (technologiesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={205} />
@@ -417,18 +512,18 @@ export function DeviceRegistryPanel() {
                 <Table striped highlightOnHover stickyHeader>
                   <Table.Thead>
                     <Table.Tr>
-                      <Table.Th>Name</Table.Th>
-                      <Table.Th>Class</Table.Th>
-                      <Table.Th>Type</Table.Th>
-                      <Table.Th>Technology</Table.Th>
-                      <Table.Th>Address</Table.Th>
-                      <Table.Th>Location</Table.Th>
-                      <Table.Th>Parent</Table.Th>
-                      <Table.Th>Battery</Table.Th>
-                      <Table.Th>Last seen</Table.Th>
-                      <Table.Th>Health</Table.Th>
+                      <SortableTableHeader active={sortKey === "name"} direction={sortDirection} onClick={() => toggleSort("name")}>Name</SortableTableHeader>
+                      <SortableTableHeader active={sortKey === "address"} direction={sortDirection} onClick={() => toggleSort("address")}>Address</SortableTableHeader>
+                      <SortableTableHeader active={sortKey === "class"} direction={sortDirection} onClick={() => toggleSort("class")}>Class</SortableTableHeader>
+                      <SortableTableHeader active={sortKey === "type"} direction={sortDirection} onClick={() => toggleSort("type")}>Type</SortableTableHeader>
+                      <SortableTableHeader active={sortKey === "technology"} direction={sortDirection} onClick={() => toggleSort("technology")}>Technology</SortableTableHeader>
+                      <SortableTableHeader active={sortKey === "location"} direction={sortDirection} onClick={() => toggleSort("location")}>Location</SortableTableHeader>
+                      <SortableTableHeader active={sortKey === "parent"} direction={sortDirection} onClick={() => toggleSort("parent")}>Parent</SortableTableHeader>
+                      <SortableTableHeader active={sortKey === "battery"} direction={sortDirection} onClick={() => toggleSort("battery")}>Battery</SortableTableHeader>
+                      <SortableTableHeader active={sortKey === "lastSeen"} direction={sortDirection} onClick={() => toggleSort("lastSeen")}>Last seen</SortableTableHeader>
+                      <SortableTableHeader active={sortKey === "health"} direction={sortDirection} onClick={() => toggleSort("health")}>Health</SortableTableHeader>
                       <Table.Th>Access</Table.Th>
-                      <Table.Th style={{ width: 88 }}>Actions</Table.Th>
+                      <Table.Th style={{ width: 116 }}>Actions</Table.Th>
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
@@ -440,6 +535,7 @@ export function DeviceRegistryPanel() {
                             <Text size="xs" c="dimmed">{device.manufacturer || device.model ? [device.manufacturer, device.model].filter(Boolean).join(" · ") : device.identities[0]?.value ?? ""}</Text>
                           </Stack>
                         </Table.Td>
+                        <Table.Td><Text size="sm" ff="monospace">{deviceAddress(device) || "—"}</Text></Table.Td>
                         <Table.Td><Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceClassInfo.icon} color={device.deviceClassInfo.color} /><Text size="sm">{device.deviceClassInfo.label}</Text></Group></Table.Td>
                         <Table.Td><Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceTypeInfo.icon} color={device.deviceTypeInfo.color} /><Text size="sm">{device.deviceTypeInfo.label}</Text></Group></Table.Td>
                         <Table.Td>
@@ -454,7 +550,6 @@ export function DeviceRegistryPanel() {
                             </Group>
                           ) : "—"}
                         </Table.Td>
-                        <Table.Td><Text size="sm" ff="monospace">{primaryIdentity(device.identities, "IP")?.value ?? primaryIdentity(device.identities, "FQDN")?.value ?? primaryIdentity(device.identities, "MAC")?.value ?? primaryIdentity(device.identities, "IEEE")?.value ?? "—"}</Text></Table.Td>
                         <Table.Td>{device.location?.name ?? "—"}</Table.Td>
                         <Table.Td>{device.parentDevice?.name ?? "—"}</Table.Td>
                         <Table.Td>{device.batteryPercent == null ? "—" : `${device.batteryPercent}%`}</Table.Td>
@@ -468,13 +563,14 @@ export function DeviceRegistryPanel() {
                           <Group gap={2} wrap="nowrap">
                             {device.accessLinks.filter(link => link.enabled).slice(0, 3).map((link, index) => {
                               const resolved = resolveDeviceAccessUrl(link, { deviceName: device.name, macAddress: primaryIdentity(device.identities, "MAC")?.value ?? "", ipAddress: primaryIdentity(device.identities, "IP")?.value ?? "", ieeeAddress: primaryIdentity(device.identities, "IEEE")?.value ?? "", fqdn: primaryIdentity(device.identities, "FQDN")?.value ?? "", manufacturer: device.manufacturer ?? "", model: device.model ?? "", deviceClass: device.deviceClass, deviceType: device.deviceType, location: device.location?.name ?? "", identities: device.identities });
-                              return <Tooltip key={`${link.name}-${index}`} label={resolved.unresolved.length ? `${link.name} · missing ${resolved.unresolved.join(", ")}` : link.name}><ActionIcon variant="subtle" disabled={resolved.unresolved.length > 0} onClick={() => openDeviceAccessUrl(resolved.url, `ss_device_${device.id}_${index}`)} aria-label={`Open ${link.name}`}><DeviceGlyph icon={link.icon} /></ActionIcon></Tooltip>;
+                              return <Tooltip key={`${link.name}-${index}`} label={resolved.unresolved.length ? `${link.name} · missing ${resolved.unresolved.join(", ")}` : link.name}><ActionIcon variant="subtle" disabled={resolved.unresolved.length > 0} onClick={() => openDeviceAccessUrl(resolved.url, `ss_device_${device.id}_${index}`)} aria-label={`Open ${link.name}`}><DeviceGlyph icon={link.icon} color={link.color} /></ActionIcon></Tooltip>;
                             })}
                             {device.accessLinks.length === 0 && <Text size="xs" c="dimmed">—</Text>}
                           </Group>
                         </Table.Td>
                         <Table.Td>
                           <Group gap={4} wrap="nowrap">
+                            <Tooltip label="Copy device"><ActionIcon variant="subtle" color="blue" onClick={() => openCopyDevice(device)} aria-label={`Copy ${device.name}`}><DeviceGlyph icon="copy" color="blue" size={16} /></ActionIcon></Tooltip>
                             <EditActionIcon onClick={() => openEditDevice(device)} />
                             <DeleteActionIcon onClick={() => { setError(null); setDeleteDeviceTarget(device); }} />
                           </Group>
@@ -586,7 +682,13 @@ export function DeviceRegistryPanel() {
             <TextInput label="Manufacturer" value={deviceForm.manufacturer} onChange={event => setDeviceForm(current => ({ ...current, manufacturer: event.currentTarget.value }))} />
             <TextInput label="Model" value={deviceForm.model} onChange={event => setDeviceForm(current => ({ ...current, model: event.currentTarget.value }))} />
             <TextInput label="Firmware / version" value={deviceForm.firmwareVersion} onChange={event => setDeviceForm(current => ({ ...current, firmwareVersion: event.currentTarget.value }))} />
-            <Select label="Location" searchable clearable value={deviceForm.locationId} onChange={value => setDeviceForm(current => ({ ...current, locationId: value }))} data={(locationsQuery.data ?? []).map(location => ({ value: location.id, label: location.name }))} />
+            <Select
+              label="Location" searchable clearable value={deviceForm.locationId}
+              onChange={value => setDeviceForm(current => ({ ...current, locationId: value }))}
+              data={(locationsQuery.data ?? []).map(location => ({ value: location.id, label: location.name }))}
+              leftSection={deviceForm.locationId ? <LocationIcon name={getLocationIconName((locationsQuery.data ?? []).find(location => location.id === deviceForm.locationId))} size={16} /> : undefined}
+              renderOption={({ option }) => { const location = (locationsQuery.data ?? []).find(item => item.id === option.value); return <Group gap="xs" wrap="nowrap"><LocationIcon name={getLocationIconName(location)} size={16} /><Text size="sm">{option.label}</Text></Group>; }}
+            />
             <Select label="Parent device" searchable clearable value={deviceForm.parentDeviceId} onChange={value => setDeviceForm(current => ({ ...current, parentDeviceId: value }))} data={devices.filter(device => device.id !== editingDevice?.id).map(device => ({ value: device.id, label: device.name }))} />
             <Select label="Health profile" searchable clearable value={deviceForm.healthProfileId} onChange={value => setDeviceForm(current => ({ ...current, healthProfileId: value }))} data={(profilesQuery.data ?? []).map(profile => ({ value: profile.id, label: profile.name }))} />
             <TextInput type="datetime-local" label="Last seen" value={deviceForm.lastSeenAt} onChange={event => setDeviceForm(current => ({ ...current, lastSeenAt: event.currentTarget.value }))} />

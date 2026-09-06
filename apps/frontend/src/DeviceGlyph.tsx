@@ -6,13 +6,21 @@ export function deviceColor(color: string): string {
   return MANTINE_COLORS.has(color) ? `var(--mantine-color-${color}-6)` : color || "currentColor";
 }
 
-export const DEVICE_ICON_OPTIONS = [
-  "device", "network", "router", "switch", "wifi", "shield", "server", "server-stack",
-  "virtual", "container", "storage", "gateway", "antenna", "sensor", "thermometer", "droplet",
-  "motion", "contact", "button", "plug", "switch-toggle", "bulb", "thermostat", "camera",
-  "display", "controller", "battery", "printer", "ethernet", "bluetooth", "chip", "message",
-  "activity", "terminal", "globe", "globe-lock", "infrastructure", "link"
-].map(value => ({ value, label: value }));
+const DEVICE_ICON_NAMES = [
+  "activity", "antenna", "battery", "bluetooth", "bulb", "button", "camera", "chip",
+  "contact", "container", "controller", "copy", "device", "display", "droplet", "ethernet",
+  "gateway", "globe", "globe-lock", "infrastructure", "link", "message", "motion", "network",
+  "plug", "printer", "router", "sensor", "server", "server-stack", "shield", "storage", "switch",
+  "switch-toggle", "terminal", "thermometer", "thermostat", "virtual", "wifi"
+];
+
+function iconLabel(value: string): string {
+  return value.split("-").map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+}
+
+export const DEVICE_ICON_OPTIONS = DEVICE_ICON_NAMES
+  .map(value => ({ value, label: iconLabel(value) }))
+  .sort((left, right) => left.label.localeCompare(right.label));
 
 export function DeviceGlyph({ icon, color = "gray", size = 18 }: { icon: string; color?: string; size?: number }) {
   const common = {
@@ -75,6 +83,8 @@ export function DeviceGlyph({ icon, color = "gray", size = 18 }: { icon: string;
       return <svg {...common}><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>;
     case "link":
       return <svg {...common}><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></svg>;
+    case "copy":
+      return <svg {...common}><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>;
     default:
       return <svg {...common}><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 13h5"/></svg>;
   }

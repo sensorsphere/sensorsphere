@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.6.1";
+export const MODULE_VERSION = "1.6.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.6.2": {
+    releasedAt: "2026-09-06T09:20:00+02:00",
+    patch: "PR-148-device-registry-usability-multi-identities-v6.patch",
+    changes: [
+      { type: "added", description: "Device access links persist a configurable icon color with a blue default" }
+    ]
+  },
   "1.6.0": {
     releasedAt: "2026-09-06T08:00:00+02:00",
     patch: "PR-148-device-registry-usability-multi-identities-v1.patch",

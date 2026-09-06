@@ -747,6 +747,7 @@ export interface DeviceAccessLink {
   port: number | null;
   parameters: Record<string, string>;
   icon: string;
+  color: string;
   enabled: boolean;
   sortOrder: number;
 }

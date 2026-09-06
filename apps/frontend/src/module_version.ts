@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.15.5";
+export const MODULE_VERSION = "1.15.6";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.15.6": {
+    releasedAt: "2026-09-06T09:20:00+02:00",
+    patch: "PR-148-device-registry-usability-multi-identities-v6.patch",
+    changes: [
+      { type: "added", description: "Devices can be copied with reusable configuration preserved while hardware/network identities are neutralized for safe editing" },
+      { type: "added", description: "Device table supports sortable columns plus dedicated Name and Address filters, with taxonomy columns ordered before Location" },
+      { type: "changed", description: "Access-link icon choices are alphabetized and display their glyphs; access icons also support configurable colors" },
+      { type: "changed", description: "Device Location selector displays the configured location icon in both options and the selected value" }
+    ]
+  },
   "1.15.5": {
     releasedAt: "2026-09-06T09:00:00+02:00",
     patch: "PR-148-device-registry-usability-multi-identities-v5.patch",
