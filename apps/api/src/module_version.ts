@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.8.1";
+export const MODULE_VERSION = "1.8.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.8.2": {
+    releasedAt: "2026-09-06T13:24:00+02:00",
+    patch: "PR-149-service-registry-foundation-v6.patch",
+    changes: [
+      { type: "changed", description: "Projected Device Registry service names are prefixed with the source device name and fall back to the access link name when no published name is set" }
+    ]
+  },
   "1.8.1": {
     releasedAt: "2026-09-06T12:55:00+02:00",
     patch: "PR-149-service-registry-foundation-v3.patch",

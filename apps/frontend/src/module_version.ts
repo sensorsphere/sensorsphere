@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.18.0";
+export const MODULE_VERSION = "1.18.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.18.1": {
+    releasedAt: "2026-09-06T13:24:00+02:00",
+    patch: "PR-149-service-registry-foundation-v6.patch",
+    changes: [
+      { type: "changed", description: "Device class, type and technology choices are sorted alphabetically in Add/Edit Device" },
+      { type: "changed", description: "Published Device access links can omit a service name and use the access link name automatically" }
+    ]
+  },
   "1.18.0": {
     releasedAt: "2026-09-06T13:30:00+02:00",
     patch: "PR-149-service-registry-foundation-v4.patch",

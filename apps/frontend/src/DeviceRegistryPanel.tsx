@@ -657,11 +657,11 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           {error && <Text c="red" size="sm">{error}</Text>}
           <SimpleGrid cols={{ base: 1, sm: 3 }}>
             <TextInput label="Name" required value={deviceForm.name} onChange={event => setDeviceForm(current => ({ ...current, name: event.currentTarget.value }))} autoFocus />
-            <Select label="Class" required data={(deviceClassesQuery.data ?? []).map(item => ({ value: item.code, label: item.label }))} value={deviceForm.deviceClass || null} onChange={value => value && setDeviceForm(current => ({ ...current, deviceClass: value, deviceType: "" }))} allowDeselect={false} leftSection={<DeviceGlyph icon={(deviceClassesQuery.data ?? []).find(item => item.code === deviceForm.deviceClass)?.icon ?? "device"} color={(deviceClassesQuery.data ?? []).find(item => item.code === deviceForm.deviceClass)?.color} />} renderOption={({ option }) => { const item = (deviceClassesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} />
+            <Select label="Class" required data={[...(deviceClassesQuery.data ?? [])].sort((a, b) => a.label.localeCompare(b.label)).map(item => ({ value: item.code, label: item.label }))} value={deviceForm.deviceClass || null} onChange={value => value && setDeviceForm(current => ({ ...current, deviceClass: value, deviceType: "" }))} allowDeselect={false} leftSection={<DeviceGlyph icon={(deviceClassesQuery.data ?? []).find(item => item.code === deviceForm.deviceClass)?.icon ?? "device"} color={(deviceClassesQuery.data ?? []).find(item => item.code === deviceForm.deviceClass)?.color} />} renderOption={({ option }) => { const item = (deviceClassesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} />
             <Select
               label="Type" required searchable value={deviceForm.deviceType || null}
               onChange={value => setDeviceForm(current => ({ ...current, deviceType: value ?? "" }))}
-              data={(deviceTypesQuery.data ?? []).filter(type => type.deviceClass === deviceForm.deviceClass || type.deviceClass === "OTHER").map(type => ({ value: type.code, label: `${type.label} · ${type.category}` }))}
+              data={[...(deviceTypesQuery.data ?? [])].filter(type => type.deviceClass === deviceForm.deviceClass || type.deviceClass === "OTHER").sort((a, b) => a.label.localeCompare(b.label)).map(type => ({ value: type.code, label: `${type.label} · ${type.category}` }))}
               leftSection={deviceForm.deviceType ? <DeviceGlyph icon={(deviceTypesQuery.data ?? []).find(item => item.code === deviceForm.deviceType)?.icon ?? "device"} color={(deviceTypesQuery.data ?? []).find(item => item.code === deviceForm.deviceType)?.color} /> : undefined}
               renderOption={({ option }) => { const item = (deviceTypesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} suffix={item.category} /> : option.label; }}
               placeholder="Select a device type"
@@ -669,7 +669,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
             <MultiSelect
               label="Technologies" searchable clearable value={deviceForm.technologies}
               onChange={value => setDeviceForm(current => ({ ...current, technologies: value }))}
-              data={(technologiesQuery.data ?? []).map(technology => ({ value: technology.code, label: `${technology.label} · ${technology.category}` }))}
+              data={[...(technologiesQuery.data ?? [])].sort((a, b) => a.label.localeCompare(b.label)).map(technology => ({ value: technology.code, label: `${technology.label} · ${technology.category}` }))}
               renderOption={({ option }) => { const item = (technologiesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} suffix={item.category} /> : option.label; }}
               placeholder="Select one or more technologies"
             />

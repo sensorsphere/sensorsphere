@@ -59,7 +59,7 @@ async function listServices(pool: Pool) {
   const projected = published.rows.map((row: any) => ({
     id: `device-access:${row.id}`, source: "DEVICE_ACCESS_LINK" as const, readOnly: true,
     sourceDevice: { id: row.device_id, name: row.device_name }, sourceAccessLinkId: row.id,
-    name: row.published_service_name || row.name, serviceClass: row.published_service_class,
+    name: `${row.device_name} - ${row.published_service_name || row.name}`, serviceClass: row.published_service_class,
     serviceClassInfo: { code: row.published_service_class, label: row.class_label, icon: row.class_icon, color: row.class_color },
     serviceType: row.published_service_type, serviceTypeInfo: { code: row.published_service_type, label: row.type_label, icon: row.type_icon, color: row.type_color },
     provider: null, description: row.published_service_description, enabled: row.enabled && row.device_enabled,
