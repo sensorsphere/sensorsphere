@@ -62,6 +62,33 @@ function relativeAge(value: string | null): string {
   return `${Math.round(seconds / 86400)}d ago`;
 }
 
+
+async function writeClipboardText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall through for HTTP/insecure contexts or browsers denying Clipboard API access.
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try {
+    document.execCommand("copy");
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
 function overallCheckStatus(check: MonitoringCheck): "UP" | "DOWN" | "UNKNOWN" {
   if (check.states.some(state => state.status === "UP")) return "UP";
   if (check.states.some(state => state.status === "DOWN")) return "DOWN";
@@ -370,9 +397,38 @@ export function MonitoringPanel() {
       <Modal opened={tokenInfo !== null} onClose={() => setTokenInfo(null)} title="Monitoring agent token" size="lg">
         <Stack>
           <Text size="sm">Copy this token now. SensorSphere stores only its hash and cannot display it again.</Text>
-          <Code block>{tokenInfo?.token}</Code>
-          <Code block>{`SENSORSPHERE_URL=https://<sensorsphere-host>\nSENSORSPHERE_AGENT_ID=${tokenInfo?.agentName ?? "agent"}\nSENSORSPHERE_AGENT_TOKEN=${tokenInfo?.token ?? ""}`}</Code>
-          <Group justify="flex-end"><Button variant="light" onClick={() => tokenInfo && navigator.clipboard.writeText(tokenInfo.token)}>Copy token</Button><Button onClick={() => setTokenInfo(null)}>Close</Button></Group>
+          <TextInput
+            label="Token"
+            readOnly
+            value={tokenInfo?.token ?? ""}
+            rightSection={
+              <Tooltip label="Copy token">
+                <ActionIcon
+                  variant="subtle"
+                  aria-label="Copy token"
+                  onClick={() => tokenInfo && void writeClipboardText(tokenInfo.token)}
+                >
+                  ⧉
+                </ActionIcon>
+              </Tooltip>
+            }
+          />
+          <Stack gap={4}>
+            <Group justify="space-between" align="center">
+              <Text size="sm" fw={500}>Agent environment variables</Text>
+              <Tooltip label="Copy all environment variables">
+                <ActionIcon
+                  variant="subtle"
+                  aria-label="Copy all environment variables"
+                  onClick={() => tokenInfo && void writeClipboardText(`SENSORSPHERE_URL=https://<sensorsphere-host>\nSENSORSPHERE_AGENT_ID=${tokenInfo.agentName}\nSENSORSPHERE_AGENT_TOKEN=${tokenInfo.token}`)}
+                >
+                  ⧉
+                </ActionIcon>
+              </Tooltip>
+            </Group>
+            <Code block>{`SENSORSPHERE_URL=https://<sensorsphere-host>\nSENSORSPHERE_AGENT_ID=${tokenInfo?.agentName ?? "agent"}\nSENSORSPHERE_AGENT_TOKEN=${tokenInfo?.token ?? ""}`}</Code>
+          </Stack>
+          <Group justify="flex-end"><Button onClick={() => setTokenInfo(null)}>Close</Button></Group>
         </Stack>
       </Modal>
 

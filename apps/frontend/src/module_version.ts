@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.20.1";
+export const MODULE_VERSION = "1.20.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.20.2": {
+    releasedAt: "2026-09-06T15:20:00+02:00",
+    patch: "PR-150-monitoring-foundation-v3.patch",
+    changes: [
+      { type: "fixed", description: "Monitoring token copy works in HTTP/insecure contexts using a clipboard fallback" },
+      { type: "changed", description: "Monitoring token dialog adds inline copy actions for the token and complete agent environment variables" }
+    ]
+  },
   "1.20.1": {
     releasedAt: "2026-09-06T15:03:00+02:00",
     patch: "PR-150-monitoring-foundation-v2.patch",
