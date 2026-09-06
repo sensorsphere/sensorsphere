@@ -353,7 +353,7 @@ export function MonitoringPanel() {
           <Button size="xs" onClick={openCreateAgent}>+ Add agent</Button>
         </Group>
         <Table striped highlightOnHover>
-          <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Status</Table.Th><Table.Th>Host</Table.Th><Table.Th>Version</Table.Th><Table.Th>Last seen</Table.Th><Table.Th>Labels</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead>
+          <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Status</Table.Th><Table.Th>Host</Table.Th><Table.Th>Version</Table.Th><Table.Th>Last seen</Table.Th><Table.Th>Labels</Table.Th><Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
           <Table.Tbody>
             {agents.map(agent => (
               <Table.Tr key={agent.id}>
@@ -363,7 +363,7 @@ export function MonitoringPanel() {
                 <Table.Td>{agent.version ?? "—"}</Table.Td>
                 <Table.Td>{relativeAge(agent.lastSeenAt)}</Table.Td>
                 <Table.Td><Text size="xs">{Object.entries(agent.labels).map(([k, v]) => `${k}=${v}`).join(", ") || "—"}</Text></Table.Td>
-                <Table.Td><Group gap={4} wrap="nowrap">
+                <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">
                   <EditActionIcon onClick={() => openEditAgent(agent)} />
                   <Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip>
                   <Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip>
@@ -382,7 +382,7 @@ export function MonitoringPanel() {
           <Button size="xs" onClick={openCreateCheck} disabled={agents.length === 0}>+ Add check</Button>
         </Group>
         <Table striped highlightOnHover>
-          <Table.Thead><Table.Tr><Table.Th>Device</Table.Th><Table.Th>Check</Table.Th><Table.Th>Target</Table.Th><Table.Th>Agents</Table.Th><Table.Th>Mode</Table.Th><Table.Th>Status</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead>
+          <Table.Thead><Table.Tr><Table.Th>Device</Table.Th><Table.Th>Check</Table.Th><Table.Th>Target</Table.Th><Table.Th>Agents</Table.Th><Table.Th>Mode</Table.Th><Table.Th>Status</Table.Th><Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
           <Table.Tbody>
             {checks.map(check => {
               const status = overallCheckStatus(check);
@@ -394,7 +394,7 @@ export function MonitoringPanel() {
                 <Table.Td><Text size="xs">{check.assignments.map(item => item.agentName ?? item.agentId).join(" → ")}</Text></Table.Td>
                 <Table.Td><Badge size="sm" variant="light">{check.executionMode}</Badge></Table.Td>
                 <Table.Td><Badge size="sm" color={STATUS_COLORS[status]}>{status}</Badge></Table.Td>
-                <Table.Td><Group gap={4}><EditActionIcon onClick={() => openEditCheck(check)} /><Tooltip label="Copy monitoring check"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring check" onClick={() => openCopyCheck(check)}>⧉</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setCheckDeleteTarget(check)} /></Group></Table.Td>
+                <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => openEditCheck(check)} /><Tooltip label="Copy monitoring check"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring check" onClick={() => openCopyCheck(check)}>⧉</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setCheckDeleteTarget(check)} /></Group></Table.Td>
               </Table.Tr>;
             })}
             {checks.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text ta="center" c="dimmed" py="xl">No monitoring checks yet.</Text></Table.Td></Table.Tr>}

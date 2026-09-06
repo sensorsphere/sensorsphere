@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.20.3";
+export const MODULE_VERSION = "1.20.4";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.20.4": {
+    releasedAt: "2026-09-06T15:45:00+02:00",
+    patch: "PR-150-monitoring-foundation-v5.patch",
+    changes: [
+      { type: "changed", description: "Align Device and Monitoring action columns and use the Monitoring copy action style consistently" }
+    ]
+  },
   "1.20.3": {
     releasedAt: "2026-09-06T15:35:00+02:00",
     patch: "PR-150-monitoring-foundation-v4.patch",

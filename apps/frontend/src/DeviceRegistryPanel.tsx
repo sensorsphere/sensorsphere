@@ -556,7 +556,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                       <SortableTableHeader active={sortKey === "lastSeen"} direction={sortDirection} onClick={() => toggleSort("lastSeen")}>Last seen</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "health"} direction={sortDirection} onClick={() => toggleSort("health")}>Health</SortableTableHeader>
                       <Table.Th>Access</Table.Th>
-                      <Table.Th style={{ width: 116 }}>Actions</Table.Th>
+                      <Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th>
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
@@ -602,9 +602,9 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                           </Group>
                         </Table.Td>
                         <Table.Td>
-                          <Group gap={4} wrap="nowrap">
-                            <Tooltip label="Copy device"><ActionIcon variant="subtle" color="green" onClick={() => openCopyDevice(device)} aria-label={`Copy ${device.name}`}><DeviceGlyph icon="copy" color="green" size={16} /></ActionIcon></Tooltip>
+                          <Group gap={4} wrap="nowrap" justify="flex-end">
                             <EditActionIcon onClick={() => openEditDevice(device)} />
+                            <Tooltip label="Copy device"><ActionIcon size="sm" variant="light" color="green" aria-label={`Copy ${device.name}`} onClick={() => openCopyDevice(device)}>⧉</ActionIcon></Tooltip>
                             <DeleteActionIcon onClick={() => { setError(null); setDeleteDeviceTarget(device); }} />
                           </Group>
                         </Table.Td>
