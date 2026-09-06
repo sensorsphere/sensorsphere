@@ -287,7 +287,7 @@ function TaxonomyOption({ icon, color, label, suffix }: { icon: string; color: s
   return <Group gap={7} wrap="nowrap"><DeviceGlyph icon={icon} color={color} /><Text size="sm">{label}{suffix ? ` · ${suffix}` : ""}</Text></Group>;
 }
 
-export function DeviceRegistryPanel({ openDeviceId, onDeviceOpened }: { openDeviceId?: string | null; onDeviceOpened?: () => void } = {}) {
+export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOpened, onDeviceSaved }: { openDeviceId?: string | null; openAccessLinkId?: string | null; onDeviceOpened?: () => void; onDeviceSaved?: () => void } = {}) {
   const queryClient = useQueryClient();
   const [tab, setTab] = React.useState<string | null>("devices");
   const [nameFilter, setNameFilter] = React.useState("");
@@ -306,6 +306,7 @@ export function DeviceRegistryPanel({ openDeviceId, onDeviceOpened }: { openDevi
   const [profileModalOpen, setProfileModalOpen] = React.useState(false);
   const [profileForm, setProfileForm] = React.useState<HealthProfileFormState>(emptyHealthProfileForm());
   const [error, setError] = React.useState<string | null>(null);
+  const [accessLinkToOpen, setAccessLinkToOpen] = React.useState<string | null>(null);
 
   const devicesQuery = useQuery({ queryKey: ["device-registry", "devices"], queryFn: getDeviceRegistryDevices });
   const deviceClassesQuery = useQuery({ queryKey: ["device-registry", "classes"], queryFn: getDeviceClassReferences });
@@ -334,6 +335,7 @@ export function DeviceRegistryPanel({ openDeviceId, onDeviceOpened }: { openDevi
       setEditingDevice(null);
       setError(null);
       await refresh();
+      onDeviceSaved?.();
     },
     onError: cause => setError(cause instanceof Error ? cause.message : "Unable to save device")
   });
@@ -441,9 +443,10 @@ export function DeviceRegistryPanel({ openDeviceId, onDeviceOpened }: { openDevi
     if (!openDeviceId) return;
     const device = devices.find(item => item.id === openDeviceId);
     if (!device) return;
+    setAccessLinkToOpen(openAccessLinkId ?? null);
     openEditDevice(device);
     onDeviceOpened?.();
-  }, [openDeviceId, devices]);
+  }, [openDeviceId, openAccessLinkId, devices]);
 
   const openCreateProfile = () => {
     setEditingProfile(null);
@@ -689,7 +692,7 @@ export function DeviceRegistryPanel({ openDeviceId, onDeviceOpened }: { openDevi
           <Checkbox label="Enabled" checked={deviceForm.enabled} onChange={event => setDeviceForm(current => ({ ...current, enabled: event.currentTarget.checked }))} />
           <Textarea label="Description" minRows={2} value={deviceForm.description} onChange={event => setDeviceForm(current => ({ ...current, description: event.currentTarget.value }))} />
           <DeviceIdentitiesEditor value={deviceForm.identities} onChange={identities => setDeviceForm(current => ({ ...current, identities }))} devices={devices} identityLabels={identityLabelsQuery.data ?? []} currentDeviceId={editingDevice?.id} onViewDevice={device => { setDeviceModalOpen(false); openEditDevice(device); }} />
-          <DeviceAccessLinksEditor value={deviceForm.accessLinks} onChange={accessLinks => setDeviceForm(current => ({ ...current, accessLinks }))} context={{ deviceName: deviceForm.name, macAddress: primaryIdentity(deviceForm.identities, "MAC")?.value ?? "", ipAddress: primaryIdentity(deviceForm.identities, "IP")?.value ?? "", ieeeAddress: primaryIdentity(deviceForm.identities, "IEEE")?.value ?? "", fqdn: primaryIdentity(deviceForm.identities, "FQDN")?.value ?? "", manufacturer: deviceForm.manufacturer, model: deviceForm.model, deviceClass: deviceForm.deviceClass, deviceType: deviceForm.deviceType, location: (locationsQuery.data ?? []).find(location => location.id === deviceForm.locationId)?.name ?? "", identities: deviceForm.identities }} />
+          <DeviceAccessLinksEditor value={deviceForm.accessLinks} onChange={accessLinks => setDeviceForm(current => ({ ...current, accessLinks }))} context={{ deviceName: deviceForm.name, macAddress: primaryIdentity(deviceForm.identities, "MAC")?.value ?? "", ipAddress: primaryIdentity(deviceForm.identities, "IP")?.value ?? "", ieeeAddress: primaryIdentity(deviceForm.identities, "IEEE")?.value ?? "", fqdn: primaryIdentity(deviceForm.identities, "FQDN")?.value ?? "", manufacturer: deviceForm.manufacturer, model: deviceForm.model, deviceClass: deviceForm.deviceClass, deviceType: deviceForm.deviceType, location: (locationsQuery.data ?? []).find(location => location.id === deviceForm.locationId)?.name ?? "", identities: deviceForm.identities }} openAccessLinkId={accessLinkToOpen} onAccessLinkOpened={() => setAccessLinkToOpen(null)} />
           <Stack gap="xs">
             <Text fw={600} size="sm">SensorSphere links</Text>
             <Text size="xs" c="dimmed">Optional loose links. The Device Registry remains usable if none are selected.</Text>

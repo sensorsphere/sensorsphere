@@ -692,6 +692,8 @@ function Dashboard() {
     );
 
   const [deviceRegistryOpenId, setDeviceRegistryOpenId] = React.useState<string | null>(null);
+  const [deviceRegistryOpenAccessLinkId, setDeviceRegistryOpenAccessLinkId] = React.useState<string | null>(null);
+  const [returnToServiceRegistryAfterDeviceSave, setReturnToServiceRegistryAfterDeviceSave] = React.useState(false);
 
   const [
     historyTemplateLaunch,
@@ -5055,14 +5057,14 @@ function Dashboard() {
             {
               activePage ===
                 "devices" && (
-                <DeviceRegistryPanel openDeviceId={deviceRegistryOpenId} onDeviceOpened={() => setDeviceRegistryOpenId(null)} />
+                <DeviceRegistryPanel openDeviceId={deviceRegistryOpenId} openAccessLinkId={deviceRegistryOpenAccessLinkId} onDeviceOpened={() => { setDeviceRegistryOpenId(null); setDeviceRegistryOpenAccessLinkId(null); }} onDeviceSaved={() => { if (returnToServiceRegistryAfterDeviceSave) { setReturnToServiceRegistryAfterDeviceSave(false); navigateTo("services"); } }} />
               )
             }
 
             {
               activePage ===
                 "services" && (
-                <ServiceRegistryPanel onOpenDevice={(id) => { setDeviceRegistryOpenId(id); navigateTo("devices"); }} />
+                <ServiceRegistryPanel onOpenDeviceAccess={(deviceId, accessLinkId) => { setDeviceRegistryOpenId(deviceId); setDeviceRegistryOpenAccessLinkId(accessLinkId); setReturnToServiceRegistryAfterDeviceSave(true); navigateTo("devices"); }} />
               )
             }
 

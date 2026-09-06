@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.17.0";
+export const MODULE_VERSION = "1.18.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.18.0": {
+    releasedAt: "2026-09-06T13:30:00+02:00",
+    patch: "PR-149-service-registry-foundation-v4.patch",
+    changes: [
+      { type: "added", description: "Device taxonomy includes a Compute / Backup Server type for systems such as Proxmox Backup Server" },
+      { type: "changed", description: "Service classes and types are presented alphabetically and service names identify native versus Device Registry projected sources with distinct icons" },
+      { type: "fixed", description: "Projected Device Registry service access URLs resolve with the source device identities instead of appearing disabled without explanation" },
+      { type: "changed", description: "Editing a projected service opens its exact source access link and returns to Service Registry after the source device is saved" }
+    ]
+  },
   "1.17.0": {
     releasedAt: "2026-09-06T12:45:00+02:00",
     patch: "PR-149-service-registry-foundation-v2.patch",
