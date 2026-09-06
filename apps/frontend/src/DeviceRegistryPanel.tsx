@@ -368,7 +368,7 @@ export function DeviceRegistryPanel() {
   };
 
   return (
-    <Stack gap="md" style={{ minHeight: 0, height: "100%" }}>
+    <Stack gap="md" className="device-registry-panel">
       <Group justify="space-between" align="flex-start">
         <div>
           <Title order={2}>Device Registry</Title>
@@ -376,7 +376,7 @@ export function DeviceRegistryPanel() {
         </div>
       </Group>
 
-      <Tabs value={tab} onChange={setTab} style={{ minHeight: 0, display: "flex", flexDirection: "column", flex: "1 1 0" }}>
+      <Tabs value={tab} onChange={setTab} className="device-registry-tabs">
         <Tabs.List>
           <Tabs.Tab value="devices">Devices</Tabs.Tab>
           <Tabs.Tab value="discovery">Discovery</Tabs.Tab>
@@ -384,8 +384,8 @@ export function DeviceRegistryPanel() {
           <Tabs.Tab value="taxonomy">Taxonomy</Tabs.Tab>
         </Tabs.List>
 
-        <Tabs.Panel value="devices" pt="md" style={{ minHeight: 0, height: "100%", flex: "1 1 0", display: "flex" }}>
-          <Stack gap="sm" style={{ minHeight: 0, height: "100%", flex: "1 1 0", width: "100%" }}>
+        <Tabs.Panel value="devices" pt="md" className="device-registry-devices-panel">
+          <Stack gap="sm" className="device-registry-devices-stack">
             <Group justify="space-between">
               <Group gap="xs">
                 {(["ONLINE", "WARNING", "OFFLINE", "UNKNOWN", "DISABLED"] as DeviceHealthStatus[]).map(status => (
@@ -405,8 +405,8 @@ export function DeviceRegistryPanel() {
               <Select placeholder="All health" clearable value={healthFilter} onChange={setHealthFilter} data={Object.keys(HEALTH_COLORS)} w={150} />
             </Group>
 
-            <Card withBorder padding={0} style={{ minHeight: 0, height: "100%", flex: "1 1 0", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-              <div style={{ minHeight: 0, flex: "1 1 auto", overflow: "auto" }}>
+            <Card withBorder padding={0} className="device-registry-table-card">
+              <div className="device-registry-table-scroll">
                 <Table striped highlightOnHover stickyHeader>
                   <Table.Thead>
                     <Table.Tr>

@@ -18,11 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.15.1";
+export const MODULE_VERSION = "1.15.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
-  "1.15.1": {
+  "1.15.3": {
+    releasedAt: "2026-09-06T08:20:00+02:00",
+    patch: "PR-148-device-registry-usability-multi-identities-v3.patch",
+    changes: [
+      { type: "fixed", description: "Device Registry now participates in the viewport-constrained AppShell layout so its device table receives a real scrollable height" },
+      { type: "changed", description: "Device technology values keep their taxonomy-defined icon and color in table and filter selectors" }
+    ]
+  },
+  "1.15.2": {
     releasedAt: "2026-09-06T07:30:00+02:00",
     patch: "PR-148-device-registry-usability-multi-identities-v2.patch",
     changes: [

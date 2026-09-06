@@ -2531,7 +2531,9 @@ function Dashboard() {
               ? "metric-routing-main"
               : activePage === "todos"
                 ? "project-todos-main"
-                : undefined
+                : activePage === "devices"
+                  ? "device-registry-main"
+                  : undefined
         }
       >
 
@@ -2548,7 +2550,9 @@ function Dashboard() {
                 ? "metric-routing-page-container"
                 : activePage === "todos"
                   ? "project-todos-page-container"
-                  : undefined
+                  : activePage === "devices"
+                    ? "device-registry-page-container"
+                    : undefined
           }
         >
 
@@ -2563,7 +2567,9 @@ function Dashboard() {
                   ? "metric-routing-page-stack"
                   : activePage === "todos"
                     ? "project-todos-page-stack"
-                    : undefined
+                    : activePage === "devices"
+                      ? "device-registry-page-stack"
+                      : undefined
             }
           >
 
