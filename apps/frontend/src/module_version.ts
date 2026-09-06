@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.20.0";
+export const MODULE_VERSION = "1.20.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.20.1": {
+    releasedAt: "2026-09-06T15:03:00+02:00",
+    patch: "PR-150-monitoring-foundation-v2.patch",
+    changes: [
+      { type: "fixed", description: "Capture Monitoring dialog event values before queued state updates to avoid null currentTarget crashes" }
+    ]
+  },
   "1.20.0": {
     releasedAt: "2026-09-06T14:45:00+02:00",
     patch: "PR-150-monitoring-foundation-v1.patch",

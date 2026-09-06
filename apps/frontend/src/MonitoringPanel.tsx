@@ -359,10 +359,10 @@ export function MonitoringPanel() {
 
       <Modal opened={agentModalOpen} onClose={() => setAgentModalOpen(false)} title={editingAgent ? "Edit monitoring agent" : "Add monitoring agent"}>
         <Stack>
-          <TextInput label="Name" required autoFocus value={agentForm.name} onChange={event => setAgentForm(current => ({ ...current, name: event.currentTarget.value }))} />
+          <TextInput label="Name" required autoFocus value={agentForm.name} onChange={event => { const value = event.currentTarget.value; setAgentForm(current => ({ ...current, name: value })); }} />
           <NumberInput label="Heartbeat timeout (seconds)" min={15} max={3600} value={agentForm.heartbeatTimeoutSeconds} onChange={value => setAgentForm(current => ({ ...current, heartbeatTimeoutSeconds: Number(value) || 90 }))} />
-          <Textarea label="Labels" description="One key=value entry per line." placeholder={'site=home\nnetwork=lan'} minRows={3} value={agentForm.labelsText} onChange={event => setAgentForm(current => ({ ...current, labelsText: event.currentTarget.value }))} />
-          {editingAgent && <Checkbox label="Enabled" checked={agentForm.enabled} onChange={event => setAgentForm(current => ({ ...current, enabled: event.currentTarget.checked }))} />}
+          <Textarea label="Labels" description="One key=value entry per line." placeholder={'site=home\nnetwork=lan'} minRows={3} value={agentForm.labelsText} onChange={event => { const value = event.currentTarget.value; setAgentForm(current => ({ ...current, labelsText: value })); }} />
+          {editingAgent && <Checkbox label="Enabled" checked={agentForm.enabled} onChange={event => { const checked = event.currentTarget.checked; setAgentForm(current => ({ ...current, enabled: checked })); }} />}
           <Group justify="flex-end"><Button variant="light" color="gray" onClick={() => setAgentModalOpen(false)}>Cancel</Button><Button loading={saveAgent.isPending} onClick={() => saveAgent.mutate()}>Save</Button></Group>
         </Stack>
       </Modal>
@@ -380,12 +380,12 @@ export function MonitoringPanel() {
         <Stack>
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
             <Select label="Device" required searchable data={(devicesQuery.data ?? []).map(device => ({ value: device.id, label: device.name })).sort((a, b) => a.label.localeCompare(b.label))} value={checkForm.deviceId} onChange={value => setCheckForm(current => ({ ...current, deviceId: value }))} />
-            <TextInput label="Check name" required value={checkForm.name} onChange={event => setCheckForm(current => ({ ...current, name: event.currentTarget.value }))} />
+            <TextInput label="Check name" required value={checkForm.name} onChange={event => { const value = event.currentTarget.value; setCheckForm(current => ({ ...current, name: value })); }} />
             <Select label="Check type" required data={["PING", "TCP", "HTTP", "HTTPS"]} value={checkForm.checkType} onChange={value => value && setCheckForm(current => ({ ...current, checkType: value as MonitoringCheckType, port: value === "PING" ? "" : current.port }))} allowDeselect={false} />
             <Select label="Target" required data={[{ value: "PRIMARY_IP", label: "Primary IP" }, { value: "PRIMARY_FQDN", label: "Primary FQDN/hostname" }, { value: "PRIMARY_ADDRESS", label: "Primary IP or FQDN" }, { value: "CUSTOM", label: "Custom" }]} value={checkForm.targetMode} onChange={value => value && setCheckForm(current => ({ ...current, targetMode: value as MonitoringTargetMode }))} allowDeselect={false} />
-            {checkForm.targetMode === "CUSTOM" && <TextInput label="Custom target" required value={checkForm.targetValue} onChange={event => setCheckForm(current => ({ ...current, targetValue: event.currentTarget.value }))} />}
+            {checkForm.targetMode === "CUSTOM" && <TextInput label="Custom target" required value={checkForm.targetValue} onChange={event => { const value = event.currentTarget.value; setCheckForm(current => ({ ...current, targetValue: value })); }} />}
             {checkForm.checkType !== "PING" && <NumberInput label="Port" min={1} max={65535} value={checkForm.port} onChange={value => setCheckForm(current => ({ ...current, port: value }))} />}
-            {(checkForm.checkType === "HTTP" || checkForm.checkType === "HTTPS") && <TextInput label="Path" placeholder="/health" value={checkForm.path} onChange={event => setCheckForm(current => ({ ...current, path: event.currentTarget.value }))} />}
+            {(checkForm.checkType === "HTTP" || checkForm.checkType === "HTTPS") && <TextInput label="Path" placeholder="/health" value={checkForm.path} onChange={event => { const value = event.currentTarget.value; setCheckForm(current => ({ ...current, path: value })); }} />}
             <NumberInput label="Interval (seconds)" min={5} value={checkForm.intervalSeconds} onChange={value => setCheckForm(current => ({ ...current, intervalSeconds: value }))} />
             <NumberInput label="Timeout (seconds)" min={1} value={checkForm.timeoutSeconds} onChange={value => setCheckForm(current => ({ ...current, timeoutSeconds: value }))} />
             <NumberInput label="Failures before DOWN" min={1} value={checkForm.failureThreshold} onChange={value => setCheckForm(current => ({ ...current, failureThreshold: value }))} />
@@ -393,7 +393,7 @@ export function MonitoringPanel() {
             <Select label="Execution mode" required data={[{ value: "FAILOVER", label: "Failover (first healthy agent)" }, { value: "ALL", label: "All assigned agents" }]} value={checkForm.executionMode} onChange={value => value && setCheckForm(current => ({ ...current, executionMode: value as MonitoringExecutionMode }))} allowDeselect={false} />
           </SimpleGrid>
           <MultiSelect label="Monitoring agents" description={checkForm.executionMode === "FAILOVER" ? "Selection order defines failover priority." : "All selected agents execute this check."} required searchable data={agents.filter(agent => agent.enabled).map(agent => ({ value: agent.id, label: agent.name })).sort((a, b) => a.label.localeCompare(b.label))} value={checkForm.agentIds} onChange={value => setCheckForm(current => ({ ...current, agentIds: value }))} />
-          <Checkbox label="Enabled" checked={checkForm.enabled} onChange={event => setCheckForm(current => ({ ...current, enabled: event.currentTarget.checked }))} />
+          <Checkbox label="Enabled" checked={checkForm.enabled} onChange={event => { const checked = event.currentTarget.checked; setCheckForm(current => ({ ...current, enabled: checked })); }} />
           <Group justify="flex-end"><Button variant="light" color="gray" onClick={() => setCheckModalOpen(false)}>Cancel</Button><Button loading={saveCheck.isPending} onClick={() => saveCheck.mutate()}>Save</Button></Group>
         </Stack>
       </Modal>
