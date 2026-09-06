@@ -16,6 +16,7 @@ const identitySchema = z.object({
   identityType: z.string().trim().min(1).max(100),
   value: z.string().trim().min(1).max(500),
   source: z.string().trim().max(200).nullable().optional(),
+  labelCode: z.string().trim().min(1).max(100).nullable().optional(),
   label: z.string().trim().max(200).nullable().optional(),
   isPrimary: z.boolean().optional(),
   sortOrder: z.number().int().min(0).max(100000).optional()
@@ -203,7 +204,9 @@ interface IdentityRow {
   identity_type: string;
   value: string;
   source: string | null;
+  label_code: string | null;
   label: string | null;
+  label_display: string | null;
   is_primary: boolean;
   sort_order: number;
   normalized_value: string | null;
@@ -377,7 +380,8 @@ function mapDevice(row: DeviceRow, identities: IdentityRow[], links: LinkRow[], 
       identityType: item.identity_type,
       value: item.value,
       source: item.source,
-      label: item.label,
+      labelCode: item.label_code,
+      label: item.label_display ?? item.label,
       isPrimary: item.is_primary,
       sortOrder: item.sort_order
     })),
@@ -457,7 +461,8 @@ async function prepareIdentities(
     const normalized = normalizeIdentityValue(identityType, identity.value);
     return {
       ...identity, identityType, value: normalized.value, normalizedValue: normalized.normalized,
-      label: identity.label ?? null, isPrimary: identity.isPrimary ?? false, sortOrder: identity.sortOrder ?? (index + 1) * 10
+      labelCode: identity.labelCode ?? null, label: identity.label ?? null,
+      isPrimary: identity.isPrimary ?? false, sortOrder: identity.sortOrder ?? (index + 1) * 10
     };
   });
 
@@ -518,9 +523,9 @@ async function replaceChildren(
     for (const identity of prepared) {
       await client.query(`
         INSERT INTO device_registry_identities (
-          device_id, identity_type, value, normalized_value, source, label, is_primary, sort_order
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      `, [deviceId, identity.identityType, identity.value, identity.normalizedValue, identity.source ?? null, identity.label, identity.isPrimary, identity.sortOrder]);
+          device_id, identity_type, value, normalized_value, source, label_code, label, is_primary, sort_order
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `, [deviceId, identity.identityType, identity.value, identity.normalizedValue, identity.source ?? null, identity.labelCode, identity.label, identity.isPrimary, identity.sortOrder]);
     }
     await syncIdentitySummaries(client, deviceId);
   }
@@ -562,7 +567,14 @@ async function sendDevice(pool: Pool, id: string, reply: FastifyReply) {
   const row = await getDeviceRow(pool, id);
   if (!row) return reply.code(404).send({ error: "Device not found" });
   const [identityResult, linkResult, accessLinkResult] = await Promise.all([
-    pool.query<IdentityRow>("SELECT id, device_id, identity_type, value, source, label, is_primary, sort_order, normalized_value FROM device_registry_identities WHERE device_id = $1 ORDER BY identity_type, is_primary DESC, sort_order, value", [id]),
+    pool.query<IdentityRow>(`
+      SELECT i.id, i.device_id, i.identity_type, i.value, i.source, i.label_code, i.label,
+        COALESCE(il.label, i.label) AS label_display, i.is_primary, i.sort_order, i.normalized_value
+      FROM device_registry_identities i
+      LEFT JOIN device_identity_labels il ON il.code = i.label_code
+      WHERE i.device_id = $1
+      ORDER BY i.identity_type, i.is_primary DESC, i.sort_order, i.value
+    `, [id]),
     pool.query<LinkRow>("SELECT id, device_id, target_type, target_id FROM device_registry_links WHERE device_id = $1 ORDER BY target_type, target_id", [id]),
     pool.query<AccessLinkRow>("SELECT id, device_id, name, link_type, url_template, username, port, parameters, icon, enabled, sort_order FROM device_access_links WHERE device_id = $1 ORDER BY sort_order, LOWER(name), id", [id])
   ]);
@@ -599,6 +611,16 @@ export async function registerDeviceRegistryFeature(
     const result = await pool.query(`
       SELECT code, label, category, icon, color, enabled, sort_order AS "sortOrder"
       FROM device_technologies
+      WHERE enabled = TRUE
+      ORDER BY sort_order, LOWER(label), code
+    `);
+    return reply.send(result.rows);
+  });
+
+  app.get("/api/v1/device-registry/reference/identity-labels", async (_request, reply) => {
+    const result = await pool.query(`
+      SELECT code, label, description, enabled, sort_order AS "sortOrder"
+      FROM device_identity_labels
       WHERE enabled = TRUE
       ORDER BY sort_order, LOWER(label), code
     `);
@@ -786,7 +808,13 @@ export async function registerDeviceRegistryFeature(
   app.get("/api/v1/device-registry/devices", async (_request, reply) => {
     const rows = await listDeviceRows(pool);
     const [identityResult, linkResult, accessLinkResult] = await Promise.all([
-      pool.query<IdentityRow>("SELECT id, device_id, identity_type, value, source, label, is_primary, sort_order, normalized_value FROM device_registry_identities ORDER BY device_id, identity_type, is_primary DESC, sort_order, value"),
+      pool.query<IdentityRow>(`
+        SELECT i.id, i.device_id, i.identity_type, i.value, i.source, i.label_code, i.label,
+          COALESCE(il.label, i.label) AS label_display, i.is_primary, i.sort_order, i.normalized_value
+        FROM device_registry_identities i
+        LEFT JOIN device_identity_labels il ON il.code = i.label_code
+        ORDER BY i.device_id, i.identity_type, i.is_primary DESC, i.sort_order, i.value
+      `),
       pool.query<LinkRow>("SELECT id, device_id, target_type, target_id FROM device_registry_links ORDER BY target_type, target_id"),
       pool.query<AccessLinkRow>("SELECT id, device_id, name, link_type, url_template, username, port, parameters, icon, enabled, sort_order FROM device_access_links ORDER BY device_id, sort_order, LOWER(name), id")
     ]);

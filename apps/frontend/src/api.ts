@@ -51,6 +51,7 @@ import type {
   DeviceClassReference,
   DeviceTypeReference,
   DeviceTechnologyReference,
+  DeviceIdentityLabelReference,
   CreateDeviceRegistryDeviceInput,
   UpdateDeviceRegistryDeviceInput,
   CreateDeviceHealthProfileInput,
@@ -1537,6 +1538,10 @@ export async function getDeviceTypeReferences(): Promise<DeviceTypeReference[]> 
 
 export async function getDeviceTechnologyReferences(): Promise<DeviceTechnologyReference[]> {
   return readJson<DeviceTechnologyReference[]>(await fetch("/api/v1/device-registry/reference/technologies"));
+}
+
+export async function getDeviceIdentityLabelReferences(): Promise<DeviceIdentityLabelReference[]> {
+  return readJson<DeviceIdentityLabelReference[]>(await fetch("/api/v1/device-registry/reference/identity-labels"));
 }
 
 export async function getDeviceRegistryDevices(): Promise<DeviceRegistryDevice[]> {

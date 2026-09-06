@@ -18,7 +18,7 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.6.0";
+export const MODULE_VERSION = "1.6.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {

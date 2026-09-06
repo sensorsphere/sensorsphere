@@ -60,7 +60,7 @@ export function DeviceTaxonomyPanel() {
     return deleteDeviceTaxonomyTechnology(code);
   }, onSuccess:refresh, onError:e=>setError(e instanceof Error?e.message:"Unable to delete taxonomy item") });
 
-  const openCreate=(next:Kind)=>{setKind(next);setEditingCode(null);const f=emptyForm(); if(next==="type") f.icon="device"; if(next==="technology") f.icon="link"; setForm(f);setError(null);setOpened(true);};
+  const openCreate=(next:Kind)=>{setKind(next);setEditingCode(null);const f=emptyForm(); if(next==="type") f.icon="device"; if(next==="technology") { f.icon="link"; f.color="blue"; } setForm(f);setError(null);setOpened(true);};
   const openClass=(item:DeviceClassReference)=>{setKind("class");setEditingCode(item.code);setForm({code:item.code,label:item.label,description:item.description??"",deviceClass:"",category:"",icon:item.icon,color:item.color,enabled:item.enabled,sortOrder:item.sortOrder});setOpened(true);};
   const openType=(item:DeviceTypeReference)=>{setKind("type");setEditingCode(item.code);setForm({code:item.code,label:item.label,description:"",deviceClass:item.deviceClass,category:item.category,icon:item.icon,color:item.color,enabled:item.enabled,sortOrder:item.sortOrder});setOpened(true);};
   const openTechnology=(item:DeviceTechnologyReference)=>{setKind("technology");setEditingCode(item.code);setForm({code:item.code,label:item.label,description:"",deviceClass:"",category:item.category,icon:item.icon,color:item.color,enabled:item.enabled,sortOrder:item.sortOrder});setOpened(true);};

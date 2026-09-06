@@ -706,6 +706,14 @@ export interface DeviceTechnologyReference {
   sortOrder: number;
 }
 
+export interface DeviceIdentityLabelReference {
+  code: string;
+  label: string;
+  description: string | null;
+  enabled: boolean;
+  sortOrder: number;
+}
+
 export type DeviceHealthStatus =
   | "ONLINE"
   | "WARNING"
@@ -718,6 +726,7 @@ export interface DeviceIdentity {
   identityType: string;
   value: string;
   source: string | null;
+  labelCode?: string | null;
   label?: string | null;
   isPrimary?: boolean;
   sortOrder?: number;

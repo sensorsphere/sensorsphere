@@ -18,7 +18,7 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.15.3";
+export const MODULE_VERSION = "1.15.4";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {

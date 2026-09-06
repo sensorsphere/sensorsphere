@@ -1,12 +1,12 @@
 import React from "react";
 import { ActionIcon, Badge, Button, Checkbox, Group, Modal, Select, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
-import type { DeviceIdentity, DeviceRegistryDevice } from "./types";
+import type { DeviceIdentity, DeviceIdentityLabelReference, DeviceRegistryDevice } from "./types";
 import { DeleteActionIcon, EditActionIcon } from "./TableActionIcons";
 
 const IDENTITY_TYPES = ["MAC", "IP", "FQDN", "IEEE", "HOSTNAME", "SERIAL", "ESPHOME_NODE", "MQTT_CLIENT_ID", "PROXMOX_VMID", "CUSTOM"];
 
-interface IdentityForm { identityType: string; label: string; value: string; isPrimary: boolean; sortOrder: number | string; }
-const emptyIdentity = (): IdentityForm => ({ identityType: "MAC", label: "", value: "", isPrimary: true, sortOrder: 100 });
+interface IdentityForm { identityType: string; labelCode: string | null; value: string; isPrimary: boolean; sortOrder: number | string; }
+const emptyIdentity = (): IdentityForm => ({ identityType: "MAC", labelCode: null, value: "", isPrimary: true, sortOrder: 100 });
 
 export function normalizeMac(value: string): string | null {
   const hex = value.toUpperCase().replace(/[^0-9A-F]/g, "");
@@ -35,12 +35,14 @@ export function DeviceIdentitiesEditor({
   value,
   onChange,
   devices,
+  identityLabels,
   currentDeviceId,
   onViewDevice
 }: {
   value: DeviceIdentity[];
   onChange: (value: DeviceIdentity[]) => void;
   devices: DeviceRegistryDevice[];
+  identityLabels: DeviceIdentityLabelReference[];
   currentDeviceId?: string;
   onViewDevice?: (device: DeviceRegistryDevice) => void;
 }) {
@@ -52,7 +54,7 @@ export function DeviceIdentitiesEditor({
   const openEdit = (index: number) => {
     const item = value[index]!;
     setEditIndex(index);
-    setForm({ identityType: item.identityType, label: item.label ?? "", value: item.value, isPrimary: item.isPrimary ?? false, sortOrder: item.sortOrder ?? 100 });
+    setForm({ identityType: item.identityType, labelCode: item.labelCode ?? null, value: item.value, isPrimary: item.isPrimary ?? false, sortOrder: item.sortOrder ?? 100 });
     setOpened(true);
   };
 
@@ -76,7 +78,8 @@ export function DeviceIdentitiesEditor({
       identityType: form.identityType.trim().toUpperCase(),
       value: canonicalValue,
       source: "manual",
-      label: form.label.trim() || null,
+      labelCode: form.labelCode,
+      label: identityLabels.find(label => label.code === form.labelCode)?.label ?? null,
       isPrimary: form.isPrimary,
       sortOrder: typeof form.sortOrder === "number" ? form.sortOrder : 100
     };
@@ -97,7 +100,7 @@ export function DeviceIdentitiesEditor({
       <Table.Thead><Table.Tr><Table.Th>Type</Table.Th><Table.Th>Label</Table.Th><Table.Th>Value</Table.Th><Table.Th>Primary</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead>
       <Table.Tbody>{value.map((item, index) => <Table.Tr key={`${item.identityType}-${item.value}-${index}`}>
         <Table.Td><Badge variant="light">{item.identityType}</Badge></Table.Td>
-        <Table.Td>{item.label ?? "—"}</Table.Td>
+        <Table.Td>{item.label ?? identityLabels.find(label => label.code === item.labelCode)?.label ?? "—"}</Table.Td>
         <Table.Td><Text ff="monospace" size="sm">{item.value}</Text></Table.Td>
         <Table.Td>{item.isPrimary ? <Badge color="blue" variant="light">PRIMARY</Badge> : "—"}</Table.Td>
         <Table.Td><Group gap={4}><EditActionIcon onClick={() => openEdit(index)} /><DeleteActionIcon onClick={() => onChange(value.filter((_, i) => i !== index))} /></Group></Table.Td>
@@ -106,8 +109,11 @@ export function DeviceIdentitiesEditor({
 
     <Modal opened={opened} onClose={() => setOpened(false)} title={editIndex == null ? "Add identity" : "Edit identity"} size="md">
       <Stack gap="sm">
-        <Group grow><Select label="Type" searchable data={IDENTITY_TYPES} value={form.identityType} onChange={v => setForm(f => ({ ...f, identityType: v ?? "CUSTOM" }))} /><TextInput label="Label" placeholder="LAN, WAN, Wi-Fi, Management..." value={form.label} onChange={e => setForm(f => ({ ...f, label: e.currentTarget.value }))} /></Group>
-        <TextInput label="Value" required autoFocus value={form.value} onChange={e => setForm(f => ({ ...f, value: e.currentTarget.value }))} error={formatError ?? undefined} placeholder={form.identityType === "MAC" ? "AA:BB:CC:DD:EE:FF" : form.identityType === "IEEE" ? "0x00158d0001234567" : undefined} />
+        <Group grow>
+          <Select label="Type" searchable data={IDENTITY_TYPES} value={form.identityType} onChange={v => setForm(f => ({ ...f, identityType: v ?? "CUSTOM" }))} />
+          <Select label="Label" searchable clearable placeholder="Select a standard label" data={identityLabels.map(item => ({ value: item.code, label: item.label }))} value={form.labelCode} onChange={v => setForm(f => ({ ...f, labelCode: v }))} />
+        </Group>
+        <TextInput label="Value" required autoFocus data-autofocus value={form.value} onChange={e => setForm(f => ({ ...f, value: e.currentTarget.value }))} error={formatError ?? undefined} placeholder={form.identityType === "MAC" ? "AA:BB:CC:DD:EE:FF" : form.identityType === "IEEE" ? "0x00158d0001234567" : undefined} />
         {conflict && <Stack gap={2} p="xs" style={{ border: "1px solid var(--mantine-color-orange-6)", borderRadius: 6 }}>
           <Text size="sm" c="orange" fw={600}>{form.identityType} already assigned</Text>
           <Text size="xs">{form.value} is already assigned to <b>{conflict.name}</b> ({conflict.deviceClassInfo.label} / {conflict.deviceTypeInfo.label}).</Text>

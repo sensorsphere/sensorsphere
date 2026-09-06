@@ -507,7 +507,7 @@ function Dashboard() {
 
   React.useEffect(() => {
     const editableFieldSelector =
-      'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), [role="combobox"]:not([aria-disabled="true"]), select:not([disabled])';
+      '[data-autofocus], input:not([type="hidden"]):not([disabled]):not([readonly]):not([role="combobox"]), textarea:not([disabled]):not([readonly]), select:not([disabled])';
 
     const focusFirstField = (dialog: Element): void => {
       window.requestAnimationFrame(() => {
