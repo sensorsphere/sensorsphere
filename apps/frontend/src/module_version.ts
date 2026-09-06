@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.13.0";
+export const MODULE_VERSION = "1.14.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.14.0": {
+    releasedAt: "2026-09-06T07:15:00+02:00",
+    patch: "PR-147-device-registry-identities-access-taxonomy-v1.patch",
+    changes: [
+      { type: "added", description: "Device Registry adds first-class MAC, IP, IEEE and FQDN/hostname fields plus searchable address display" },
+      { type: "added", description: "Devices support multiple templated access links with username, port, custom parameters, placeholders and resolved previews" },
+      { type: "added", description: "Device classes, types and technologies are managed from a Taxonomy tab with icon and color metadata" },
+      { type: "changed", description: "Device class and type badges use taxonomy-defined icons and colors" }
+    ]
+  },
   "1.13.0": {
     releasedAt: "2026-09-05T22:40:00+02:00",
     patch: "PR-146-device-registry-reference-data-v1.patch",

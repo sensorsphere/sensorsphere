@@ -48,6 +48,7 @@ import type {
   SimpleDashboardTemplateSection,
   DeviceRegistryDevice,
   DeviceHealthProfile,
+  DeviceClassReference,
   DeviceTypeReference,
   DeviceTechnologyReference,
   CreateDeviceRegistryDeviceInput,
@@ -1461,6 +1462,74 @@ export async function reorderSimpleDashboardTemplateAssets(templateId: string, c
   }));
 }
 
+
+
+export async function getDeviceClassReferences(): Promise<DeviceClassReference[]> {
+  return readJson<DeviceClassReference[]>(await fetch("/api/v1/device-registry/reference/device-classes"));
+}
+
+export async function getDeviceTaxonomyClasses(): Promise<DeviceClassReference[]> {
+  return readJson<DeviceClassReference[]>(await fetch("/api/v1/device-registry/taxonomy/classes"));
+}
+
+export async function createDeviceTaxonomyClass(input: DeviceClassReference): Promise<DeviceClassReference> {
+  return readJson<DeviceClassReference>(await fetch("/api/v1/device-registry/taxonomy/classes", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input)
+  }));
+}
+
+export async function updateDeviceTaxonomyClass(code: string, input: Partial<Omit<DeviceClassReference, "code">>): Promise<DeviceClassReference> {
+  return readJson<DeviceClassReference>(await fetch(`/api/v1/device-registry/taxonomy/classes/${encodeURIComponent(code)}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input)
+  }));
+}
+
+export async function deleteDeviceTaxonomyClass(code: string): Promise<void> {
+  const response = await fetch(`/api/v1/device-registry/taxonomy/classes/${encodeURIComponent(code)}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
+}
+
+export async function getDeviceTaxonomyTypes(): Promise<DeviceTypeReference[]> {
+  return readJson<DeviceTypeReference[]>(await fetch("/api/v1/device-registry/taxonomy/types"));
+}
+
+export async function createDeviceTaxonomyType(input: DeviceTypeReference): Promise<DeviceTypeReference> {
+  return readJson<DeviceTypeReference>(await fetch("/api/v1/device-registry/taxonomy/types", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input)
+  }));
+}
+
+export async function updateDeviceTaxonomyType(code: string, input: Partial<Omit<DeviceTypeReference, "code">>): Promise<DeviceTypeReference> {
+  return readJson<DeviceTypeReference>(await fetch(`/api/v1/device-registry/taxonomy/types/${encodeURIComponent(code)}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input)
+  }));
+}
+
+export async function deleteDeviceTaxonomyType(code: string): Promise<void> {
+  const response = await fetch(`/api/v1/device-registry/taxonomy/types/${encodeURIComponent(code)}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
+}
+
+export async function getDeviceTaxonomyTechnologies(): Promise<DeviceTechnologyReference[]> {
+  return readJson<DeviceTechnologyReference[]>(await fetch("/api/v1/device-registry/taxonomy/technologies"));
+}
+
+export async function createDeviceTaxonomyTechnology(input: DeviceTechnologyReference): Promise<DeviceTechnologyReference> {
+  return readJson<DeviceTechnologyReference>(await fetch("/api/v1/device-registry/taxonomy/technologies", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input)
+  }));
+}
+
+export async function updateDeviceTaxonomyTechnology(code: string, input: Partial<Omit<DeviceTechnologyReference, "code">>): Promise<DeviceTechnologyReference> {
+  return readJson<DeviceTechnologyReference>(await fetch(`/api/v1/device-registry/taxonomy/technologies/${encodeURIComponent(code)}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input)
+  }));
+}
+
+export async function deleteDeviceTaxonomyTechnology(code: string): Promise<void> {
+  const response = await fetch(`/api/v1/device-registry/taxonomy/technologies/${encodeURIComponent(code)}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
+}
 
 export async function getDeviceTypeReferences(): Promise<DeviceTypeReference[]> {
   return readJson<DeviceTypeReference[]>(await fetch("/api/v1/device-registry/reference/device-types"));

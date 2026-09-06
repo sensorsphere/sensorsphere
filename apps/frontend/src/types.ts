@@ -673,20 +673,25 @@ export interface SimpleDashboardTemplateData {
   cards: SimpleDashboardTemplateCard[];
 }
 
-export type DeviceRegistryClass =
-  | "IOT"
-  | "NETWORK"
-  | "COMPUTE"
-  | "VIRTUAL"
-  | "INFRASTRUCTURE"
-  | "OTHER";
+export type DeviceRegistryClass = string;
 
+export interface DeviceClassReference {
+  code: string;
+  label: string;
+  description: string | null;
+  icon: string;
+  color: string;
+  enabled: boolean;
+  sortOrder: number;
+}
 
 export interface DeviceTypeReference {
   code: string;
   label: string;
   deviceClass: DeviceRegistryClass;
   category: string;
+  icon: string;
+  color: string;
   enabled: boolean;
   sortOrder: number;
 }
@@ -695,6 +700,8 @@ export interface DeviceTechnologyReference {
   code: string;
   label: string;
   category: string;
+  icon: string;
+  color: string;
   enabled: boolean;
   sortOrder: number;
 }
@@ -719,6 +726,19 @@ export interface DeviceLink {
   targetId: string;
 }
 
+export interface DeviceAccessLink {
+  id?: string;
+  name: string;
+  linkType: string;
+  urlTemplate: string;
+  username: string | null;
+  port: number | null;
+  parameters: Record<string, string>;
+  icon: string;
+  enabled: boolean;
+  sortOrder: number;
+}
+
 export interface DeviceHealthProfile {
   id: string;
   name: string;
@@ -737,9 +757,15 @@ export interface DeviceRegistryDevice {
   id: string;
   name: string;
   deviceClass: DeviceRegistryClass;
+  deviceClassInfo: Pick<DeviceClassReference, "code" | "label" | "icon" | "color">;
   deviceType: string;
+  deviceTypeInfo: Pick<DeviceTypeReference, "code" | "label" | "icon" | "color">;
   technology: string | null;
   technologies: DeviceTechnologyReference[];
+  macAddress: string | null;
+  ipAddress: string | null;
+  ieeeAddress: string | null;
+  fqdn: string | null;
   manufacturer: string | null;
   model: string | null;
   firmwareVersion: string | null;
@@ -757,6 +783,7 @@ export interface DeviceRegistryDevice {
   };
   identities: DeviceIdentity[];
   links: DeviceLink[];
+  accessLinks: DeviceAccessLink[];
   createdAt: string;
   updatedAt: string;
 }
@@ -767,6 +794,10 @@ export interface CreateDeviceRegistryDeviceInput {
   deviceType: string;
   technology?: string | null;
   technologies?: string[];
+  macAddress?: string | null;
+  ipAddress?: string | null;
+  ieeeAddress?: string | null;
+  fqdn?: string | null;
   manufacturer?: string | null;
   model?: string | null;
   firmwareVersion?: string | null;
@@ -780,6 +811,7 @@ export interface CreateDeviceRegistryDeviceInput {
   rssi?: number | null;
   identities?: DeviceIdentity[];
   links?: DeviceLink[];
+  accessLinks?: DeviceAccessLink[];
 }
 
 export type UpdateDeviceRegistryDeviceInput = Partial<CreateDeviceRegistryDeviceInput>;

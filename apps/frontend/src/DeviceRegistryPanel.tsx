@@ -37,6 +37,7 @@ import {
   getAssets,
   getDeviceHealthProfiles,
   getDeviceRegistryDevices,
+  getDeviceClassReferences,
   getDeviceTechnologyReferences,
   getDeviceTypeReferences,
   getGateways,
@@ -52,19 +53,14 @@ import type {
   DeviceHealthProfile,
   DeviceHealthStatus,
   DeviceRegistryClass,
-  DeviceRegistryDevice
+  DeviceRegistryDevice,
+  DeviceAccessLink
 } from "./types";
 
 import { EditActionIcon, DeleteActionIcon } from "./TableActionIcons";
-
-const DEVICE_CLASSES: Array<{ value: DeviceRegistryClass; label: string }> = [
-  { value: "IOT", label: "IoT" },
-  { value: "NETWORK", label: "Network" },
-  { value: "COMPUTE", label: "Compute" },
-  { value: "VIRTUAL", label: "Virtual" },
-  { value: "INFRASTRUCTURE", label: "Infrastructure" },
-  { value: "OTHER", label: "Other" }
-];
+import { DeviceGlyph } from "./DeviceGlyph";
+import { DeviceTaxonomyPanel } from "./DeviceTaxonomyPanel";
+import { DeviceAccessLinksEditor, resolveDeviceAccessUrl } from "./DeviceAccessLinksEditor";
 
 const HEALTH_COLORS: Record<DeviceHealthStatus, string> = {
   ONLINE: "green",
@@ -107,6 +103,10 @@ interface DeviceFormState {
   deviceClass: DeviceRegistryClass;
   deviceType: string;
   technologies: string[];
+  macAddress: string;
+  ipAddress: string;
+  ieeeAddress: string;
+  fqdn: string;
   manufacturer: string;
   model: string;
   firmwareVersion: string;
@@ -122,6 +122,7 @@ interface DeviceFormState {
   sensorIds: string[];
   assetIds: string[];
   gatewayIds: string[];
+  accessLinks: DeviceAccessLink[];
 }
 
 function emptyDeviceForm(): DeviceFormState {
@@ -130,6 +131,10 @@ function emptyDeviceForm(): DeviceFormState {
     deviceClass: "IOT",
     deviceType: "",
     technologies: [],
+    macAddress: "",
+    ipAddress: "",
+    ieeeAddress: "",
+    fqdn: "",
     manufacturer: "",
     model: "",
     firmwareVersion: "",
@@ -144,7 +149,8 @@ function emptyDeviceForm(): DeviceFormState {
     identitiesText: "",
     sensorIds: [],
     assetIds: [],
-    gatewayIds: []
+    gatewayIds: [],
+    accessLinks: []
   };
 }
 
@@ -154,6 +160,10 @@ function deviceToForm(device: DeviceRegistryDevice): DeviceFormState {
     deviceClass: device.deviceClass,
     deviceType: device.deviceType,
     technologies: device.technologies.map(item => item.code),
+    macAddress: device.macAddress ?? "",
+    ipAddress: device.ipAddress ?? "",
+    ieeeAddress: device.ieeeAddress ?? "",
+    fqdn: device.fqdn ?? "",
     manufacturer: device.manufacturer ?? "",
     model: device.model ?? "",
     firmwareVersion: device.firmwareVersion ?? "",
@@ -165,10 +175,11 @@ function deviceToForm(device: DeviceRegistryDevice): DeviceFormState {
     lastSeenAt: device.lastSeenAt ? device.lastSeenAt.slice(0, 16) : "",
     batteryPercent: device.batteryPercent ?? "",
     rssi: device.rssi ?? "",
-    identitiesText: device.identities.map(identity => `${identity.identityType}=${identity.value}`).join("\n"),
+    identitiesText: device.identities.filter(identity => !["MAC", "MAC_ADDRESS", "MAC_WIFI", "MAC_ETHERNET", "IP", "IP_ADDRESS", "IEEE", "IEEE_ADDRESS", "ZIGBEE_IEEE", "FQDN", "HOSTNAME"].includes(identity.identityType.toUpperCase())).map(identity => `${identity.identityType}=${identity.value}`).join("\n"),
     sensorIds: device.links.filter(link => link.targetType === "sensor").map(link => link.targetId),
     assetIds: device.links.filter(link => link.targetType === "asset").map(link => link.targetId),
-    gatewayIds: device.links.filter(link => link.targetType === "gateway").map(link => link.targetId)
+    gatewayIds: device.links.filter(link => link.targetType === "gateway").map(link => link.targetId),
+    accessLinks: device.accessLinks
   };
 }
 
@@ -179,6 +190,10 @@ function deviceFormPayload(form: DeviceFormState): CreateDeviceRegistryDeviceInp
     deviceType: form.deviceType.trim(),
     technology: form.technologies[0] ?? null,
     technologies: form.technologies,
+    macAddress: form.macAddress.trim() || null,
+    ipAddress: form.ipAddress.trim() || null,
+    ieeeAddress: form.ieeeAddress.trim() || null,
+    fqdn: form.fqdn.trim() || null,
     manufacturer: form.manufacturer.trim() || null,
     model: form.model.trim() || null,
     firmwareVersion: form.firmwareVersion.trim() || null,
@@ -195,7 +210,8 @@ function deviceFormPayload(form: DeviceFormState): CreateDeviceRegistryDeviceInp
       ...form.sensorIds.map(targetId => ({ targetType: "sensor" as const, targetId })),
       ...form.assetIds.map(targetId => ({ targetType: "asset" as const, targetId })),
       ...form.gatewayIds.map(targetId => ({ targetType: "gateway" as const, targetId }))
-    ]
+    ],
+    accessLinks: form.accessLinks
   };
 }
 
@@ -265,6 +281,7 @@ export function DeviceRegistryPanel() {
   const [error, setError] = React.useState<string | null>(null);
 
   const devicesQuery = useQuery({ queryKey: ["device-registry", "devices"], queryFn: getDeviceRegistryDevices });
+  const deviceClassesQuery = useQuery({ queryKey: ["device-registry", "classes"], queryFn: getDeviceClassReferences });
   const profilesQuery = useQuery({ queryKey: ["device-registry", "health-profiles"], queryFn: getDeviceHealthProfiles });
   const deviceTypesQuery = useQuery({ queryKey: ["device-registry", "device-types"], queryFn: getDeviceTypeReferences });
   const technologiesQuery = useQuery({ queryKey: ["device-registry", "technologies"], queryFn: getDeviceTechnologyReferences });
@@ -327,6 +344,10 @@ export function DeviceRegistryPanel() {
       device.technologies.map(item => item.label).join(" "),
       device.manufacturer ?? "",
       device.model ?? "",
+      device.macAddress ?? "",
+      device.ipAddress ?? "",
+      device.ieeeAddress ?? "",
+      device.fqdn ?? "",
       ...device.identities.map(identity => `${identity.identityType} ${identity.value}`)
     ].join(" ").toLowerCase().includes(needle);
     return matchesSearch &&
@@ -383,6 +404,7 @@ export function DeviceRegistryPanel() {
           <Tabs.Tab value="devices">Devices</Tabs.Tab>
           <Tabs.Tab value="discovery">Discovery</Tabs.Tab>
           <Tabs.Tab value="health-profiles">Health Profiles</Tabs.Tab>
+          <Tabs.Tab value="taxonomy">Taxonomy</Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="devices" pt="md" style={{ minHeight: 0, flex: "1 1 0" }}>
@@ -400,7 +422,7 @@ export function DeviceRegistryPanel() {
 
             <Group gap="sm">
               <TextInput placeholder="Search devices..." value={search} onChange={event => setSearch(event.currentTarget.value)} style={{ flex: 1 }} />
-              <Select placeholder="All classes" clearable value={classFilter} onChange={setClassFilter} data={DEVICE_CLASSES} w={150} />
+              <Select placeholder="All classes" clearable value={classFilter} onChange={setClassFilter} data={(deviceClassesQuery.data ?? []).map(item => ({ value: item.code, label: item.label }))} w={160} />
               <Select placeholder="All types" searchable clearable value={typeFilter} onChange={setTypeFilter} data={(deviceTypesQuery.data ?? []).map(type => ({ value: type.code, label: type.label }))} w={180} />
               <Select placeholder="All technologies" searchable clearable value={technologyFilter} onChange={setTechnologyFilter} data={(technologiesQuery.data ?? []).map(technology => ({ value: technology.code, label: technology.label }))} w={190} />
               <Select placeholder="All health" clearable value={healthFilter} onChange={setHealthFilter} data={Object.keys(HEALTH_COLORS)} w={150} />
@@ -415,11 +437,13 @@ export function DeviceRegistryPanel() {
                       <Table.Th>Class</Table.Th>
                       <Table.Th>Type</Table.Th>
                       <Table.Th>Technology</Table.Th>
+                      <Table.Th>Address</Table.Th>
                       <Table.Th>Location</Table.Th>
                       <Table.Th>Parent</Table.Th>
                       <Table.Th>Battery</Table.Th>
                       <Table.Th>Last seen</Table.Th>
                       <Table.Th>Health</Table.Th>
+                      <Table.Th>Access</Table.Th>
                       <Table.Th style={{ width: 88 }}>Actions</Table.Th>
                     </Table.Tr>
                   </Table.Thead>
@@ -432,9 +456,10 @@ export function DeviceRegistryPanel() {
                             <Text size="xs" c="dimmed">{device.manufacturer || device.model ? [device.manufacturer, device.model].filter(Boolean).join(" · ") : device.identities[0]?.value ?? ""}</Text>
                           </Stack>
                         </Table.Td>
-                        <Table.Td><Badge size="sm" variant="light">{device.deviceClass}</Badge></Table.Td>
-                        <Table.Td>{device.deviceType}</Table.Td>
+                        <Table.Td><Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceClassInfo.icon} color={device.deviceClassInfo.color} /><Badge size="sm" color={device.deviceClassInfo.color} variant="light">{device.deviceClassInfo.label}</Badge></Group></Table.Td>
+                        <Table.Td><Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceTypeInfo.icon} color={device.deviceTypeInfo.color} /><Text size="sm">{device.deviceTypeInfo.label}</Text></Group></Table.Td>
                         <Table.Td>{device.technologies.length ? device.technologies.map(item => item.label).join(", ") : "—"}</Table.Td>
+                        <Table.Td><Text size="sm" ff="monospace">{device.ipAddress ?? device.fqdn ?? device.macAddress ?? device.ieeeAddress ?? "—"}</Text></Table.Td>
                         <Table.Td>{device.location?.name ?? "—"}</Table.Td>
                         <Table.Td>{device.parentDevice?.name ?? "—"}</Table.Td>
                         <Table.Td>{device.batteryPercent == null ? "—" : `${device.batteryPercent}%`}</Table.Td>
@@ -443,6 +468,15 @@ export function DeviceRegistryPanel() {
                           <Tooltip label={device.health.reasons.length ? device.health.reasons.join(" · ") : "Healthy"}>
                             <Badge color={HEALTH_COLORS[device.health.status]} variant="light">{device.health.status}</Badge>
                           </Tooltip>
+                        </Table.Td>
+                        <Table.Td>
+                          <Group gap={2} wrap="nowrap">
+                            {device.accessLinks.filter(link => link.enabled).slice(0, 3).map((link, index) => {
+                              const resolved = resolveDeviceAccessUrl(link, { deviceName: device.name, macAddress: device.macAddress ?? "", ipAddress: device.ipAddress ?? "", ieeeAddress: device.ieeeAddress ?? "", fqdn: device.fqdn ?? "", manufacturer: device.manufacturer ?? "", model: device.model ?? "", deviceClass: device.deviceClass, deviceType: device.deviceType, location: device.location?.name ?? "", identities: device.identities });
+                              return <Tooltip key={`${link.name}-${index}`} label={resolved.unresolved.length ? `${link.name} · missing ${resolved.unresolved.join(", ")}` : link.name}><ActionIcon variant="subtle" disabled={resolved.unresolved.length > 0} onClick={() => window.open(resolved.url, `ss_device_${device.id}_${index}`)} aria-label={`Open ${link.name}`}><DeviceGlyph icon={link.icon} /></ActionIcon></Tooltip>;
+                            })}
+                            {device.accessLinks.length === 0 && <Text size="xs" c="dimmed">—</Text>}
+                          </Group>
                         </Table.Td>
                         <Table.Td>
                           <Group gap={4} wrap="nowrap">
@@ -455,7 +489,7 @@ export function DeviceRegistryPanel() {
                       </Table.Tr>
                     ))}
                     {filteredDevices.length === 0 && (
-                      <Table.Tr><Table.Td colSpan={10}><Text c="dimmed" ta="center" py="xl">No devices match the current filters.</Text></Table.Td></Table.Tr>
+                      <Table.Tr><Table.Td colSpan={12}><Text c="dimmed" ta="center" py="xl">No devices match the current filters.</Text></Table.Td></Table.Tr>
                     )}
                   </Table.Tbody>
                 </Table>
@@ -498,6 +532,10 @@ export function DeviceRegistryPanel() {
             </Card>
           </Stack>
         </Tabs.Panel>
+
+        <Tabs.Panel value="taxonomy" pt="md">
+          <DeviceTaxonomyPanel />
+        </Tabs.Panel>
       </Tabs>
 
       <Modal opened={deviceModalOpen} onClose={() => setDeviceModalOpen(false)} title={editingDevice ? "Edit device" : "Add device"} size="xl">
@@ -505,7 +543,7 @@ export function DeviceRegistryPanel() {
           {error && <Text c="red" size="sm">{error}</Text>}
           <SimpleGrid cols={{ base: 1, sm: 3 }}>
             <TextInput label="Name" required value={deviceForm.name} onChange={event => setDeviceForm(current => ({ ...current, name: event.currentTarget.value }))} autoFocus />
-            <Select label="Class" required data={DEVICE_CLASSES} value={deviceForm.deviceClass} onChange={value => value && setDeviceForm(current => ({ ...current, deviceClass: value as DeviceRegistryClass, deviceType: "" }))} allowDeselect={false} />
+            <Select label="Class" required data={(deviceClassesQuery.data ?? []).map(item => ({ value: item.code, label: item.label }))} value={deviceForm.deviceClass || null} onChange={value => value && setDeviceForm(current => ({ ...current, deviceClass: value, deviceType: "" }))} allowDeselect={false} />
             <Select
               label="Type"
               required
@@ -526,6 +564,10 @@ export function DeviceRegistryPanel() {
               data={(technologiesQuery.data ?? []).map(technology => ({ value: technology.code, label: `${technology.label} · ${technology.category}` }))}
               placeholder="Select one or more technologies"
             />
+            <TextInput label="MAC address" value={deviceForm.macAddress} onChange={event => setDeviceForm(current => ({ ...current, macAddress: event.currentTarget.value }))} placeholder="AA:BB:CC:DD:EE:FF" />
+            <TextInput label="IP address" value={deviceForm.ipAddress} onChange={event => setDeviceForm(current => ({ ...current, ipAddress: event.currentTarget.value }))} placeholder="192.168.1.10" />
+            <TextInput label="IEEE address" value={deviceForm.ieeeAddress} onChange={event => setDeviceForm(current => ({ ...current, ieeeAddress: event.currentTarget.value }))} placeholder="0x00158d..." />
+            <TextInput label="FQDN / hostname" value={deviceForm.fqdn} onChange={event => setDeviceForm(current => ({ ...current, fqdn: event.currentTarget.value }))} placeholder="device.example.local" />
             <TextInput label="Manufacturer" value={deviceForm.manufacturer} onChange={event => setDeviceForm(current => ({ ...current, manufacturer: event.currentTarget.value }))} />
             <TextInput label="Model" value={deviceForm.model} onChange={event => setDeviceForm(current => ({ ...current, model: event.currentTarget.value }))} />
             <TextInput label="Firmware / version" value={deviceForm.firmwareVersion} onChange={event => setDeviceForm(current => ({ ...current, firmwareVersion: event.currentTarget.value }))} />
@@ -538,7 +580,8 @@ export function DeviceRegistryPanel() {
           </SimpleGrid>
           <Checkbox label="Enabled" checked={deviceForm.enabled} onChange={event => setDeviceForm(current => ({ ...current, enabled: event.currentTarget.checked }))} />
           <Textarea label="Description" minRows={2} value={deviceForm.description} onChange={event => setDeviceForm(current => ({ ...current, description: event.currentTarget.value }))} />
-          <Textarea label="Identities" description="One identity per line: TYPE=value (examples: MAC_WIFI=..., ZIGBEE_IEEE=..., PROXMOX_VMID=100)" minRows={4} value={deviceForm.identitiesText} onChange={event => setDeviceForm(current => ({ ...current, identitiesText: event.currentTarget.value }))} />
+          <Textarea label="Additional identities" description="One optional identity per line: TYPE=value (examples: PROXMOX_VMID=100, MQTT_CLIENT_ID=...). MAC/IP/IEEE/FQDN have dedicated fields above." minRows={3} value={deviceForm.identitiesText} onChange={event => setDeviceForm(current => ({ ...current, identitiesText: event.currentTarget.value }))} />
+          <DeviceAccessLinksEditor value={deviceForm.accessLinks} onChange={accessLinks => setDeviceForm(current => ({ ...current, accessLinks }))} context={{ deviceName: deviceForm.name, macAddress: deviceForm.macAddress, ipAddress: deviceForm.ipAddress, ieeeAddress: deviceForm.ieeeAddress, fqdn: deviceForm.fqdn, manufacturer: deviceForm.manufacturer, model: deviceForm.model, deviceClass: deviceForm.deviceClass, deviceType: deviceForm.deviceType, location: (locationsQuery.data ?? []).find(location => location.id === deviceForm.locationId)?.name ?? "", identities: parseIdentities(deviceForm.identitiesText) }} />
           <Stack gap="xs">
             <Text fw={600} size="sm">SensorSphere links</Text>
             <Text size="xs" c="dimmed">Optional loose links. The Device Registry remains usable if none are selected.</Text>

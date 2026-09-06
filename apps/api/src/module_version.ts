@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.4.0";
+export const MODULE_VERSION = "1.5.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.5.0": {
+    releasedAt: "2026-09-06T07:15:00+02:00",
+    patch: "PR-147-device-registry-identities-access-taxonomy-v1.patch",
+    changes: [
+      { type: "added", description: "Device Registry persists first-class MAC, IP, IEEE and FQDN addresses and multiple parameterized access links" },
+      { type: "added", description: "Managed taxonomy APIs provide CRUD for device classes, types and technologies including icon, color and enable state" },
+      { type: "changed", description: "Device classes are reference-backed and extensible instead of being restricted to a fixed database enum" }
+    ]
+  },
   "1.4.0": {
     releasedAt: "2026-09-05T22:40:00+02:00",
     patch: "PR-146-device-registry-reference-data-v1.patch",
