@@ -395,12 +395,7 @@ function mapDevice(row: DeviceRow, identities: IdentityRow[], links: LinkRow[], 
       labelCode: item.label_code,
       label: item.label_display ?? item.label,
       isPrimary: item.is_primary,
-      sortOrder: item.sort_order,
-      publishAsService: item.publish_as_service,
-      publishedServiceName: item.published_service_name,
-      publishedServiceClass: item.published_service_class,
-      publishedServiceType: item.published_service_type,
-      publishedServiceDescription: item.published_service_description
+      sortOrder: item.sort_order
     })),
     links: links.filter(item => item.device_id === row.id).map(item => ({
       id: item.id,
@@ -418,7 +413,12 @@ function mapDevice(row: DeviceRow, identities: IdentityRow[], links: LinkRow[], 
       icon: item.icon,
       color: item.color,
       enabled: item.enabled,
-      sortOrder: item.sort_order
+      sortOrder: item.sort_order,
+      publishAsService: item.publish_as_service,
+      publishedServiceName: item.published_service_name,
+      publishedServiceClass: item.published_service_class,
+      publishedServiceType: item.published_service_type,
+      publishedServiceDescription: item.published_service_description
     })),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString()

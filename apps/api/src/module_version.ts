@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.8.0";
+export const MODULE_VERSION = "1.8.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.8.1": {
+    releasedAt: "2026-09-06T12:55:00+02:00",
+    patch: "PR-149-service-registry-foundation-v3.patch",
+    changes: [
+      { type: "fixed", description: "Map Service Registry publication metadata from Device access links instead of Device identities" }
+    ]
+  },
   "1.8.0": {
     releasedAt: "2026-09-06T12:45:00+02:00",
     patch: "PR-149-service-registry-foundation-v2.patch",
