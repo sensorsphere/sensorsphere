@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.14.0";
+export const MODULE_VERSION = "1.15.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.15.0": {
+    releasedAt: "2026-09-06T08:00:00+02:00",
+    patch: "PR-148-device-registry-usability-multi-identities-v1.patch",
+    changes: [
+      { type: "added", description: "Device editor manages multiple labeled identities and warns immediately when a MAC or IEEE address belongs to another device" },
+      { type: "changed", description: "Class, type and technology selectors and filters display their taxonomy icons and colors" },
+      { type: "fixed", description: "Device table keeps a constrained internal scroll viewport and remains visible when no filters are active" },
+      { type: "changed", description: "Access-link placeholders resolve primary device identities while preserving labeled identity placeholders" }
+    ]
+  },
   "1.14.0": {
     releasedAt: "2026-09-06T07:15:00+02:00",
     patch: "PR-147-device-registry-identities-access-taxonomy-v1.patch",

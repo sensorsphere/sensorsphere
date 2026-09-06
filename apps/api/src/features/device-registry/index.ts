@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Pool, PoolClient } from "pg";
+import { isIP } from "node:net";
 import { z } from "zod";
 
 export interface DeviceRegistryFeatureOptions {
@@ -14,7 +15,10 @@ const linkTypeSchema = z.enum(["sensor", "asset", "gateway"]);
 const identitySchema = z.object({
   identityType: z.string().trim().min(1).max(100),
   value: z.string().trim().min(1).max(500),
-  source: z.string().trim().max(200).nullable().optional()
+  source: z.string().trim().max(200).nullable().optional(),
+  label: z.string().trim().max(200).nullable().optional(),
+  isPrimary: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(100000).optional()
 }).strict();
 
 const linkSchema = z.object({
@@ -199,6 +203,10 @@ interface IdentityRow {
   identity_type: string;
   value: string;
   source: string | null;
+  label: string | null;
+  is_primary: boolean;
+  sort_order: number;
+  normalized_value: string | null;
 }
 
 interface LinkRow {
@@ -368,7 +376,10 @@ function mapDevice(row: DeviceRow, identities: IdentityRow[], links: LinkRow[], 
       id: item.id,
       identityType: item.identity_type,
       value: item.value,
-      source: item.source
+      source: item.source,
+      label: item.label,
+      isPrimary: item.is_primary,
+      sortOrder: item.sort_order
     })),
     links: links.filter(item => item.device_id === row.id).map(item => ({
       id: item.id,
@@ -392,6 +403,107 @@ function mapDevice(row: DeviceRow, identities: IdentityRow[], links: LinkRow[], 
   };
 }
 
+
+function canonicalIdentityType(value: string): string {
+  const type = value.trim().toUpperCase();
+  if (["MAC_ADDRESS", "MAC_WIFI", "MAC_ETHERNET"].includes(type)) return "MAC";
+  if (type === "IP_ADDRESS") return "IP";
+  if (["IEEE_ADDRESS", "ZIGBEE_IEEE"].includes(type)) return "IEEE";
+  if (type === "HOSTNAME") return "FQDN";
+  return type;
+}
+
+class DeviceIdentityValidationError extends Error {}
+
+function normalizeIdentityValue(identityType: string, value: string): { value: string; normalized: string } {
+  const type = canonicalIdentityType(identityType);
+  const trimmed = value.trim();
+  if (type === "MAC") {
+    const hex = trimmed.toUpperCase().replace(/[^0-9A-F]/g, "");
+    if (hex.length !== 12) throw new DeviceIdentityValidationError("MAC address must contain exactly 12 hexadecimal digits");
+    const canonical = hex.match(/.{2}/g)!.join(":");
+    return { value: canonical, normalized: hex };
+  }
+  if (type === "IEEE") {
+    const hex = trimmed.toUpperCase().replace(/[^0-9A-F]/g, "");
+    if (hex.length !== 16) throw new DeviceIdentityValidationError("IEEE address must contain exactly 16 hexadecimal digits");
+    return { value: `0x${hex.toLowerCase()}`, normalized: hex };
+  }
+  if (type === "IP") {
+    if (!isIP(trimmed)) throw new DeviceIdentityValidationError("IP identity must be a valid IPv4 or IPv6 address");
+    return { value: trimmed, normalized: trimmed.toLowerCase() };
+  }
+  if (type === "FQDN") return { value: trimmed, normalized: trimmed.toLowerCase() };
+  return { value: trimmed, normalized: trimmed };
+}
+
+class DeviceIdentityConflictError extends Error {
+  constructor(
+    readonly identityType: string,
+    readonly value: string,
+    readonly device: { id: string; name: string }
+  ) {
+    super(`${identityType} ${value} is already assigned to ${device.name}`);
+  }
+}
+
+async function prepareIdentities(
+  client: PoolClient,
+  deviceId: string,
+  identities: z.infer<typeof identitySchema>[]
+) {
+  const prepared = identities.map((identity, index) => {
+    const identityType = canonicalIdentityType(identity.identityType);
+    const normalized = normalizeIdentityValue(identityType, identity.value);
+    return {
+      ...identity, identityType, value: normalized.value, normalizedValue: normalized.normalized,
+      label: identity.label ?? null, isPrimary: identity.isPrimary ?? false, sortOrder: identity.sortOrder ?? (index + 1) * 10
+    };
+  });
+
+  for (const type of new Set(prepared.map(item => item.identityType))) {
+    const sameType = prepared.filter(item => item.identityType === type);
+    if (sameType.length > 0 && !sameType.some(item => item.isPrimary)) sameType[0]!.isPrimary = true;
+    let primarySeen = false;
+    for (const item of sameType) {
+      if (!item.isPrimary) continue;
+      if (primarySeen) item.isPrimary = false;
+      primarySeen = true;
+    }
+  }
+
+  for (const identity of prepared.filter(item => item.identityType === "MAC" || item.identityType === "IEEE")) {
+    const conflict = await client.query<{ id: string; name: string }>(`
+      SELECT d.id, d.name
+      FROM device_registry_identities i
+      JOIN device_registry_devices d ON d.id = i.device_id
+      WHERE i.identity_type = $1 AND i.normalized_value = $2 AND i.device_id <> $3
+      LIMIT 1
+    `, [identity.identityType, identity.normalizedValue, deviceId]);
+    if (conflict.rows[0]) throw new DeviceIdentityConflictError(identity.identityType, identity.value, conflict.rows[0]);
+  }
+  return prepared;
+}
+
+async function syncIdentitySummaries(client: PoolClient, deviceId: string): Promise<void> {
+  const result = await client.query<{ identity_type: string; value: string }>(`
+    SELECT DISTINCT ON (identity_type) identity_type, value
+    FROM device_registry_identities
+    WHERE device_id = $1 AND identity_type IN ('MAC', 'IP', 'IEEE', 'FQDN')
+    ORDER BY identity_type, is_primary DESC, sort_order, created_at, id
+  `, [deviceId]);
+  const values = new Map(result.rows.map(row => [row.identity_type, row.value]));
+  await client.query(`
+    UPDATE device_registry_devices SET
+      mac_address = $2,
+      ip_address = $3::inet,
+      ieee_address = $4,
+      fqdn = $5,
+      updated_at = NOW()
+    WHERE id = $1
+  `, [deviceId, values.get("MAC") ?? null, values.get("IP") ?? null, values.get("IEEE") ?? null, values.get("FQDN") ?? null]);
+}
+
 async function replaceChildren(
   client: PoolClient,
   deviceId: string,
@@ -401,13 +513,16 @@ async function replaceChildren(
   accessLinks?: z.infer<typeof accessLinkSchema>[]
 ): Promise<void> {
   if (identities !== undefined) {
+    const prepared = await prepareIdentities(client, deviceId, identities);
     await client.query("DELETE FROM device_registry_identities WHERE device_id = $1", [deviceId]);
-    for (const identity of identities) {
+    for (const identity of prepared) {
       await client.query(`
-        INSERT INTO device_registry_identities (device_id, identity_type, value, source)
-        VALUES ($1, $2, $3, $4)
-      `, [deviceId, identity.identityType, identity.value, identity.source ?? null]);
+        INSERT INTO device_registry_identities (
+          device_id, identity_type, value, normalized_value, source, label, is_primary, sort_order
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `, [deviceId, identity.identityType, identity.value, identity.normalizedValue, identity.source ?? null, identity.label, identity.isPrimary, identity.sortOrder]);
     }
+    await syncIdentitySummaries(client, deviceId);
   }
   if (technologies !== undefined) {
     await client.query("DELETE FROM device_registry_device_technologies WHERE device_id = $1", [deviceId]);
@@ -447,7 +562,7 @@ async function sendDevice(pool: Pool, id: string, reply: FastifyReply) {
   const row = await getDeviceRow(pool, id);
   if (!row) return reply.code(404).send({ error: "Device not found" });
   const [identityResult, linkResult, accessLinkResult] = await Promise.all([
-    pool.query<IdentityRow>("SELECT id, device_id, identity_type, value, source FROM device_registry_identities WHERE device_id = $1 ORDER BY identity_type, value", [id]),
+    pool.query<IdentityRow>("SELECT id, device_id, identity_type, value, source, label, is_primary, sort_order, normalized_value FROM device_registry_identities WHERE device_id = $1 ORDER BY identity_type, is_primary DESC, sort_order, value", [id]),
     pool.query<LinkRow>("SELECT id, device_id, target_type, target_id FROM device_registry_links WHERE device_id = $1 ORDER BY target_type, target_id", [id]),
     pool.query<AccessLinkRow>("SELECT id, device_id, name, link_type, url_template, username, port, parameters, icon, enabled, sort_order FROM device_access_links WHERE device_id = $1 ORDER BY sort_order, LOWER(name), id", [id])
   ]);
@@ -671,7 +786,7 @@ export async function registerDeviceRegistryFeature(
   app.get("/api/v1/device-registry/devices", async (_request, reply) => {
     const rows = await listDeviceRows(pool);
     const [identityResult, linkResult, accessLinkResult] = await Promise.all([
-      pool.query<IdentityRow>("SELECT id, device_id, identity_type, value, source FROM device_registry_identities ORDER BY identity_type, value"),
+      pool.query<IdentityRow>("SELECT id, device_id, identity_type, value, source, label, is_primary, sort_order, normalized_value FROM device_registry_identities ORDER BY device_id, identity_type, is_primary DESC, sort_order, value"),
       pool.query<LinkRow>("SELECT id, device_id, target_type, target_id FROM device_registry_links ORDER BY target_type, target_id"),
       pool.query<AccessLinkRow>("SELECT id, device_id, name, link_type, url_template, username, port, parameters, icon, enabled, sort_order FROM device_access_links ORDER BY device_id, sort_order, LOWER(name), id")
     ]);
@@ -712,6 +827,18 @@ export async function registerDeviceRegistryFeature(
       return sendDevice(pool, id, reply.code(201));
     } catch (error) {
       await client.query("ROLLBACK");
+      if (error instanceof DeviceIdentityValidationError) {
+        return reply.code(400).send({ code: "DEVICE_IDENTITY_INVALID", error: error.message });
+      }
+      if (error instanceof DeviceIdentityConflictError) {
+        return reply.code(409).send({
+          code: "DEVICE_IDENTITY_CONFLICT",
+          error: error.message,
+          identityType: error.identityType,
+          value: error.value,
+          device: error.device
+        });
+      }
       throw error;
     } finally {
       client.release();
@@ -781,6 +908,18 @@ export async function registerDeviceRegistryFeature(
       return sendDevice(pool, request.params.id, reply);
     } catch (error) {
       await client.query("ROLLBACK");
+      if (error instanceof DeviceIdentityValidationError) {
+        return reply.code(400).send({ code: "DEVICE_IDENTITY_INVALID", error: error.message });
+      }
+      if (error instanceof DeviceIdentityConflictError) {
+        return reply.code(409).send({
+          code: "DEVICE_IDENTITY_CONFLICT",
+          error: error.message,
+          identityType: error.identityType,
+          value: error.value,
+          device: error.device
+        });
+      }
       throw error;
     } finally {
       client.release();

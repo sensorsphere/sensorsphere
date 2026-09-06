@@ -42,7 +42,10 @@ export function resolveDeviceAccessUrl(link: DeviceAccessLink, context: DeviceAc
     MAC:context.macAddress, IEEE:context.ieeeAddress, manufacturer:context.manufacturer, model:context.model,
     class:context.deviceClass, type:context.deviceType, location:context.location
   };
-  for(const identity of context.identities) base[`identity:${identity.identityType}`]=identity.value;
+  for(const identity of context.identities) {
+    if (base[`identity:${identity.identityType}`] == null || identity.isPrimary) base[`identity:${identity.identityType}`]=identity.value;
+    if (identity.label) base[`identity:${identity.identityType}:${identity.label}`]=identity.value;
+  }
   for(const [key,value] of Object.entries(link.parameters??{})) base[`param:${key}`]=value;
   const unresolved=new Set<string>();
   const url=link.urlTemplate.replace(/\{\{([^{}]+)\}\}/g,(_all,key:string)=>{
@@ -64,7 +67,7 @@ export function DeviceAccessLinksEditor({ value, onChange, context }: { value: D
     {value.length===0&&<Text size="sm" c="dimmed">No access links configured.</Text>}
     <Modal opened={opened} onClose={()=>setOpened(false)} title={editIndex==null?"Add access link":"Edit access link"} size="lg"><Stack gap="sm">
       <Group grow><TextInput label="Name" required autoFocus value={form.name} onChange={e=>setForm(f=>({...f,name:e.currentTarget.value}))}/><Select label="Type" data={LINK_TYPES} value={form.linkType} onChange={v=>setForm(f=>({...f,linkType:v??"CUSTOM"}))}/></Group>
-      <Textarea label="URL template" required minRows={2} value={form.urlTemplate} onChange={e=>setForm(f=>({...f,urlTemplate:e.currentTarget.value}))} description="Placeholders: {{username}}, {{IP}}, {{FQDN}}, {{IP_or_FQDN}}, {{port}}, {{MAC}}, {{IEEE}}, {{device_name}}, {{class}}, {{type}}, {{identity:TYPE}}, {{param:key}}"/>
+      <Textarea label="URL template" required minRows={2} value={form.urlTemplate} onChange={e=>setForm(f=>({...f,urlTemplate:e.currentTarget.value}))} description="Placeholders: {{username}}, {{IP}}, {{FQDN}}, {{IP_or_FQDN}}, {{port}}, {{MAC}}, {{IEEE}}, {{device_name}}, {{class}}, {{type}}, {{identity:TYPE}}, {{identity:TYPE:Label}}, {{param:key}}"/>
       <Group grow><TextInput label="Username" value={form.username} onChange={e=>setForm(f=>({...f,username:e.currentTarget.value}))}/><NumberInput label="Port" min={1} max={65535} value={form.port} onChange={v=>setForm(f=>({...f,port:v}))}/></Group>
       <Textarea label="Custom parameters" minRows={2} value={form.parametersText} onChange={e=>setForm(f=>({...f,parametersText:e.currentTarget.value}))} description="One per line: key=value; use as {{param:key}}"/>
       <Group grow><Select label="Icon" searchable data={DEVICE_ICON_OPTIONS} value={form.icon} onChange={v=>setForm(f=>({...f,icon:v??"link"}))}/><NumberInput label="Sort order" min={0} value={form.sortOrder} onChange={v=>setForm(f=>({...f,sortOrder:v}))}/></Group>

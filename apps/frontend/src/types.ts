@@ -718,6 +718,9 @@ export interface DeviceIdentity {
   identityType: string;
   value: string;
   source: string | null;
+  label?: string | null;
+  isPrimary?: boolean;
+  sortOrder?: number;
 }
 
 export interface DeviceLink {

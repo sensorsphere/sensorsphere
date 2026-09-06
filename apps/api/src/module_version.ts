@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.5.0";
+export const MODULE_VERSION = "1.6.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.6.0": {
+    releasedAt: "2026-09-06T08:00:00+02:00",
+    patch: "PR-148-device-registry-usability-multi-identities-v1.patch",
+    changes: [
+      { type: "added", description: "Device Registry identities support multiple labeled MAC, IP, FQDN and IEEE addresses with one primary value per type" },
+      { type: "added", description: "MAC and IEEE identities are normalized and globally protected against assignment to multiple devices" },
+      { type: "fixed", description: "Device identity conflicts return HTTP 409 with the device that already owns the hardware identifier" }
+    ]
+  },
   "1.5.0": {
     releasedAt: "2026-09-06T07:15:00+02:00",
     patch: "PR-147-device-registry-identities-access-taxonomy-v1.patch",
