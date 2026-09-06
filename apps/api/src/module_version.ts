@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.8.2";
+export const MODULE_VERSION = "1.8.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.8.3": {
+    releasedAt: "2026-09-06T13:40:00+02:00",
+    patch: "PR-149-service-registry-foundation-v7.patch",
+    changes: [
+      { type: "added", description: "Service Registry taxonomy includes WebUI and App Protocol classes and protocol-oriented types" }
+    ]
+  },
   "1.8.2": {
     releasedAt: "2026-09-06T13:24:00+02:00",
     patch: "PR-149-service-registry-foundation-v6.patch",

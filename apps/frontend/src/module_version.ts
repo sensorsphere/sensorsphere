@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.18.1";
+export const MODULE_VERSION = "1.18.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.18.2": {
+    releasedAt: "2026-09-06T13:40:00+02:00",
+    patch: "PR-149-service-registry-foundation-v7.patch",
+    changes: [
+      { type: "added", description: "Service Registry adds WebUI and App Protocol taxonomy for browser and application-protocol access links" },
+      { type: "fixed", description: "Changing a Service class immediately selects a valid type from the new class" },
+      { type: "fixed", description: "Empty Published service name values remain empty and use the access-link name only when projected for display" }
+    ]
+  },
   "1.18.1": {
     releasedAt: "2026-09-06T13:24:00+02:00",
     patch: "PR-149-service-registry-foundation-v6.patch",
