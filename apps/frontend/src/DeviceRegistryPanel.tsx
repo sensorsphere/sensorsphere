@@ -287,7 +287,7 @@ function TaxonomyOption({ icon, color, label, suffix }: { icon: string; color: s
   return <Group gap={7} wrap="nowrap"><DeviceGlyph icon={icon} color={color} /><Text size="sm">{label}{suffix ? ` · ${suffix}` : ""}</Text></Group>;
 }
 
-export function DeviceRegistryPanel() {
+export function DeviceRegistryPanel({ openDeviceId, onDeviceOpened }: { openDeviceId?: string | null; onDeviceOpened?: () => void } = {}) {
   const queryClient = useQueryClient();
   const [tab, setTab] = React.useState<string | null>("devices");
   const [nameFilter, setNameFilter] = React.useState("");
@@ -436,6 +436,14 @@ export function DeviceRegistryPanel() {
     setError(null);
     setDeviceModalOpen(true);
   };
+
+  React.useEffect(() => {
+    if (!openDeviceId) return;
+    const device = devices.find(item => item.id === openDeviceId);
+    if (!device) return;
+    openEditDevice(device);
+    onDeviceOpened?.();
+  }, [openDeviceId, devices]);
 
   const openCreateProfile = () => {
     setEditingProfile(null);

@@ -41,19 +41,33 @@ function mapResource(row: any) { return { id: row.id, name: row.name, resourceTy
 function mapAccount(row: any, resources: any[]) { return { id: row.id, name: row.name, accountIdentifier: row.account_identifier, contractIdentifier: row.contract_identifier, description: row.description, enabled: row.enabled, sortOrder: row.sort_order, resources: resources.filter(item => item.account_id === row.id).map(mapResource) }; }
 
 async function listServices(pool: Pool) {
-  const [services, accounts, resources, access] = await Promise.all([
+  const [services, accounts, resources, access, published] = await Promise.all([
     pool.query(`SELECT s.*, c.label AS class_label, c.icon AS class_icon, c.color AS class_color, t.label AS type_label, t.icon AS type_icon, t.color AS type_color FROM service_registry_services s JOIN service_classes c ON c.code=s.service_class JOIN service_types t ON t.code=s.service_type ORDER BY s.name`),
     pool.query(`SELECT * FROM service_registry_accounts ORDER BY service_id, sort_order, name`),
     pool.query(`SELECT * FROM service_registry_resources ORDER BY account_id, sort_order, name`),
-    pool.query(`SELECT * FROM service_registry_access_links ORDER BY service_id, sort_order, name`)
+    pool.query(`SELECT * FROM service_registry_access_links ORDER BY service_id, sort_order, name`),
+    pool.query(`SELECT dal.*, d.name AS device_name, d.enabled AS device_enabled, c.label AS class_label, c.icon AS class_icon, c.color AS class_color, t.label AS type_label, t.icon AS type_icon, t.color AS type_color FROM device_access_links dal JOIN device_registry_devices d ON d.id=dal.device_id JOIN service_classes c ON c.code=dal.published_service_class JOIN service_types t ON t.code=dal.published_service_type WHERE dal.publish_as_service=TRUE ORDER BY COALESCE(NULLIF(dal.published_service_name,''),dal.name), d.name`)
   ]);
-  return services.rows.map((row: any) => ({
-    id: row.id, name: row.name, serviceClass: row.service_class, serviceClassInfo: { code: row.service_class, label: row.class_label, icon: row.class_icon, color: row.class_color },
+  const native = services.rows.map((row: any) => ({
+    id: row.id, source: "SERVICE_REGISTRY" as const, readOnly: false, sourceDevice: null, sourceAccessLinkId: null,
+    name: row.name, serviceClass: row.service_class, serviceClassInfo: { code: row.service_class, label: row.class_label, icon: row.class_icon, color: row.class_color },
     serviceType: row.service_type, serviceTypeInfo: { code: row.service_type, label: row.type_label, icon: row.type_icon, color: row.type_color }, provider: row.provider,
     description: row.description, enabled: row.enabled, healthStatus: row.health_status, lastCheckedAt: row.last_checked_at, createdAt: row.created_at, updatedAt: row.updated_at,
     accounts: accounts.rows.filter((item: any) => item.service_id === row.id).map((item: any) => mapAccount(item, resources.rows)),
     accessLinks: access.rows.filter((item: any) => item.service_id === row.id).map(mapAccess)
   }));
+  const projected = published.rows.map((row: any) => ({
+    id: `device-access:${row.id}`, source: "DEVICE_ACCESS_LINK" as const, readOnly: true,
+    sourceDevice: { id: row.device_id, name: row.device_name }, sourceAccessLinkId: row.id,
+    name: row.published_service_name || row.name, serviceClass: row.published_service_class,
+    serviceClassInfo: { code: row.published_service_class, label: row.class_label, icon: row.class_icon, color: row.class_color },
+    serviceType: row.published_service_type, serviceTypeInfo: { code: row.published_service_type, label: row.type_label, icon: row.type_icon, color: row.type_color },
+    provider: null, description: row.published_service_description, enabled: row.enabled && row.device_enabled,
+    healthStatus: row.enabled && row.device_enabled ? "UNKNOWN" : "DISABLED", lastCheckedAt: null,
+    createdAt: row.created_at, updatedAt: row.updated_at, accounts: [],
+    accessLinks: [mapAccess({ ...row, service_id: null })]
+  }));
+  return [...native, ...projected].sort((a,b)=>a.name.localeCompare(b.name));
 }
 
 async function replaceChildren(client: PoolClient, serviceId: string, input: any) {

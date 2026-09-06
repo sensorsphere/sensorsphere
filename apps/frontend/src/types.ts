@@ -750,6 +750,11 @@ export interface DeviceAccessLink {
   color: string;
   enabled: boolean;
   sortOrder: number;
+  publishAsService?: boolean;
+  publishedServiceName?: string | null;
+  publishedServiceClass?: string | null;
+  publishedServiceType?: string | null;
+  publishedServiceDescription?: string | null;
 }
 
 export interface DeviceHealthProfile {
@@ -903,6 +908,10 @@ export interface ServiceRegistryAccount {
 
 export interface ServiceRegistryService {
   id: string;
+  source: "SERVICE_REGISTRY" | "DEVICE_ACCESS_LINK";
+  readOnly: boolean;
+  sourceDevice?: { id: string; name: string } | null;
+  sourceAccessLinkId?: string | null;
   name: string;
   serviceClass: string;
   serviceClassInfo: Pick<ServiceClassReference, "code" | "label" | "icon" | "color">;

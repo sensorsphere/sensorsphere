@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.16.0";
+export const MODULE_VERSION = "1.17.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.17.0": {
+    releasedAt: "2026-09-06T12:45:00+02:00",
+    patch: "PR-149-service-registry-foundation-v2.patch",
+    changes: [
+      { type: "added", description: "Device access links can be published as read-only projected services without duplicating their URLs" },
+      { type: "added", description: "Service Registry supports native service copy, source filtering and direct navigation to a projected service source device" },
+      { type: "fixed", description: "Changing a Service class clears the incompatible selected type immediately" }
+    ]
+  },
   "1.16.0": {
     releasedAt: "2026-09-06T12:00:00+02:00",
     patch: "PR-149-service-registry-foundation-v1.patch",

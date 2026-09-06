@@ -37,7 +37,12 @@ const accessLinkSchema = z.object({
   icon: z.string().trim().min(1).max(100).optional(),
   color: z.string().trim().min(1).max(50).optional(),
   enabled: z.boolean().optional(),
-  sortOrder: z.number().int().min(0).max(100000).optional()
+  sortOrder: z.number().int().min(0).max(100000).optional(),
+  publishAsService: z.boolean().optional(),
+  publishedServiceName: z.string().trim().max(300).nullable().optional(),
+  publishedServiceClass: z.string().trim().max(100).nullable().optional(),
+  publishedServiceType: z.string().trim().max(100).nullable().optional(),
+  publishedServiceDescription: z.string().trim().max(5000).nullable().optional()
 }).strict();
 
 const classReferenceSchema = z.object({
@@ -233,6 +238,11 @@ interface AccessLinkRow {
   color: string;
   enabled: boolean;
   sort_order: number;
+  publish_as_service: boolean;
+  published_service_name: string | null;
+  published_service_class: string | null;
+  published_service_type: string | null;
+  published_service_description: string | null;
 }
 
 function evaluateHealth(row: DeviceRow): { status: HealthStatus; reasons: string[] } {
@@ -385,7 +395,12 @@ function mapDevice(row: DeviceRow, identities: IdentityRow[], links: LinkRow[], 
       labelCode: item.label_code,
       label: item.label_display ?? item.label,
       isPrimary: item.is_primary,
-      sortOrder: item.sort_order
+      sortOrder: item.sort_order,
+      publishAsService: item.publish_as_service,
+      publishedServiceName: item.published_service_name,
+      publishedServiceClass: item.published_service_class,
+      publishedServiceType: item.published_service_type,
+      publishedServiceDescription: item.published_service_description
     })),
     links: links.filter(item => item.device_id === row.id).map(item => ({
       id: item.id,
@@ -546,12 +561,14 @@ async function replaceChildren(
     for (const accessLink of accessLinks) {
       await client.query(`
         INSERT INTO device_access_links (
-          device_id, name, link_type, url_template, username, port, parameters, icon, color, enabled, sort_order
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11)
+          device_id, name, link_type, url_template, username, port, parameters, icon, color, enabled, sort_order, publish_as_service, published_service_name, published_service_class, published_service_type, published_service_description
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       `, [
         deviceId, accessLink.name, accessLink.linkType, accessLink.urlTemplate,
         accessLink.username ?? null, accessLink.port ?? null, JSON.stringify(accessLink.parameters ?? {}),
-        accessLink.icon ?? "link", accessLink.color ?? "blue", accessLink.enabled ?? true, accessLink.sortOrder ?? 100
+        accessLink.icon ?? "link", accessLink.color ?? "blue", accessLink.enabled ?? true, accessLink.sortOrder ?? 100,
+        accessLink.publishAsService ?? false, accessLink.publishedServiceName ?? null, accessLink.publishedServiceClass ?? null,
+        accessLink.publishedServiceType ?? null, accessLink.publishedServiceDescription ?? null
       ]);
     }
   }
@@ -579,7 +596,7 @@ async function sendDevice(pool: Pool, id: string, reply: FastifyReply) {
       ORDER BY i.identity_type, i.is_primary DESC, i.sort_order, i.value
     `, [id]),
     pool.query<LinkRow>("SELECT id, device_id, target_type, target_id FROM device_registry_links WHERE device_id = $1 ORDER BY target_type, target_id", [id]),
-    pool.query<AccessLinkRow>("SELECT id, device_id, name, link_type, url_template, username, port, parameters, icon, color, enabled, sort_order FROM device_access_links WHERE device_id = $1 ORDER BY sort_order, LOWER(name), id", [id])
+    pool.query<AccessLinkRow>("SELECT id, device_id, name, link_type, url_template, username, port, parameters, icon, color, enabled, sort_order, publish_as_service, published_service_name, published_service_class, published_service_type, published_service_description FROM device_access_links WHERE device_id = $1 ORDER BY sort_order, LOWER(name), id", [id])
   ]);
   return reply.send(mapDevice(row, identityResult.rows, linkResult.rows, accessLinkResult.rows));
 }
@@ -819,7 +836,7 @@ export async function registerDeviceRegistryFeature(
         ORDER BY i.device_id, i.identity_type, i.is_primary DESC, i.sort_order, i.value
       `),
       pool.query<LinkRow>("SELECT id, device_id, target_type, target_id FROM device_registry_links ORDER BY target_type, target_id"),
-      pool.query<AccessLinkRow>("SELECT id, device_id, name, link_type, url_template, username, port, parameters, icon, color, enabled, sort_order FROM device_access_links ORDER BY device_id, sort_order, LOWER(name), id")
+      pool.query<AccessLinkRow>("SELECT id, device_id, name, link_type, url_template, username, port, parameters, icon, color, enabled, sort_order, publish_as_service, published_service_name, published_service_class, published_service_type, published_service_description FROM device_access_links ORDER BY device_id, sort_order, LOWER(name), id")
     ]);
     return reply.send(rows.map(row => mapDevice(row, identityResult.rows, linkResult.rows, accessLinkResult.rows)));
   });

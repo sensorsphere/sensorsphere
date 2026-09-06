@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.7.0";
+export const MODULE_VERSION = "1.8.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.8.0": {
+    releasedAt: "2026-09-06T12:45:00+02:00",
+    patch: "PR-149-service-registry-foundation-v2.patch",
+    changes: [
+      { type: "added", description: "Service Registry API aggregates native services with read-only projections published from Device access links" },
+      { type: "added", description: "Device access links persist Service Registry publication metadata without duplicating service URLs" }
+    ]
+  },
   "1.7.0": {
     releasedAt: "2026-09-06T12:00:00+02:00",
     patch: "PR-149-service-registry-foundation-v1.patch",

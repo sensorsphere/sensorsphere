@@ -1,8 +1,10 @@
 import React from "react";
 import { ActionIcon, Button, Checkbox, Group, Modal, NumberInput, Select, Stack, Table, Text, Textarea, TextInput, Tooltip } from "@mantine/core";
+import { useQuery } from "@tanstack/react-query";
 import type { DeviceAccessLink, DeviceIdentity } from "./types";
 import { DeleteActionIcon, EditActionIcon } from "./TableActionIcons";
 import { DEVICE_ICON_OPTIONS, DeviceGlyph } from "./DeviceGlyph";
+import { getServiceClassReferences, getServiceTypeReferences } from "./api";
 
 export interface DeviceAccessContext {
   deviceName: string;
@@ -21,11 +23,12 @@ export interface DeviceAccessContext {
 interface LinkForm {
   name: string; linkType: string; urlTemplate: string; username: string; port: number | string;
   parametersText: string; icon: string; color: string; enabled: boolean; sortOrder: number | string;
+  publishAsService: boolean; publishedServiceName: string; publishedServiceClass: string; publishedServiceType: string; publishedServiceDescription: string;
 }
 
 const LINK_TYPES = ["WEB","SSH","RDP","VNC","API","DOCUMENTATION","CUSTOM"].map(value=>({value,label:value}));
 const ACCESS_COLORS = ["blue", "cyan", "grape", "green", "indigo", "lime", "orange", "pink", "red", "teal", "violet", "yellow"].map(value => ({ value, label: value.charAt(0).toUpperCase() + value.slice(1) }));
-const emptyLink=():LinkForm=>({name:"",linkType:"WEB",urlTemplate:"https://{{IP_or_FQDN}}/",username:"",port:"",parametersText:"",icon:"globe",color:"blue",enabled:true,sortOrder:100});
+const emptyLink=():LinkForm=>({name:"",linkType:"WEB",urlTemplate:"https://{{IP_or_FQDN}}/",username:"",port:"",parametersText:"",icon:"globe",color:"blue",enabled:true,sortOrder:100,publishAsService:false,publishedServiceName:"",publishedServiceClass:"",publishedServiceType:"",publishedServiceDescription:""});
 
 function parametersFromText(text:string):Record<string,string>{
   const result:Record<string,string>={};
@@ -68,11 +71,13 @@ export function resolveDeviceAccessUrl(link: DeviceAccessLink, context: DeviceAc
 }
 
 export function DeviceAccessLinksEditor({ value, onChange, context }: { value: DeviceAccessLink[]; onChange:(value:DeviceAccessLink[])=>void; context:DeviceAccessContext }) {
+  const serviceClasses=useQuery({queryKey:["service-registry","references","classes"],queryFn:getServiceClassReferences});
+  const serviceTypes=useQuery({queryKey:["service-registry","references","types"],queryFn:getServiceTypeReferences});
   const [opened,setOpened]=React.useState(false); const [editIndex,setEditIndex]=React.useState<number|null>(null); const [form,setForm]=React.useState<LinkForm>(emptyLink());
   const openCreate=()=>{setEditIndex(null);setForm(emptyLink());setOpened(true);};
-  const openEdit=(index:number)=>{const item=value[index]!;setEditIndex(index);setForm({name:item.name,linkType:item.linkType,urlTemplate:item.urlTemplate,username:item.username??"",port:item.port??"",parametersText:parametersToText(item.parameters),icon:item.icon,color:item.color??"blue",enabled:item.enabled,sortOrder:item.sortOrder});setOpened(true);};
-  const save=()=>{const item:DeviceAccessLink={name:form.name.trim(),linkType:form.linkType,urlTemplate:form.urlTemplate.trim(),username:form.username.trim()||null,port:typeof form.port==="number"?form.port:null,parameters:parametersFromText(form.parametersText),icon:form.icon,color:form.color,enabled:form.enabled,sortOrder:typeof form.sortOrder==="number"?form.sortOrder:100};const next=[...value];if(editIndex==null)next.push(item);else next[editIndex]=item;next.sort((a,b)=>a.sortOrder-b.sortOrder||a.name.localeCompare(b.name));onChange(next);setOpened(false);};
-  const previewLink:DeviceAccessLink={name:form.name,linkType:form.linkType,urlTemplate:form.urlTemplate,username:form.username||null,port:typeof form.port==="number"?form.port:null,parameters:parametersFromText(form.parametersText),icon:form.icon,color:form.color,enabled:form.enabled,sortOrder:typeof form.sortOrder==="number"?form.sortOrder:100};
+  const openEdit=(index:number)=>{const item=value[index]!;setEditIndex(index);setForm({name:item.name,linkType:item.linkType,urlTemplate:item.urlTemplate,username:item.username??"",port:item.port??"",parametersText:parametersToText(item.parameters),icon:item.icon,color:item.color??"blue",enabled:item.enabled,sortOrder:item.sortOrder,publishAsService:item.publishAsService??false,publishedServiceName:item.publishedServiceName??item.name,publishedServiceClass:item.publishedServiceClass??"",publishedServiceType:item.publishedServiceType??"",publishedServiceDescription:item.publishedServiceDescription??""});setOpened(true);};
+  const save=()=>{const item:DeviceAccessLink={name:form.name.trim(),linkType:form.linkType,urlTemplate:form.urlTemplate.trim(),username:form.username.trim()||null,port:typeof form.port==="number"?form.port:null,parameters:parametersFromText(form.parametersText),icon:form.icon,color:form.color,enabled:form.enabled,sortOrder:typeof form.sortOrder==="number"?form.sortOrder:100,publishAsService:form.publishAsService,publishedServiceName:form.publishAsService?(form.publishedServiceName.trim()||form.name.trim()):null,publishedServiceClass:form.publishAsService?(form.publishedServiceClass||null):null,publishedServiceType:form.publishAsService?(form.publishedServiceType||null):null,publishedServiceDescription:form.publishAsService?(form.publishedServiceDescription.trim()||null):null};const next=[...value];if(editIndex==null)next.push(item);else next[editIndex]=item;next.sort((a,b)=>a.sortOrder-b.sortOrder||a.name.localeCompare(b.name));onChange(next);setOpened(false);};
+  const previewLink:DeviceAccessLink={name:form.name,linkType:form.linkType,urlTemplate:form.urlTemplate,username:form.username||null,port:typeof form.port==="number"?form.port:null,parameters:parametersFromText(form.parametersText),icon:form.icon,color:form.color,enabled:form.enabled,sortOrder:typeof form.sortOrder==="number"?form.sortOrder:100,publishAsService:form.publishAsService,publishedServiceName:form.publishedServiceName||null,publishedServiceClass:form.publishedServiceClass||null,publishedServiceType:form.publishedServiceType||null,publishedServiceDescription:form.publishedServiceDescription||null};
   const preview=resolveDeviceAccessUrl(previewLink,context);
   return <Stack gap="xs">
     <Group justify="space-between"><div><Text fw={600} size="sm">Access links</Text><Text size="xs" c="dimmed">Multiple Web, SSH, RDP, API or custom launch URLs. Passwords should not be stored here.</Text></div><Button size="compact-xs" variant="light" onClick={openCreate}>+ Add access</Button></Group>
@@ -103,8 +108,10 @@ export function DeviceAccessLinksEditor({ value, onChange, context }: { value: D
         <NumberInput label="Sort order" min={0} value={form.sortOrder} onChange={v=>setForm(f=>({...f,sortOrder:v}))}/>
       </Group>
       <Checkbox label="Enabled" checked={form.enabled} onChange={e=>setForm(f=>({...f,enabled:e.currentTarget.checked}))}/>
+      <Checkbox label="Publish as Service in Service Registry" checked={form.publishAsService} onChange={e=>setForm(f=>({...f,publishAsService:e.currentTarget.checked,publishedServiceName:f.publishedServiceName||f.name}))}/>
+      {form.publishAsService&&<Stack gap="xs"><Group grow><TextInput label="Published service name" value={form.publishedServiceName} onChange={e=>setForm(f=>({...f,publishedServiceName:e.currentTarget.value}))}/><Select label="Service class" data={(serviceClasses.data??[]).map(c=>({value:c.code,label:c.label}))} value={form.publishedServiceClass||null} onChange={v=>setForm(f=>({...f,publishedServiceClass:v??"",publishedServiceType:""}))}/><Select label="Service type" data={(serviceTypes.data??[]).filter(t=>t.serviceClass===form.publishedServiceClass).map(t=>({value:t.code,label:t.label}))} value={form.publishedServiceType||null} onChange={v=>setForm(f=>({...f,publishedServiceType:v??""}))}/></Group><Textarea label="Published service description" minRows={2} value={form.publishedServiceDescription} onChange={e=>setForm(f=>({...f,publishedServiceDescription:e.currentTarget.value}))}/></Stack>}
       <Stack gap={2}><Text size="xs" fw={600}>Preview</Text><Text size="xs" ff="monospace" c={preview.unresolved.length?"orange":"dimmed"}>{preview.url||"—"}</Text>{preview.unresolved.length>0&&<Text size="xs" c="orange">Unresolved placeholders: {preview.unresolved.join(", ")}</Text>}</Stack>
-      <Group justify="flex-end"><Button variant="default" onClick={()=>setOpened(false)}>Cancel</Button><Button disabled={!form.name.trim()||!form.urlTemplate.trim()} onClick={save}>Save</Button></Group>
+      <Group justify="flex-end"><Button variant="default" onClick={()=>setOpened(false)}>Cancel</Button><Button disabled={!form.name.trim()||!form.urlTemplate.trim()||(form.publishAsService&&(!form.publishedServiceClass||!form.publishedServiceType))} onClick={save}>Save</Button></Group>
     </Stack></Modal>
   </Stack>;
 }

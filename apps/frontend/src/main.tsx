@@ -691,6 +691,8 @@ function Dashboard() {
       isPageKey
     );
 
+  const [deviceRegistryOpenId, setDeviceRegistryOpenId] = React.useState<string | null>(null);
+
   const [
     historyTemplateLaunch,
     setHistoryTemplateLaunch
@@ -5053,14 +5055,14 @@ function Dashboard() {
             {
               activePage ===
                 "devices" && (
-                <DeviceRegistryPanel />
+                <DeviceRegistryPanel openDeviceId={deviceRegistryOpenId} onDeviceOpened={() => setDeviceRegistryOpenId(null)} />
               )
             }
 
             {
               activePage ===
                 "services" && (
-                <ServiceRegistryPanel />
+                <ServiceRegistryPanel onOpenDevice={(id) => { setDeviceRegistryOpenId(id); navigateTo("devices"); }} />
               )
             }
 
