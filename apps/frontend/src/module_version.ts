@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.20.4";
+export const MODULE_VERSION = "1.21.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.21.0": {
+    releasedAt: "2026-09-06T22:15:00+02:00",
+    patch: "PR-151-monitoring-identity-targets-service-table-fonts-v1.patch",
+    changes: [
+      { type: "added", description: "Monitoring checks can select an existing Device Registry IP/FQDN identity and custom targets autocomplete identity templates" },
+      { type: "fixed", description: "Monitoring check dialogs focus Check name instead of auto-opening the Device select" },
+      { type: "changed", description: "Service Registry Services and Taxonomy tables use the same compact table typography as Device Registry" },
+      { type: "changed", description: "Generated monitoring-agent environment variables contain only SensorSphere URL and bearer token" }
+    ]
+  },
   "1.20.4": {
     releasedAt: "2026-09-06T15:45:00+02:00",
     patch: "PR-150-monitoring-foundation-v5.patch",

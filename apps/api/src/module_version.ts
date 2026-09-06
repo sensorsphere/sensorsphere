@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.9.0";
+export const MODULE_VERSION = "1.10.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.10.0": {
+    releasedAt: "2026-09-06T22:15:00+02:00",
+    patch: "PR-151-monitoring-identity-targets-service-table-fonts-v1.patch",
+    changes: [
+      { type: "added", description: "Resolve Monitoring custom identity templates such as {{identity:IP:VPN}} against the selected Device Registry device" }
+    ]
+  },
   "1.9.0": {
     releasedAt: "2026-09-06T14:45:00+02:00",
     patch: "PR-150-monitoring-foundation-v1.patch",

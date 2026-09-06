@@ -2,6 +2,7 @@ import React from "react";
 
 import {
   ActionIcon,
+  Autocomplete,
   Badge,
   Button,
   Card,
@@ -41,7 +42,8 @@ import type {
   MonitoringCheck,
   MonitoringCheckType,
   MonitoringExecutionMode,
-  MonitoringTargetMode
+  MonitoringTargetMode,
+  DeviceIdentity
 } from "./types";
 import { EditActionIcon, DeleteActionIcon } from "./TableActionIcons";
 
@@ -127,12 +129,16 @@ function parseLabels(value: string): Record<string, string> {
   return labels;
 }
 
+type CheckTargetSelectionMode = MonitoringTargetMode | "EXISTING_IDENTITY";
+
+const identityTargetPattern = /^\{\{identity:([^:}]+):([^}]+)\}\}$/i;
+
 interface CheckFormState {
   deviceId: string | null;
   name: string;
   enabled: boolean;
   checkType: MonitoringCheckType;
-  targetMode: MonitoringTargetMode;
+  targetMode: CheckTargetSelectionMode;
   targetValue: string;
   port: number | string;
   path: string;
@@ -164,12 +170,13 @@ function emptyCheckForm(): CheckFormState {
 }
 
 function checkToForm(check: MonitoringCheck): CheckFormState {
+  const symbolicIdentity = check.targetMode === "CUSTOM" && identityTargetPattern.test(check.targetValue ?? "");
   return {
     deviceId: check.deviceId,
     name: check.name,
     enabled: check.enabled,
     checkType: check.checkType,
-    targetMode: check.targetMode,
+    targetMode: symbolicIdentity ? "EXISTING_IDENTITY" : check.targetMode,
     targetValue: check.targetValue ?? "",
     port: check.port ?? "",
     path: check.path ?? "",
@@ -194,8 +201,8 @@ function checkPayload(form: CheckFormState): CreateMonitoringCheckInput {
     name: form.name.trim(),
     enabled: form.enabled,
     checkType: form.checkType,
-    targetMode: form.targetMode,
-    targetValue: form.targetMode === "CUSTOM" ? form.targetValue.trim() || null : null,
+    targetMode: form.targetMode === "EXISTING_IDENTITY" ? "CUSTOM" : form.targetMode,
+    targetValue: form.targetMode === "CUSTOM" || form.targetMode === "EXISTING_IDENTITY" ? form.targetValue.trim() || null : null,
     port: form.checkType === "PING" ? null : numeric(form.port, form.checkType === "HTTPS" ? 443 : form.checkType === "HTTP" ? 80 : 22),
     path: form.checkType === "HTTP" || form.checkType === "HTTPS" ? (form.path.trim() || "/") : null,
     intervalSeconds: numeric(form.intervalSeconds, 60),
@@ -224,6 +231,23 @@ export function MonitoringPanel() {
   const [checkForm, setCheckForm] = React.useState<CheckFormState>(emptyCheckForm());
   const [checkDeleteTarget, setCheckDeleteTarget] = React.useState<MonitoringCheck | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+
+  const selectedDevice = (devicesQuery.data ?? []).find(device => device.id === checkForm.deviceId);
+  const compatibleIdentities = React.useMemo(() => {
+    const identities = selectedDevice?.identities ?? [];
+    return identities
+      .filter(identity => ["IP", "FQDN", "HOSTNAME"].includes(identity.identityType.toUpperCase()))
+      .sort((a, b) => Number(Boolean(b.isPrimary)) - Number(Boolean(a.isPrimary)) || (a.sortOrder ?? 100) - (b.sortOrder ?? 100) || a.identityType.localeCompare(b.identityType));
+  }, [selectedDevice]);
+  const identityTargetValue = (identity: DeviceIdentity): string => {
+    const key = identity.labelCode?.trim() || identity.source?.trim();
+    return key ? `{{identity:${identity.identityType.toUpperCase()}:${key}}}` : identity.value;
+  };
+  const identityOptions = compatibleIdentities.map(identity => {
+    const symbolic = identityTargetValue(identity);
+    const label = identity.label ?? identity.labelCode ?? identity.source ?? (identity.isPrimary ? "Primary" : "Unlabelled");
+    return { value: symbolic, label: `${identity.identityType.toUpperCase()} · ${label} · ${identity.value}` };
+  });
 
   const refresh = async () => {
     await Promise.all([
@@ -271,9 +295,14 @@ export function MonitoringPanel() {
   });
 
   const saveCheck = useMutation({
-    mutationFn: async () => editingCheck
-      ? updateMonitoringCheck(editingCheck.id, checkPayload(checkForm))
-      : createMonitoringCheck(checkPayload(checkForm)),
+    mutationFn: async () => {
+      if (checkForm.targetMode === "EXISTING_IDENTITY" && !checkForm.targetValue) throw new Error("Existing identity is required");
+      if (checkForm.targetMode === "CUSTOM" && checkForm.targetValue.trim().startsWith("{{identity:") && !identityTargetPattern.test(checkForm.targetValue.trim())) {
+        throw new Error("Invalid identity target. Expected {{identity:TYPE:LABEL}}");
+      }
+      const payload = checkPayload(checkForm);
+      return editingCheck ? updateMonitoringCheck(editingCheck.id, payload) : createMonitoringCheck(payload);
+    },
     onSuccess: async () => {
       setCheckModalOpen(false);
       setEditingCheck(null);
@@ -324,7 +353,7 @@ export function MonitoringPanel() {
 
   const sensorsphereUrl = typeof window === "undefined" ? "" : window.location.origin;
   const agentEnvironment = tokenInfo
-    ? `SENSORSPHERE_URL=${sensorsphereUrl}\nSENSORSPHERE_AGENT_ID=${tokenInfo.agentName}\nSENSORSPHERE_AGENT_TOKEN=${tokenInfo.token}`
+    ? `SENSORSPHERE_URL=${sensorsphereUrl}\nSENSORSPHERE_AGENT_TOKEN=${tokenInfo.token}`
     : "";
 
   return (
@@ -453,11 +482,12 @@ export function MonitoringPanel() {
       <Modal opened={checkModalOpen} onClose={() => setCheckModalOpen(false)} title={editingCheck ? "Edit monitoring check" : "Add monitoring check"} size="lg">
         <Stack>
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
-            <Select label="Device" required searchable data={(devicesQuery.data ?? []).map(device => ({ value: device.id, label: device.name })).sort((a, b) => a.label.localeCompare(b.label))} value={checkForm.deviceId} onChange={value => setCheckForm(current => ({ ...current, deviceId: value }))} />
-            <TextInput label="Check name" required value={checkForm.name} onChange={event => { const value = event.currentTarget.value; setCheckForm(current => ({ ...current, name: value })); }} />
+            <Select label="Device" required searchable data={(devicesQuery.data ?? []).map(device => ({ value: device.id, label: device.name })).sort((a, b) => a.label.localeCompare(b.label))} value={checkForm.deviceId} onChange={value => setCheckForm(current => ({ ...current, deviceId: value, targetValue: current.targetMode === "EXISTING_IDENTITY" ? "" : current.targetValue }))} />
+            <TextInput label="Check name" required autoFocus value={checkForm.name} onChange={event => { const value = event.currentTarget.value; setCheckForm(current => ({ ...current, name: value })); }} />
             <Select label="Check type" required data={["PING", "TCP", "HTTP", "HTTPS"]} value={checkForm.checkType} onChange={value => value && setCheckForm(current => ({ ...current, checkType: value as MonitoringCheckType, port: value === "PING" ? "" : current.port }))} allowDeselect={false} />
-            <Select label="Target" required data={[{ value: "PRIMARY_IP", label: "Primary IP" }, { value: "PRIMARY_FQDN", label: "Primary FQDN/hostname" }, { value: "PRIMARY_ADDRESS", label: "Primary IP or FQDN" }, { value: "CUSTOM", label: "Custom" }]} value={checkForm.targetMode} onChange={value => value && setCheckForm(current => ({ ...current, targetMode: value as MonitoringTargetMode }))} allowDeselect={false} />
-            {checkForm.targetMode === "CUSTOM" && <TextInput label="Custom target" required value={checkForm.targetValue} onChange={event => { const value = event.currentTarget.value; setCheckForm(current => ({ ...current, targetValue: value })); }} />}
+            <Select label="Target" required data={[{ value: "PRIMARY_IP", label: "Primary IP" }, { value: "PRIMARY_FQDN", label: "Primary FQDN/hostname" }, { value: "PRIMARY_ADDRESS", label: "Primary IP or FQDN" }, { value: "EXISTING_IDENTITY", label: "Existing identity / address" }, { value: "CUSTOM", label: "Custom" }]} value={checkForm.targetMode} onChange={value => value && setCheckForm(current => ({ ...current, targetMode: value as CheckTargetSelectionMode, targetValue: value === "EXISTING_IDENTITY" ? "" : current.targetValue }))} allowDeselect={false} />
+            {checkForm.targetMode === "EXISTING_IDENTITY" && <Select label="Existing identity" required searchable disabled={!checkForm.deviceId} description={checkForm.deviceId ? "Uses the selected Device Registry identity. Labelled identities remain dynamic when their address changes." : "Select a device first."} placeholder={checkForm.deviceId ? "Select an IP or FQDN identity" : "Select a device first"} data={identityOptions} value={checkForm.targetValue || null} onChange={value => setCheckForm(current => ({ ...current, targetValue: value ?? "" }))} />}
+            {checkForm.targetMode === "CUSTOM" && <Autocomplete label="Custom target" required description="Literal address/hostname or identity template. Available device identities are suggested below." placeholder="192.168.1.10 or {{identity:IP:VPN}}" data={identityOptions} value={checkForm.targetValue} onChange={value => setCheckForm(current => ({ ...current, targetValue: value }))} />}
             {checkForm.checkType !== "PING" && <NumberInput label="Port" min={1} max={65535} value={checkForm.port} onChange={value => setCheckForm(current => ({ ...current, port: value }))} />}
             {(checkForm.checkType === "HTTP" || checkForm.checkType === "HTTPS") && <TextInput label="Path" placeholder="/health" value={checkForm.path} onChange={event => { const value = event.currentTarget.value; setCheckForm(current => ({ ...current, path: value })); }} />}
             <NumberInput label="Interval (seconds)" min={5} value={checkForm.intervalSeconds} onChange={value => setCheckForm(current => ({ ...current, intervalSeconds: value }))} />

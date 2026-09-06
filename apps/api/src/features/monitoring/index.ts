@@ -9,6 +9,7 @@ export interface MonitoringFeatureOptions {
 
 const checkTypeSchema = z.enum(["PING", "TCP", "HTTP", "HTTPS"]);
 const targetModeSchema = z.enum(["PRIMARY_IP", "PRIMARY_FQDN", "PRIMARY_ADDRESS", "CUSTOM"]);
+const identityTargetPattern = /^\{\{identity:([^:}]+):([^}]+)\}\}$/i;
 const executionModeSchema = z.enum(["FAILOVER", "ALL"]);
 const resultStatusSchema = z.enum(["UP", "DOWN", "UNKNOWN"]);
 
@@ -50,6 +51,9 @@ const checkBaseSchema = z.object({
 }).strict().superRefine((value, context) => {
   if (value.targetMode === "CUSTOM" && !value.targetValue) {
     context.addIssue({ code: "custom", message: "Custom target is required", path: ["targetValue"] });
+  }
+  if (value.targetMode === "CUSTOM" && value.targetValue?.startsWith("{{identity:") && !identityTargetPattern.test(value.targetValue)) {
+    context.addIssue({ code: "custom", message: "Invalid identity target. Expected {{identity:TYPE:LABEL}}", path: ["targetValue"] });
   }
   if ((value.checkType === "TCP" || value.checkType === "HTTP" || value.checkType === "HTTPS") && value.port == null) {
     context.addIssue({ code: "custom", message: "Port is required for this check type", path: ["port"] });
@@ -281,9 +285,10 @@ function checkDto(row: CheckRow, assignments: AssignmentRow[], states: Array<Rec
 }
 
 async function resolveTarget(pool: Pool, check: CheckRow): Promise<string | null> {
-  if (check.target_mode === "CUSTOM") return check.target_value;
-  const identities = await pool.query<{ identity_type: string; value: string; is_primary: boolean; sort_order: number }>(
-    `SELECT identity_type, value, is_primary, sort_order
+  const identities = await pool.query<{ identity_type: string; value: string; is_primary: boolean; sort_order: number; label_code: string | null; source: string | null }>(
+    `SELECT identity_type, value, is_primary, sort_order,
+            to_jsonb(device_registry_identities)->>'label_code' AS label_code,
+            source
        FROM device_registry_identities
       WHERE device_id = $1
         AND UPPER(identity_type) IN ('IP', 'FQDN', 'HOSTNAME')
@@ -291,6 +296,17 @@ async function resolveTarget(pool: Pool, check: CheckRow): Promise<string | null
     [check.device_id]
   );
   const find = (types: string[]) => identities.rows.find(row => types.includes(row.identity_type.toUpperCase()))?.value ?? null;
+  if (check.target_mode === "CUSTOM") {
+    const value = check.target_value?.trim() ?? "";
+    const match = identityTargetPattern.exec(value);
+    if (!match) return value || null;
+    const identityType = match[1]!.trim().toUpperCase();
+    const identityLabel = match[2]!.trim().toUpperCase();
+    return identities.rows.find(row =>
+      row.identity_type.toUpperCase() === identityType &&
+      [row.label_code, row.source].some(candidate => candidate?.trim().toUpperCase() === identityLabel)
+    )?.value ?? null;
+  }
   if (check.target_mode === "PRIMARY_IP") return find(["IP"]);
   if (check.target_mode === "PRIMARY_FQDN") return find(["FQDN", "HOSTNAME"]);
   return find(["IP"]) ?? find(["FQDN", "HOSTNAME"]);
