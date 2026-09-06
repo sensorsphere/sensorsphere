@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.15.4";
+export const MODULE_VERSION = "1.15.5";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.15.5": {
+    releasedAt: "2026-09-06T09:00:00+02:00",
+    patch: "PR-148-device-registry-usability-multi-identities-v5.patch",
+    changes: [
+      { type: "changed", description: "Device deletion now uses the standard SensorSphere confirmation dialog pattern used by Gateways" },
+      { type: "changed", description: "Device taxonomy Classes use colored icons with plain labels instead of badges" },
+      { type: "fixed", description: "Device access links open with a no-referrer policy for embedded Web UIs that reject cross-site Referer headers" }
+    ]
+  },
   "1.15.3": {
     releasedAt: "2026-09-06T08:20:00+02:00",
     patch: "PR-148-device-registry-usability-multi-identities-v3.patch",

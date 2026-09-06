@@ -35,6 +35,18 @@ function parametersFromText(text:string):Record<string,string>{
 }
 function parametersToText(parameters:Record<string,string>):string{return Object.entries(parameters??{}).map(([k,v])=>`${k}=${v}`).join("\n");}
 
+export function openDeviceAccessUrl(url: string, target: string): void {
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.target = target;
+  anchor.rel = "noopener noreferrer";
+  anchor.referrerPolicy = "no-referrer";
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
 export function resolveDeviceAccessUrl(link: DeviceAccessLink, context: DeviceAccessContext): { url: string; unresolved: string[] } {
   const base:Record<string,string>={
     device_name:context.deviceName, username:link.username??"", port:link.port==null?"":String(link.port),
@@ -63,7 +75,7 @@ export function DeviceAccessLinksEditor({ value, onChange, context }: { value: D
   const preview=resolveDeviceAccessUrl(previewLink,context);
   return <Stack gap="xs">
     <Group justify="space-between"><div><Text fw={600} size="sm">Access links</Text><Text size="xs" c="dimmed">Multiple Web, SSH, RDP, API or custom launch URLs. Passwords should not be stored here.</Text></div><Button size="compact-xs" variant="light" onClick={openCreate}>+ Add access</Button></Group>
-    {value.length>0&&<Table withTableBorder withColumnBorders={false}><Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Type</Table.Th><Table.Th>Template</Table.Th><Table.Th>User</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{value.map((item,index)=>{const resolved=resolveDeviceAccessUrl(item,context);return <Table.Tr key={`${item.name}-${index}`}><Table.Td><Group gap="xs"><DeviceGlyph icon={item.icon}/><Text size="sm">{item.name}</Text></Group></Table.Td><Table.Td>{item.linkType}</Table.Td><Table.Td><Tooltip label={resolved.unresolved.length?`Missing: ${resolved.unresolved.join(", ")}`:resolved.url}><Text size="xs" ff="monospace" lineClamp={1}>{item.urlTemplate}</Text></Tooltip></Table.Td><Table.Td>{item.username??"—"}</Table.Td><Table.Td><Group gap={4}><ActionIcon variant="subtle" disabled={resolved.unresolved.length>0||!item.enabled} onClick={()=>window.open(resolved.url,`ss_device_${context.deviceName}_${index}`)} aria-label={`Open ${item.name}`}><DeviceGlyph icon={item.icon}/></ActionIcon><EditActionIcon onClick={()=>openEdit(index)}/><DeleteActionIcon onClick={()=>onChange(value.filter((_,i)=>i!==index))}/></Group></Table.Td></Table.Tr>;})}</Table.Tbody></Table>}
+    {value.length>0&&<Table withTableBorder withColumnBorders={false}><Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Type</Table.Th><Table.Th>Template</Table.Th><Table.Th>User</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{value.map((item,index)=>{const resolved=resolveDeviceAccessUrl(item,context);return <Table.Tr key={`${item.name}-${index}`}><Table.Td><Group gap="xs"><DeviceGlyph icon={item.icon}/><Text size="sm">{item.name}</Text></Group></Table.Td><Table.Td>{item.linkType}</Table.Td><Table.Td><Tooltip label={resolved.unresolved.length?`Missing: ${resolved.unresolved.join(", ")}`:resolved.url}><Text size="xs" ff="monospace" lineClamp={1}>{item.urlTemplate}</Text></Tooltip></Table.Td><Table.Td>{item.username??"—"}</Table.Td><Table.Td><Group gap={4}><ActionIcon variant="subtle" disabled={resolved.unresolved.length>0||!item.enabled} onClick={()=>openDeviceAccessUrl(resolved.url,`ss_device_${context.deviceName}_${index}`)} aria-label={`Open ${item.name}`}><DeviceGlyph icon={item.icon}/></ActionIcon><EditActionIcon onClick={()=>openEdit(index)}/><DeleteActionIcon onClick={()=>onChange(value.filter((_,i)=>i!==index))}/></Group></Table.Td></Table.Tr>;})}</Table.Tbody></Table>}
     {value.length===0&&<Text size="sm" c="dimmed">No access links configured.</Text>}
     <Modal opened={opened} onClose={()=>setOpened(false)} title={editIndex==null?"Add access link":"Edit access link"} size="lg"><Stack gap="sm">
       <Group grow><TextInput label="Name" required autoFocus value={form.name} onChange={e=>setForm(f=>({...f,name:e.currentTarget.value}))}/><Select label="Type" data={LINK_TYPES} value={form.linkType} onChange={v=>setForm(f=>({...f,linkType:v??"CUSTOM"}))}/></Group>

@@ -62,7 +62,7 @@ import type {
 import { EditActionIcon, DeleteActionIcon } from "./TableActionIcons";
 import { DeviceGlyph } from "./DeviceGlyph";
 import { DeviceTaxonomyPanel } from "./DeviceTaxonomyPanel";
-import { DeviceAccessLinksEditor, resolveDeviceAccessUrl } from "./DeviceAccessLinksEditor";
+import { DeviceAccessLinksEditor, openDeviceAccessUrl, resolveDeviceAccessUrl } from "./DeviceAccessLinksEditor";
 import { DeviceIdentitiesEditor, primaryIdentity } from "./DeviceIdentitiesEditor";
 
 const HEALTH_COLORS: Record<DeviceHealthStatus, string> = {
@@ -252,6 +252,7 @@ export function DeviceRegistryPanel() {
   const [healthFilter, setHealthFilter] = React.useState<string | null>(null);
   const [editingDevice, setEditingDevice] = React.useState<DeviceRegistryDevice | null>(null);
   const [deviceModalOpen, setDeviceModalOpen] = React.useState(false);
+  const [deleteDeviceTarget, setDeleteDeviceTarget] = React.useState<DeviceRegistryDevice | null>(null);
   const [deviceForm, setDeviceForm] = React.useState<DeviceFormState>(emptyDeviceForm());
   const [editingProfile, setEditingProfile] = React.useState<DeviceHealthProfile | null>(null);
   const [profileModalOpen, setProfileModalOpen] = React.useState(false);
@@ -291,7 +292,11 @@ export function DeviceRegistryPanel() {
 
   const removeDevice = useMutation({
     mutationFn: deleteDeviceRegistryDevice,
-    onSuccess: refresh,
+    onSuccess: async () => {
+      setDeleteDeviceTarget(null);
+      setError(null);
+      await refresh();
+    },
     onError: cause => setError(cause instanceof Error ? cause.message : "Unable to delete device")
   });
 
@@ -463,7 +468,7 @@ export function DeviceRegistryPanel() {
                           <Group gap={2} wrap="nowrap">
                             {device.accessLinks.filter(link => link.enabled).slice(0, 3).map((link, index) => {
                               const resolved = resolveDeviceAccessUrl(link, { deviceName: device.name, macAddress: primaryIdentity(device.identities, "MAC")?.value ?? "", ipAddress: primaryIdentity(device.identities, "IP")?.value ?? "", ieeeAddress: primaryIdentity(device.identities, "IEEE")?.value ?? "", fqdn: primaryIdentity(device.identities, "FQDN")?.value ?? "", manufacturer: device.manufacturer ?? "", model: device.model ?? "", deviceClass: device.deviceClass, deviceType: device.deviceType, location: device.location?.name ?? "", identities: device.identities });
-                              return <Tooltip key={`${link.name}-${index}`} label={resolved.unresolved.length ? `${link.name} · missing ${resolved.unresolved.join(", ")}` : link.name}><ActionIcon variant="subtle" disabled={resolved.unresolved.length > 0} onClick={() => window.open(resolved.url, `ss_device_${device.id}_${index}`)} aria-label={`Open ${link.name}`}><DeviceGlyph icon={link.icon} /></ActionIcon></Tooltip>;
+                              return <Tooltip key={`${link.name}-${index}`} label={resolved.unresolved.length ? `${link.name} · missing ${resolved.unresolved.join(", ")}` : link.name}><ActionIcon variant="subtle" disabled={resolved.unresolved.length > 0} onClick={() => openDeviceAccessUrl(resolved.url, `ss_device_${device.id}_${index}`)} aria-label={`Open ${link.name}`}><DeviceGlyph icon={link.icon} /></ActionIcon></Tooltip>;
                             })}
                             {device.accessLinks.length === 0 && <Text size="xs" c="dimmed">—</Text>}
                           </Group>
@@ -471,9 +476,7 @@ export function DeviceRegistryPanel() {
                         <Table.Td>
                           <Group gap={4} wrap="nowrap">
                             <EditActionIcon onClick={() => openEditDevice(device)} />
-                            <DeleteActionIcon onClick={() => {
-                              if (window.confirm(`Delete device "${device.name}"?`)) removeDevice.mutate(device.id);
-                            }} />
+                            <DeleteActionIcon onClick={() => { setError(null); setDeleteDeviceTarget(device); }} />
                           </Group>
                         </Table.Td>
                       </Table.Tr>
@@ -527,6 +530,37 @@ export function DeviceRegistryPanel() {
           <DeviceTaxonomyPanel />
         </Tabs.Panel>
       </Tabs>
+
+      <Modal
+        opened={deleteDeviceTarget !== null}
+        onClose={() => !removeDevice.isPending && setDeleteDeviceTarget(null)}
+        title="Delete device"
+        centered
+      >
+        <Stack>
+          <Text>
+            Delete device <b>{deleteDeviceTarget?.name}</b>? Its Device Registry identities, access links and optional SensorSphere links will also be removed.
+          </Text>
+          {removeDevice.isError && (
+            <Text c="red">
+              {removeDevice.error instanceof Error ? removeDevice.error.message : "Unable to delete device."}
+            </Text>
+          )}
+          <Group justify="flex-end">
+            <Button variant="light" color="gray" disabled={removeDevice.isPending} onClick={() => setDeleteDeviceTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              variant="light"
+              loading={removeDevice.isPending}
+              onClick={() => deleteDeviceTarget && removeDevice.mutate(deleteDeviceTarget.id)}
+            >
+              Delete
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal opened={deviceModalOpen} onClose={() => setDeviceModalOpen(false)} title={editingDevice ? "Edit device" : "Add device"} size="xl">
         <Stack gap="md">
