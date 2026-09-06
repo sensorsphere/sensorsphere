@@ -681,6 +681,24 @@ export type DeviceRegistryClass =
   | "INFRASTRUCTURE"
   | "OTHER";
 
+
+export interface DeviceTypeReference {
+  code: string;
+  label: string;
+  deviceClass: DeviceRegistryClass;
+  category: string;
+  enabled: boolean;
+  sortOrder: number;
+}
+
+export interface DeviceTechnologyReference {
+  code: string;
+  label: string;
+  category: string;
+  enabled: boolean;
+  sortOrder: number;
+}
+
 export type DeviceHealthStatus =
   | "ONLINE"
   | "WARNING"
@@ -721,6 +739,7 @@ export interface DeviceRegistryDevice {
   deviceClass: DeviceRegistryClass;
   deviceType: string;
   technology: string | null;
+  technologies: DeviceTechnologyReference[];
   manufacturer: string | null;
   model: string | null;
   firmwareVersion: string | null;
@@ -747,6 +766,7 @@ export interface CreateDeviceRegistryDeviceInput {
   deviceClass: DeviceRegistryClass;
   deviceType: string;
   technology?: string | null;
+  technologies?: string[];
   manufacturer?: string | null;
   model?: string | null;
   firmwareVersion?: string | null;

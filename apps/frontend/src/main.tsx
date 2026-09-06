@@ -2254,31 +2254,6 @@ function Dashboard() {
             label={
               navbarCollapsed
                 ? null
-                : "Device Registry"
-            }
-            leftSection={
-              <NavigationIcon
-                page="devices"
-              />
-            }
-            title="Device Registry"
-            aria-label="Device Registry"
-            active={
-              activePage ===
-              "devices"
-            }
-            onClick={
-              () =>
-                navigateTo(
-                  "devices"
-                )
-            }
-          />
-
-          <NavLink
-            label={
-              navbarCollapsed
-                ? null
                 : "Sensors"
             }
             leftSection={
@@ -2414,6 +2389,31 @@ function Dashboard() {
               () =>
                 navigateTo(
                   "gateway-coverage"
+                )
+            }
+          />
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Device Registry"
+            }
+            leftSection={
+              <NavigationIcon
+                page="devices"
+              />
+            }
+            title="Device Registry"
+            aria-label="Device Registry"
+            active={
+              activePage ===
+              "devices"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "devices"
                 )
             }
           />

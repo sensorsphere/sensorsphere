@@ -33,6 +33,7 @@ const deviceCreateSchema = z.object({
   deviceClass: deviceClassSchema,
   deviceType: z.string().trim().min(1).max(200),
   technology: z.string().trim().max(200).nullable().optional(),
+  technologies: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
   manufacturer: z.string().trim().max(300).nullable().optional(),
   model: z.string().trim().max(300).nullable().optional(),
   firmwareVersion: z.string().trim().max(300).nullable().optional(),
@@ -115,6 +116,7 @@ interface DeviceRow {
   device_class: string;
   device_type: string;
   technology: string | null;
+  technologies: Array<{ code: string; label: string; category: string }>;
   manufacturer: string | null;
   model: string | null;
   firmware_version: string | null;
@@ -211,6 +213,7 @@ async function listDeviceRows(pool: Pool): Promise<DeviceRow[]> {
       d.device_class,
       d.device_type,
       d.technology,
+      COALESCE(tech.technologies, '[]'::jsonb) AS technologies,
       d.manufacturer,
       d.model,
       d.firmware_version,
@@ -237,6 +240,15 @@ async function listDeviceRows(pool: Pool): Promise<DeviceRow[]> {
     LEFT JOIN locations l ON l.id = d.location_id
     LEFT JOIN device_registry_devices parent ON parent.id = d.parent_device_id
     LEFT JOIN device_health_profiles hp ON hp.id = d.health_profile_id
+    LEFT JOIN LATERAL (
+      SELECT jsonb_agg(
+        jsonb_build_object('code', t.code, 'label', t.label, 'category', t.category)
+        ORDER BY t.sort_order, LOWER(t.label), t.code
+      ) AS technologies
+      FROM device_registry_device_technologies dt
+      JOIN device_technologies t ON t.code = dt.technology_code
+      WHERE dt.device_id = d.id
+    ) tech ON TRUE
     ORDER BY LOWER(d.name), d.id
   `);
   return result.rows;
@@ -255,6 +267,7 @@ function mapDevice(row: DeviceRow, identities: IdentityRow[], links: LinkRow[]) 
     deviceClass: row.device_class,
     deviceType: row.device_type,
     technology: row.technology,
+    technologies: row.technologies,
     manufacturer: row.manufacturer,
     model: row.model,
     firmwareVersion: row.firmware_version,
@@ -287,7 +300,8 @@ async function replaceChildren(
   client: PoolClient,
   deviceId: string,
   identities: z.infer<typeof identitySchema>[] | undefined,
-  links: z.infer<typeof linkSchema>[] | undefined
+  links: z.infer<typeof linkSchema>[] | undefined,
+  technologies?: string[]
 ): Promise<void> {
   if (identities !== undefined) {
     await client.query("DELETE FROM device_registry_identities WHERE device_id = $1", [deviceId]);
@@ -296,6 +310,15 @@ async function replaceChildren(
         INSERT INTO device_registry_identities (device_id, identity_type, value, source)
         VALUES ($1, $2, $3, $4)
       `, [deviceId, identity.identityType, identity.value, identity.source ?? null]);
+    }
+  }
+  if (technologies !== undefined) {
+    await client.query("DELETE FROM device_registry_device_technologies WHERE device_id = $1", [deviceId]);
+    for (const technologyCode of [...new Set(technologies)]) {
+      await client.query(`
+        INSERT INTO device_registry_device_technologies (device_id, technology_code)
+        VALUES ($1, $2)
+      `, [deviceId, technologyCode]);
     }
   }
   if (links !== undefined) {
@@ -324,6 +347,26 @@ export async function registerDeviceRegistryFeature(
   options: DeviceRegistryFeatureOptions
 ): Promise<void> {
   const { pool } = options;
+
+  app.get("/api/v1/device-registry/reference/device-types", async (_request, reply) => {
+    const result = await pool.query(`
+      SELECT code, label, device_class AS "deviceClass", category, enabled, sort_order AS "sortOrder"
+      FROM device_types
+      WHERE enabled = TRUE
+      ORDER BY sort_order, LOWER(label), code
+    `);
+    return reply.send(result.rows);
+  });
+
+  app.get("/api/v1/device-registry/reference/technologies", async (_request, reply) => {
+    const result = await pool.query(`
+      SELECT code, label, category, enabled, sort_order AS "sortOrder"
+      FROM device_technologies
+      WHERE enabled = TRUE
+      ORDER BY sort_order, LOWER(label), code
+    `);
+    return reply.send(result.rows);
+  });
 
   app.get("/api/v1/device-registry/devices", async (_request, reply) => {
     const rows = await listDeviceRows(pool);
@@ -362,7 +405,7 @@ export async function registerDeviceRegistryFeature(
         input.batteryPercent ?? null, input.rssi ?? null
       ]);
       const id = result.rows[0]!.id;
-      await replaceChildren(client, id, input.identities ?? [], input.links ?? []);
+      await replaceChildren(client, id, input.identities ?? [], input.links ?? [], input.technologies ?? (input.technology ? [input.technology] : []));
       await client.query("COMMIT");
       return sendDevice(pool, id, reply.code(201));
     } catch (error) {
@@ -423,7 +466,7 @@ export async function registerDeviceRegistryFeature(
         Object.prototype.hasOwnProperty.call(input, "batteryPercent"), input.batteryPercent ?? null,
         Object.prototype.hasOwnProperty.call(input, "rssi"), input.rssi ?? null
       ]);
-      await replaceChildren(client, request.params.id, input.identities, input.links);
+      await replaceChildren(client, request.params.id, input.identities, input.links, input.technologies);
       await client.query("COMMIT");
       return sendDevice(pool, request.params.id, reply);
     } catch (error) {

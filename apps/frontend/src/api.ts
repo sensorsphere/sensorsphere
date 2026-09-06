@@ -48,6 +48,8 @@ import type {
   SimpleDashboardTemplateSection,
   DeviceRegistryDevice,
   DeviceHealthProfile,
+  DeviceTypeReference,
+  DeviceTechnologyReference,
   CreateDeviceRegistryDeviceInput,
   UpdateDeviceRegistryDeviceInput,
   CreateDeviceHealthProfileInput,
@@ -1459,6 +1461,14 @@ export async function reorderSimpleDashboardTemplateAssets(templateId: string, c
   }));
 }
 
+
+export async function getDeviceTypeReferences(): Promise<DeviceTypeReference[]> {
+  return readJson<DeviceTypeReference[]>(await fetch("/api/v1/device-registry/reference/device-types"));
+}
+
+export async function getDeviceTechnologyReferences(): Promise<DeviceTechnologyReference[]> {
+  return readJson<DeviceTechnologyReference[]>(await fetch("/api/v1/device-registry/reference/technologies"));
+}
 
 export async function getDeviceRegistryDevices(): Promise<DeviceRegistryDevice[]> {
   return readJson<DeviceRegistryDevice[]>(await fetch("/api/v1/device-registry/devices"));

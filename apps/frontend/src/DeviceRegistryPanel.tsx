@@ -37,6 +37,8 @@ import {
   getAssets,
   getDeviceHealthProfiles,
   getDeviceRegistryDevices,
+  getDeviceTechnologyReferences,
+  getDeviceTypeReferences,
   getGateways,
   getLocations,
   getSensors,
@@ -104,7 +106,7 @@ interface DeviceFormState {
   name: string;
   deviceClass: DeviceRegistryClass;
   deviceType: string;
-  technology: string;
+  technologies: string[];
   manufacturer: string;
   model: string;
   firmwareVersion: string;
@@ -127,7 +129,7 @@ function emptyDeviceForm(): DeviceFormState {
     name: "",
     deviceClass: "IOT",
     deviceType: "",
-    technology: "",
+    technologies: [],
     manufacturer: "",
     model: "",
     firmwareVersion: "",
@@ -151,7 +153,7 @@ function deviceToForm(device: DeviceRegistryDevice): DeviceFormState {
     name: device.name,
     deviceClass: device.deviceClass,
     deviceType: device.deviceType,
-    technology: device.technology ?? "",
+    technologies: device.technologies.map(item => item.code),
     manufacturer: device.manufacturer ?? "",
     model: device.model ?? "",
     firmwareVersion: device.firmwareVersion ?? "",
@@ -175,7 +177,8 @@ function deviceFormPayload(form: DeviceFormState): CreateDeviceRegistryDeviceInp
     name: form.name.trim(),
     deviceClass: form.deviceClass,
     deviceType: form.deviceType.trim(),
-    technology: form.technology.trim() || null,
+    technology: form.technologies[0] ?? null,
+    technologies: form.technologies,
     manufacturer: form.manufacturer.trim() || null,
     model: form.model.trim() || null,
     firmwareVersion: form.firmwareVersion.trim() || null,
@@ -250,6 +253,8 @@ export function DeviceRegistryPanel() {
   const [tab, setTab] = React.useState<string | null>("devices");
   const [search, setSearch] = React.useState("");
   const [classFilter, setClassFilter] = React.useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = React.useState<string | null>(null);
+  const [technologyFilter, setTechnologyFilter] = React.useState<string | null>(null);
   const [healthFilter, setHealthFilter] = React.useState<string | null>(null);
   const [editingDevice, setEditingDevice] = React.useState<DeviceRegistryDevice | null>(null);
   const [deviceModalOpen, setDeviceModalOpen] = React.useState(false);
@@ -261,6 +266,8 @@ export function DeviceRegistryPanel() {
 
   const devicesQuery = useQuery({ queryKey: ["device-registry", "devices"], queryFn: getDeviceRegistryDevices });
   const profilesQuery = useQuery({ queryKey: ["device-registry", "health-profiles"], queryFn: getDeviceHealthProfiles });
+  const deviceTypesQuery = useQuery({ queryKey: ["device-registry", "device-types"], queryFn: getDeviceTypeReferences });
+  const technologiesQuery = useQuery({ queryKey: ["device-registry", "technologies"], queryFn: getDeviceTechnologyReferences });
   const locationsQuery = useQuery({ queryKey: ["locations"], queryFn: getLocations });
   const sensorsQuery = useQuery({ queryKey: ["sensors"], queryFn: getSensors });
   const assetsQuery = useQuery({ queryKey: ["assets"], queryFn: getAssets });
@@ -317,13 +324,15 @@ export function DeviceRegistryPanel() {
     const matchesSearch = !needle || [
       device.name,
       device.deviceType,
-      device.technology ?? "",
+      device.technologies.map(item => item.label).join(" "),
       device.manufacturer ?? "",
       device.model ?? "",
       ...device.identities.map(identity => `${identity.identityType} ${identity.value}`)
     ].join(" ").toLowerCase().includes(needle);
     return matchesSearch &&
       (!classFilter || device.deviceClass === classFilter) &&
+      (!typeFilter || device.deviceType === typeFilter) &&
+      (!technologyFilter || device.technologies.some(item => item.code === technologyFilter)) &&
       (!healthFilter || device.health.status === healthFilter);
   });
 
@@ -391,8 +400,10 @@ export function DeviceRegistryPanel() {
 
             <Group gap="sm">
               <TextInput placeholder="Search devices..." value={search} onChange={event => setSearch(event.currentTarget.value)} style={{ flex: 1 }} />
-              <Select placeholder="All classes" clearable value={classFilter} onChange={setClassFilter} data={DEVICE_CLASSES} w={170} />
-              <Select placeholder="All health" clearable value={healthFilter} onChange={setHealthFilter} data={Object.keys(HEALTH_COLORS)} w={160} />
+              <Select placeholder="All classes" clearable value={classFilter} onChange={setClassFilter} data={DEVICE_CLASSES} w={150} />
+              <Select placeholder="All types" searchable clearable value={typeFilter} onChange={setTypeFilter} data={(deviceTypesQuery.data ?? []).map(type => ({ value: type.code, label: type.label }))} w={180} />
+              <Select placeholder="All technologies" searchable clearable value={technologyFilter} onChange={setTechnologyFilter} data={(technologiesQuery.data ?? []).map(technology => ({ value: technology.code, label: technology.label }))} w={190} />
+              <Select placeholder="All health" clearable value={healthFilter} onChange={setHealthFilter} data={Object.keys(HEALTH_COLORS)} w={150} />
             </Group>
 
             <Card withBorder padding={0} style={{ minHeight: 0, flex: "1 1 0", overflow: "hidden" }}>
@@ -423,7 +434,7 @@ export function DeviceRegistryPanel() {
                         </Table.Td>
                         <Table.Td><Badge size="sm" variant="light">{device.deviceClass}</Badge></Table.Td>
                         <Table.Td>{device.deviceType}</Table.Td>
-                        <Table.Td>{device.technology ?? "—"}</Table.Td>
+                        <Table.Td>{device.technologies.length ? device.technologies.map(item => item.label).join(", ") : "—"}</Table.Td>
                         <Table.Td>{device.location?.name ?? "—"}</Table.Td>
                         <Table.Td>{device.parentDevice?.name ?? "—"}</Table.Td>
                         <Table.Td>{device.batteryPercent == null ? "—" : `${device.batteryPercent}%`}</Table.Td>
@@ -494,9 +505,27 @@ export function DeviceRegistryPanel() {
           {error && <Text c="red" size="sm">{error}</Text>}
           <SimpleGrid cols={{ base: 1, sm: 3 }}>
             <TextInput label="Name" required value={deviceForm.name} onChange={event => setDeviceForm(current => ({ ...current, name: event.currentTarget.value }))} autoFocus />
-            <Select label="Class" required data={DEVICE_CLASSES} value={deviceForm.deviceClass} onChange={value => value && setDeviceForm(current => ({ ...current, deviceClass: value as DeviceRegistryClass }))} allowDeselect={false} />
-            <TextInput label="Type" required placeholder="router, switch, vm, sensor..." value={deviceForm.deviceType} onChange={event => setDeviceForm(current => ({ ...current, deviceType: event.currentTarget.value }))} />
-            <TextInput label="Technology" placeholder="BLE, Zigbee, ESPHome, Proxmox..." value={deviceForm.technology} onChange={event => setDeviceForm(current => ({ ...current, technology: event.currentTarget.value }))} />
+            <Select label="Class" required data={DEVICE_CLASSES} value={deviceForm.deviceClass} onChange={value => value && setDeviceForm(current => ({ ...current, deviceClass: value as DeviceRegistryClass, deviceType: "" }))} allowDeselect={false} />
+            <Select
+              label="Type"
+              required
+              searchable
+              value={deviceForm.deviceType || null}
+              onChange={value => setDeviceForm(current => ({ ...current, deviceType: value ?? "" }))}
+              data={(deviceTypesQuery.data ?? [])
+                .filter(type => type.deviceClass === deviceForm.deviceClass || type.deviceClass === "OTHER")
+                .map(type => ({ value: type.code, label: `${type.label} · ${type.category}` }))}
+              placeholder="Select a device type"
+            />
+            <MultiSelect
+              label="Technologies"
+              searchable
+              clearable
+              value={deviceForm.technologies}
+              onChange={value => setDeviceForm(current => ({ ...current, technologies: value }))}
+              data={(technologiesQuery.data ?? []).map(technology => ({ value: technology.code, label: `${technology.label} · ${technology.category}` }))}
+              placeholder="Select one or more technologies"
+            />
             <TextInput label="Manufacturer" value={deviceForm.manufacturer} onChange={event => setDeviceForm(current => ({ ...current, manufacturer: event.currentTarget.value }))} />
             <TextInput label="Model" value={deviceForm.model} onChange={event => setDeviceForm(current => ({ ...current, model: event.currentTarget.value }))} />
             <TextInput label="Firmware / version" value={deviceForm.firmwareVersion} onChange={event => setDeviceForm(current => ({ ...current, firmwareVersion: event.currentTarget.value }))} />

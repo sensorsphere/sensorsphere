@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.3.2";
+export const MODULE_VERSION = "1.4.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.4.0": {
+    releasedAt: "2026-09-05T22:40:00+02:00",
+    patch: "PR-146-device-registry-reference-data-v1.patch",
+    changes: [
+      { type: "added", description: "Device Registry exposes reference APIs for device types and technologies" },
+      { type: "added", description: "Device records support multiple reference-backed technologies while preserving foundation data" }
+    ]
+  },
   "1.3.2": {
     releasedAt: "2026-09-05T20:05:00+02:00",
     patch: "PR-145-device-registry-foundation-v3.patch",

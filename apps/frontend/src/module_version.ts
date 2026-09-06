@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.12.0";
+export const MODULE_VERSION = "1.13.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.13.0": {
+    releasedAt: "2026-09-05T22:40:00+02:00",
+    patch: "PR-146-device-registry-reference-data-v1.patch",
+    changes: [
+      { type: "changed", description: "Device Registry navigation now appears directly below Gateway Coverage" },
+      { type: "added", description: "Device types use a prefilled reference catalog grouped by device class and category" },
+      { type: "added", description: "Devices can use multiple technologies selected from a prefilled reference catalog" }
+    ]
+  },
   "1.12.0": {
     releasedAt: "2026-09-05T19:05:00+02:00",
     patch: "PR-145-device-registry-foundation-v1.patch",
