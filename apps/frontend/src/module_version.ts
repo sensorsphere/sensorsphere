@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.25.0";
+export const MODULE_VERSION = "1.25.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.25.1": {
+    releasedAt: "2026-09-08T00:15:00+02:00",
+    patch: "PR-156-monitoring-check-status-service-taxonomy-table-fix-v1.patch",
+    changes: [
+      { type: "changed", description: "Device identity PING shortcut is green when a check will be added and blue when an existing check will be edited" },
+      { type: "fixed", description: "Service Registry Taxonomy tables remain visible while keeping persistent filtering and sorting" },
+      { type: "fixed", description: "Raspberry Pi taxonomy switches existing records from the generic server icon to the dedicated raspberry-pi glyph" }
+    ]
+  },
   "1.25.0": {
     releasedAt: "2026-09-07T23:55:00+02:00",
     patch: "PR-155-monitoring-target-resolution-check-management-service-taxonomy-v1.patch",

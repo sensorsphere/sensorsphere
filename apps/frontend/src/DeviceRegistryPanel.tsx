@@ -43,6 +43,7 @@ import {
   getDeviceTypeReferences,
   getGateways,
   getLocations,
+  getMonitoringChecks,
   getSensors,
   updateDeviceHealthProfile,
   updateDeviceRegistryDevice
@@ -327,6 +328,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const sensorsQuery = useQuery({ queryKey: ["sensors"], queryFn: getSensors });
   const assetsQuery = useQuery({ queryKey: ["assets"], queryFn: getAssets });
   const gatewaysQuery = useQuery({ queryKey: ["gateways"], queryFn: getGateways });
+  const monitoringChecksQuery = useQuery({ queryKey: ["monitoring", "checks"], queryFn: getMonitoringChecks, refetchInterval: 15000 });
 
   const refresh = async () => {
     await Promise.all([
@@ -460,10 +462,25 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     setDeviceModalOpen(true);
   };
 
+  const pingTargetForIdentity = (identity: DeviceIdentity) => {
+    const key = identity.labelCode?.trim() || identity.source?.trim();
+    return key ? `{{identity:${identity.identityType.toUpperCase()}:${key}}}` : identity.value;
+  };
+
+  const pingCheckExistsForIdentity = (identity: DeviceIdentity): boolean | null => {
+    if (!editingDevice || !monitoringChecksQuery.isSuccess) return null;
+    const targetValue = pingTargetForIdentity(identity).trim().toLowerCase();
+    return (monitoringChecksQuery.data ?? []).some(check =>
+      check.deviceId === editingDevice.id &&
+      check.checkType === "PING" &&
+      check.targetMode === "CUSTOM" &&
+      (check.targetValue ?? "").trim().toLowerCase() === targetValue
+    );
+  };
+
   const openPingCheckForIdentity = (identity: DeviceIdentity) => {
     if (!editingDevice) return;
-    const key = identity.labelCode?.trim() || identity.source?.trim();
-    const targetValue = key ? `{{identity:${identity.identityType.toUpperCase()}:${key}}}` : identity.value;
+    const targetValue = pingTargetForIdentity(identity);
     setQuickCheckRequest({ requestId: Date.now(), deviceId: editingDevice.id, targetValue });
     setDeviceModalOpen(false);
     setTab("monitoring");
@@ -792,7 +809,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           </SimpleGrid>
           <Checkbox label="Enabled" checked={deviceForm.enabled} onChange={event => setDeviceForm(current => ({ ...current, enabled: event.currentTarget.checked }))} />
           <Textarea label="Description" minRows={2} value={deviceForm.description} onChange={event => setDeviceForm(current => ({ ...current, description: event.currentTarget.value }))} />
-          <DeviceIdentitiesEditor value={deviceForm.identities} onChange={identities => setDeviceForm(current => ({ ...current, identities }))} devices={devices} identityLabels={identityLabelsQuery.data ?? []} currentDeviceId={editingDevice?.id} onViewDevice={device => { setDeviceModalOpen(false); openEditDevice(device); }} onManagePingCheck={openPingCheckForIdentity} />
+          <DeviceIdentitiesEditor value={deviceForm.identities} onChange={identities => setDeviceForm(current => ({ ...current, identities }))} devices={devices} identityLabels={identityLabelsQuery.data ?? []} currentDeviceId={editingDevice?.id} onViewDevice={device => { setDeviceModalOpen(false); openEditDevice(device); }} onManagePingCheck={openPingCheckForIdentity} pingCheckExists={pingCheckExistsForIdentity} />
           <DeviceAccessLinksEditor value={deviceForm.accessLinks} onChange={accessLinks => setDeviceForm(current => ({ ...current, accessLinks }))} context={{ deviceName: deviceForm.name, macAddress: primaryIdentity(deviceForm.identities, "MAC")?.value ?? "", ipAddress: primaryIdentity(deviceForm.identities, "IP")?.value ?? "", ieeeAddress: primaryIdentity(deviceForm.identities, "IEEE")?.value ?? "", fqdn: primaryIdentity(deviceForm.identities, "FQDN")?.value ?? "", manufacturer: deviceForm.manufacturer, model: deviceForm.model, deviceClass: deviceForm.deviceClass, deviceType: deviceForm.deviceType, location: (locationsQuery.data ?? []).find(location => location.id === deviceForm.locationId)?.name ?? "", identities: deviceForm.identities }} openAccessLinkId={accessLinkToOpen} onAccessLinkOpened={() => setAccessLinkToOpen(null)} />
           <Stack gap="xs">
             <Text fw={600} size="sm">SensorSphere links</Text>

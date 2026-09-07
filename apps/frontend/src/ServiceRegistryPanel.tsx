@@ -82,7 +82,7 @@ function TaxonomyPanel(){
      </Group>
      <Button size="compact-sm" onClick={()=>open(tab==="classes"?"class":"type")}>+ Add {tab==="classes"?"class":"type"}</Button>
    </Group>
-   <div className="device-registry-table-card"><div className="device-registry-table-scroll"><Table striped highlightOnHover withTableBorder fz="sm">
+   <div style={{ overflow: "auto", width: "100%" }}><Table striped highlightOnHover withTableBorder fz="sm">
      <Table.Thead><Table.Tr>
        <SortableTableHeader active={sortKey==="label"} direction={sortDirection} onClick={()=>toggleSort("label")}>{tab==="classes"?"Class":"Type"}</SortableTableHeader>
        {tab==="types"&&<SortableTableHeader active={sortKey==="class"} direction={sortDirection} onClick={()=>toggleSort("class")}>Class</SortableTableHeader>}
@@ -101,7 +101,7 @@ function TaxonomyPanel(){
        <Table.Td>{item.sortOrder??100}</Table.Td>
        <Table.Td><Group gap={4} justify="flex-end"><EditActionIcon onClick={()=>open(tab==="classes"?"class":"type",item)}/><DeleteActionIcon onClick={()=>setDeleteTarget({kind:tab==="classes"?"class":"type",code:item.code,label:item.label})}/></Group></Table.Td>
      </Table.Tr>)}</Table.Tbody>
-   </Table></div></div>
+   </Table></div>
    <Modal opened={opened} onClose={()=>setOpened(false)} title={`${original?"Edit":"Add"} ${kind}`}><Stack><TextInput label="Code" required disabled={!!original} autoFocus={!original} value={code} onChange={e=>setCode(e.currentTarget.value)}/><TextInput label="Label" required autoFocus={!!original} value={label} onChange={e=>setLabel(e.currentTarget.value)}/>{kind==="type"&&<Select label="Class" required data={[...(classes.data??[])].sort((a,b)=>a.label.localeCompare(b.label)).map(c=>({value:c.code,label:c.label}))} value={parent} onChange={v=>setParent(v??"CLOUD")}/>}<Textarea label="Description" value={description} onChange={e=>setDescription(e.currentTarget.value)}/><Group grow><Select label="Icon" searchable data={DEVICE_ICON_OPTIONS} value={icon} leftSection={<DeviceGlyph icon={icon} color={color}/>} renderOption={({option})=><Group gap="xs"><DeviceGlyph icon={option.value} color={color}/><Text>{option.label}</Text></Group>} onChange={v=>setIcon(v??"cloud")}/><Select label="Color" data={["blue","cyan","grape","green","indigo","orange","red","teal","violet","yellow","gray"]} value={color} onChange={v=>setColor(v??"blue")}/><NumberInput label="Sort order" value={sortOrder} onChange={setSortOrder}/></Group><Checkbox label="Enabled" checked={enabled} onChange={e=>setEnabled(e.currentTarget.checked)}/><Group justify="flex-end"><Button variant="default" onClick={()=>setOpened(false)}>Cancel</Button><Button loading={save.isPending} disabled={!code.trim()||!label.trim()} onClick={()=>save.mutate()}>Save</Button></Group></Stack></Modal>
    <Modal opened={!!deleteTarget} onClose={()=>setDeleteTarget(null)} title={`Delete ${deleteTarget?.kind??"item"}?`} centered><Stack><Text>Delete <strong>{deleteTarget?.label}</strong>? This action cannot be undone.</Text><Group justify="flex-end"><Button variant="default" onClick={()=>setDeleteTarget(null)}>Cancel</Button><Button color="red" loading={remove.isPending} onClick={()=>remove.mutate()}>Delete</Button></Group></Stack></Modal>
  </Stack>;

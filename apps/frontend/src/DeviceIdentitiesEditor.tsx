@@ -42,7 +42,8 @@ export function DeviceIdentitiesEditor({
   identityLabels,
   currentDeviceId,
   onViewDevice,
-  onManagePingCheck
+  onManagePingCheck,
+  pingCheckExists
 }: {
   value: DeviceIdentity[];
   onChange: (value: DeviceIdentity[]) => void;
@@ -51,6 +52,7 @@ export function DeviceIdentitiesEditor({
   currentDeviceId?: string;
   onViewDevice?: (device: DeviceRegistryDevice) => void;
   onManagePingCheck?: (identity: DeviceIdentity) => void;
+  pingCheckExists?: (identity: DeviceIdentity) => boolean | null;
 }) {
   const [opened, setOpened] = React.useState(false);
   const [editIndex, setEditIndex] = React.useState<number | null>(null);
@@ -109,7 +111,12 @@ export function DeviceIdentitiesEditor({
         <Table.Td>{item.label ?? identityLabels.find(label => label.code === item.labelCode)?.label ?? "—"}</Table.Td>
         <Table.Td><Text ff="monospace" size="sm">{item.value}</Text></Table.Td>
         <Table.Td>{item.isPrimary ? <Badge color="blue" variant="light">PRIMARY</Badge> : "—"}</Table.Td>
-        <Table.Td>{currentDeviceId && item.identityType.toUpperCase() === "IP" && onManagePingCheck ? <Tooltip label="Manage PING check"><ActionIcon size="sm" variant="light" color="blue" aria-label="Manage PING check" onClick={() => onManagePingCheck(item)}><PingCheckIcon /></ActionIcon></Tooltip> : "—"}</Table.Td><Table.Td><Group gap={4}><EditActionIcon onClick={() => openEdit(index)} /><DeleteActionIcon onClick={() => onChange(value.filter((_, i) => i !== index))} /></Group></Table.Td>
+        <Table.Td>{currentDeviceId && item.identityType.toUpperCase() === "IP" && onManagePingCheck ? (() => {
+          const exists = pingCheckExists?.(item) ?? null;
+          const color = exists === null ? "gray" : exists ? "blue" : "green";
+          const label = exists === null ? "Manage PING check" : exists ? "Edit PING check" : "Add PING check";
+          return <Tooltip label={label}><ActionIcon size="sm" variant="light" color={color} aria-label={label} onClick={() => onManagePingCheck(item)}><PingCheckIcon /></ActionIcon></Tooltip>;
+        })() : "—"}</Table.Td><Table.Td><Group gap={4}><EditActionIcon onClick={() => openEdit(index)} /><DeleteActionIcon onClick={() => onChange(value.filter((_, i) => i !== index))} /></Group></Table.Td>
       </Table.Tr>)}</Table.Tbody>
     </Table> : <Text size="sm" c="dimmed">No identity configured.</Text>}
 
