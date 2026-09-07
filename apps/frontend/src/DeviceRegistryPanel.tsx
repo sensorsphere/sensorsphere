@@ -68,7 +68,8 @@ import { LocationIcon, getLocationIconName } from "./LocationIcon";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import { usePersistentState } from "./preferences/usePersistentState";
 import { ResetFiltersAction } from "./ResetFiltersAction";
-import { MonitoringPanel } from "./MonitoringPanel";
+import { activeFilterStyles } from "./ActiveFilterStyles";
+import { MonitoringPanel, type MonitoringQuickCheckRequest } from "./MonitoringPanel";
 
 
 type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "battery" | "lastSeen" | "health";
@@ -314,6 +315,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const [profileSortDirection, setProfileSortDirection] = usePersistentState<SortDirection>("device-registry.health-profiles.sort.direction", "asc");
   const [error, setError] = React.useState<string | null>(null);
   const [accessLinkToOpen, setAccessLinkToOpen] = React.useState<string | null>(null);
+  const [quickCheckRequest, setQuickCheckRequest] = React.useState<MonitoringQuickCheckRequest | null>(null);
 
   const devicesQuery = useQuery({ queryKey: ["device-registry", "devices"], queryFn: getDeviceRegistryDevices });
   const deviceClassesQuery = useQuery({ queryKey: ["device-registry", "classes"], queryFn: getDeviceClassReferences });
@@ -458,6 +460,21 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     setDeviceModalOpen(true);
   };
 
+  const openPingCheckForIdentity = (identity: DeviceIdentity) => {
+    if (!editingDevice) return;
+    const key = identity.labelCode?.trim() || identity.source?.trim();
+    const targetValue = key ? `{{identity:${identity.identityType.toUpperCase()}:${key}}}` : identity.value;
+    setQuickCheckRequest({ requestId: Date.now(), deviceId: editingDevice.id, targetValue });
+    setDeviceModalOpen(false);
+    setTab("monitoring");
+  };
+
+  const returnFromQuickCheck = () => {
+    setQuickCheckRequest(null);
+    setTab("devices");
+    if (editingDevice) setDeviceModalOpen(true);
+  };
+
   const openCopyDevice = (device: DeviceRegistryDevice) => {
     setEditingDevice(null);
     setDeviceForm(copyDeviceToForm(device));
@@ -555,12 +572,12 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                   setHealthFilter(null);
                 }}
               />
-              <TextInput placeholder="Name" value={nameFilter} onChange={event => setNameFilter(event.currentTarget.value)} style={{ flex: 1, minWidth: 180 }} />
-              <TextInput placeholder="Address" value={addressFilter} onChange={event => setAddressFilter(event.currentTarget.value)} style={{ flex: 1, minWidth: 180 }} />
-              <Select placeholder="All classes" clearable value={classFilter} onChange={setClassFilter} data={(deviceClassesQuery.data ?? []).map(item => ({ value: item.code, label: item.label }))} leftSection={classFilter ? <DeviceGlyph icon={(deviceClassesQuery.data ?? []).find(item => item.code === classFilter)?.icon ?? "device"} color={(deviceClassesQuery.data ?? []).find(item => item.code === classFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (deviceClassesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={180} />
-              <Select placeholder="All types" searchable clearable value={typeFilter} onChange={setTypeFilter} data={(deviceTypesQuery.data ?? []).map(type => ({ value: type.code, label: type.label }))} leftSection={typeFilter ? <DeviceGlyph icon={(deviceTypesQuery.data ?? []).find(item => item.code === typeFilter)?.icon ?? "device"} color={(deviceTypesQuery.data ?? []).find(item => item.code === typeFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (deviceTypesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={190} />
-              <Select placeholder="All technologies" searchable clearable value={technologyFilter} onChange={setTechnologyFilter} data={(technologiesQuery.data ?? []).map(technology => ({ value: technology.code, label: technology.label }))} leftSection={technologyFilter ? <DeviceGlyph icon={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.icon ?? "link"} color={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (technologiesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={205} />
-              <Select placeholder="All health" clearable value={healthFilter} onChange={setHealthFilter} data={Object.keys(HEALTH_COLORS)} w={150} />
+              <TextInput placeholder="Name" value={nameFilter} onChange={event => setNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(nameFilter.trim()))} style={{ flex: 1, minWidth: 180 }} />
+              <TextInput placeholder="Address" value={addressFilter} onChange={event => setAddressFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(addressFilter.trim()))} style={{ flex: 1, minWidth: 180 }} />
+              <Select placeholder="All classes" clearable value={classFilter} onChange={setClassFilter} styles={activeFilterStyles(Boolean(classFilter))} data={(deviceClassesQuery.data ?? []).map(item => ({ value: item.code, label: item.label }))} leftSection={classFilter ? <DeviceGlyph icon={(deviceClassesQuery.data ?? []).find(item => item.code === classFilter)?.icon ?? "device"} color={(deviceClassesQuery.data ?? []).find(item => item.code === classFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (deviceClassesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={180} />
+              <Select placeholder="All types" searchable clearable value={typeFilter} onChange={setTypeFilter} styles={activeFilterStyles(Boolean(typeFilter))} data={(deviceTypesQuery.data ?? []).map(type => ({ value: type.code, label: type.label }))} leftSection={typeFilter ? <DeviceGlyph icon={(deviceTypesQuery.data ?? []).find(item => item.code === typeFilter)?.icon ?? "device"} color={(deviceTypesQuery.data ?? []).find(item => item.code === typeFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (deviceTypesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={190} />
+              <Select placeholder="All technologies" searchable clearable value={technologyFilter} onChange={setTechnologyFilter} styles={activeFilterStyles(Boolean(technologyFilter))} data={(technologiesQuery.data ?? []).map(technology => ({ value: technology.code, label: technology.label }))} leftSection={technologyFilter ? <DeviceGlyph icon={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.icon ?? "link"} color={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (technologiesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={205} />
+              <Select placeholder="All health" clearable value={healthFilter} onChange={setHealthFilter} styles={activeFilterStyles(Boolean(healthFilter))} data={Object.keys(HEALTH_COLORS)} w={150} />
             </Group>
 
             <Card withBorder padding={0} className="device-registry-table-card">
@@ -644,7 +661,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         </Tabs.Panel>
 
         <Tabs.Panel value="monitoring" pt="md">
-          <MonitoringPanel />
+          <MonitoringPanel quickCheckRequest={quickCheckRequest} onQuickCheckFinished={returnFromQuickCheck} />
         </Tabs.Panel>
 
         <Tabs.Panel value="discovery" pt="md">
@@ -661,7 +678,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
             <Group justify="space-between" wrap="wrap">
               <Group gap="xs">
                 <ResetFiltersAction active={Boolean(profileFilter)} onReset={() => setProfileFilter("")} />
-                <TextInput size="xs" placeholder="Filter name / description" value={profileFilter} onChange={event => setProfileFilter(event.currentTarget.value)} w={240} />
+                <TextInput size="xs" placeholder="Filter name / description" value={profileFilter} onChange={event => setProfileFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(profileFilter.trim()))} w={240} />
                 <Text size="xs" c="dimmed">{filteredProfiles.length}/{profiles.length}</Text>
               </Group>
               <Button size="compact-sm" onClick={openCreateProfile}>+ Add health profile</Button>
@@ -775,7 +792,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           </SimpleGrid>
           <Checkbox label="Enabled" checked={deviceForm.enabled} onChange={event => setDeviceForm(current => ({ ...current, enabled: event.currentTarget.checked }))} />
           <Textarea label="Description" minRows={2} value={deviceForm.description} onChange={event => setDeviceForm(current => ({ ...current, description: event.currentTarget.value }))} />
-          <DeviceIdentitiesEditor value={deviceForm.identities} onChange={identities => setDeviceForm(current => ({ ...current, identities }))} devices={devices} identityLabels={identityLabelsQuery.data ?? []} currentDeviceId={editingDevice?.id} onViewDevice={device => { setDeviceModalOpen(false); openEditDevice(device); }} />
+          <DeviceIdentitiesEditor value={deviceForm.identities} onChange={identities => setDeviceForm(current => ({ ...current, identities }))} devices={devices} identityLabels={identityLabelsQuery.data ?? []} currentDeviceId={editingDevice?.id} onViewDevice={device => { setDeviceModalOpen(false); openEditDevice(device); }} onAddPingCheck={openPingCheckForIdentity} />
           <DeviceAccessLinksEditor value={deviceForm.accessLinks} onChange={accessLinks => setDeviceForm(current => ({ ...current, accessLinks }))} context={{ deviceName: deviceForm.name, macAddress: primaryIdentity(deviceForm.identities, "MAC")?.value ?? "", ipAddress: primaryIdentity(deviceForm.identities, "IP")?.value ?? "", ieeeAddress: primaryIdentity(deviceForm.identities, "IEEE")?.value ?? "", fqdn: primaryIdentity(deviceForm.identities, "FQDN")?.value ?? "", manufacturer: deviceForm.manufacturer, model: deviceForm.model, deviceClass: deviceForm.deviceClass, deviceType: deviceForm.deviceType, location: (locationsQuery.data ?? []).find(location => location.id === deviceForm.locationId)?.name ?? "", identities: deviceForm.identities }} openAccessLinkId={accessLinkToOpen} onAccessLinkOpened={() => setAccessLinkToOpen(null)} />
           <Stack gap="xs">
             <Text fw={600} size="sm">SensorSphere links</Text>

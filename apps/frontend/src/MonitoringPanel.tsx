@@ -50,6 +50,7 @@ import { DeviceGlyph } from "./DeviceGlyph";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import { usePersistentState } from "./preferences/usePersistentState";
 import { ResetFiltersAction } from "./ResetFiltersAction";
+import { activeFilterStyles } from "./ActiveFilterStyles";
 
 type AgentSortKey = "name" | "status" | "host" | "version" | "lastSeen" | "labels" | "agentLabels";
 type CheckSortKey = "device" | "class" | "type" | "technology" | "check" | "target" | "agents" | "mode" | "status";
@@ -140,6 +141,19 @@ type CheckTargetSelectionMode = MonitoringTargetMode | "EXISTING_IDENTITY";
 
 const identityTargetPattern = /^\{\{identity:([^:}]+):([^}]+)\}\}$/i;
 
+function resolveIdentityTarget(target: string | null | undefined, device: { identities: DeviceIdentity[] } | undefined): string | null {
+  if (!target || !device) return null;
+  const match = identityTargetPattern.exec(target.trim());
+  if (!match) return null;
+  const identityType = match[1]!.toUpperCase();
+  const identityKey = match[2]!.toLowerCase();
+  const identity = device.identities.find(item =>
+    item.identityType.toUpperCase() === identityType &&
+    [item.labelCode, item.source, item.label].some(value => value?.trim().toLowerCase() === identityKey)
+  );
+  return identity?.value ?? null;
+}
+
 interface CheckFormState {
   deviceId: string | null;
   name: string;
@@ -221,7 +235,19 @@ function checkPayload(form: CheckFormState): CreateMonitoringCheckInput {
   };
 }
 
-export function MonitoringPanel() {
+export interface MonitoringQuickCheckRequest {
+  requestId: number;
+  deviceId: string;
+  targetValue: string;
+}
+
+export function MonitoringPanel({
+  quickCheckRequest,
+  onQuickCheckFinished
+}: {
+  quickCheckRequest?: MonitoringQuickCheckRequest | null;
+  onQuickCheckFinished?: () => void;
+} = {}) {
   const queryClient = useQueryClient();
   const agentsQuery = useQuery({ queryKey: ["monitoring", "agents"], queryFn: getMonitoringAgents, refetchInterval: 15000 });
   const checksQuery = useQuery({ queryKey: ["monitoring", "checks"], queryFn: getMonitoringChecks, refetchInterval: 15000 });
@@ -334,11 +360,13 @@ export function MonitoringPanel() {
       return editingCheck ? updateMonitoringCheck(editingCheck.id, payload) : createMonitoringCheck(payload);
     },
     onSuccess: async () => {
+      const wasQuickCheck = Boolean(quickCheckRequest && !editingCheck);
       setCheckModalOpen(false);
       setEditingCheck(null);
       setCheckError(null);
       setDeviceDropdownOpened(false);
       await refresh();
+      if (wasQuickCheck) onQuickCheckFinished?.();
     },
     onError: cause => setCheckError(cause instanceof Error ? cause.message : "Unable to save monitoring check")
   });
@@ -434,6 +462,22 @@ export function MonitoringPanel() {
     setDeviceDropdownOpened(false);
     setCheckModalOpen(true);
   };
+  React.useEffect(() => {
+    if (!quickCheckRequest) return;
+    setEditingCheck(null);
+    setCheckForm({ ...emptyCheckForm(), deviceId: quickCheckRequest.deviceId, name: "Ping", checkType: "PING", targetMode: "EXISTING_IDENTITY", targetValue: quickCheckRequest.targetValue });
+    setCheckError(null);
+    setDeviceDropdownOpened(false);
+    setCheckModalOpen(true);
+  }, [quickCheckRequest?.requestId]);
+
+  const closeCheckModal = () => {
+    const wasQuickCheck = Boolean(quickCheckRequest && !editingCheck);
+    setCheckModalOpen(false);
+    setCheckError(null);
+    setDeviceDropdownOpened(false);
+    if (wasQuickCheck) onQuickCheckFinished?.();
+  };
   const openEditCheck = (check: MonitoringCheck) => {
     setEditingCheck(check);
     setCheckForm(checkToForm(check));
@@ -481,10 +525,10 @@ export function MonitoringPanel() {
         </Group>
         <Group gap="xs" mb="sm" wrap="wrap">
           <ResetFiltersAction active={agentFiltersActive} onReset={() => { setAgentNameFilter(""); setAgentStatusFilter(null); setAgentHostFilter(""); setAgentLabelsFilter(""); }} />
-          <TextInput size="xs" placeholder="Filter name" value={agentNameFilter} onChange={event => setAgentNameFilter(event.currentTarget.value)} w={180} />
-          <Select size="xs" clearable placeholder="Status" data={["ONLINE","OFFLINE","DISABLED"]} value={agentStatusFilter} onChange={setAgentStatusFilter} w={140} />
-          <TextInput size="xs" placeholder="Host / IP" value={agentHostFilter} onChange={event => setAgentHostFilter(event.currentTarget.value)} w={180} />
-          <TextInput size="xs" placeholder="Labels / agent labels" value={agentLabelsFilter} onChange={event => setAgentLabelsFilter(event.currentTarget.value)} w={220} />
+          <TextInput size="xs" placeholder="Filter name" value={agentNameFilter} onChange={event => setAgentNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentNameFilter.trim()))} w={180} />
+          <Select size="xs" clearable placeholder="Status" data={["ONLINE","OFFLINE","DISABLED"]} value={agentStatusFilter} onChange={setAgentStatusFilter} styles={activeFilterStyles(Boolean(agentStatusFilter))} w={140} />
+          <TextInput size="xs" placeholder="Host / IP" value={agentHostFilter} onChange={event => setAgentHostFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentHostFilter.trim()))} w={180} />
+          <TextInput size="xs" placeholder="Labels / agent labels" value={agentLabelsFilter} onChange={event => setAgentLabelsFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentLabelsFilter.trim()))} w={220} />
           <Text size="xs" c="dimmed">{filteredAgents.length}/{agents.length}</Text>
         </Group>
         <Table striped highlightOnHover>
@@ -523,13 +567,13 @@ export function MonitoringPanel() {
         </Group>
         <Group gap="xs" mb="sm" wrap="wrap">
           <ResetFiltersAction active={checkFiltersActive} onReset={() => { setCheckDeviceFilter(""); setCheckClassFilter(null); setCheckTypeFilter(null); setCheckTechnologyFilter(null); setCheckNameFilter(""); setCheckAgentFilter(""); setCheckStatusFilter(null); }} />
-          <TextInput size="xs" placeholder="Device name" value={checkDeviceFilter} onChange={event => setCheckDeviceFilter(event.currentTarget.value)} w={170} />
-          <Select size="xs" clearable searchable placeholder="Class" data={[...new Map(devices.map(device => [device.deviceClass, { value: device.deviceClass, label: device.deviceClassInfo.label }])).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkClassFilter} onChange={setCheckClassFilter} w={150} />
-          <Select size="xs" clearable searchable placeholder="Type" data={[...new Map(devices.map(device => [device.deviceType, { value: device.deviceType, label: device.deviceTypeInfo.label }])).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkTypeFilter} onChange={setCheckTypeFilter} w={160} />
-          <Select size="xs" clearable searchable placeholder="Technology" data={[...new Map(devices.flatMap(device => device.technologies.map(item => [item.code, { value:item.code, label:item.label }] as const))).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkTechnologyFilter} onChange={setCheckTechnologyFilter} w={170} />
-          <TextInput size="xs" placeholder="Check / type" value={checkNameFilter} onChange={event => setCheckNameFilter(event.currentTarget.value)} w={160} />
-          <TextInput size="xs" placeholder="Agent" value={checkAgentFilter} onChange={event => setCheckAgentFilter(event.currentTarget.value)} w={150} />
-          <Select size="xs" clearable placeholder="Status" data={["UP","DOWN","UNKNOWN"]} value={checkStatusFilter} onChange={setCheckStatusFilter} w={135} />
+          <TextInput size="xs" placeholder="Device name" value={checkDeviceFilter} onChange={event => setCheckDeviceFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkDeviceFilter.trim()))} w={170} />
+          <Select size="xs" clearable searchable placeholder="Class" data={[...new Map(devices.map(device => [device.deviceClass, { value: device.deviceClass, label: device.deviceClassInfo.label }])).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkClassFilter} onChange={setCheckClassFilter} styles={activeFilterStyles(Boolean(checkClassFilter))} w={150} />
+          <Select size="xs" clearable searchable placeholder="Type" data={[...new Map(devices.map(device => [device.deviceType, { value: device.deviceType, label: device.deviceTypeInfo.label }])).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkTypeFilter} onChange={setCheckTypeFilter} styles={activeFilterStyles(Boolean(checkTypeFilter))} w={160} />
+          <Select size="xs" clearable searchable placeholder="Technology" data={[...new Map(devices.flatMap(device => device.technologies.map(item => [item.code, { value:item.code, label:item.label }] as const))).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkTechnologyFilter} onChange={setCheckTechnologyFilter} styles={activeFilterStyles(Boolean(checkTechnologyFilter))} w={170} />
+          <TextInput size="xs" placeholder="Check / type" value={checkNameFilter} onChange={event => setCheckNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkNameFilter.trim()))} w={160} />
+          <TextInput size="xs" placeholder="Agent" value={checkAgentFilter} onChange={event => setCheckAgentFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkAgentFilter.trim()))} w={150} />
+          <Select size="xs" clearable placeholder="Status" data={["UP","DOWN","UNKNOWN"]} value={checkStatusFilter} onChange={setCheckStatusFilter} styles={activeFilterStyles(Boolean(checkStatusFilter))} w={135} />
           <Text size="xs" c="dimmed">{filteredChecks.length}/{checks.length}</Text>
         </Group>
         <Table striped highlightOnHover>
@@ -556,7 +600,10 @@ export function MonitoringPanel() {
                 <Table.Td>{device ? <Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceTypeInfo.icon} color={device.deviceTypeInfo.color} /><Text size="sm">{device.deviceTypeInfo.label}</Text></Group> : "—"}</Table.Td>
                 <Table.Td>{device && device.technologies.length > 0 ? <Group gap={6} wrap="wrap">{device.technologies.map(item => <Group key={item.code} gap={4} wrap="nowrap"><DeviceGlyph icon={item.icon} color={item.color} /><Text size="xs">{item.label}</Text></Group>)}</Group> : "—"}</Table.Td>
                 <Table.Td><Text size="sm">{check.name}</Text><Text size="xs" c="dimmed">{check.checkType} · {check.intervalSeconds}s</Text></Table.Td>
-                <Table.Td><Code>{target ?? "—"}{check.port ? `:${check.port}` : ""}</Code></Table.Td>
+                <Table.Td>{(() => {
+                  const resolvedTarget = check.targetMode === "CUSTOM" ? resolveIdentityTarget(check.targetValue, device) : null;
+                  return <Stack gap={2}><Code>{target ?? "—"}{check.port ? `:${check.port}` : ""}</Code>{resolvedTarget && <Text size="xs" c="dimmed">→ {resolvedTarget}{check.port ? `:${check.port}` : ""}</Text>}</Stack>;
+                })()}</Table.Td>
                 <Table.Td><Text size="xs">{check.assignments.map(item => item.agentName ?? item.agentId).join(" → ")}</Text></Table.Td>
                 <Table.Td><Badge size="sm" variant="light">{check.executionMode}</Badge></Table.Td>
                 <Table.Td><Badge size="sm" color={STATUS_COLORS[status]}>{status}</Badge></Table.Td>
@@ -616,7 +663,7 @@ export function MonitoringPanel() {
         </Stack>
       </Modal>
 
-      <Modal opened={checkModalOpen} onClose={() => { setCheckModalOpen(false); setCheckError(null); setDeviceDropdownOpened(false); }} title={editingCheck ? "Edit monitoring check" : "Add monitoring check"} size="lg">
+      <Modal opened={checkModalOpen} onClose={closeCheckModal} title={editingCheck ? "Edit monitoring check" : "Add monitoring check"} size="lg">
         <Stack>
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
             <Select
@@ -653,7 +700,7 @@ export function MonitoringPanel() {
           <MultiSelect label="Monitoring agents" description={checkForm.executionMode === "FAILOVER" ? "Selection order defines failover priority." : "All selected agents execute this check."} required searchable data={agents.filter(agent => agent.enabled).map(agent => ({ value: agent.id, label: agent.name })).sort((a, b) => a.label.localeCompare(b.label))} value={checkForm.agentIds} onChange={value => setCheckForm(current => ({ ...current, agentIds: value }))} />
           <Checkbox label="Enabled" checked={checkForm.enabled} onChange={event => { const checked = event.currentTarget.checked; setCheckForm(current => ({ ...current, enabled: checked })); }} />
           {checkError && <Text c="red" size="sm">{checkError}</Text>}
-          <Group justify="flex-end"><Button variant="light" color="gray" onClick={() => { setCheckModalOpen(false); setCheckError(null); setDeviceDropdownOpened(false); }}>Cancel</Button><Button loading={saveCheck.isPending} onClick={() => saveCheck.mutate()}>Save</Button></Group>
+          <Group justify="flex-end"><Button variant="light" color="gray" onClick={closeCheckModal}>Cancel</Button><Button loading={saveCheck.isPending} onClick={() => saveCheck.mutate()}>Save</Button></Group>
         </Stack>
       </Modal>
 

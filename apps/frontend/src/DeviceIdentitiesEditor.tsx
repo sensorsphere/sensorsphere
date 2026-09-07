@@ -31,13 +31,18 @@ export function primaryIdentity(identities: DeviceIdentity[], type: string): Dev
     ?? identities.find(item => item.identityType === type);
 }
 
+function PingCheckIcon() {
+  return <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.5 4.5a10.6 10.6 0 0 0 0 15M19.5 4.5a10.6 10.6 0 0 1 0 15"/></svg>;
+}
+
 export function DeviceIdentitiesEditor({
   value,
   onChange,
   devices,
   identityLabels,
   currentDeviceId,
-  onViewDevice
+  onViewDevice,
+  onAddPingCheck
 }: {
   value: DeviceIdentity[];
   onChange: (value: DeviceIdentity[]) => void;
@@ -45,6 +50,7 @@ export function DeviceIdentitiesEditor({
   identityLabels: DeviceIdentityLabelReference[];
   currentDeviceId?: string;
   onViewDevice?: (device: DeviceRegistryDevice) => void;
+  onAddPingCheck?: (identity: DeviceIdentity) => void;
 }) {
   const [opened, setOpened] = React.useState(false);
   const [editIndex, setEditIndex] = React.useState<number | null>(null);
@@ -103,7 +109,7 @@ export function DeviceIdentitiesEditor({
         <Table.Td>{item.label ?? identityLabels.find(label => label.code === item.labelCode)?.label ?? "—"}</Table.Td>
         <Table.Td><Text ff="monospace" size="sm">{item.value}</Text></Table.Td>
         <Table.Td>{item.isPrimary ? <Badge color="blue" variant="light">PRIMARY</Badge> : "—"}</Table.Td>
-        <Table.Td><Group gap={4}><EditActionIcon onClick={() => openEdit(index)} /><DeleteActionIcon onClick={() => onChange(value.filter((_, i) => i !== index))} /></Group></Table.Td>
+        <Table.Td><Group gap={4}>{currentDeviceId && item.identityType.toUpperCase() === "IP" && onAddPingCheck && <Tooltip label="Add PING check"><ActionIcon size="sm" variant="light" color="blue" aria-label="Add PING check" onClick={() => onAddPingCheck(item)}><PingCheckIcon /></ActionIcon></Tooltip>}<EditActionIcon onClick={() => openEdit(index)} /><DeleteActionIcon onClick={() => onChange(value.filter((_, i) => i !== index))} /></Group></Table.Td>
       </Table.Tr>)}</Table.Tbody>
     </Table> : <Text size="sm" c="dimmed">No identity configured.</Text>}
 

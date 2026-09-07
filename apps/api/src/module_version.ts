@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.11.1";
+export const MODULE_VERSION = "1.11.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.11.2": {
+    releasedAt: "2026-09-07T23:30:00+02:00",
+    patch: "PR-154-device-identity-ping-check-filter-emphasis-raspberry-pi-v1.patch",
+    changes: [
+      { type: "added", description: "Add Raspberry Pi to Device Registry Compute taxonomy as a single-board-computer type" }
+    ]
+  },
   "1.11.1": {
     releasedAt: "2026-09-07T23:15:00+02:00",
     patch: "PR-153-device-registry-table-filter-sort-monitoring-migration-v1.patch",
