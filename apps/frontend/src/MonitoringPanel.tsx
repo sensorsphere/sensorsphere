@@ -43,7 +43,8 @@ import type {
   MonitoringCheckType,
   MonitoringExecutionMode,
   MonitoringTargetMode,
-  DeviceIdentity
+  DeviceIdentity,
+  DeviceRegistryDevice
 } from "./types";
 import { EditActionIcon, DeleteActionIcon } from "./TableActionIcons";
 import { DeviceGlyph } from "./DeviceGlyph";
@@ -152,6 +153,19 @@ function resolveIdentityTarget(target: string | null | undefined, device: { iden
     [item.labelCode, item.source, item.label].some(value => value?.trim().toLowerCase() === identityKey)
   );
   return identity?.value ?? null;
+}
+
+function resolveCheckTarget(check: MonitoringCheck, device: DeviceRegistryDevice | undefined): string | null {
+  if (!device) return null;
+  if (check.targetMode === "CUSTOM") return resolveIdentityTarget(check.targetValue, device);
+  const primary = (type: string) => device.identities.find(item => item.identityType.toUpperCase() === type && item.isPrimary)
+    ?? device.identities.find(item => item.identityType.toUpperCase() === type);
+  const primaryIp = primary("IP")?.value ?? device.ipAddress ?? null;
+  const primaryFqdn = primary("FQDN")?.value ?? primary("HOSTNAME")?.value ?? device.fqdn ?? null;
+  if (check.targetMode === "PRIMARY_IP") return primaryIp;
+  if (check.targetMode === "PRIMARY_FQDN") return primaryFqdn;
+  if (check.targetMode === "PRIMARY_ADDRESS") return primaryIp ?? primaryFqdn;
+  return null;
 }
 
 interface CheckFormState {
@@ -360,7 +374,7 @@ export function MonitoringPanel({
       return editingCheck ? updateMonitoringCheck(editingCheck.id, payload) : createMonitoringCheck(payload);
     },
     onSuccess: async () => {
-      const wasQuickCheck = Boolean(quickCheckRequest && !editingCheck);
+      const wasQuickCheck = Boolean(quickCheckRequest);
       setCheckModalOpen(false);
       setEditingCheck(null);
       setCheckError(null);
@@ -463,16 +477,24 @@ export function MonitoringPanel({
     setCheckModalOpen(true);
   };
   React.useEffect(() => {
-    if (!quickCheckRequest) return;
-    setEditingCheck(null);
-    setCheckForm({ ...emptyCheckForm(), deviceId: quickCheckRequest.deviceId, name: "Ping", checkType: "PING", targetMode: "EXISTING_IDENTITY", targetValue: quickCheckRequest.targetValue });
+    if (!quickCheckRequest || !checksQuery.isSuccess) return;
+    const existing = checks.find(check =>
+      check.deviceId === quickCheckRequest.deviceId &&
+      check.checkType === "PING" &&
+      check.targetMode === "CUSTOM" &&
+      (check.targetValue ?? "").trim().toLowerCase() === quickCheckRequest.targetValue.trim().toLowerCase()
+    );
+    setEditingCheck(existing ?? null);
+    setCheckForm(existing
+      ? checkToForm(existing)
+      : { ...emptyCheckForm(), deviceId: quickCheckRequest.deviceId, name: "Ping", checkType: "PING", targetMode: "EXISTING_IDENTITY", targetValue: quickCheckRequest.targetValue });
     setCheckError(null);
     setDeviceDropdownOpened(false);
     setCheckModalOpen(true);
-  }, [quickCheckRequest?.requestId]);
+  }, [quickCheckRequest?.requestId, checksQuery.isSuccess]);
 
   const closeCheckModal = () => {
-    const wasQuickCheck = Boolean(quickCheckRequest && !editingCheck);
+    const wasQuickCheck = Boolean(quickCheckRequest);
     setCheckModalOpen(false);
     setCheckError(null);
     setDeviceDropdownOpened(false);
@@ -601,7 +623,7 @@ export function MonitoringPanel({
                 <Table.Td>{device && device.technologies.length > 0 ? <Group gap={6} wrap="wrap">{device.technologies.map(item => <Group key={item.code} gap={4} wrap="nowrap"><DeviceGlyph icon={item.icon} color={item.color} /><Text size="xs">{item.label}</Text></Group>)}</Group> : "—"}</Table.Td>
                 <Table.Td><Text size="sm">{check.name}</Text><Text size="xs" c="dimmed">{check.checkType} · {check.intervalSeconds}s</Text></Table.Td>
                 <Table.Td>{(() => {
-                  const resolvedTarget = check.targetMode === "CUSTOM" ? resolveIdentityTarget(check.targetValue, device) : null;
+                  const resolvedTarget = resolveCheckTarget(check, device);
                   return <Stack gap={2}><Code>{target ?? "—"}{check.port ? `:${check.port}` : ""}</Code>{resolvedTarget && <Text size="xs" c="dimmed">→ {resolvedTarget}{check.port ? `:${check.port}` : ""}</Text>}</Stack>;
                 })()}</Table.Td>
                 <Table.Td><Text size="xs">{check.assignments.map(item => item.agentName ?? item.agentId).join(" → ")}</Text></Table.Td>

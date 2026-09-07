@@ -10,7 +10,7 @@ const DEVICE_ICON_NAMES = [
   "activity", "antenna", "battery", "bluetooth", "bulb", "button", "camera", "chip", "cloud", "cloud-network", "code",
   "contact", "container", "controller", "copy", "device", "display", "droplet", "ethernet",
   "gateway", "globe", "globe-lock", "infrastructure", "key", "link", "mail", "message", "motion", "network",
-  "plug", "printer", "router", "sensor", "server", "server-stack", "shield", "storage", "switch",
+  "plug", "printer", "raspberry-pi", "router", "sensor", "server", "server-stack", "shield", "storage", "switch",
   "switch-toggle", "terminal", "thermometer", "thermostat", "virtual", "wifi"
 ];
 
@@ -50,6 +50,8 @@ export function DeviceGlyph({ icon, color = "gray", size = 18 }: { icon: string;
     case "server":
     case "server-stack":
       return <svg {...common}><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><path d="M8 7h.01M8 17h.01M12 7h5M12 17h5"/></svg>;
+    case "raspberry-pi":
+      return <svg {...common}><path d="M12 7c-1.8-2.7-4.7-3.2-6.2-1.5 1.4.1 2.5.7 3.2 1.7-2.7-.2-4.8 1.4-4.8 3.6 1.1-.7 2.4-.9 3.6-.5-2.3 1.2-3.3 3.6-2.2 5.5.7-1 1.7-1.7 2.9-2-1 2.4.1 5 2.3 5.7.1-1.2.5-2.2 1.2-3 .7.8 1.1 1.8 1.2 3 2.2-.7 3.3-3.3 2.3-5.7 1.2.3 2.2 1 2.9 2 1.1-1.9.1-4.3-2.2-5.5 1.2-.4 2.5-.2 3.6.5 0-2.2-2.1-3.8-4.8-3.6.7-1 1.8-1.6 3.2-1.7C16.7 3.8 13.8 4.3 12 7Z"/><path d="M10 4c.2-1.2 1-2 2-2M14 4c-.2-1.2-1-2-2-2"/></svg>;
     case "virtual":
       return <svg {...common}><rect x="3" y="4" width="14" height="12" rx="2"/><rect x="7" y="8" width="14" height="12" rx="2"/></svg>;
     case "container":

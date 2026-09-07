@@ -41,14 +41,70 @@ function AccountsEditor({value,onChange,devices}:{value:ServiceRegistryAccount[]
 }
 
 function TaxonomyPanel(){
- const qc=useQueryClient();const classes=useQuery({queryKey:["service-registry","taxonomy","classes"],queryFn:getServiceTaxonomyClasses});const types=useQuery({queryKey:["service-registry","taxonomy","types"],queryFn:getServiceTaxonomyTypes});const[tab,setTab]=usePersistentState("service-registry.taxonomy.tab","classes");const[opened,setOpened]=React.useState(false),[deleteTarget,setDeleteTarget]=React.useState<{kind:"class"|"type";code:string;label:string}|null>(null);const[kind,setKind]=React.useState<"class"|"type">("class"),[original,setOriginal]=React.useState<string|null>(null);const[code,setCode]=React.useState(""),[label,setLabel]=React.useState(""),[parent,setParent]=React.useState("CLOUD"),[description,setDescription]=React.useState(""),[icon,setIcon]=React.useState("cloud"),[color,setColor]=React.useState("blue"),[enabled,setEnabled]=React.useState(true),[sortOrder,setSortOrder]=React.useState<number|string>(100);
- const refresh=()=>qc.invalidateQueries({queryKey:["service-registry"]}); const open=(k:"class"|"type",item?:ServiceClassReference|ServiceTypeReference)=>{setKind(k);setOriginal(item?.code??null);setCode(item?.code??"");setLabel(item?.label??"");setParent(k==="type"?(item as ServiceTypeReference|undefined)?.serviceClass??"CLOUD":"CLOUD");setDescription(item?.description??"");setIcon(item?.icon??"cloud");setColor(item?.color??"blue");setEnabled(item?.enabled??true);setSortOrder(item?.sortOrder??100);setOpened(true);};
+ const qc=useQueryClient();
+ const classes=useQuery({queryKey:["service-registry","taxonomy","classes"],queryFn:getServiceTaxonomyClasses});
+ const types=useQuery({queryKey:["service-registry","taxonomy","types"],queryFn:getServiceTaxonomyTypes});
+ const[tab,setTab]=usePersistentState("service-registry.taxonomy.tab","classes");
+ const[filterText,setFilterText]=usePersistentState("service-registry.taxonomy.filter.text","");
+ const[parentFilter,setParentFilter]=usePersistentState<string|null>("service-registry.taxonomy.filter.class",null);
+ const[enabledFilter,setEnabledFilter]=usePersistentState<string|null>("service-registry.taxonomy.filter.enabled",null);
+ const[sortKey,setSortKey]=usePersistentState<"label"|"class"|"code"|"description"|"enabled"|"sortOrder">("service-registry.taxonomy.sort.key","label");
+ const[sortDirection,setSortDirection]=usePersistentState<SortDirection>("service-registry.taxonomy.sort.direction","asc");
+ const[opened,setOpened]=React.useState(false),[deleteTarget,setDeleteTarget]=React.useState<{kind:"class"|"type";code:string;label:string}|null>(null);
+ const[kind,setKind]=React.useState<"class"|"type">("class"),[original,setOriginal]=React.useState<string|null>(null);
+ const[code,setCode]=React.useState(""),[label,setLabel]=React.useState(""),[parent,setParent]=React.useState("CLOUD"),[description,setDescription]=React.useState(""),[icon,setIcon]=React.useState("cloud"),[color,setColor]=React.useState("blue"),[enabled,setEnabled]=React.useState(true),[sortOrder,setSortOrder]=React.useState<number|string>(100);
+ const refresh=()=>qc.invalidateQueries({queryKey:["service-registry"]});
+ const open=(k:"class"|"type",item?:ServiceClassReference|ServiceTypeReference)=>{setKind(k);setOriginal(item?.code??null);setCode(item?.code??"");setLabel(item?.label??"");setParent(k==="type"?(item as ServiceTypeReference|undefined)?.serviceClass??"CLOUD":"CLOUD");setDescription(item?.description??"");setIcon(item?.icon??"cloud");setColor(item?.color??"blue");setEnabled(item?.enabled??true);setSortOrder(item?.sortOrder??100);setOpened(true);};
  const save=useMutation({mutationFn:async()=>{if(kind==="class"){const data={code,label,description:description||null,icon,color,enabled,sortOrder:typeof sortOrder==="number"?sortOrder:100};return original?updateServiceTaxonomyClass(original,data):createServiceTaxonomyClass(data);}const data={code,label,serviceClass:parent,description:description||null,icon,color,enabled,sortOrder:typeof sortOrder==="number"?sortOrder:100};return original?updateServiceTaxonomyType(original,data):createServiceTaxonomyType(data);},onSuccess:()=>{setOpened(false);refresh();}});
  const remove=useMutation({mutationFn:async()=>{if(!deleteTarget)return;if(deleteTarget.kind==="class")await deleteServiceTaxonomyClass(deleteTarget.code);else await deleteServiceTaxonomyType(deleteTarget.code);},onSuccess:()=>{setDeleteTarget(null);refresh();}});
- const rows=(tab==="classes"?(classes.data??[]):(types.data??[])).slice().sort((a:any,b:any)=>a.label.localeCompare(b.label));
- return <Stack gap="md"><Tabs value={tab} onChange={v=>setTab(v??"classes")}><Tabs.List><Tabs.Tab value="classes">Classes</Tabs.Tab><Tabs.Tab value="types">Types</Tabs.Tab></Tabs.List></Tabs><Group justify="flex-end"><Button size="compact-sm" onClick={()=>open(tab==="classes"?"class":"type")}>+ Add {tab==="classes"?"class":"type"}</Button></Group><Table striped withTableBorder fz="sm"><Table.Thead><Table.Tr><Table.Th>{tab==="classes"?"Class":"Type"}</Table.Th>{tab==="types"&&<Table.Th>Class</Table.Th>}<Table.Th>Code</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{rows.map((item:any)=><Table.Tr key={item.code}><Table.Td><Group gap="xs"><DeviceGlyph icon={item.icon} color={item.color}/><Text size="sm">{item.label}</Text></Group></Table.Td>{tab==="types"&&<Table.Td>{classes.data?.find(c=>c.code===item.serviceClass)?.label??item.serviceClass}</Table.Td>}<Table.Td><Text ff="monospace" size="sm">{item.code}</Text></Table.Td><Table.Td><Group gap={4}><EditActionIcon onClick={()=>open(tab==="classes"?"class":"type",item)}/><DeleteActionIcon onClick={()=>setDeleteTarget({kind:tab==="classes"?"class":"type",code:item.code,label:item.label})}/></Group></Table.Td></Table.Tr>)}</Table.Tbody></Table>
- <Modal opened={opened} onClose={()=>setOpened(false)} title={`${original?"Edit":"Add"} ${kind}`}><Stack><TextInput label="Code" required disabled={!!original} autoFocus={!original} value={code} onChange={e=>setCode(e.currentTarget.value)}/><TextInput label="Label" required autoFocus={!!original} value={label} onChange={e=>setLabel(e.currentTarget.value)}/>{kind==="type"&&<Select label="Class" required data={[...(classes.data??[])].sort((a,b)=>a.label.localeCompare(b.label)).map(c=>({value:c.code,label:c.label}))} value={parent} onChange={v=>setParent(v??"CLOUD")}/>}<Textarea label="Description" value={description} onChange={e=>setDescription(e.currentTarget.value)}/><Group grow><Select label="Icon" searchable data={DEVICE_ICON_OPTIONS} value={icon} leftSection={<DeviceGlyph icon={icon} color={color}/>} renderOption={({option})=><Group gap="xs"><DeviceGlyph icon={option.value} color={color}/><Text>{option.label}</Text></Group>} onChange={v=>setIcon(v??"cloud")}/><Select label="Color" data={["blue","cyan","grape","green","indigo","orange","red","teal","violet","yellow","gray"]} value={color} onChange={v=>setColor(v??"blue")}/><NumberInput label="Sort order" value={sortOrder} onChange={setSortOrder}/></Group><Checkbox label="Enabled" checked={enabled} onChange={e=>setEnabled(e.currentTarget.checked)}/><Group justify="flex-end"><Button variant="default" onClick={()=>setOpened(false)}>Cancel</Button><Button loading={save.isPending} disabled={!code.trim()||!label.trim()} onClick={()=>save.mutate()}>Save</Button></Group></Stack></Modal>
- <Modal opened={!!deleteTarget} onClose={()=>setDeleteTarget(null)} title={`Delete ${deleteTarget?.kind??"item"}?`} centered><Stack><Text>Delete <strong>{deleteTarget?.label}</strong>? This action cannot be undone.</Text><Group justify="flex-end"><Button variant="default" onClick={()=>setDeleteTarget(null)}>Cancel</Button><Button color="red" loading={remove.isPending} onClick={()=>remove.mutate()}>Delete</Button></Group></Stack></Modal></Stack>;
+ const toggleSort=(key:"label"|"class"|"code"|"description"|"enabled"|"sortOrder")=>{if(sortKey===key)setSortDirection(current=>current==="asc"?"desc":"asc");else{setSortKey(key);setSortDirection("asc");}};
+ const className=(code:string)=>classes.data?.find(item=>item.code===code)?.label??code;
+ const needle=filterText.trim().toLowerCase();
+ const rows=(tab==="classes"?(classes.data??[]):(types.data??[])).filter((item:any)=>{
+   if(needle&&!`${item.label} ${item.code} ${item.description??""}`.toLowerCase().includes(needle))return false;
+   if(tab==="types"&&parentFilter&&item.serviceClass!==parentFilter)return false;
+   if(enabledFilter!==null&&String(Boolean(item.enabled))!==enabledFilter)return false;
+   return true;
+ }).slice().sort((left:any,right:any)=>{
+   const value=(item:any)=>sortKey==="class"?(tab==="types"?className(item.serviceClass):""):sortKey==="enabled"?(item.enabled?1:0):sortKey==="sortOrder"?(item.sortOrder??100):(item[sortKey]??"");
+   return compareTableValues(value(left),value(right),sortDirection);
+ });
+ const filtersActive=Boolean(filterText.trim()||(tab==="types"&&parentFilter)||enabledFilter!==null);
+ return <Stack gap="md">
+   <Tabs value={tab} onChange={v=>{setTab(v??"classes");setParentFilter(null);}}><Tabs.List><Tabs.Tab value="classes">Classes</Tabs.Tab><Tabs.Tab value="types">Types</Tabs.Tab></Tabs.List></Tabs>
+   <Group justify="space-between" align="center" wrap="wrap">
+     <Group gap="xs" wrap="wrap">
+       <ResetFiltersAction active={filtersActive} onReset={()=>{setFilterText("");setParentFilter(null);setEnabledFilter(null);}}/>
+       <TextInput size="xs" placeholder="Name / code / description" value={filterText} onChange={e=>setFilterText(e.currentTarget.value)} styles={activeFilterStyles(Boolean(filterText.trim()))} w={230}/>
+       {tab==="types"&&<Select size="xs" clearable placeholder="All classes" data={[...(classes.data??[])].sort((a,b)=>a.label.localeCompare(b.label)).map(item=>({value:item.code,label:item.label}))} value={parentFilter} onChange={setParentFilter} styles={activeFilterStyles(Boolean(parentFilter))} w={180}/>}
+       <Select size="xs" clearable placeholder="Enabled / disabled" data={[{value:"true",label:"Enabled"},{value:"false",label:"Disabled"}]} value={enabledFilter} onChange={setEnabledFilter} styles={activeFilterStyles(enabledFilter!==null)} w={170}/>
+       <Text size="xs" c="dimmed">{rows.length}/{tab==="classes"?(classes.data??[]).length:(types.data??[]).length}</Text>
+     </Group>
+     <Button size="compact-sm" onClick={()=>open(tab==="classes"?"class":"type")}>+ Add {tab==="classes"?"class":"type"}</Button>
+   </Group>
+   <div className="device-registry-table-card"><div className="device-registry-table-scroll"><Table striped highlightOnHover withTableBorder fz="sm">
+     <Table.Thead><Table.Tr>
+       <SortableTableHeader active={sortKey==="label"} direction={sortDirection} onClick={()=>toggleSort("label")}>{tab==="classes"?"Class":"Type"}</SortableTableHeader>
+       {tab==="types"&&<SortableTableHeader active={sortKey==="class"} direction={sortDirection} onClick={()=>toggleSort("class")}>Class</SortableTableHeader>}
+       <SortableTableHeader active={sortKey==="code"} direction={sortDirection} onClick={()=>toggleSort("code")}>Code</SortableTableHeader>
+       <SortableTableHeader active={sortKey==="description"} direction={sortDirection} onClick={()=>toggleSort("description")}>Description</SortableTableHeader>
+       <SortableTableHeader active={sortKey==="enabled"} direction={sortDirection} onClick={()=>toggleSort("enabled")}>Enabled</SortableTableHeader>
+       <SortableTableHeader active={sortKey==="sortOrder"} direction={sortDirection} onClick={()=>toggleSort("sortOrder")}>Order</SortableTableHeader>
+       <Table.Th style={{width:88,textAlign:"right"}}>Actions</Table.Th>
+     </Table.Tr></Table.Thead>
+     <Table.Tbody>{rows.map((item:any)=><Table.Tr key={item.code}>
+       <Table.Td><Group gap="xs" wrap="nowrap"><DeviceGlyph icon={item.icon} color={item.color}/><Text size="sm">{item.label}</Text></Group></Table.Td>
+       {tab==="types"&&<Table.Td><Text size="sm">{className(item.serviceClass)}</Text></Table.Td>}
+       <Table.Td><Text ff="monospace" size="sm">{item.code}</Text></Table.Td>
+       <Table.Td><Text size="sm" c={item.description?undefined:"dimmed"}>{item.description??"—"}</Text></Table.Td>
+       <Table.Td><Text size="xs" fw={700} c={item.enabled?"green":"gray"}>{item.enabled?"YES":"NO"}</Text></Table.Td>
+       <Table.Td>{item.sortOrder??100}</Table.Td>
+       <Table.Td><Group gap={4} justify="flex-end"><EditActionIcon onClick={()=>open(tab==="classes"?"class":"type",item)}/><DeleteActionIcon onClick={()=>setDeleteTarget({kind:tab==="classes"?"class":"type",code:item.code,label:item.label})}/></Group></Table.Td>
+     </Table.Tr>)}</Table.Tbody>
+   </Table></div></div>
+   <Modal opened={opened} onClose={()=>setOpened(false)} title={`${original?"Edit":"Add"} ${kind}`}><Stack><TextInput label="Code" required disabled={!!original} autoFocus={!original} value={code} onChange={e=>setCode(e.currentTarget.value)}/><TextInput label="Label" required autoFocus={!!original} value={label} onChange={e=>setLabel(e.currentTarget.value)}/>{kind==="type"&&<Select label="Class" required data={[...(classes.data??[])].sort((a,b)=>a.label.localeCompare(b.label)).map(c=>({value:c.code,label:c.label}))} value={parent} onChange={v=>setParent(v??"CLOUD")}/>}<Textarea label="Description" value={description} onChange={e=>setDescription(e.currentTarget.value)}/><Group grow><Select label="Icon" searchable data={DEVICE_ICON_OPTIONS} value={icon} leftSection={<DeviceGlyph icon={icon} color={color}/>} renderOption={({option})=><Group gap="xs"><DeviceGlyph icon={option.value} color={color}/><Text>{option.label}</Text></Group>} onChange={v=>setIcon(v??"cloud")}/><Select label="Color" data={["blue","cyan","grape","green","indigo","orange","red","teal","violet","yellow","gray"]} value={color} onChange={v=>setColor(v??"blue")}/><NumberInput label="Sort order" value={sortOrder} onChange={setSortOrder}/></Group><Checkbox label="Enabled" checked={enabled} onChange={e=>setEnabled(e.currentTarget.checked)}/><Group justify="flex-end"><Button variant="default" onClick={()=>setOpened(false)}>Cancel</Button><Button loading={save.isPending} disabled={!code.trim()||!label.trim()} onClick={()=>save.mutate()}>Save</Button></Group></Stack></Modal>
+   <Modal opened={!!deleteTarget} onClose={()=>setDeleteTarget(null)} title={`Delete ${deleteTarget?.kind??"item"}?`} centered><Stack><Text>Delete <strong>{deleteTarget?.label}</strong>? This action cannot be undone.</Text><Group justify="flex-end"><Button variant="default" onClick={()=>setDeleteTarget(null)}>Cancel</Button><Button color="red" loading={remove.isPending} onClick={()=>remove.mutate()}>Delete</Button></Group></Stack></Modal>
+ </Stack>;
 }
 
 export function ServiceRegistryPanel({ onOpenDeviceAccess }: { onOpenDeviceAccess?: (deviceId:string, accessLinkId:string)=>void } = {}){

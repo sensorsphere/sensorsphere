@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.24.0";
+export const MODULE_VERSION = "1.25.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.25.0": {
+    releasedAt: "2026-09-07T23:55:00+02:00",
+    patch: "PR-155-monitoring-target-resolution-check-management-service-taxonomy-v1.patch",
+    changes: [
+      { type: "fixed", description: "Device Checks resolves PRIMARY_IP, PRIMARY_FQDN and PRIMARY_ADDRESS targets as well as symbolic identity targets" },
+      { type: "changed", description: "Device identity checks use a dedicated Checks column and edit an existing matching PING check instead of creating duplicates" },
+      { type: "added", description: "Raspberry Pi device taxonomy uses a dedicated raspberry glyph" },
+      { type: "changed", description: "Service Registry Taxonomy classes and types gain persistent filters, active-filter emphasis and persistent sortable columns" }
+    ]
+  },
   "1.24.0": {
     releasedAt: "2026-09-07T23:30:00+02:00",
     patch: "PR-154-device-identity-ping-check-filter-emphasis-raspberry-pi-v1.patch",

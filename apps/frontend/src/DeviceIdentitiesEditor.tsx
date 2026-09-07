@@ -42,7 +42,7 @@ export function DeviceIdentitiesEditor({
   identityLabels,
   currentDeviceId,
   onViewDevice,
-  onAddPingCheck
+  onManagePingCheck
 }: {
   value: DeviceIdentity[];
   onChange: (value: DeviceIdentity[]) => void;
@@ -50,7 +50,7 @@ export function DeviceIdentitiesEditor({
   identityLabels: DeviceIdentityLabelReference[];
   currentDeviceId?: string;
   onViewDevice?: (device: DeviceRegistryDevice) => void;
-  onAddPingCheck?: (identity: DeviceIdentity) => void;
+  onManagePingCheck?: (identity: DeviceIdentity) => void;
 }) {
   const [opened, setOpened] = React.useState(false);
   const [editIndex, setEditIndex] = React.useState<number | null>(null);
@@ -103,13 +103,13 @@ export function DeviceIdentitiesEditor({
       <Button size="compact-xs" variant="light" onClick={openCreate}>+ Add identity</Button>
     </Group>
     {value.length > 0 ? <Table withTableBorder>
-      <Table.Thead><Table.Tr><Table.Th>Type</Table.Th><Table.Th>Label</Table.Th><Table.Th>Value</Table.Th><Table.Th>Primary</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead>
+      <Table.Thead><Table.Tr><Table.Th>Type</Table.Th><Table.Th>Label</Table.Th><Table.Th>Value</Table.Th><Table.Th>Primary</Table.Th><Table.Th>Checks</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead>
       <Table.Tbody>{value.map((item, index) => <Table.Tr key={`${item.identityType}-${item.value}-${index}`}>
         <Table.Td><Badge variant="light">{item.identityType}</Badge></Table.Td>
         <Table.Td>{item.label ?? identityLabels.find(label => label.code === item.labelCode)?.label ?? "—"}</Table.Td>
         <Table.Td><Text ff="monospace" size="sm">{item.value}</Text></Table.Td>
         <Table.Td>{item.isPrimary ? <Badge color="blue" variant="light">PRIMARY</Badge> : "—"}</Table.Td>
-        <Table.Td><Group gap={4}>{currentDeviceId && item.identityType.toUpperCase() === "IP" && onAddPingCheck && <Tooltip label="Add PING check"><ActionIcon size="sm" variant="light" color="blue" aria-label="Add PING check" onClick={() => onAddPingCheck(item)}><PingCheckIcon /></ActionIcon></Tooltip>}<EditActionIcon onClick={() => openEdit(index)} /><DeleteActionIcon onClick={() => onChange(value.filter((_, i) => i !== index))} /></Group></Table.Td>
+        <Table.Td>{currentDeviceId && item.identityType.toUpperCase() === "IP" && onManagePingCheck ? <Tooltip label="Manage PING check"><ActionIcon size="sm" variant="light" color="blue" aria-label="Manage PING check" onClick={() => onManagePingCheck(item)}><PingCheckIcon /></ActionIcon></Tooltip> : "—"}</Table.Td><Table.Td><Group gap={4}><EditActionIcon onClick={() => openEdit(index)} /><DeleteActionIcon onClick={() => onChange(value.filter((_, i) => i !== index))} /></Group></Table.Td>
       </Table.Tr>)}</Table.Tbody>
     </Table> : <Text size="sm" c="dimmed">No identity configured.</Text>}
 
