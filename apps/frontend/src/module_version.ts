@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.26.0";
+export const MODULE_VERSION = "1.27.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.27.0": {
+    releasedAt: "2026-09-08T00:40:00+02:00",
+    patch: "PR-158-monitoring-agent-connection-origin-led-strip-icon-v1.patch",
+    changes: [
+      { type: "added", description: "Monitoring Agents displays agent local IP separately from the HTTP source IP, X-Forwarded-For and X-Real-IP connection metadata" },
+      { type: "changed", description: "Monitoring and Device Registry check counters are green when at least one check is assigned" },
+      { type: "changed", description: "LED Strip devices use a dedicated led-strip glyph instead of the generic bulb icon" }
+    ]
+  },
   "1.26.0": {
     releasedAt: "2026-09-08T00:25:00+02:00",
     patch: "PR-157-monitoring-table-scroll-check-counts-led-strip-v1.patch",

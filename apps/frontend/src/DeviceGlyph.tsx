@@ -10,7 +10,7 @@ const DEVICE_ICON_NAMES = [
   "activity", "antenna", "battery", "bluetooth", "bulb", "button", "camera", "chip", "cloud", "cloud-network", "code",
   "contact", "container", "controller", "copy", "device", "display", "droplet", "ethernet",
   "gateway", "globe", "globe-lock", "infrastructure", "key", "link", "mail", "message", "motion", "network",
-  "plug", "printer", "raspberry-pi", "router", "sensor", "server", "server-stack", "shield", "storage", "switch",
+  "plug", "printer", "raspberry-pi", "led-strip", "router", "sensor", "server", "server-stack", "shield", "storage", "switch",
   "switch-toggle", "terminal", "thermometer", "thermostat", "virtual", "wifi"
 ];
 
@@ -71,6 +71,8 @@ export function DeviceGlyph({ icon, color = "gray", size = 18 }: { icon: string;
       return <svg {...common}><path d="M8 3v6M16 3v6M6 9h12v2a6 6 0 0 1-6 6v4M9 21h6"/></svg>;
     case "bulb":
       return <svg {...common}><path d="M9 18h6M10 22h4M8 14a6 6 0 1 1 8 0c-1 1-1 2-1 4H9c0-2 0-3-1-4"/></svg>;
+    case "led-strip":
+      return <svg {...common}><rect x="2.5" y="7" width="19" height="10" rx="2"/><circle cx="6" cy="12" r="1.2"/><circle cx="10" cy="12" r="1.2"/><circle cx="14" cy="12" r="1.2"/><circle cx="18" cy="12" r="1.2"/><path d="M4 7V5M20 17v2"/></svg>;
     case "camera":
       return <svg {...common}><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3"/><path d="m8 6 1.5-2h5L16 6"/></svg>;
     case "shield":

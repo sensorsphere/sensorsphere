@@ -655,7 +655,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                             <Badge color={HEALTH_COLORS[device.health.status]} variant="light">{device.health.status}</Badge>
                           </Tooltip>
                         </Table.Td>
-                        <Table.Td><Text size="sm" fw={600}>{deviceCheckCount(device.id)}</Text></Table.Td>
+                        <Table.Td>{(() => { const count = deviceCheckCount(device.id); return <Text size="sm" fw={700} c={count > 0 ? "green.6" : "dimmed"}>{count}</Text>; })()}</Table.Td>
                         <Table.Td>
                           <Group gap={2} wrap="nowrap">
                             {device.accessLinks.filter(link => link.enabled).slice(0, 3).map((link, index) => {

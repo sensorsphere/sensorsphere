@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.11.2";
+export const MODULE_VERSION = "1.12.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.12.0": {
+    releasedAt: "2026-09-08T00:40:00+02:00",
+    patch: "PR-158-monitoring-agent-connection-origin-led-strip-icon-v1.patch",
+    changes: [
+      { type: "added", description: "Monitoring Agent requests persist raw HTTP source IP, X-Forwarded-For and X-Real-IP metadata independently from the effective client IP" },
+      { type: "added", description: "Monitoring Agent heartbeat accepts an optional localIp reported by the agent" }
+    ]
+  },
   "1.11.2": {
     releasedAt: "2026-09-07T23:30:00+02:00",
     patch: "PR-154-device-identity-ping-check-filter-emphasis-raspberry-pi-v1.patch",

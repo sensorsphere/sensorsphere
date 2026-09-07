@@ -405,14 +405,14 @@ export function MonitoringPanel({
     const labels = [...Object.entries(agent.labels).map(([key, value]) => `${key}=${value}`), ...agent.agentLabels].join(" ").toLowerCase();
     return (!agentNameFilter.trim() || agent.name.toLowerCase().includes(agentNameFilter.trim().toLowerCase()))
       && (!agentStatusFilter || status === agentStatusFilter)
-      && (!agentHostFilter.trim() || `${agent.hostname ?? ""} ${agent.lastIp ?? ""}`.toLowerCase().includes(agentHostFilter.trim().toLowerCase()))
+      && (!agentHostFilter.trim() || `${agent.hostname ?? ""} ${agent.lastIp ?? ""} ${agent.localIp ?? ""} ${agent.sourceIp ?? ""} ${agent.xForwardedFor ?? ""} ${agent.xRealIp ?? ""}`.toLowerCase().includes(agentHostFilter.trim().toLowerCase()))
       && (!agentLabelsFilter.trim() || labels.includes(agentLabelsFilter.trim().toLowerCase()));
   }).sort((left, right) => {
     const status = (agent: MonitoringAgent) => !agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE";
     const value = (agent: MonitoringAgent) => agentSortKey === "name" ? agent.name
       : agentSortKey === "status" ? status(agent)
       : agentSortKey === "checks" ? checks.filter(check => check.assignments.some(item => item.agentId === agent.id)).length
-      : agentSortKey === "host" ? `${agent.hostname ?? ""} ${agent.lastIp ?? ""}`
+      : agentSortKey === "host" ? `${agent.hostname ?? ""} ${agent.localIp ?? ""} ${agent.sourceIp ?? ""} ${agent.xForwardedFor ?? ""}`
       : agentSortKey === "version" ? agent.version
       : agentSortKey === "lastSeen" ? agent.lastSeenAt
       : agentSortKey === "labels" ? Object.entries(agent.labels).map(([key, val]) => `${key}=${val}`).join(",")
@@ -561,6 +561,7 @@ export function MonitoringPanel({
             <SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader>
             <SortableTableHeader active={agentSortKey === "checks"} direction={agentSortDirection} onClick={() => toggleAgentSort("checks")}>Checks</SortableTableHeader>
             <SortableTableHeader active={agentSortKey === "host"} direction={agentSortDirection} onClick={() => toggleAgentSort("host")}>Host</SortableTableHeader>
+            <Table.Th>Connection</Table.Th>
             <SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>
             <SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last seen</SortableTableHeader>
             <SortableTableHeader active={agentSortKey === "labels"} direction={agentSortDirection} onClick={() => toggleAgentSort("labels")}>Labels</SortableTableHeader>
@@ -572,8 +573,14 @@ export function MonitoringPanel({
               <Table.Tr key={agent.id}>
                 <Table.Td><Text fw={600} size="sm">{agent.name}</Text></Table.Td>
                 <Table.Td><Badge size="sm" color={!agent.enabled ? "gray" : agent.online ? "green" : "red"}>{!agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE"}</Badge></Table.Td>
-                <Table.Td><Text size="sm" fw={600}>{checks.filter(check => check.assignments.some(item => item.agentId === agent.id)).length}</Text></Table.Td>
+                <Table.Td>{(() => { const count = checks.filter(check => check.assignments.some(item => item.agentId === agent.id)).length; return <Text size="sm" fw={700} c={count > 0 ? "green.6" : "dimmed"}>{count}</Text>; })()}</Table.Td>
                 <Table.Td><Text size="sm">{agent.hostname ?? "—"}</Text><Text size="xs" c="dimmed">{agent.lastIp ?? ""}</Text></Table.Td>
+                <Table.Td><Stack gap={0} style={{ minWidth: 210 }}>
+                  <Text size="xs"><Text span c="dimmed">Local:</Text> {agent.localIp ?? "—"}</Text>
+                  <Text size="xs"><Text span c="dimmed">Source:</Text> {agent.sourceIp ?? "—"}</Text>
+                  <Text size="xs" title={agent.xForwardedFor ?? undefined}><Text span c="dimmed">XFF:</Text> {agent.xForwardedFor ?? "—"}</Text>
+                  {agent.xRealIp && <Text size="xs"><Text span c="dimmed">X-Real-IP:</Text> {agent.xRealIp}</Text>}
+                </Stack></Table.Td>
                 <Table.Td>{agent.version ?? "—"}</Table.Td>
                 <Table.Td>{relativeAge(agent.lastSeenAt)}</Table.Td>
                 <Table.Td><Text size="xs">{Object.entries(agent.labels).map(([k, v]) => `${k}=${v}`).join(", ") || "—"}</Text></Table.Td>
@@ -581,7 +588,7 @@ export function MonitoringPanel({
                 <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => openEditAgent(agent)} /><Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} /></Group></Table.Td>
               </Table.Tr>
             ))}
-            {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={9}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
+            {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={10}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
           </Table.Tbody>
             </Table>
         </div>

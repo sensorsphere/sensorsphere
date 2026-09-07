@@ -957,6 +957,10 @@ export interface MonitoringAgent {
   version: string | null;
   hostname: string | null;
   lastIp: string | null;
+  localIp: string | null;
+  sourceIp: string | null;
+  xForwardedFor: string | null;
+  xRealIp: string | null;
   lastSeenAt: string | null;
   heartbeatTimeoutSeconds: number;
   configRevision: number;

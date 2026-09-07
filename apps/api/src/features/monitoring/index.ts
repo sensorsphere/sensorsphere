@@ -85,6 +85,7 @@ const checkUpdateSchema = z.object({
 const heartbeatSchema = z.object({
   version: z.string().trim().max(200).nullable().optional(),
   hostname: z.string().trim().max(500).nullable().optional(),
+  localIp: z.string().trim().max(200).nullable().optional(),
   agentLabels: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
   // Backward compatibility for agents <= 1.0.4. These values are treated as
   // agent-reported labels and never overwrite SensorSphere-managed labels.
@@ -111,6 +112,10 @@ interface AgentRow {
   version: string | null;
   hostname: string | null;
   last_ip: string | null;
+  local_ip: string | null;
+  source_ip: string | null;
+  x_forwarded_for: string | null;
+  x_real_ip: string | null;
   last_seen_at: Date | null;
   heartbeat_timeout_seconds: number;
   config_revision: string | number;
@@ -158,10 +163,20 @@ function generateToken(): string {
   return `ssma_${randomBytes(32).toString("base64url")}`;
 }
 
-function requestIp(request: FastifyRequest): string | null {
-  const forwarded = request.headers["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.trim()) return forwarded.split(",")[0]?.trim() ?? null;
-  return request.ip ?? null;
+function headerValue(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) {
+    const joined = value.map(item => item.trim()).filter(Boolean).join(", ");
+    return joined || null;
+  }
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function requestConnection(request: FastifyRequest) {
+  const xForwardedFor = headerValue(request.headers["x-forwarded-for"]);
+  const xRealIp = headerValue(request.headers["x-real-ip"]);
+  const sourceIp = request.raw.socket.remoteAddress ?? null;
+  const effectiveIp = xForwardedFor?.split(",")[0]?.trim() || request.ip || sourceIp;
+  return { effectiveIp: effectiveIp ?? null, sourceIp, xForwardedFor, xRealIp };
 }
 
 function agentDto(row: AgentRow) {
@@ -176,6 +191,10 @@ function agentDto(row: AgentRow) {
     version: row.version,
     hostname: row.hostname,
     lastIp: row.last_ip,
+    localIp: row.local_ip,
+    sourceIp: row.source_ip,
+    xForwardedFor: row.x_forwarded_for,
+    xRealIp: row.x_real_ip,
     lastSeenAt: row.last_seen_at?.toISOString() ?? null,
     heartbeatTimeoutSeconds: row.heartbeat_timeout_seconds,
     configRevision: Number(row.config_revision),
@@ -499,11 +518,14 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
       : input.labels
         ? [...new Set(Object.entries(input.labels).map(([key, value]) => `${key}=${value}`))]
         : null;
+    const connection = requestConnection(request);
     const result = await pool.query<AgentRow>(
       `UPDATE monitoring_agents SET last_seen_at=NOW(), last_ip=$2, version=COALESCE($3,version),
               hostname=COALESCE($4,hostname), agent_labels=COALESCE($5::jsonb,agent_labels),
+              local_ip=COALESCE($6,local_ip), source_ip=$7, x_forwarded_for=$8, x_real_ip=$9,
               updated_at=NOW() WHERE id=$1 RETURNING *`,
-      [agent.id, requestIp(request), input.version ?? null, input.hostname ?? null, reportedLabels == null ? null : JSON.stringify(reportedLabels)]
+      [agent.id, connection.effectiveIp, input.version ?? null, input.hostname ?? null, reportedLabels == null ? null : JSON.stringify(reportedLabels),
+       input.localIp ?? null, connection.sourceIp, connection.xForwardedFor, connection.xRealIp]
     );
     return { agentId: agent.id, configRevision: Number(result.rows[0]!.config_revision), serverTime: new Date().toISOString() };
   });
@@ -511,7 +533,13 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
   app.get("/api/v1/monitoring/agent/checks", async (request, reply) => {
     const agent = await authenticateAgent(pool, request);
     if (!agent) return reply.code(401).send({ error: "Invalid monitoring agent token" });
-    await pool.query(`UPDATE monitoring_agents SET last_seen_at=NOW(), last_ip=$2, updated_at=NOW() WHERE id=$1`, [agent.id, requestIp(request)]);
+    {
+      const connection = requestConnection(request);
+      await pool.query(
+        `UPDATE monitoring_agents SET last_seen_at=NOW(), last_ip=$2, source_ip=$3, x_forwarded_for=$4, x_real_ip=$5, updated_at=NOW() WHERE id=$1`,
+        [agent.id, connection.effectiveIp, connection.sourceIp, connection.xForwardedFor, connection.xRealIp]
+      );
+    }
     const result = await pool.query<CheckRow>(
       `SELECT c.*, d.name AS device_name
          FROM monitoring_checks c
@@ -561,7 +589,11 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      await client.query(`UPDATE monitoring_agents SET last_seen_at=NOW(), last_ip=$2, updated_at=NOW() WHERE id=$1`, [agent.id, requestIp(request)]);
+      const connection = requestConnection(request);
+      await client.query(
+        `UPDATE monitoring_agents SET last_seen_at=NOW(), last_ip=$2, source_ip=$3, x_forwarded_for=$4, x_real_ip=$5, updated_at=NOW() WHERE id=$1`,
+        [agent.id, connection.effectiveIp, connection.sourceIp, connection.xForwardedFor, connection.xRealIp]
+      );
       let accepted = 0;
       for (const result of input.results) {
         const assignment = await client.query(
