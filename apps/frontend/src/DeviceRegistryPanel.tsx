@@ -73,7 +73,7 @@ import { activeFilterStyles } from "./ActiveFilterStyles";
 import { MonitoringPanel, type MonitoringQuickCheckRequest } from "./MonitoringPanel";
 
 
-type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "battery" | "lastSeen" | "health";
+type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "battery" | "lastSeen" | "health" | "checks";
 type HealthProfileSortKey = "name" | "warning" | "offline" | "batteryWarning" | "batteryCritical" | "rssiWarning" | "rssiCritical";
 
 function deviceAddress(device: DeviceRegistryDevice): string {
@@ -400,6 +400,9 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     return compareTableValues(value(left), value(right), profileSortDirection);
   });
 
+  const deviceCheckCount = (deviceId: string): number =>
+    (monitoringChecksQuery.data ?? []).filter(check => check.deviceId === deviceId).length;
+
   const filteredDevices = devices.filter(device => {
     const nameNeedle = nameFilter.trim().toLowerCase();
     const addressNeedle = addressFilter.trim().toLowerCase();
@@ -420,7 +423,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       : sortKey === "parent" ? left.parentDevice?.name ?? null
       : sortKey === "battery" ? left.batteryPercent
       : sortKey === "lastSeen" ? (left.lastSeenAt ? new Date(left.lastSeenAt).getTime() : null)
-      : left.health.status;
+      : sortKey === "health" ? left.health.status
+      : deviceCheckCount(left.id);
     const rightValue = sortKey === "name" ? right.name
       : sortKey === "address" ? deviceAddress(right)
       : sortKey === "class" ? right.deviceClassInfo.label
@@ -430,7 +434,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       : sortKey === "parent" ? right.parentDevice?.name ?? null
       : sortKey === "battery" ? right.batteryPercent
       : sortKey === "lastSeen" ? (right.lastSeenAt ? new Date(right.lastSeenAt).getTime() : null)
-      : right.health.status;
+      : sortKey === "health" ? right.health.status
+      : deviceCheckCount(right.id);
     return compareTableValues(leftValue, rightValue, sortDirection);
   });
 
@@ -612,6 +617,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                       <SortableTableHeader active={sortKey === "battery"} direction={sortDirection} onClick={() => toggleSort("battery")}>Battery</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "lastSeen"} direction={sortDirection} onClick={() => toggleSort("lastSeen")}>Last seen</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "health"} direction={sortDirection} onClick={() => toggleSort("health")}>Health</SortableTableHeader>
+                      <SortableTableHeader active={sortKey === "checks"} direction={sortDirection} onClick={() => toggleSort("checks")}>Checks</SortableTableHeader>
                       <Table.Th>Access</Table.Th>
                       <Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th>
                     </Table.Tr>
@@ -649,6 +655,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                             <Badge color={HEALTH_COLORS[device.health.status]} variant="light">{device.health.status}</Badge>
                           </Tooltip>
                         </Table.Td>
+                        <Table.Td><Text size="sm" fw={600}>{deviceCheckCount(device.id)}</Text></Table.Td>
                         <Table.Td>
                           <Group gap={2} wrap="nowrap">
                             {device.accessLinks.filter(link => link.enabled).slice(0, 3).map((link, index) => {
@@ -668,7 +675,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                       </Table.Tr>
                     ))}
                     {filteredDevices.length === 0 && (
-                      <Table.Tr><Table.Td colSpan={12}><Text c="dimmed" ta="center" py="xl">No devices match the current filters.</Text></Table.Td></Table.Tr>
+                      <Table.Tr><Table.Td colSpan={13}><Text c="dimmed" ta="center" py="xl">No devices match the current filters.</Text></Table.Td></Table.Tr>
                     )}
                   </Table.Tbody>
                 </Table>

@@ -53,7 +53,7 @@ import { usePersistentState } from "./preferences/usePersistentState";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 
-type AgentSortKey = "name" | "status" | "host" | "version" | "lastSeen" | "labels" | "agentLabels";
+type AgentSortKey = "name" | "status" | "checks" | "host" | "version" | "lastSeen" | "labels" | "agentLabels";
 type CheckSortKey = "device" | "class" | "type" | "technology" | "check" | "target" | "agents" | "mode" | "status";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -411,6 +411,7 @@ export function MonitoringPanel({
     const status = (agent: MonitoringAgent) => !agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE";
     const value = (agent: MonitoringAgent) => agentSortKey === "name" ? agent.name
       : agentSortKey === "status" ? status(agent)
+      : agentSortKey === "checks" ? checks.filter(check => check.assignments.some(item => item.agentId === agent.id)).length
       : agentSortKey === "host" ? `${agent.hostname ?? ""} ${agent.lastIp ?? ""}`
       : agentSortKey === "version" ? agent.version
       : agentSortKey === "lastSeen" ? agent.lastSeenAt
@@ -553,10 +554,12 @@ export function MonitoringPanel({
           <TextInput size="xs" placeholder="Labels / agent labels" value={agentLabelsFilter} onChange={event => setAgentLabelsFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentLabelsFilter.trim()))} w={220} />
           <Text size="xs" c="dimmed">{filteredAgents.length}/{agents.length}</Text>
         </Group>
-        <Table striped highlightOnHover>
+        <div style={{ maxHeight: 320, overflow: "auto" }}>
+            <Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
           <Table.Thead><Table.Tr>
             <SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader>
             <SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader>
+            <SortableTableHeader active={agentSortKey === "checks"} direction={agentSortDirection} onClick={() => toggleAgentSort("checks")}>Checks</SortableTableHeader>
             <SortableTableHeader active={agentSortKey === "host"} direction={agentSortDirection} onClick={() => toggleAgentSort("host")}>Host</SortableTableHeader>
             <SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>
             <SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last seen</SortableTableHeader>
@@ -569,6 +572,7 @@ export function MonitoringPanel({
               <Table.Tr key={agent.id}>
                 <Table.Td><Text fw={600} size="sm">{agent.name}</Text></Table.Td>
                 <Table.Td><Badge size="sm" color={!agent.enabled ? "gray" : agent.online ? "green" : "red"}>{!agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE"}</Badge></Table.Td>
+                <Table.Td><Text size="sm" fw={600}>{checks.filter(check => check.assignments.some(item => item.agentId === agent.id)).length}</Text></Table.Td>
                 <Table.Td><Text size="sm">{agent.hostname ?? "—"}</Text><Text size="xs" c="dimmed">{agent.lastIp ?? ""}</Text></Table.Td>
                 <Table.Td>{agent.version ?? "—"}</Table.Td>
                 <Table.Td>{relativeAge(agent.lastSeenAt)}</Table.Td>
@@ -577,9 +581,10 @@ export function MonitoringPanel({
                 <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => openEditAgent(agent)} /><Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} /></Group></Table.Td>
               </Table.Tr>
             ))}
-            {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={8}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
+            {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={9}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
           </Table.Tbody>
-        </Table>
+            </Table>
+        </div>
       </Card>
 
       <Card withBorder>
@@ -598,7 +603,8 @@ export function MonitoringPanel({
           <Select size="xs" clearable placeholder="Status" data={["UP","DOWN","UNKNOWN"]} value={checkStatusFilter} onChange={setCheckStatusFilter} styles={activeFilterStyles(Boolean(checkStatusFilter))} w={135} />
           <Text size="xs" c="dimmed">{filteredChecks.length}/{checks.length}</Text>
         </Group>
-        <Table striped highlightOnHover>
+        <div style={{ maxHeight: 440, overflow: "auto" }}>
+            <Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
           <Table.Thead><Table.Tr>
             <SortableTableHeader active={checkSortKey === "device"} direction={checkSortDirection} onClick={() => toggleCheckSort("device")}>Device</SortableTableHeader>
             <SortableTableHeader active={checkSortKey === "class"} direction={checkSortDirection} onClick={() => toggleCheckSort("class")}>Class</SortableTableHeader>
@@ -634,7 +640,8 @@ export function MonitoringPanel({
             })}
             {filteredChecks.length === 0 && <Table.Tr><Table.Td colSpan={10}><Text ta="center" c="dimmed" py="xl">{checks.length === 0 ? "No monitoring checks yet." : "No monitoring checks match the active filters."}</Text></Table.Td></Table.Tr>}
           </Table.Tbody>
-        </Table>
+            </Table>
+        </div>
       </Card>
 
       <Modal opened={agentModalOpen} onClose={() => setAgentModalOpen(false)} title={editingAgent ? "Edit monitoring agent" : "Add monitoring agent"}>

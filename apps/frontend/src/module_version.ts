@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.25.1";
+export const MODULE_VERSION = "1.26.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.26.0": {
+    releasedAt: "2026-09-08T00:25:00+02:00",
+    patch: "PR-157-monitoring-table-scroll-check-counts-led-strip-v1.patch",
+    changes: [
+      { type: "fixed", description: "Monitoring Agents and Device Checks use the same internal scroll viewport and sticky table header as Device Registry Devices" },
+      { type: "added", description: "Monitoring Agents shows the number of assigned checks and Device Registry Devices shows the number of device checks" },
+      { type: "added", description: "Device Registry taxonomy includes LED Strip as an IoT Lighting device type" }
+    ]
+  },
   "1.25.1": {
     releasedAt: "2026-09-08T00:15:00+02:00",
     patch: "PR-156-monitoring-check-status-service-taxonomy-table-fix-v1.patch",
