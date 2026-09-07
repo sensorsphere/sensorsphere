@@ -85,6 +85,9 @@ const checkUpdateSchema = z.object({
 const heartbeatSchema = z.object({
   version: z.string().trim().max(200).nullable().optional(),
   hostname: z.string().trim().max(500).nullable().optional(),
+  agentLabels: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
+  // Backward compatibility for agents <= 1.0.4. These values are treated as
+  // agent-reported labels and never overwrite SensorSphere-managed labels.
   labels: z.record(z.string(), z.string()).optional()
 }).strict();
 
@@ -104,6 +107,7 @@ interface AgentRow {
   name: string;
   enabled: boolean;
   labels: Record<string, string>;
+  agent_labels: string[];
   version: string | null;
   hostname: string | null;
   last_ip: string | null;
@@ -168,6 +172,7 @@ function agentDto(row: AgentRow) {
     name: row.name,
     enabled: row.enabled,
     labels: row.labels ?? {},
+    agentLabels: Array.isArray(row.agent_labels) ? row.agent_labels : [],
     version: row.version,
     hostname: row.hostname,
     lastIp: row.last_ip,
@@ -489,11 +494,16 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
     const agent = await authenticateAgent(pool, request);
     if (!agent) return reply.code(401).send({ error: "Invalid monitoring agent token" });
     const input = heartbeatSchema.parse(request.body ?? {});
+    const reportedLabels = input.agentLabels
+      ? [...new Set(input.agentLabels.map(value => value.trim()).filter(Boolean))]
+      : input.labels
+        ? [...new Set(Object.entries(input.labels).map(([key, value]) => `${key}=${value}`))]
+        : null;
     const result = await pool.query<AgentRow>(
       `UPDATE monitoring_agents SET last_seen_at=NOW(), last_ip=$2, version=COALESCE($3,version),
-              hostname=COALESCE($4,hostname), labels=CASE WHEN $5::jsonb='{}'::jsonb THEN labels ELSE $5::jsonb END,
+              hostname=COALESCE($4,hostname), agent_labels=COALESCE($5::jsonb,agent_labels),
               updated_at=NOW() WHERE id=$1 RETURNING *`,
-      [agent.id, requestIp(request), input.version ?? null, input.hostname ?? null, JSON.stringify(input.labels ?? {})]
+      [agent.id, requestIp(request), input.version ?? null, input.hostname ?? null, reportedLabels == null ? null : JSON.stringify(reportedLabels)]
     );
     return { agentId: agent.id, configRevision: Number(result.rows[0]!.config_revision), serverTime: new Date().toISOString() };
   });

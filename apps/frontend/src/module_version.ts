@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.21.1";
+export const MODULE_VERSION = "1.22.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.22.0": {
+    releasedAt: "2026-09-07T22:10:00+02:00",
+    patch: "PR-152-monitoring-agent-reported-labels-v1.patch",
+    changes: [
+      { type: "added", description: "Monitoring Agents table shows agent-reported labels independently from SensorSphere-managed labels" },
+      { type: "changed", description: "Generated monitor-agent environment example includes the optional AGENT_LABELS setting" }
+    ]
+  },
   "1.21.1": {
     releasedAt: "2026-09-06T22:11:00+02:00",
     patch: "PR-151-monitoring-identity-targets-service-table-fonts-v2.patch",

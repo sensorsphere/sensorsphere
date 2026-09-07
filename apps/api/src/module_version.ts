@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.10.0";
+export const MODULE_VERSION = "1.11.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.11.0": {
+    releasedAt: "2026-09-07T22:10:00+02:00",
+    patch: "PR-152-monitoring-agent-reported-labels-v1.patch",
+    changes: [
+      { type: "added", description: "Store agent-reported labels separately from SensorSphere-managed Monitoring Agent labels" },
+      { type: "changed", description: "Heartbeat accepts agentLabels and treats legacy labels payloads as agent-reported metadata without overwriting managed labels" }
+    ]
+  },
   "1.10.0": {
     releasedAt: "2026-09-06T22:15:00+02:00",
     patch: "PR-151-monitoring-identity-targets-service-table-fonts-v1.patch",

@@ -953,6 +953,7 @@ export interface MonitoringAgent {
   name: string;
   enabled: boolean;
   labels: Record<string, string>;
+  agentLabels: string[];
   version: string | null;
   hostname: string | null;
   lastIp: string | null;

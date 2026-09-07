@@ -369,7 +369,7 @@ export function MonitoringPanel() {
 
   const sensorsphereUrl = typeof window === "undefined" ? "" : window.location.origin;
   const agentEnvironment = tokenInfo
-    ? `SENSORSPHERE_URL=${sensorsphereUrl}\nSENSORSPHERE_AGENT_TOKEN=${tokenInfo.token}`
+    ? `SENSORSPHERE_URL=${sensorsphereUrl}\nSENSORSPHERE_AGENT_TOKEN=${tokenInfo.token}\n#AGENT_LABELS=vm-022,site-paris`
     : "";
 
   return (
@@ -398,7 +398,7 @@ export function MonitoringPanel() {
           <Button size="xs" onClick={openCreateAgent}>+ Add agent</Button>
         </Group>
         <Table striped highlightOnHover>
-          <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Status</Table.Th><Table.Th>Host</Table.Th><Table.Th>Version</Table.Th><Table.Th>Last seen</Table.Th><Table.Th>Labels</Table.Th><Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
+          <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Status</Table.Th><Table.Th>Host</Table.Th><Table.Th>Version</Table.Th><Table.Th>Last seen</Table.Th><Table.Th>Labels</Table.Th><Table.Th>Agent labels</Table.Th><Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
           <Table.Tbody>
             {agents.map(agent => (
               <Table.Tr key={agent.id}>
@@ -408,6 +408,13 @@ export function MonitoringPanel() {
                 <Table.Td>{agent.version ?? "—"}</Table.Td>
                 <Table.Td>{relativeAge(agent.lastSeenAt)}</Table.Td>
                 <Table.Td><Text size="xs">{Object.entries(agent.labels).map(([k, v]) => `${k}=${v}`).join(", ") || "—"}</Text></Table.Td>
+                <Table.Td>
+                  {agent.agentLabels.length > 0 ? (
+                    <Group gap={4} wrap="wrap">
+                      {agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}
+                    </Group>
+                  ) : <Text size="xs" c="dimmed">—</Text>}
+                </Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">
                   <EditActionIcon onClick={() => openEditAgent(agent)} />
                   <Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip>
