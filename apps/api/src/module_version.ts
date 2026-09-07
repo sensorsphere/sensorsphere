@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.11.0";
+export const MODULE_VERSION = "1.11.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.11.1": {
+    releasedAt: "2026-09-07T23:15:00+02:00",
+    patch: "PR-153-device-registry-table-filter-sort-monitoring-migration-v1.patch",
+    changes: [
+      { type: "fixed", description: "Add the missing monitoring_agents.agent_labels JSONB migration and GIN index required by reported agent labels" }
+    ]
+  },
   "1.11.0": {
     releasedAt: "2026-09-07T22:10:00+02:00",
     patch: "PR-152-monitoring-agent-reported-labels-v1.patch",

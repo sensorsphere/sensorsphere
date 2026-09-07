@@ -46,6 +46,13 @@ import type {
   DeviceIdentity
 } from "./types";
 import { EditActionIcon, DeleteActionIcon } from "./TableActionIcons";
+import { DeviceGlyph } from "./DeviceGlyph";
+import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
+import { usePersistentState } from "./preferences/usePersistentState";
+import { ResetFiltersAction } from "./ResetFiltersAction";
+
+type AgentSortKey = "name" | "status" | "host" | "version" | "lastSeen" | "labels" | "agentLabels";
+type CheckSortKey = "device" | "class" | "type" | "technology" | "check" | "target" | "agents" | "mode" | "status";
 
 const STATUS_COLORS: Record<string, string> = {
   UP: "green",
@@ -234,6 +241,23 @@ export function MonitoringPanel() {
   const [deviceDropdownOpened, setDeviceDropdownOpened] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  const [agentNameFilter, setAgentNameFilter] = usePersistentState("device-registry.monitoring.agents.filter.name", "");
+  const [agentStatusFilter, setAgentStatusFilter] = usePersistentState<string | null>("device-registry.monitoring.agents.filter.status", null);
+  const [agentHostFilter, setAgentHostFilter] = usePersistentState("device-registry.monitoring.agents.filter.host", "");
+  const [agentLabelsFilter, setAgentLabelsFilter] = usePersistentState("device-registry.monitoring.agents.filter.labels", "");
+  const [agentSortKey, setAgentSortKey] = usePersistentState<AgentSortKey>("device-registry.monitoring.agents.sort.key", "name");
+  const [agentSortDirection, setAgentSortDirection] = usePersistentState<SortDirection>("device-registry.monitoring.agents.sort.direction", "asc");
+
+  const [checkDeviceFilter, setCheckDeviceFilter] = usePersistentState("device-registry.monitoring.checks.filter.device", "");
+  const [checkClassFilter, setCheckClassFilter] = usePersistentState<string | null>("device-registry.monitoring.checks.filter.class", null);
+  const [checkTypeFilter, setCheckTypeFilter] = usePersistentState<string | null>("device-registry.monitoring.checks.filter.type", null);
+  const [checkTechnologyFilter, setCheckTechnologyFilter] = usePersistentState<string | null>("device-registry.monitoring.checks.filter.technology", null);
+  const [checkNameFilter, setCheckNameFilter] = usePersistentState("device-registry.monitoring.checks.filter.name", "");
+  const [checkAgentFilter, setCheckAgentFilter] = usePersistentState("device-registry.monitoring.checks.filter.agent", "");
+  const [checkStatusFilter, setCheckStatusFilter] = usePersistentState<string | null>("device-registry.monitoring.checks.filter.status", null);
+  const [checkSortKey, setCheckSortKey] = usePersistentState<CheckSortKey>("device-registry.monitoring.checks.sort.key", "device");
+  const [checkSortDirection, setCheckSortDirection] = usePersistentState<SortDirection>("device-registry.monitoring.checks.sort.direction", "asc");
+
   const selectedDevice = (devicesQuery.data ?? []).find(device => device.id === checkForm.deviceId);
   const compatibleIdentities = React.useMemo(() => {
     const identities = selectedDevice?.identities ?? [];
@@ -327,6 +351,64 @@ export function MonitoringPanel() {
 
   const agents = agentsQuery.data ?? [];
   const checks = checksQuery.data ?? [];
+  const devices = devicesQuery.data ?? [];
+  const deviceById = new Map(devices.map(device => [device.id, device]));
+
+  const toggleAgentSort = (key: AgentSortKey) => {
+    if (agentSortKey === key) setAgentSortDirection(current => current === "asc" ? "desc" : "asc");
+    else { setAgentSortKey(key); setAgentSortDirection("asc"); }
+  };
+  const filteredAgents = agents.filter(agent => {
+    const status = !agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE";
+    const labels = [...Object.entries(agent.labels).map(([key, value]) => `${key}=${value}`), ...agent.agentLabels].join(" ").toLowerCase();
+    return (!agentNameFilter.trim() || agent.name.toLowerCase().includes(agentNameFilter.trim().toLowerCase()))
+      && (!agentStatusFilter || status === agentStatusFilter)
+      && (!agentHostFilter.trim() || `${agent.hostname ?? ""} ${agent.lastIp ?? ""}`.toLowerCase().includes(agentHostFilter.trim().toLowerCase()))
+      && (!agentLabelsFilter.trim() || labels.includes(agentLabelsFilter.trim().toLowerCase()));
+  }).sort((left, right) => {
+    const status = (agent: MonitoringAgent) => !agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE";
+    const value = (agent: MonitoringAgent) => agentSortKey === "name" ? agent.name
+      : agentSortKey === "status" ? status(agent)
+      : agentSortKey === "host" ? `${agent.hostname ?? ""} ${agent.lastIp ?? ""}`
+      : agentSortKey === "version" ? agent.version
+      : agentSortKey === "lastSeen" ? agent.lastSeenAt
+      : agentSortKey === "labels" ? Object.entries(agent.labels).map(([key, val]) => `${key}=${val}`).join(",")
+      : agent.agentLabels.join(",");
+    return compareTableValues(value(left), value(right), agentSortDirection);
+  });
+  const agentFiltersActive = Boolean(agentNameFilter || agentStatusFilter || agentHostFilter || agentLabelsFilter);
+
+  const toggleCheckSort = (key: CheckSortKey) => {
+    if (checkSortKey === key) setCheckSortDirection(current => current === "asc" ? "desc" : "asc");
+    else { setCheckSortKey(key); setCheckSortDirection("asc"); }
+  };
+  const filteredChecks = checks.filter(check => {
+    const device = deviceById.get(check.deviceId);
+    const status = overallCheckStatus(check);
+    const agentText = check.assignments.map(item => item.agentName ?? item.agentId).join(" ").toLowerCase();
+    return (!checkDeviceFilter.trim() || check.deviceName.toLowerCase().includes(checkDeviceFilter.trim().toLowerCase()))
+      && (!checkClassFilter || device?.deviceClass === checkClassFilter)
+      && (!checkTypeFilter || device?.deviceType === checkTypeFilter)
+      && (!checkTechnologyFilter || device?.technologies.some(item => item.code === checkTechnologyFilter))
+      && (!checkNameFilter.trim() || `${check.name} ${check.checkType}`.toLowerCase().includes(checkNameFilter.trim().toLowerCase()))
+      && (!checkAgentFilter.trim() || agentText.includes(checkAgentFilter.trim().toLowerCase()))
+      && (!checkStatusFilter || status === checkStatusFilter);
+  }).sort((left, right) => {
+    const leftDevice = deviceById.get(left.deviceId);
+    const rightDevice = deviceById.get(right.deviceId);
+    const value = (check: MonitoringCheck, device: typeof leftDevice) => checkSortKey === "device" ? check.deviceName
+      : checkSortKey === "class" ? device?.deviceClassInfo.label
+      : checkSortKey === "type" ? device?.deviceTypeInfo.label
+      : checkSortKey === "technology" ? device?.technologies.map(item => item.label).join(",")
+      : checkSortKey === "check" ? `${check.name} ${check.checkType}`
+      : checkSortKey === "target" ? `${check.targetMode} ${check.targetValue ?? ""} ${check.port ?? ""}`
+      : checkSortKey === "agents" ? check.assignments.map(item => item.agentName ?? item.agentId).join(",")
+      : checkSortKey === "mode" ? check.executionMode
+      : overallCheckStatus(check);
+    return compareTableValues(value(left, leftDevice), value(right, rightDevice), checkSortDirection);
+  });
+  const checkFiltersActive = Boolean(checkDeviceFilter || checkClassFilter || checkTypeFilter || checkTechnologyFilter || checkNameFilter || checkAgentFilter || checkStatusFilter);
+
   const onlineAgents = agents.filter(item => item.online).length;
   const statuses = checks.map(overallCheckStatus);
   const upChecks = statuses.filter(item => item === "UP").length;
@@ -397,10 +479,27 @@ export function MonitoringPanel() {
           <div><Title order={4}>Monitoring agents</Title><Text size="xs" c="dimmed">Independent pull agents authenticate with a SensorSphere-generated token.</Text></div>
           <Button size="xs" onClick={openCreateAgent}>+ Add agent</Button>
         </Group>
+        <Group gap="xs" mb="sm" wrap="wrap">
+          <ResetFiltersAction active={agentFiltersActive} onReset={() => { setAgentNameFilter(""); setAgentStatusFilter(null); setAgentHostFilter(""); setAgentLabelsFilter(""); }} />
+          <TextInput size="xs" placeholder="Filter name" value={agentNameFilter} onChange={event => setAgentNameFilter(event.currentTarget.value)} w={180} />
+          <Select size="xs" clearable placeholder="Status" data={["ONLINE","OFFLINE","DISABLED"]} value={agentStatusFilter} onChange={setAgentStatusFilter} w={140} />
+          <TextInput size="xs" placeholder="Host / IP" value={agentHostFilter} onChange={event => setAgentHostFilter(event.currentTarget.value)} w={180} />
+          <TextInput size="xs" placeholder="Labels / agent labels" value={agentLabelsFilter} onChange={event => setAgentLabelsFilter(event.currentTarget.value)} w={220} />
+          <Text size="xs" c="dimmed">{filteredAgents.length}/{agents.length}</Text>
+        </Group>
         <Table striped highlightOnHover>
-          <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Status</Table.Th><Table.Th>Host</Table.Th><Table.Th>Version</Table.Th><Table.Th>Last seen</Table.Th><Table.Th>Labels</Table.Th><Table.Th>Agent labels</Table.Th><Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
+          <Table.Thead><Table.Tr>
+            <SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader>
+            <SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader>
+            <SortableTableHeader active={agentSortKey === "host"} direction={agentSortDirection} onClick={() => toggleAgentSort("host")}>Host</SortableTableHeader>
+            <SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>
+            <SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last seen</SortableTableHeader>
+            <SortableTableHeader active={agentSortKey === "labels"} direction={agentSortDirection} onClick={() => toggleAgentSort("labels")}>Labels</SortableTableHeader>
+            <SortableTableHeader active={agentSortKey === "agentLabels"} direction={agentSortDirection} onClick={() => toggleAgentSort("agentLabels")}>Agent labels</SortableTableHeader>
+            <Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th>
+          </Table.Tr></Table.Thead>
           <Table.Tbody>
-            {agents.map(agent => (
+            {filteredAgents.map(agent => (
               <Table.Tr key={agent.id}>
                 <Table.Td><Text fw={600} size="sm">{agent.name}</Text></Table.Td>
                 <Table.Td><Badge size="sm" color={!agent.enabled ? "gray" : agent.online ? "green" : "red"}>{!agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE"}</Badge></Table.Td>
@@ -408,22 +507,11 @@ export function MonitoringPanel() {
                 <Table.Td>{agent.version ?? "—"}</Table.Td>
                 <Table.Td>{relativeAge(agent.lastSeenAt)}</Table.Td>
                 <Table.Td><Text size="xs">{Object.entries(agent.labels).map(([k, v]) => `${k}=${v}`).join(", ") || "—"}</Text></Table.Td>
-                <Table.Td>
-                  {agent.agentLabels.length > 0 ? (
-                    <Group gap={4} wrap="wrap">
-                      {agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}
-                    </Group>
-                  ) : <Text size="xs" c="dimmed">—</Text>}
-                </Table.Td>
-                <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">
-                  <EditActionIcon onClick={() => openEditAgent(agent)} />
-                  <Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip>
-                  <Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip>
-                  <DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} />
-                </Group></Table.Td>
+                <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
+                <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => openEditAgent(agent)} /><Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} /></Group></Table.Td>
               </Table.Tr>
             ))}
-            {agents.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text ta="center" c="dimmed" py="xl">No monitoring agents. Create an agent before assigning checks.</Text></Table.Td></Table.Tr>}
+            {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={8}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
           </Table.Tbody>
         </Table>
       </Card>
@@ -433,14 +521,40 @@ export function MonitoringPanel() {
           <div><Title order={4}>Device checks</Title><Text size="xs" c="dimmed">PING is the first executable check. TCP/HTTP/HTTPS are already represented by the generic contract for future agents.</Text></div>
           <Button size="xs" onClick={openCreateCheck} disabled={agents.length === 0}>+ Add check</Button>
         </Group>
+        <Group gap="xs" mb="sm" wrap="wrap">
+          <ResetFiltersAction active={checkFiltersActive} onReset={() => { setCheckDeviceFilter(""); setCheckClassFilter(null); setCheckTypeFilter(null); setCheckTechnologyFilter(null); setCheckNameFilter(""); setCheckAgentFilter(""); setCheckStatusFilter(null); }} />
+          <TextInput size="xs" placeholder="Device name" value={checkDeviceFilter} onChange={event => setCheckDeviceFilter(event.currentTarget.value)} w={170} />
+          <Select size="xs" clearable searchable placeholder="Class" data={[...new Map(devices.map(device => [device.deviceClass, { value: device.deviceClass, label: device.deviceClassInfo.label }])).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkClassFilter} onChange={setCheckClassFilter} w={150} />
+          <Select size="xs" clearable searchable placeholder="Type" data={[...new Map(devices.map(device => [device.deviceType, { value: device.deviceType, label: device.deviceTypeInfo.label }])).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkTypeFilter} onChange={setCheckTypeFilter} w={160} />
+          <Select size="xs" clearable searchable placeholder="Technology" data={[...new Map(devices.flatMap(device => device.technologies.map(item => [item.code, { value:item.code, label:item.label }] as const))).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkTechnologyFilter} onChange={setCheckTechnologyFilter} w={170} />
+          <TextInput size="xs" placeholder="Check / type" value={checkNameFilter} onChange={event => setCheckNameFilter(event.currentTarget.value)} w={160} />
+          <TextInput size="xs" placeholder="Agent" value={checkAgentFilter} onChange={event => setCheckAgentFilter(event.currentTarget.value)} w={150} />
+          <Select size="xs" clearable placeholder="Status" data={["UP","DOWN","UNKNOWN"]} value={checkStatusFilter} onChange={setCheckStatusFilter} w={135} />
+          <Text size="xs" c="dimmed">{filteredChecks.length}/{checks.length}</Text>
+        </Group>
         <Table striped highlightOnHover>
-          <Table.Thead><Table.Tr><Table.Th>Device</Table.Th><Table.Th>Check</Table.Th><Table.Th>Target</Table.Th><Table.Th>Agents</Table.Th><Table.Th>Mode</Table.Th><Table.Th>Status</Table.Th><Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
+          <Table.Thead><Table.Tr>
+            <SortableTableHeader active={checkSortKey === "device"} direction={checkSortDirection} onClick={() => toggleCheckSort("device")}>Device</SortableTableHeader>
+            <SortableTableHeader active={checkSortKey === "class"} direction={checkSortDirection} onClick={() => toggleCheckSort("class")}>Class</SortableTableHeader>
+            <SortableTableHeader active={checkSortKey === "type"} direction={checkSortDirection} onClick={() => toggleCheckSort("type")}>Type</SortableTableHeader>
+            <SortableTableHeader active={checkSortKey === "technology"} direction={checkSortDirection} onClick={() => toggleCheckSort("technology")}>Technology</SortableTableHeader>
+            <SortableTableHeader active={checkSortKey === "check"} direction={checkSortDirection} onClick={() => toggleCheckSort("check")}>Check</SortableTableHeader>
+            <SortableTableHeader active={checkSortKey === "target"} direction={checkSortDirection} onClick={() => toggleCheckSort("target")}>Target</SortableTableHeader>
+            <SortableTableHeader active={checkSortKey === "agents"} direction={checkSortDirection} onClick={() => toggleCheckSort("agents")}>Agents</SortableTableHeader>
+            <SortableTableHeader active={checkSortKey === "mode"} direction={checkSortDirection} onClick={() => toggleCheckSort("mode")}>Mode</SortableTableHeader>
+            <SortableTableHeader active={checkSortKey === "status"} direction={checkSortDirection} onClick={() => toggleCheckSort("status")}>Status</SortableTableHeader>
+            <Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th>
+          </Table.Tr></Table.Thead>
           <Table.Tbody>
-            {checks.map(check => {
+            {filteredChecks.map(check => {
               const status = overallCheckStatus(check);
               const target = check.targetMode === "CUSTOM" ? check.targetValue : check.targetMode.replaceAll("_", " ");
+              const device = deviceById.get(check.deviceId);
               return <Table.Tr key={check.id}>
                 <Table.Td><Text fw={600} size="sm">{check.deviceName}</Text></Table.Td>
+                <Table.Td>{device ? <Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceClassInfo.icon} color={device.deviceClassInfo.color} /><Text size="sm">{device.deviceClassInfo.label}</Text></Group> : "—"}</Table.Td>
+                <Table.Td>{device ? <Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceTypeInfo.icon} color={device.deviceTypeInfo.color} /><Text size="sm">{device.deviceTypeInfo.label}</Text></Group> : "—"}</Table.Td>
+                <Table.Td>{device && device.technologies.length > 0 ? <Group gap={6} wrap="wrap">{device.technologies.map(item => <Group key={item.code} gap={4} wrap="nowrap"><DeviceGlyph icon={item.icon} color={item.color} /><Text size="xs">{item.label}</Text></Group>)}</Group> : "—"}</Table.Td>
                 <Table.Td><Text size="sm">{check.name}</Text><Text size="xs" c="dimmed">{check.checkType} · {check.intervalSeconds}s</Text></Table.Td>
                 <Table.Td><Code>{target ?? "—"}{check.port ? `:${check.port}` : ""}</Code></Table.Td>
                 <Table.Td><Text size="xs">{check.assignments.map(item => item.agentName ?? item.agentId).join(" → ")}</Text></Table.Td>
@@ -449,7 +563,7 @@ export function MonitoringPanel() {
                 <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => openEditCheck(check)} /><Tooltip label="Copy monitoring check"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring check" onClick={() => openCopyCheck(check)}>⧉</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setCheckDeleteTarget(check)} /></Group></Table.Td>
               </Table.Tr>;
             })}
-            {checks.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text ta="center" c="dimmed" py="xl">No monitoring checks yet.</Text></Table.Td></Table.Tr>}
+            {filteredChecks.length === 0 && <Table.Tr><Table.Td colSpan={10}><Text ta="center" c="dimmed" py="xl">{checks.length === 0 ? "No monitoring checks yet." : "No monitoring checks match the active filters."}</Text></Table.Td></Table.Tr>}
           </Table.Tbody>
         </Table>
       </Card>

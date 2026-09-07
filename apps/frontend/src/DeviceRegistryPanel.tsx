@@ -72,6 +72,7 @@ import { MonitoringPanel } from "./MonitoringPanel";
 
 
 type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "battery" | "lastSeen" | "health";
+type HealthProfileSortKey = "name" | "warning" | "offline" | "batteryWarning" | "batteryCritical" | "rssiWarning" | "rssiCritical";
 
 function deviceAddress(device: DeviceRegistryDevice): string {
   return primaryIdentity(device.identities, "IP")?.value
@@ -308,6 +309,9 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const [editingProfile, setEditingProfile] = React.useState<DeviceHealthProfile | null>(null);
   const [profileModalOpen, setProfileModalOpen] = React.useState(false);
   const [profileForm, setProfileForm] = React.useState<HealthProfileFormState>(emptyHealthProfileForm());
+  const [profileFilter, setProfileFilter] = usePersistentState("device-registry.health-profiles.filter.text", "");
+  const [profileSortKey, setProfileSortKey] = usePersistentState<HealthProfileSortKey>("device-registry.health-profiles.sort.key", "name");
+  const [profileSortDirection, setProfileSortDirection] = usePersistentState<SortDirection>("device-registry.health-profiles.sort.direction", "asc");
   const [error, setError] = React.useState<string | null>(null);
   const [accessLinkToOpen, setAccessLinkToOpen] = React.useState<string | null>(null);
 
@@ -373,6 +377,25 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   });
 
   const devices = devicesQuery.data ?? [];
+  const profiles = profilesQuery.data ?? [];
+  const toggleProfileSort = (key: HealthProfileSortKey) => {
+    if (profileSortKey === key) setProfileSortDirection(current => current === "asc" ? "desc" : "asc");
+    else { setProfileSortKey(key); setProfileSortDirection("asc"); }
+  };
+  const filteredProfiles = profiles.filter(profile => {
+    const needle = profileFilter.trim().toLowerCase();
+    return !needle || `${profile.name} ${profile.description ?? ""}`.toLowerCase().includes(needle);
+  }).sort((left, right) => {
+    const value = (profile: DeviceHealthProfile) => profileSortKey === "name" ? profile.name
+      : profileSortKey === "warning" ? profile.warningAfterSeconds
+      : profileSortKey === "offline" ? profile.offlineAfterSeconds
+      : profileSortKey === "batteryWarning" ? profile.batteryWarningPercent
+      : profileSortKey === "batteryCritical" ? profile.batteryCriticalPercent
+      : profileSortKey === "rssiWarning" ? profile.rssiWarning
+      : profile.rssiCritical;
+    return compareTableValues(value(left), value(right), profileSortDirection);
+  });
+
   const filteredDevices = devices.filter(device => {
     const nameNeedle = nameFilter.trim().toLowerCase();
     const addressNeedle = addressFilter.trim().toLowerCase();
@@ -635,24 +658,42 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
 
         <Tabs.Panel value="health-profiles" pt="md">
           <Stack gap="sm">
-            <Group justify="flex-end"><Button size="compact-sm" onClick={openCreateProfile}>+ Add health profile</Button></Group>
+            <Group justify="space-between" wrap="wrap">
+              <Group gap="xs">
+                <ResetFiltersAction active={Boolean(profileFilter)} onReset={() => setProfileFilter("")} />
+                <TextInput size="xs" placeholder="Filter name / description" value={profileFilter} onChange={event => setProfileFilter(event.currentTarget.value)} w={240} />
+                <Text size="xs" c="dimmed">{filteredProfiles.length}/{profiles.length}</Text>
+              </Group>
+              <Button size="compact-sm" onClick={openCreateProfile}>+ Add health profile</Button>
+            </Group>
             <Card withBorder padding={0}>
               <Table striped highlightOnHover>
-                <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Last seen warning</Table.Th><Table.Th>Offline</Table.Th><Table.Th>Battery W/C</Table.Th><Table.Th>RSSI W/C</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead>
+                <Table.Thead><Table.Tr>
+                  <SortableTableHeader active={profileSortKey === "name"} direction={profileSortDirection} onClick={() => toggleProfileSort("name")}>Name</SortableTableHeader>
+                  <SortableTableHeader active={profileSortKey === "warning"} direction={profileSortDirection} onClick={() => toggleProfileSort("warning")}>Last seen warning</SortableTableHeader>
+                  <SortableTableHeader active={profileSortKey === "offline"} direction={profileSortDirection} onClick={() => toggleProfileSort("offline")}>Offline</SortableTableHeader>
+                  <SortableTableHeader active={profileSortKey === "batteryWarning"} direction={profileSortDirection} onClick={() => toggleProfileSort("batteryWarning")}>Battery W</SortableTableHeader>
+                  <SortableTableHeader active={profileSortKey === "batteryCritical"} direction={profileSortDirection} onClick={() => toggleProfileSort("batteryCritical")}>Battery C</SortableTableHeader>
+                  <SortableTableHeader active={profileSortKey === "rssiWarning"} direction={profileSortDirection} onClick={() => toggleProfileSort("rssiWarning")}>RSSI W</SortableTableHeader>
+                  <SortableTableHeader active={profileSortKey === "rssiCritical"} direction={profileSortDirection} onClick={() => toggleProfileSort("rssiCritical")}>RSSI C</SortableTableHeader>
+                  <Table.Th>Actions</Table.Th>
+                </Table.Tr></Table.Thead>
                 <Table.Tbody>
-                  {(profilesQuery.data ?? []).map(profile => (
+                  {filteredProfiles.map(profile => (
                     <Table.Tr key={profile.id}>
                       <Table.Td><Text fw={600} size="sm">{profile.name}</Text><Text size="xs" c="dimmed">{profile.description ?? ""}</Text></Table.Td>
                       <Table.Td>{profile.warningAfterSeconds ?? "—"}</Table.Td>
                       <Table.Td>{profile.offlineAfterSeconds ?? "—"}</Table.Td>
-                      <Table.Td>{profile.batteryWarningPercent ?? "—"} / {profile.batteryCriticalPercent ?? "—"}</Table.Td>
-                      <Table.Td>{profile.rssiWarning ?? "—"} / {profile.rssiCritical ?? "—"}</Table.Td>
+                      <Table.Td>{profile.batteryWarningPercent ?? "—"}</Table.Td>
+                      <Table.Td>{profile.batteryCriticalPercent ?? "—"}</Table.Td>
+                      <Table.Td>{profile.rssiWarning ?? "—"}</Table.Td>
+                      <Table.Td>{profile.rssiCritical ?? "—"}</Table.Td>
                       <Table.Td><Group gap={4}><EditActionIcon onClick={() => openEditProfile(profile)} /><DeleteActionIcon onClick={() => {
                         if (window.confirm(`Delete health profile "${profile.name}"? Devices using it will keep working with UNKNOWN/default health rules.`)) removeProfile.mutate(profile.id);
                       }} /></Group></Table.Td>
                     </Table.Tr>
                   ))}
-                  {(profilesQuery.data ?? []).length === 0 && <Table.Tr><Table.Td colSpan={6}><Text c="dimmed" ta="center" py="xl">No health profiles yet. Create only the profiles you actually need.</Text></Table.Td></Table.Tr>}
+                  {filteredProfiles.length === 0 && <Table.Tr><Table.Td colSpan={8}><Text c="dimmed" ta="center" py="xl">{profiles.length === 0 ? "No health profiles yet. Create only the profiles you actually need." : "No health profiles match the active filter."}</Text></Table.Td></Table.Tr>}
                 </Table.Tbody>
               </Table>
             </Card>

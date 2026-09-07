@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.22.0";
+export const MODULE_VERSION = "1.23.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.23.0": {
+    releasedAt: "2026-09-07T23:15:00+02:00",
+    patch: "PR-153-device-registry-table-filter-sort-monitoring-migration-v1.patch",
+    changes: [
+      { type: "added", description: "Add persistent filter bars with reset and persistent column sorting to Monitoring Agents, Device Checks, Health Profiles and Device Taxonomy tables" },
+      { type: "added", description: "Device Checks shows Device class, type and technologies with taxonomy icons and colors immediately after Device Name" },
+      { type: "fixed", description: "Ship the missing monitoring agent_labels database migration required by agent-reported heartbeat labels" }
+    ]
+  },
   "1.22.0": {
     releasedAt: "2026-09-07T22:10:00+02:00",
     patch: "PR-152-monitoring-agent-reported-labels-v1.patch",
