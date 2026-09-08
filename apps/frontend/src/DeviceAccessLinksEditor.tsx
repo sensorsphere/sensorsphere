@@ -70,6 +70,26 @@ export function resolveDeviceAccessUrl(link: DeviceAccessLink, context: DeviceAc
   return {url,unresolved:[...unresolved]};
 }
 
+
+export function DeviceAccessGlyph({ link, size = 18 }: { link: Pick<DeviceAccessLink, "icon" | "color" | "publishAsService">; size?: number }) {
+  return <span style={{ position: "relative", display: "inline-flex", width: size, height: size }}>
+    <DeviceGlyph icon={link.icon} color={link.color} size={size} />
+    <span
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        right: -2,
+        bottom: -2,
+        width: 7,
+        height: 7,
+        borderRadius: "50%",
+        background: link.publishAsService ? "var(--mantine-color-green-6)" : "var(--mantine-color-gray-6)",
+        border: "1px solid var(--mantine-color-dark-7)"
+      }}
+    />
+  </span>;
+}
+
 export function DeviceAccessLinksEditor({ value, onChange, context, openAccessLinkId, onAccessLinkOpened }: { value: DeviceAccessLink[]; onChange:(value:DeviceAccessLink[])=>void; context:DeviceAccessContext; openAccessLinkId?: string | null; onAccessLinkOpened?: () => void }) {
   const serviceClasses=useQuery({queryKey:["service-registry","references","classes"],queryFn:getServiceClassReferences});
   const serviceTypes=useQuery({queryKey:["service-registry","references","types"],queryFn:getServiceTypeReferences});
@@ -82,7 +102,7 @@ export function DeviceAccessLinksEditor({ value, onChange, context, openAccessLi
   const preview=resolveDeviceAccessUrl(previewLink,context);
   return <Stack gap="xs">
     <Group justify="space-between"><div><Text fw={600} size="sm">Access links</Text><Text size="xs" c="dimmed">Multiple Web, SSH, RDP, API or custom launch URLs. Passwords should not be stored here.</Text></div><Button size="compact-xs" variant="light" onClick={openCreate}>+ Add access</Button></Group>
-    {value.length>0&&<Table withTableBorder withColumnBorders={false}><Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Type</Table.Th><Table.Th>Template</Table.Th><Table.Th>User</Table.Th><Table.Th style={{width:52,textAlign:"center"}}>Pub.</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{value.map((item,index)=>({item,index})).sort((a,b)=>a.item.linkType.localeCompare(b.item.linkType)||a.item.name.localeCompare(b.item.name)).map(({item,index})=>{const resolved=resolveDeviceAccessUrl(item,context);return <Table.Tr key={`${item.name}-${index}`}><Table.Td><Group gap="xs"><DeviceGlyph icon={item.icon} color={item.color}/><Text size="sm">{item.name}</Text></Group></Table.Td><Table.Td>{item.linkType}</Table.Td><Table.Td><Tooltip label={resolved.unresolved.length?`Missing: ${resolved.unresolved.join(", ")}`:resolved.url}><Text size="xs" ff="monospace" lineClamp={1}>{item.urlTemplate}</Text></Tooltip></Table.Td><Table.Td>{item.username??"—"}</Table.Td><Table.Td style={{textAlign:"center"}}><Tooltip label={item.publishAsService?"Published in Service Registry":"Not published in Service Registry"}><span><DeviceGlyph icon={item.publishAsService?"cloud":"minus"} color={item.publishAsService?"green":"gray"} size={15}/></span></Tooltip></Table.Td><Table.Td><Group gap={4}><ActionIcon variant="subtle" disabled={resolved.unresolved.length>0||!item.enabled} onClick={()=>openDeviceAccessUrl(resolved.url,`ss_device_${context.deviceName}_${index}`)} aria-label={`Open ${item.name}`}><DeviceGlyph icon={item.icon} color={item.color}/></ActionIcon><EditActionIcon onClick={()=>openEdit(index)}/><DeleteActionIcon onClick={()=>onChange(value.filter((_,i)=>i!==index))}/></Group></Table.Td></Table.Tr>;})}</Table.Tbody></Table>}
+    {value.length>0&&<Table withTableBorder withColumnBorders={false}><Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Type</Table.Th><Table.Th>Template</Table.Th><Table.Th>User</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead><Table.Tbody>{value.map((item,index)=>({item,index})).sort((a,b)=>a.item.linkType.localeCompare(b.item.linkType)||a.item.name.localeCompare(b.item.name)).map(({item,index})=>{const resolved=resolveDeviceAccessUrl(item,context);const publicationLabel=item.publishAsService?"Published in Service Registry":"Not published in Service Registry";return <Table.Tr key={`${item.name}-${index}`}><Table.Td><Tooltip label={publicationLabel}><Group gap="xs" wrap="nowrap"><DeviceAccessGlyph link={item}/><Text size="sm">{item.name}</Text></Group></Tooltip></Table.Td><Table.Td>{item.linkType}</Table.Td><Table.Td><Tooltip label={resolved.unresolved.length?`Missing: ${resolved.unresolved.join(", ")}`:resolved.url}><Text size="xs" ff="monospace" lineClamp={1}>{item.urlTemplate}</Text></Tooltip></Table.Td><Table.Td>{item.username??"—"}</Table.Td><Table.Td><Group gap={4}><ActionIcon variant="subtle" disabled={resolved.unresolved.length>0||!item.enabled} onClick={()=>openDeviceAccessUrl(resolved.url,`ss_device_${context.deviceName}_${index}`)} aria-label={`Open ${item.name}`}><DeviceAccessGlyph link={item}/></ActionIcon><EditActionIcon onClick={()=>openEdit(index)}/><DeleteActionIcon onClick={()=>onChange(value.filter((_,i)=>i!==index))}/></Group></Table.Td></Table.Tr>;})}</Table.Tbody></Table>}
     {value.length===0&&<Text size="sm" c="dimmed">No access links configured.</Text>}
     <Modal opened={opened} onClose={()=>setOpened(false)} title={editIndex==null?"Add access link":"Edit access link"} size="lg"><Stack gap="sm">
       <Group grow><TextInput label="Name" required autoFocus value={form.name} onChange={e=>setForm(f=>({...f,name:e.currentTarget.value}))}/><Select label="Type" data={LINK_TYPES} value={form.linkType} onChange={v=>setForm(f=>({...f,linkType:v??"CUSTOM"}))}/></Group>

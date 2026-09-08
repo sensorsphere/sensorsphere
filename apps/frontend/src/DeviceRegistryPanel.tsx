@@ -63,7 +63,7 @@ import type {
 import { EditActionIcon, DeleteActionIcon } from "./TableActionIcons";
 import { DeviceGlyph } from "./DeviceGlyph";
 import { DeviceTaxonomyPanel } from "./DeviceTaxonomyPanel";
-import { DeviceAccessLinksEditor, openDeviceAccessUrl, resolveDeviceAccessUrl } from "./DeviceAccessLinksEditor";
+import { DeviceAccessGlyph, DeviceAccessLinksEditor, openDeviceAccessUrl, resolveDeviceAccessUrl } from "./DeviceAccessLinksEditor";
 import { DeviceIdentitiesEditor, primaryIdentity } from "./DeviceIdentitiesEditor";
 import { LocationIcon, getLocationIconName } from "./LocationIcon";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
@@ -667,7 +667,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                           <Group gap={2} wrap="nowrap">
                             {device.accessLinks.filter(link => link.enabled).sort((a, b) => a.linkType.localeCompare(b.linkType) || a.name.localeCompare(b.name)).slice(0, 3).map((link, index) => {
                               const resolved = resolveDeviceAccessUrl(link, { deviceName: device.name, macAddress: primaryIdentity(device.identities, "MAC")?.value ?? "", ipAddress: primaryIdentity(device.identities, "IP")?.value ?? "", ieeeAddress: primaryIdentity(device.identities, "IEEE")?.value ?? "", fqdn: primaryIdentity(device.identities, "FQDN")?.value ?? "", manufacturer: device.manufacturer ?? "", model: device.model ?? "", deviceClass: device.deviceClass, deviceType: device.deviceType, location: device.location?.name ?? "", identities: device.identities });
-                              return <Tooltip key={`${link.name}-${index}`} label={resolved.unresolved.length ? `${link.name} · missing ${resolved.unresolved.join(", ")}` : link.name}><ActionIcon variant="subtle" disabled={resolved.unresolved.length > 0} onClick={() => openDeviceAccessUrl(resolved.url, `ss_device_${device.id}_${index}`)} aria-label={`Open ${link.name}`}><DeviceGlyph icon={link.icon} color={link.color} /></ActionIcon></Tooltip>;
+                              const publicationLabel = link.publishAsService ? "Published in Service Registry" : "Not published in Service Registry";
+                              return <Tooltip key={`${link.name}-${index}`} label={resolved.unresolved.length ? `${link.name} · missing ${resolved.unresolved.join(", ")} · ${publicationLabel}` : `${link.name} · ${publicationLabel}`}><ActionIcon variant="subtle" disabled={resolved.unresolved.length > 0} onClick={() => openDeviceAccessUrl(resolved.url, `ss_device_${device.id}_${index}`)} aria-label={`Open ${link.name}`}><DeviceAccessGlyph link={link} /></ActionIcon></Tooltip>;
                             })}
                             {device.accessLinks.length === 0 && <Text size="xs" c="dimmed">—</Text>}
                           </Group>
