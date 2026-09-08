@@ -115,7 +115,8 @@ const healthProfileBaseSchema = z.object({
   batteryWarningPercent: z.number().min(0).max(100).nullable().optional(),
   batteryCriticalPercent: z.number().min(0).max(100).nullable().optional(),
   rssiWarning: z.number().nullable().optional(),
-  rssiCritical: z.number().nullable().optional()
+  rssiCritical: z.number().nullable().optional(),
+  monitoringPolicy: z.enum(["IGNORE", "ANY_UP", "ALL_UP"]).optional()
 }).strict();
 
 type HealthProfileThresholdInput = Partial<z.infer<typeof healthProfileBaseSchema>>;
@@ -200,6 +201,11 @@ interface DeviceRow {
   battery_critical_percent: number | null;
   rssi_warning: number | null;
   rssi_critical: number | null;
+  monitoring_policy: "IGNORE" | "ANY_UP" | "ALL_UP";
+  monitoring_total_checks: number;
+  monitoring_up_checks: number;
+  monitoring_down_checks: number;
+  monitoring_unknown_checks: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -249,15 +255,14 @@ function evaluateHealth(row: DeviceRow): { status: HealthStatus; reasons: string
   if (!row.enabled) return { status: "DISABLED", reasons: ["Device disabled"] };
 
   const reasons: string[] = [];
+  const offlineReasons: string[] = [];
   const ageSeconds = row.last_seen_at
     ? Math.max(0, (Date.now() - row.last_seen_at.getTime()) / 1000)
     : null;
 
   if (ageSeconds != null && row.offline_after_seconds != null && ageSeconds > row.offline_after_seconds) {
-    return { status: "OFFLINE", reasons: [`Last seen ${Math.round(ageSeconds)} seconds ago`] };
-  }
-
-  if (ageSeconds != null && row.warning_after_seconds != null && ageSeconds > row.warning_after_seconds) {
+    offlineReasons.push(`Last seen ${Math.round(ageSeconds)} seconds ago`);
+  } else if (ageSeconds != null && row.warning_after_seconds != null && ageSeconds > row.warning_after_seconds) {
     reasons.push(`Last seen ${Math.round(ageSeconds)} seconds ago`);
   }
 
@@ -289,7 +294,35 @@ function evaluateHealth(row: DeviceRow): { status: HealthStatus; reasons: string
     reasons.push(`Signal weak (${row.rssi} dBm)`);
   }
 
+  const monitoringEnabled = row.monitoring_policy !== "IGNORE" && row.monitoring_total_checks > 0;
+  if (monitoringEnabled) {
+    const total = row.monitoring_total_checks;
+    const up = row.monitoring_up_checks;
+    const down = row.monitoring_down_checks;
+    const unknown = row.monitoring_unknown_checks;
+
+    if (row.monitoring_policy === "ANY_UP") {
+      if (down === total) {
+        offlineReasons.push(`All ${total} PING monitoring checks are DOWN`);
+      } else if (up > 0 && up < total) {
+        reasons.push(`Monitoring degraded (${up}/${total} PING checks UP)`);
+      } else if (up === 0 && unknown > 0) {
+        reasons.push(`Monitoring has no confirmed UP check (${unknown} UNKNOWN${down > 0 ? `, ${down} DOWN` : ""})`);
+      }
+    } else if (row.monitoring_policy === "ALL_UP") {
+      if (down > 0) {
+        offlineReasons.push(`Monitoring requires all PING checks UP (${down}/${total} DOWN)`);
+      } else if (up < total) {
+        reasons.push(`Monitoring incomplete (${up}/${total} PING checks UP)`);
+      }
+    }
+  }
+
+  if (offlineReasons.length > 0) return { status: "OFFLINE", reasons: [...offlineReasons, ...reasons] };
   if (reasons.length > 0) return { status: "WARNING", reasons };
+  if (monitoringEnabled && row.monitoring_up_checks === row.monitoring_total_checks) {
+    return { status: "ONLINE", reasons: [] };
+  }
   if (!row.last_seen_at) return { status: "UNKNOWN", reasons: ["No health observation yet"] };
   return { status: "ONLINE", reasons: [] };
 }
@@ -333,6 +366,11 @@ async function listDeviceRows(pool: Pool): Promise<DeviceRow[]> {
       hp.battery_critical_percent,
       hp.rssi_warning,
       hp.rssi_critical,
+      COALESCE(hp.monitoring_policy, 'IGNORE') AS monitoring_policy,
+      COALESCE(mh.total_checks, 0)::int AS monitoring_total_checks,
+      COALESCE(mh.up_checks, 0)::int AS monitoring_up_checks,
+      COALESCE(mh.down_checks, 0)::int AS monitoring_down_checks,
+      COALESCE(mh.unknown_checks, 0)::int AS monitoring_unknown_checks,
       d.created_at,
       d.updated_at
     FROM device_registry_devices d
@@ -350,6 +388,26 @@ async function listDeviceRows(pool: Pool): Promise<DeviceRow[]> {
       JOIN device_technologies t ON t.code = dt.technology_code
       WHERE dt.device_id = d.id
     ) tech ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT
+        COUNT(*) AS total_checks,
+        COUNT(*) FILTER (WHERE latest.status = 'UP') AS up_checks,
+        COUNT(*) FILTER (WHERE latest.status = 'DOWN') AS down_checks,
+        COUNT(*) FILTER (WHERE latest.status IS NULL OR latest.status = 'UNKNOWN') AS unknown_checks
+      FROM monitoring_checks c
+      LEFT JOIN LATERAL (
+        SELECT s.status
+        FROM monitoring_check_states s
+        JOIN monitoring_check_agents ca ON ca.check_id = s.check_id AND ca.agent_id = s.agent_id AND ca.enabled = TRUE
+        JOIN monitoring_agents a ON a.id = s.agent_id AND a.enabled = TRUE
+        WHERE s.check_id = c.id
+        ORDER BY s.last_check_at DESC NULLS LAST, s.updated_at DESC
+        LIMIT 1
+      ) latest ON TRUE
+      WHERE c.device_id = d.id
+        AND c.enabled = TRUE
+        AND c.check_type = 'PING'
+    ) mh ON TRUE
     ORDER BY LOWER(d.name), d.id
   `);
   return result.rows;
@@ -992,6 +1050,7 @@ export async function registerDeviceRegistryFeature(
         battery_critical_percent AS "batteryCriticalPercent",
         rssi_warning AS "rssiWarning",
         rssi_critical AS "rssiCritical",
+        monitoring_policy AS "monitoringPolicy",
         created_at AS "createdAt",
         updated_at AS "updatedAt"
       FROM device_health_profiles
@@ -1009,8 +1068,8 @@ export async function registerDeviceRegistryFeature(
     const result = await pool.query(`
       INSERT INTO device_health_profiles (
         name, description, warning_after_seconds, offline_after_seconds,
-        battery_warning_percent, battery_critical_percent, rssi_warning, rssi_critical
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        battery_warning_percent, battery_critical_percent, rssi_warning, rssi_critical, monitoring_policy
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       RETURNING
         id, name, description,
         warning_after_seconds AS "warningAfterSeconds",
@@ -1019,12 +1078,13 @@ export async function registerDeviceRegistryFeature(
         battery_critical_percent AS "batteryCriticalPercent",
         rssi_warning AS "rssiWarning",
         rssi_critical AS "rssiCritical",
+        monitoring_policy AS "monitoringPolicy",
         created_at AS "createdAt",
         updated_at AS "updatedAt"
     `, [
       input.name, input.description ?? null, input.warningAfterSeconds ?? null,
       input.offlineAfterSeconds ?? null, input.batteryWarningPercent ?? null,
-      input.batteryCriticalPercent ?? null, input.rssiWarning ?? null, input.rssiCritical ?? null
+      input.batteryCriticalPercent ?? null, input.rssiWarning ?? null, input.rssiCritical ?? null, input.monitoringPolicy ?? "IGNORE"
     ]);
     return reply.code(201).send(result.rows[0]);
   });
@@ -1045,6 +1105,7 @@ export async function registerDeviceRegistryFeature(
         battery_critical_percent = CASE WHEN $11 THEN $12::double precision ELSE battery_critical_percent END,
         rssi_warning = CASE WHEN $13 THEN $14::double precision ELSE rssi_warning END,
         rssi_critical = CASE WHEN $15 THEN $16::double precision ELSE rssi_critical END,
+        monitoring_policy = COALESCE($17, monitoring_policy),
         updated_at = NOW()
       WHERE id = $1
       RETURNING
@@ -1055,6 +1116,7 @@ export async function registerDeviceRegistryFeature(
         battery_critical_percent AS "batteryCriticalPercent",
         rssi_warning AS "rssiWarning",
         rssi_critical AS "rssiCritical",
+        monitoring_policy AS "monitoringPolicy",
         created_at AS "createdAt",
         updated_at AS "updatedAt"
     `, [
@@ -1066,7 +1128,8 @@ export async function registerDeviceRegistryFeature(
       Object.prototype.hasOwnProperty.call(input, "batteryWarningPercent"), input.batteryWarningPercent ?? null,
       Object.prototype.hasOwnProperty.call(input, "batteryCriticalPercent"), input.batteryCriticalPercent ?? null,
       Object.prototype.hasOwnProperty.call(input, "rssiWarning"), input.rssiWarning ?? null,
-      Object.prototype.hasOwnProperty.call(input, "rssiCritical"), input.rssiCritical ?? null
+      Object.prototype.hasOwnProperty.call(input, "rssiCritical"), input.rssiCritical ?? null,
+      input.monitoringPolicy ?? null
     ]);
     if (!result.rows[0]) return reply.code(404).send({ error: "Health profile not found" });
     return reply.send(result.rows[0]);

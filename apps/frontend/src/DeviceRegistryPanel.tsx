@@ -74,7 +74,7 @@ import { MonitoringPanel, type MonitoringQuickCheckRequest } from "./MonitoringP
 
 
 type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "battery" | "lastSeen" | "health" | "checks";
-type HealthProfileSortKey = "name" | "warning" | "offline" | "batteryWarning" | "batteryCritical" | "rssiWarning" | "rssiCritical";
+type HealthProfileSortKey = "name" | "monitoring" | "warning" | "offline" | "batteryWarning" | "batteryCritical" | "rssiWarning" | "rssiCritical";
 
 function deviceAddress(device: DeviceRegistryDevice): string {
   return primaryIdentity(device.identities, "IP")?.value
@@ -249,6 +249,7 @@ interface HealthProfileFormState {
   batteryCriticalPercent: number | string;
   rssiWarning: number | string;
   rssiCritical: number | string;
+  monitoringPolicy: "IGNORE" | "ANY_UP" | "ALL_UP";
 }
 
 const emptyHealthProfileForm = (): HealthProfileFormState => ({
@@ -259,7 +260,8 @@ const emptyHealthProfileForm = (): HealthProfileFormState => ({
   batteryWarningPercent: "",
   batteryCriticalPercent: "",
   rssiWarning: "",
-  rssiCritical: ""
+  rssiCritical: "",
+  monitoringPolicy: "IGNORE"
 });
 
 function profileToForm(profile: DeviceHealthProfile): HealthProfileFormState {
@@ -271,7 +273,8 @@ function profileToForm(profile: DeviceHealthProfile): HealthProfileFormState {
     batteryWarningPercent: profile.batteryWarningPercent ?? "",
     batteryCriticalPercent: profile.batteryCriticalPercent ?? "",
     rssiWarning: profile.rssiWarning ?? "",
-    rssiCritical: profile.rssiCritical ?? ""
+    rssiCritical: profile.rssiCritical ?? "",
+    monitoringPolicy: profile.monitoringPolicy ?? "IGNORE"
   };
 }
 
@@ -285,7 +288,8 @@ function profilePayload(form: HealthProfileFormState): CreateDeviceHealthProfile
     batteryWarningPercent: numberOrNull(form.batteryWarningPercent),
     batteryCriticalPercent: numberOrNull(form.batteryCriticalPercent),
     rssiWarning: numberOrNull(form.rssiWarning),
-    rssiCritical: numberOrNull(form.rssiCritical)
+    rssiCritical: numberOrNull(form.rssiCritical),
+    monitoringPolicy: form.monitoringPolicy
   };
 }
 
@@ -391,6 +395,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     return !needle || `${profile.name} ${profile.description ?? ""}`.toLowerCase().includes(needle);
   }).sort((left, right) => {
     const value = (profile: DeviceHealthProfile) => profileSortKey === "name" ? profile.name
+      : profileSortKey === "monitoring" ? profile.monitoringPolicy
       : profileSortKey === "warning" ? profile.warningAfterSeconds
       : profileSortKey === "offline" ? profile.offlineAfterSeconds
       : profileSortKey === "batteryWarning" ? profile.batteryWarningPercent
@@ -711,6 +716,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
               <Table striped highlightOnHover>
                 <Table.Thead><Table.Tr>
                   <SortableTableHeader active={profileSortKey === "name"} direction={profileSortDirection} onClick={() => toggleProfileSort("name")}>Name</SortableTableHeader>
+                  <SortableTableHeader active={profileSortKey === "monitoring"} direction={profileSortDirection} onClick={() => toggleProfileSort("monitoring")}>Monitoring</SortableTableHeader>
                   <SortableTableHeader active={profileSortKey === "warning"} direction={profileSortDirection} onClick={() => toggleProfileSort("warning")}>Last seen warning</SortableTableHeader>
                   <SortableTableHeader active={profileSortKey === "offline"} direction={profileSortDirection} onClick={() => toggleProfileSort("offline")}>Offline</SortableTableHeader>
                   <SortableTableHeader active={profileSortKey === "batteryWarning"} direction={profileSortDirection} onClick={() => toggleProfileSort("batteryWarning")}>Battery W</SortableTableHeader>
@@ -723,6 +729,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                   {filteredProfiles.map(profile => (
                     <Table.Tr key={profile.id}>
                       <Table.Td><Text fw={600} size="sm">{profile.name}</Text><Text size="xs" c="dimmed">{profile.description ?? ""}</Text></Table.Td>
+                      <Table.Td><Badge variant="light" color={profile.monitoringPolicy === "IGNORE" ? "gray" : "blue"}>{profile.monitoringPolicy === "ANY_UP" ? "Any PING up" : profile.monitoringPolicy === "ALL_UP" ? "All PING up" : "Ignored"}</Badge></Table.Td>
                       <Table.Td>{profile.warningAfterSeconds ?? "—"}</Table.Td>
                       <Table.Td>{profile.offlineAfterSeconds ?? "—"}</Table.Td>
                       <Table.Td>{profile.batteryWarningPercent ?? "—"}</Table.Td>
@@ -734,7 +741,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                       }} /></Group></Table.Td>
                     </Table.Tr>
                   ))}
-                  {filteredProfiles.length === 0 && <Table.Tr><Table.Td colSpan={8}><Text c="dimmed" ta="center" py="xl">{profiles.length === 0 ? "No health profiles yet. Create only the profiles you actually need." : "No health profiles match the active filter."}</Text></Table.Td></Table.Tr>}
+                  {filteredProfiles.length === 0 && <Table.Tr><Table.Td colSpan={9}><Text c="dimmed" ta="center" py="xl">{profiles.length === 0 ? "No health profiles yet. Create only the profiles you actually need." : "No health profiles match the active filter."}</Text></Table.Td></Table.Tr>}
                 </Table.Tbody>
               </Table>
             </Card>
@@ -834,6 +841,17 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           {error && <Text c="red" size="sm">{error}</Text>}
           <TextInput label="Name" required autoFocus value={profileForm.name} onChange={event => setProfileForm(current => ({ ...current, name: event.currentTarget.value }))} />
           <Textarea label="Description" value={profileForm.description} onChange={event => setProfileForm(current => ({ ...current, description: event.currentTarget.value }))} />
+          <Select
+            label="Monitoring policy"
+            description="Uses stabilized states from enabled PING checks associated with the device."
+            value={profileForm.monitoringPolicy}
+            onChange={value => setProfileForm(current => ({ ...current, monitoringPolicy: (value as HealthProfileFormState["monitoringPolicy"]) ?? "IGNORE" }))}
+            data={[
+              { value: "IGNORE", label: "Ignore monitoring checks" },
+              { value: "ANY_UP", label: "Any PING up (redundant connectivity)" },
+              { value: "ALL_UP", label: "All PING up (strict connectivity)" }
+            ]}
+          />
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
             <NumberInput label="Last seen warning (seconds)" min={1} value={profileForm.warningAfterSeconds} onChange={value => setProfileForm(current => ({ ...current, warningAfterSeconds: value }))} />
             <NumberInput label="Offline after (seconds)" min={1} value={profileForm.offlineAfterSeconds} onChange={value => setProfileForm(current => ({ ...current, offlineAfterSeconds: value }))} />

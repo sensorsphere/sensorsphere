@@ -596,8 +596,10 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
       );
       let accepted = 0;
       for (const result of input.results) {
-        const assignment = await client.query(
-          `SELECT 1 FROM monitoring_check_agents ca JOIN monitoring_checks c ON c.id=ca.check_id
+        const assignment = await client.query<{ failure_threshold: number; recovery_threshold: number }>(
+          `SELECT c.failure_threshold, c.recovery_threshold
+             FROM monitoring_check_agents ca
+             JOIN monitoring_checks c ON c.id=ca.check_id
             WHERE ca.check_id=$1 AND ca.agent_id=$2 AND ca.enabled=TRUE AND c.enabled=TRUE`,
           [result.checkId, agent.id]
         );
@@ -609,6 +611,12 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
         const previousStatus = previous.rows[0]?.status ?? "UNKNOWN";
         const successes = result.status === "UP" ? (previous.rows[0]?.consecutive_successes ?? 0) + 1 : 0;
         const failures = result.status === "DOWN" ? (previous.rows[0]?.consecutive_failures ?? 0) + 1 : 0;
+        const thresholds = assignment.rows[0]!;
+        const nextStatus = result.status === "UNKNOWN"
+          ? "UNKNOWN"
+          : result.status === "DOWN"
+            ? (failures >= thresholds.failure_threshold ? "DOWN" : previousStatus)
+            : (successes >= thresholds.recovery_threshold ? "UP" : previousStatus);
         const checkedAt = result.finishedAt ?? result.startedAt ?? new Date().toISOString();
         await client.query(
           `INSERT INTO monitoring_check_states
@@ -619,14 +627,14 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
              last_success_at=COALESCE(EXCLUDED.last_success_at,monitoring_check_states.last_success_at),
              last_failure_at=COALESCE(EXCLUDED.last_failure_at,monitoring_check_states.last_failure_at),
              consecutive_successes=EXCLUDED.consecutive_successes,consecutive_failures=EXCLUDED.consecutive_failures,updated_at=NOW()`,
-          [result.checkId, agent.id, result.status, result.latencyMs ?? null, result.message ?? null, checkedAt,
+          [result.checkId, agent.id, nextStatus, result.latencyMs ?? null, result.message ?? null, checkedAt,
            result.status === "UP" ? checkedAt : null, result.status === "DOWN" ? checkedAt : null, successes, failures]
         );
-        if (result.status !== previousStatus) {
+        if (nextStatus !== previousStatus) {
           await client.query(
             `INSERT INTO monitoring_state_transitions (check_id,agent_id,previous_status,status,message,latency_ms,occurred_at)
              VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [result.checkId, agent.id, previousStatus, result.status, result.message ?? null, result.latencyMs ?? null, checkedAt]
+            [result.checkId, agent.id, previousStatus, nextStatus, result.message ?? null, result.latencyMs ?? null, checkedAt]
           );
         }
         accepted += 1;

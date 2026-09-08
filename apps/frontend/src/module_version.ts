@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.27.0";
+export const MODULE_VERSION = "1.28.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.28.0": {
+    releasedAt: "2026-09-08T22:30:00+02:00",
+    patch: "PR-160-device-health-monitoring-integration-v1.patch",
+    changes: [
+      { type: "added", description: "Health Profiles expose Ignore, Any PING up and All PING up monitoring policies" },
+      { type: "changed", description: "Health Profiles table displays and sorts the configured monitoring policy" }
+    ]
+  },
   "1.27.0": {
     releasedAt: "2026-09-08T00:40:00+02:00",
     patch: "PR-158-monitoring-agent-connection-origin-led-strip-icon-v1.patch",

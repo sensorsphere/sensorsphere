@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.12.0";
+export const MODULE_VERSION = "1.13.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.13.0": {
+    releasedAt: "2026-09-08T22:30:00+02:00",
+    patch: "PR-160-device-health-monitoring-integration-v1.patch",
+    changes: [
+      { type: "added", description: "Health Profiles can aggregate enabled PING monitoring checks with ANY_UP or ALL_UP policies" },
+      { type: "changed", description: "Device health combines Monitoring state with existing Last Seen, battery and RSSI rules while preserving IGNORE as the default" },
+      { type: "fixed", description: "Monitoring check states now honor failure and recovery thresholds before changing stabilized UP/DOWN state" }
+    ]
+  },
   "1.12.0": {
     releasedAt: "2026-09-08T00:40:00+02:00",
     patch: "PR-158-monitoring-agent-connection-origin-led-strip-icon-v1.patch",

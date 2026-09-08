@@ -767,6 +767,7 @@ export interface DeviceHealthProfile {
   batteryCriticalPercent: number | null;
   rssiWarning: number | null;
   rssiCritical: number | null;
+  monitoringPolicy: "IGNORE" | "ANY_UP" | "ALL_UP";
   createdAt: string;
   updatedAt: string;
 }
@@ -843,6 +844,7 @@ export interface CreateDeviceHealthProfileInput {
   batteryCriticalPercent?: number | null;
   rssiWarning?: number | null;
   rssiCritical?: number | null;
+  monitoringPolicy?: "IGNORE" | "ANY_UP" | "ALL_UP";
 }
 
 export type UpdateDeviceHealthProfileInput = Partial<CreateDeviceHealthProfileInput>;
