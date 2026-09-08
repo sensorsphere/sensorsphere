@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.28.1";
+export const MODULE_VERSION = "1.28.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.28.2": {
+    releasedAt: "2026-09-08T21:15:00+02:00",
+    patch: "PR-162-device-access-identity-type-order-v1.patch",
+    changes: [
+      { type: "changed", description: "Device Registry access actions, Access Links and Identities & addresses tables are ordered alphabetically by type" }
+    ]
+  },
   "1.28.1": {
     releasedAt: "2026-09-08T21:00:00+02:00",
     patch: "PR-161-device-health-refresh-empty-unprofiled-v1.patch",

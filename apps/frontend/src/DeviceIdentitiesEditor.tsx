@@ -106,7 +106,7 @@ export function DeviceIdentitiesEditor({
     </Group>
     {value.length > 0 ? <Table withTableBorder>
       <Table.Thead><Table.Tr><Table.Th>Type</Table.Th><Table.Th>Label</Table.Th><Table.Th>Value</Table.Th><Table.Th>Primary</Table.Th><Table.Th>Checks</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead>
-      <Table.Tbody>{value.map((item, index) => <Table.Tr key={`${item.identityType}-${item.value}-${index}`}>
+      <Table.Tbody>{value.map((item, index) => ({ item, index })).sort((a, b) => a.item.identityType.localeCompare(b.item.identityType) || a.item.value.localeCompare(b.item.value)).map(({ item, index }) => <Table.Tr key={`${item.identityType}-${item.value}-${index}`}>
         <Table.Td><Badge variant="light">{item.identityType}</Badge></Table.Td>
         <Table.Td>{item.label ?? identityLabels.find(label => label.code === item.labelCode)?.label ?? "—"}</Table.Td>
         <Table.Td><Text ff="monospace" size="sm">{item.value}</Text></Table.Td>

@@ -665,7 +665,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                         <Table.Td>{(() => { const count = deviceCheckCount(device.id); return <Text size="sm" fw={700} c={count > 0 ? "green.6" : "dimmed"}>{count}</Text>; })()}</Table.Td>
                         <Table.Td>
                           <Group gap={2} wrap="nowrap">
-                            {device.accessLinks.filter(link => link.enabled).slice(0, 3).map((link, index) => {
+                            {device.accessLinks.filter(link => link.enabled).sort((a, b) => a.linkType.localeCompare(b.linkType) || a.name.localeCompare(b.name)).slice(0, 3).map((link, index) => {
                               const resolved = resolveDeviceAccessUrl(link, { deviceName: device.name, macAddress: primaryIdentity(device.identities, "MAC")?.value ?? "", ipAddress: primaryIdentity(device.identities, "IP")?.value ?? "", ieeeAddress: primaryIdentity(device.identities, "IEEE")?.value ?? "", fqdn: primaryIdentity(device.identities, "FQDN")?.value ?? "", manufacturer: device.manufacturer ?? "", model: device.model ?? "", deviceClass: device.deviceClass, deviceType: device.deviceType, location: device.location?.name ?? "", identities: device.identities });
                               return <Tooltip key={`${link.name}-${index}`} label={resolved.unresolved.length ? `${link.name} · missing ${resolved.unresolved.join(", ")}` : link.name}><ActionIcon variant="subtle" disabled={resolved.unresolved.length > 0} onClick={() => openDeviceAccessUrl(resolved.url, `ss_device_${device.id}_${index}`)} aria-label={`Open ${link.name}`}><DeviceGlyph icon={link.icon} color={link.color} /></ActionIcon></Tooltip>;
                             })}
