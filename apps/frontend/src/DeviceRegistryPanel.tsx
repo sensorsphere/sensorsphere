@@ -322,7 +322,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const [accessLinkToOpen, setAccessLinkToOpen] = React.useState<string | null>(null);
   const [quickCheckRequest, setQuickCheckRequest] = React.useState<MonitoringQuickCheckRequest | null>(null);
 
-  const devicesQuery = useQuery({ queryKey: ["device-registry", "devices"], queryFn: getDeviceRegistryDevices });
+  const devicesQuery = useQuery({ queryKey: ["device-registry", "devices"], queryFn: getDeviceRegistryDevices, refetchInterval: 15000 });
   const deviceClassesQuery = useQuery({ queryKey: ["device-registry", "classes"], queryFn: getDeviceClassReferences });
   const profilesQuery = useQuery({ queryKey: ["device-registry", "health-profiles"], queryFn: getDeviceHealthProfiles });
   const deviceTypesQuery = useQuery({ queryKey: ["device-registry", "device-types"], queryFn: getDeviceTypeReferences });
@@ -656,9 +656,11 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                         <Table.Td>{device.batteryPercent == null ? "—" : `${device.batteryPercent}%`}</Table.Td>
                         <Table.Td title={device.lastSeenAt ?? undefined}>{compactDate(device.lastSeenAt)}</Table.Td>
                         <Table.Td>
-                          <Tooltip label={device.health.reasons.length ? device.health.reasons.join(" · ") : "Healthy"}>
-                            <Badge color={HEALTH_COLORS[device.health.status]} variant="light">{device.health.status}</Badge>
-                          </Tooltip>
+                          {device.healthProfile && (
+                            <Tooltip label={device.health.reasons.length ? device.health.reasons.join(" · ") : "Healthy"}>
+                              <Badge color={HEALTH_COLORS[device.health.status]} variant="light">{device.health.status}</Badge>
+                            </Tooltip>
+                          )}
                         </Table.Td>
                         <Table.Td>{(() => { const count = deviceCheckCount(device.id); return <Text size="sm" fw={700} c={count > 0 ? "green.6" : "dimmed"}>{count}</Text>; })()}</Table.Td>
                         <Table.Td>

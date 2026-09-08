@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.28.0";
+export const MODULE_VERSION = "1.28.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.28.1": {
+    releasedAt: "2026-09-08T21:00:00+02:00",
+    patch: "PR-161-device-health-refresh-empty-unprofiled-v1.patch",
+    changes: [
+      { type: "fixed", description: "Device Registry refreshes device health periodically so stabilized monitoring state changes are reflected without a page reload" },
+      { type: "changed", description: "Devices without a Health Profile leave the Health table cell empty instead of displaying UNKNOWN" }
+    ]
+  },
   "1.28.0": {
     releasedAt: "2026-09-08T22:30:00+02:00",
     patch: "PR-160-device-health-monitoring-integration-v1.patch",
