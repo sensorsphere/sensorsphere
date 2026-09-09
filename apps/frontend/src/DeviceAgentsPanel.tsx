@@ -71,10 +71,10 @@ export function DeviceAgentsPanel() {
     </Card>
 
     <Modal opened={opened} onClose={() => setOpened(false)} title={editing ? "Edit Device Agent" : "Add Device Agent"} centered>
-      <Stack><TextInput autoFocus label="Name" required value={form.name} onChange={event => setForm(current => ({ ...current, name: event.currentTarget.value }))} />
-        <TextInput label="Managed labels" description="Comma separated. key=value or simple labels." value={form.labelsText} onChange={event => setForm(current => ({ ...current, labelsText: event.currentTarget.value }))} />
+      <Stack><TextInput data-autofocus label="Name" required value={form.name} onChange={event => { const value = event.currentTarget.value; setForm(current => ({ ...current, name: value })); }} />
+        <TextInput label="Managed labels" description="Comma separated. key=value or simple labels." value={form.labelsText} onChange={event => { const value = event.currentTarget.value; setForm(current => ({ ...current, labelsText: value })); }} />
         <NumberInput label="Heartbeat timeout (seconds)" min={15} max={3600} value={form.heartbeatTimeoutSeconds} onChange={value => setForm(current => ({ ...current, heartbeatTimeoutSeconds: Number(value) || 60 }))} />
-        {editing && <Checkbox label="Enabled" checked={form.enabled} onChange={event => setForm(current => ({ ...current, enabled: event.currentTarget.checked }))} />}
+        {editing && <Checkbox label="Enabled" checked={form.enabled} onChange={event => { const checked = event.currentTarget.checked; setForm(current => ({ ...current, enabled: checked })); }} />}
         <Group justify="flex-end"><Button variant="default" onClick={() => setOpened(false)}>Cancel</Button><Button disabled={!form.name.trim()} loading={save.isPending} onClick={() => save.mutate()}>Save</Button></Group>
       </Stack>
     </Modal>

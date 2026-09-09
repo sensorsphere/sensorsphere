@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.29.0";
+export const MODULE_VERSION = "1.29.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.29.1": {
+    releasedAt: "2026-09-09T06:30:00+02:00",
+    patch: "PR-166-device-agent-dialog-event-focus-fix-v1.patch",
+    changes: [
+      { type: "fixed", description: "Device Agent dialog captures input values before queued state updates to avoid null currentTarget crashes while typing" },
+      { type: "changed", description: "Device Agent dialogs explicitly focus the first database field, Name, when opened" }
+    ]
+  },
   "1.29.0": {
     releasedAt: "2026-09-09T06:45:00+02:00",
     patch: "PR-164-device-control-websocket-foundation-v1.patch",
