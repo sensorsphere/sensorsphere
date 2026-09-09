@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.29.1";
+export const MODULE_VERSION = "1.29.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.29.2": {
+    releasedAt: "2026-09-09T07:10:00+02:00",
+    patch: "PR-167-device-agent-token-copy-environment-v1.patch",
+    changes: [
+      { type: "fixed", description: "Device Agent token copy uses the same clipboard fallback as Monitoring Agents so copying also works in insecure HTTP contexts" },
+      { type: "changed", description: "Device Agent token dialog provides separate copy actions for the token and for SensorSphere URL plus device-agent token environment variables" }
+    ]
+  },
   "1.29.1": {
     releasedAt: "2026-09-09T06:30:00+02:00",
     patch: "PR-166-device-agent-dialog-event-focus-fix-v1.patch",

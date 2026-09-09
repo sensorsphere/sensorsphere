@@ -1,5 +1,5 @@
 import React from "react";
-import { Badge, Button, Card, Checkbox, Group, Modal, NumberInput, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Button, Card, Checkbox, Code, Group, Modal, NumberInput, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createDeviceAgent, deleteDeviceAgent, getDeviceAgents, regenerateDeviceAgentToken, updateDeviceAgent } from "./api";
 import type { DeviceAgent } from "./types";
@@ -28,6 +28,32 @@ function labelsText(agent: DeviceAgent): string {
   return Object.entries(agent.labels ?? {}).map(([key, value]) => value === "true" ? key : `${key}=${value}`).join(", ");
 }
 
+async function writeClipboardText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall through for HTTP/insecure contexts or browsers denying Clipboard API access.
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try {
+    document.execCommand("copy");
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
 export function DeviceAgentsPanel() {
   const queryClient = useQueryClient();
   const agentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
@@ -52,6 +78,11 @@ export function DeviceAgentsPanel() {
 
   const openCreate = () => { setEditing(null); setForm(emptyForm()); setOpened(true); };
   const openEdit = (agent: DeviceAgent) => { setEditing(agent); setForm({ name: agent.name, enabled: agent.enabled, labelsText: labelsText(agent), heartbeatTimeoutSeconds: agent.heartbeatTimeoutSeconds }); setOpened(true); };
+
+  const sensorsphereUrl = typeof window === "undefined" ? "" : window.location.origin;
+  const agentEnvironment = tokenInfo
+    ? `SENSORSPHERE_URL=${sensorsphereUrl}\nSENSORSPHERE_DEVICE_AGENT_TOKEN=${tokenInfo.token}`
+    : "";
 
   return <Stack gap="md">
     <Group justify="space-between"><div><Text fw={600}>Device Agents</Text><Text size="xs" c="dimmed">Outbound WebSocket agents used for discovery and interactive device control.</Text></div><Button onClick={openCreate}>Add Device Agent</Button></Group>
@@ -83,8 +114,45 @@ export function DeviceAgentsPanel() {
       <Stack><Text>Delete <strong>{deleteTarget?.name}</strong>? Devices assigned to it will keep their provider but lose the control-agent association.</Text><Group justify="flex-end"><Button variant="default" onClick={() => setDeleteTarget(null)}>Cancel</Button><Button color="red" loading={remove.isPending} onClick={() => deleteTarget && remove.mutate(deleteTarget.id)}>Delete</Button></Group></Stack>
     </Modal>
 
-    <Modal opened={!!tokenInfo} onClose={() => setTokenInfo(null)} title="Device Agent token" centered>
-      <Stack><Text size="sm">This token is shown only now. Configure it as <strong>SENSORSPHERE_DEVICE_AGENT_TOKEN</strong> on {tokenInfo?.name}.</Text><TextInput readOnly value={tokenInfo?.token ?? ""} styles={{ input: { fontFamily: "monospace" } }} /><Button color="green" onClick={() => tokenInfo && navigator.clipboard?.writeText(tokenInfo.token)}>Copy token</Button></Stack>
+    <Modal opened={!!tokenInfo} onClose={() => setTokenInfo(null)} title="Device Agent token" size="lg">
+      <Stack>
+        <Text size="sm">Copy this token now. SensorSphere stores only its hash and cannot display it again.</Text>
+        <TextInput
+          label="Token"
+          readOnly
+          value={tokenInfo?.token ?? ""}
+          styles={{ input: { fontFamily: "monospace" } }}
+          rightSection={
+            <Tooltip label="Copy token">
+              <ActionIcon
+                color="green"
+                variant="subtle"
+                aria-label="Copy token"
+                onClick={() => tokenInfo && void writeClipboardText(tokenInfo.token)}
+              >
+                ⧉
+              </ActionIcon>
+            </Tooltip>
+          }
+        />
+        <Stack gap={4}>
+          <Group justify="space-between" align="center">
+            <Text size="sm" fw={500}>Agent environment variables</Text>
+            <Tooltip label="Copy SensorSphere URL and token">
+              <ActionIcon
+                color="green"
+                variant="subtle"
+                aria-label="Copy SensorSphere URL and token"
+                onClick={() => tokenInfo && void writeClipboardText(agentEnvironment)}
+              >
+                ⧉
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+          <Code block>{agentEnvironment}</Code>
+        </Stack>
+        <Group justify="flex-end"><Button onClick={() => setTokenInfo(null)}>Close</Button></Group>
+      </Stack>
     </Modal>
   </Stack>;
 }
