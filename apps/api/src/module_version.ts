@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.14.0";
+export const MODULE_VERSION = "1.14.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.14.1": {
+    releasedAt: "2026-09-09T06:30:00+02:00",
+    patch: "PR-165-device-control-command-target-identities-v1.patch",
+    changes: [
+      { type: "changed", description: "Device Agent COMMAND messages include the Device Registry name and ordered identities so providers can resolve protocol-specific targets" }
+    ]
+  },
   "1.14.0": {
     releasedAt: "2026-09-09T06:45:00+02:00",
     patch: "PR-164-device-control-websocket-foundation-v1.patch",

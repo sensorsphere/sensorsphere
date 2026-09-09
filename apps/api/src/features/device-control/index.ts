@@ -153,15 +153,45 @@ export async function registerDeviceControlFeature(
     const result = await pool.query<{
       id: string;
       device_id: string;
+      device_name: string;
       provider: string;
       action: string;
       parameters: Record<string, unknown>;
       expires_at: Date;
+      identities: Array<{
+        identityType: string;
+        value: string;
+        source: string | null;
+        labelCode: string | null;
+        label: string | null;
+        isPrimary: boolean;
+        sortOrder: number;
+      }>;
     }>(`
-      SELECT id, device_id, provider, action, parameters, expires_at
-      FROM device_control_commands
-      WHERE agent_id = $1 AND status = 'PENDING' AND expires_at > NOW()
-      ORDER BY created_at, id
+      SELECT
+        c.id, c.device_id, d.name AS device_name, c.provider, c.action, c.parameters, c.expires_at,
+        COALESCE(
+          jsonb_agg(
+            jsonb_build_object(
+              'identityType', i.identity_type,
+              'value', i.value,
+              'source', i.source,
+              'labelCode', i.label_code,
+              'label', COALESCE(il.label, i.label),
+              'isPrimary', i.is_primary,
+              'sortOrder', i.sort_order
+            )
+            ORDER BY i.identity_type, i.is_primary DESC, i.sort_order, i.value
+          ) FILTER (WHERE i.id IS NOT NULL),
+          '[]'::jsonb
+        ) AS identities
+      FROM device_control_commands c
+      JOIN device_registry_devices d ON d.id = c.device_id
+      LEFT JOIN device_registry_identities i ON i.device_id = c.device_id
+      LEFT JOIN device_identity_labels il ON il.code = i.label_code
+      WHERE c.agent_id = $1 AND c.status = 'PENDING' AND c.expires_at > NOW()
+      GROUP BY c.id, c.device_id, d.name, c.provider, c.action, c.parameters, c.expires_at, c.created_at
+      ORDER BY c.created_at, c.id
     `, [agentId]);
 
     for (const command of result.rows) {
@@ -170,6 +200,8 @@ export async function registerDeviceControlFeature(
         type: "COMMAND",
         commandId: command.id,
         deviceId: command.device_id,
+        deviceName: command.device_name,
+        target: { identities: command.identities ?? [] },
         provider: command.provider,
         action: command.action,
         parameters: command.parameters ?? {},
