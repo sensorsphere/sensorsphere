@@ -13,11 +13,13 @@
     "fastify": "^5.5.0",
     "pg": "^8.16.3",
     "pino": "^9.9.4",
-    "zod": "^4"
+    "zod": "^4",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/node": "^22.18.0",
     "@types/pg": "^8.15.5",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "@types/ws": "^8.18.1"
   }
 }

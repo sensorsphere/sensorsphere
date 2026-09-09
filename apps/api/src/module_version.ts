@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.13.0";
+export const MODULE_VERSION = "1.14.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.14.0": {
+    releasedAt: "2026-09-09T06:45:00+02:00",
+    patch: "PR-164-device-control-websocket-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Add Device Agent CRUD, ssda_ bearer tokens and persistent outbound WebSocket control sessions" },
+      { type: "added", description: "Add typed Device Control command/result/state protocol and Device Registry control-agent association" },
+      { type: "security", description: "Device Control accepts typed provider actions only and never exposes arbitrary remote command execution" }
+    ]
+  },
   "1.13.0": {
     releasedAt: "2026-09-08T22:30:00+02:00",
     patch: "PR-160-device-health-monitoring-integration-v1.patch",

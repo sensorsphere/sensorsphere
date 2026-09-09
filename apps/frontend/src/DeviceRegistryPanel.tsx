@@ -36,6 +36,7 @@ import {
   deleteDeviceRegistryDevice,
   getAssets,
   getDeviceHealthProfiles,
+  getDeviceAgents,
   getDeviceIdentityLabelReferences,
   getDeviceRegistryDevices,
   getDeviceClassReferences,
@@ -71,6 +72,7 @@ import { usePersistentState } from "./preferences/usePersistentState";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { MonitoringPanel, type MonitoringQuickCheckRequest } from "./MonitoringPanel";
+import { DeviceAgentsPanel } from "./DeviceAgentsPanel";
 
 
 type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "battery" | "lastSeen" | "health" | "checks";
@@ -148,6 +150,7 @@ interface DeviceFormState {
   locationId: string | null;
   parentDeviceId: string | null;
   healthProfileId: string | null;
+  controlAgentId: string | null;
   enabled: boolean;
   lastSeenAt: string;
   batteryPercent: number | string;
@@ -172,6 +175,7 @@ function emptyDeviceForm(): DeviceFormState {
     locationId: null,
     parentDeviceId: null,
     healthProfileId: null,
+    controlAgentId: null,
     enabled: true,
     lastSeenAt: "",
     batteryPercent: "",
@@ -197,6 +201,7 @@ function deviceToForm(device: DeviceRegistryDevice): DeviceFormState {
     locationId: device.location?.id ?? null,
     parentDeviceId: device.parentDevice?.id ?? null,
     healthProfileId: device.healthProfile?.id ?? null,
+    controlAgentId: device.controlAgent?.id ?? null,
     enabled: device.enabled,
     lastSeenAt: device.lastSeenAt ? device.lastSeenAt.slice(0, 16) : "",
     batteryPercent: device.batteryPercent ?? "",
@@ -226,6 +231,7 @@ function deviceFormPayload(form: DeviceFormState): CreateDeviceRegistryDeviceInp
     locationId: form.locationId,
     parentDeviceId: form.parentDeviceId,
     healthProfileId: form.healthProfileId,
+    controlAgentId: form.controlAgentId,
     enabled: form.enabled,
     lastSeenAt: form.lastSeenAt ? new Date(form.lastSeenAt).toISOString() : null,
     batteryPercent: form.batteryPercent === "" ? null : Number(form.batteryPercent),
@@ -325,6 +331,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const devicesQuery = useQuery({ queryKey: ["device-registry", "devices"], queryFn: getDeviceRegistryDevices, refetchInterval: 15000 });
   const deviceClassesQuery = useQuery({ queryKey: ["device-registry", "classes"], queryFn: getDeviceClassReferences });
   const profilesQuery = useQuery({ queryKey: ["device-registry", "health-profiles"], queryFn: getDeviceHealthProfiles });
+  const deviceAgentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
   const deviceTypesQuery = useQuery({ queryKey: ["device-registry", "device-types"], queryFn: getDeviceTypeReferences });
   const technologiesQuery = useQuery({ queryKey: ["device-registry", "technologies"], queryFn: getDeviceTechnologyReferences });
   const identityLabelsQuery = useQuery({ queryKey: ["device-registry", "identity-labels"], queryFn: getDeviceIdentityLabelReferences });
@@ -545,6 +552,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         <Tabs.List>
           <Tabs.Tab value="devices">Devices</Tabs.Tab>
           <Tabs.Tab value="monitoring">Monitoring</Tabs.Tab>
+          <Tabs.Tab value="device-agents">Device Agents</Tabs.Tab>
           <Tabs.Tab value="discovery">Discovery</Tabs.Tab>
           <Tabs.Tab value="health-profiles">Health Profiles</Tabs.Tab>
           <Tabs.Tab value="taxonomy">Taxonomy</Tabs.Tab>
@@ -696,6 +704,10 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           <MonitoringPanel quickCheckRequest={quickCheckRequest} onQuickCheckFinished={returnFromQuickCheck} />
         </Tabs.Panel>
 
+        <Tabs.Panel value="device-agents" pt="md">
+          <DeviceAgentsPanel />
+        </Tabs.Panel>
+
         <Tabs.Panel value="discovery" pt="md">
           <Card withBorder>
             <Stack gap="xs">
@@ -820,6 +832,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
             />
             <Select label="Parent device" searchable clearable value={deviceForm.parentDeviceId} onChange={value => setDeviceForm(current => ({ ...current, parentDeviceId: value }))} data={devices.filter(device => device.id !== editingDevice?.id).map(device => ({ value: device.id, label: device.name }))} />
             <Select label="Health profile" searchable clearable value={deviceForm.healthProfileId} onChange={value => setDeviceForm(current => ({ ...current, healthProfileId: value }))} data={(profilesQuery.data ?? []).map(profile => ({ value: profile.id, label: profile.name }))} />
+            <Select label="Control agent" description={deviceForm.technologies.some(value => value.toLowerCase() === "yeelight") ? "Yeelight control will use this agent." : "Used by future Device Control providers."} searchable clearable value={deviceForm.controlAgentId} onChange={value => setDeviceForm(current => ({ ...current, controlAgentId: value }))} data={(deviceAgentsQuery.data ?? []).filter(agent => agent.enabled).map(agent => ({ value: agent.id, label: `${agent.name}${agent.online ? " · ONLINE" : " · OFFLINE"}` }))} />
             <TextInput type="datetime-local" label="Last seen" value={deviceForm.lastSeenAt} onChange={event => setDeviceForm(current => ({ ...current, lastSeenAt: event.currentTarget.value }))} />
             <NumberInput label="Battery %" min={0} max={100} value={deviceForm.batteryPercent} onChange={value => setDeviceForm(current => ({ ...current, batteryPercent: value }))} />
             <NumberInput label="RSSI dBm" value={deviceForm.rssi} onChange={value => setDeviceForm(current => ({ ...current, rssi: value }))} />

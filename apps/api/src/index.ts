@@ -58,6 +58,10 @@ import {
   registerMonitoringFeature
 } from "./features/monitoring/index.js";
 
+import {
+  registerDeviceControlFeature
+} from "./features/device-control/index.js";
+
 
 import {
   loadApiConfig
@@ -1039,6 +1043,13 @@ await registerServiceRegistryFeature(
 );
 
 await registerMonitoringFeature(
+  app,
+  {
+    pool
+  }
+);
+
+await registerDeviceControlFeature(
   app,
   {
     pool

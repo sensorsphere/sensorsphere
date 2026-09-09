@@ -83,8 +83,10 @@ export function DeviceAccessGlyph({ link, size = 18 }: { link: Pick<DeviceAccess
         width: 7,
         height: 7,
         borderRadius: "50%",
-        background: link.publishAsService ? "var(--mantine-color-green-6)" : "var(--mantine-color-gray-6)",
-        border: "1px solid var(--mantine-color-dark-7)"
+        background: link.publishAsService ? "var(--mantine-color-green-4)" : "var(--mantine-color-gray-4)",
+        opacity: link.publishAsService ? 1 : 0.42,
+        boxShadow: link.publishAsService ? "0 0 4px var(--mantine-color-green-4)" : "none",
+        border: link.publishAsService ? "1px solid var(--mantine-color-green-1)" : "1px solid var(--mantine-color-gray-6)"
       }}
     />
   </span>;

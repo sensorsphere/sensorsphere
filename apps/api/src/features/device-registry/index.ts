@@ -93,6 +93,7 @@ const deviceCreateSchema = z.object({
   locationId: z.string().uuid().nullable().optional(),
   parentDeviceId: z.string().uuid().nullable().optional(),
   healthProfileId: z.string().uuid().nullable().optional(),
+  controlAgentId: z.string().uuid().nullable().optional(),
   enabled: z.boolean().optional(),
   lastSeenAt: z.string().datetime({ offset: true }).nullable().optional(),
   batteryPercent: z.number().min(0).max(100).nullable().optional(),
@@ -191,6 +192,9 @@ interface DeviceRow {
   parent_device_name: string | null;
   health_profile_id: string | null;
   health_profile_name: string | null;
+  control_agent_id: string | null;
+  control_agent_name: string | null;
+  control_provider: string | null;
   enabled: boolean;
   last_seen_at: Date | null;
   battery_percent: number | null;
@@ -356,6 +360,9 @@ async function listDeviceRows(pool: Pool): Promise<DeviceRow[]> {
       parent.name AS parent_device_name,
       d.health_profile_id,
       hp.name AS health_profile_name,
+      d.control_agent_id,
+      da.name AS control_agent_name,
+      d.control_provider,
       d.enabled,
       d.last_seen_at,
       d.battery_percent,
@@ -379,6 +386,7 @@ async function listDeviceRows(pool: Pool): Promise<DeviceRow[]> {
     LEFT JOIN locations l ON l.id = d.location_id
     LEFT JOIN device_registry_devices parent ON parent.id = d.parent_device_id
     LEFT JOIN device_health_profiles hp ON hp.id = d.health_profile_id
+    LEFT JOIN device_agents da ON da.id = d.control_agent_id
     LEFT JOIN LATERAL (
       SELECT jsonb_agg(
         jsonb_build_object('code', t.code, 'label', t.label, 'category', t.category, 'icon', t.icon, 'color', t.color, 'enabled', t.enabled, 'sortOrder', t.sort_order)
@@ -440,6 +448,8 @@ function mapDevice(row: DeviceRow, identities: IdentityRow[], links: LinkRow[], 
     location: row.location_id ? { id: row.location_id, name: row.location_name ?? row.location_id } : null,
     parentDevice: row.parent_device_id ? { id: row.parent_device_id, name: row.parent_device_name ?? row.parent_device_id } : null,
     healthProfile: row.health_profile_id ? { id: row.health_profile_id, name: row.health_profile_name ?? row.health_profile_id } : null,
+    controlAgent: row.control_agent_id ? { id: row.control_agent_id, name: row.control_agent_name ?? row.control_agent_id } : null,
+    controlProvider: row.control_provider,
     enabled: row.enabled,
     lastSeenAt: row.last_seen_at?.toISOString() ?? null,
     batteryPercent: row.battery_percent,
@@ -916,16 +926,17 @@ export async function registerDeviceRegistryFeature(
         INSERT INTO device_registry_devices (
           name, device_class, device_type, technology, mac_address, ip_address, ieee_address, fqdn, manufacturer, model,
           firmware_version, description, location_id, parent_device_id,
-          health_profile_id, enabled, last_seen_at, battery_percent, rssi
-        ) VALUES ($1,$2,$3,$4,$5,$6::inet,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+          health_profile_id, control_agent_id, control_provider, enabled, last_seen_at, battery_percent, rssi
+        ) VALUES ($1,$2,$3,$4,$5,$6::inet,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
         RETURNING id
       `, [
         input.name, input.deviceClass, input.deviceType, input.technology ?? null,
         input.macAddress ?? null, input.ipAddress ?? null, input.ieeeAddress ?? null, input.fqdn ?? null,
         input.manufacturer ?? null, input.model ?? null, input.firmwareVersion ?? null,
         input.description ?? null, input.locationId ?? null, input.parentDeviceId ?? null,
-        input.healthProfileId ?? null, input.enabled ?? true, input.lastSeenAt ?? null,
-        input.batteryPercent ?? null, input.rssi ?? null
+        input.healthProfileId ?? null, input.controlAgentId ?? null,
+        ((input.technologies ?? (input.technology ? [input.technology] : [])).some(value => value.toLowerCase() === "yeelight")) ? "YEELIGHT" : null,
+        input.enabled ?? true, input.lastSeenAt ?? null, input.batteryPercent ?? null, input.rssi ?? null
       ]);
       const id = result.rows[0]!.id;
       await replaceChildren(client, id, input.identities ?? [], input.links ?? [], input.technologies ?? (input.technology ? [input.technology] : []), input.accessLinks ?? []);
@@ -981,10 +992,12 @@ export async function registerDeviceRegistryFeature(
           location_id = CASE WHEN $23 THEN $24::uuid ELSE location_id END,
           parent_device_id = CASE WHEN $25 THEN $26::uuid ELSE parent_device_id END,
           health_profile_id = CASE WHEN $27 THEN $28::uuid ELSE health_profile_id END,
-          enabled = COALESCE($29, enabled),
-          last_seen_at = CASE WHEN $30 THEN $31::timestamptz ELSE last_seen_at END,
-          battery_percent = CASE WHEN $32 THEN $33::double precision ELSE battery_percent END,
-          rssi = CASE WHEN $34 THEN $35::double precision ELSE rssi END,
+          control_agent_id = CASE WHEN $29 THEN $30::uuid ELSE control_agent_id END,
+          control_provider = CASE WHEN $31 THEN $32 ELSE control_provider END,
+          enabled = COALESCE($33, enabled),
+          last_seen_at = CASE WHEN $34 THEN $35::timestamptz ELSE last_seen_at END,
+          battery_percent = CASE WHEN $36 THEN $37::double precision ELSE battery_percent END,
+          rssi = CASE WHEN $38 THEN $39::double precision ELSE rssi END,
           updated_at = NOW()
         WHERE id = $1
       `, [
@@ -1004,6 +1017,9 @@ export async function registerDeviceRegistryFeature(
         Object.prototype.hasOwnProperty.call(input, "locationId"), input.locationId ?? null,
         Object.prototype.hasOwnProperty.call(input, "parentDeviceId"), input.parentDeviceId ?? null,
         Object.prototype.hasOwnProperty.call(input, "healthProfileId"), input.healthProfileId ?? null,
+        Object.prototype.hasOwnProperty.call(input, "controlAgentId"), input.controlAgentId ?? null,
+        Object.prototype.hasOwnProperty.call(input, "technologies"),
+        input.technologies?.some(value => value.toLowerCase() === "yeelight") ? "YEELIGHT" : null,
         input.enabled ?? null,
         Object.prototype.hasOwnProperty.call(input, "lastSeenAt"), input.lastSeenAt ?? null,
         Object.prototype.hasOwnProperty.call(input, "batteryPercent"), input.batteryPercent ?? null,

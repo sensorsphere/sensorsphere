@@ -792,6 +792,8 @@ export interface DeviceRegistryDevice {
   location: { id: string; name: string } | null;
   parentDevice: { id: string; name: string } | null;
   healthProfile: { id: string; name: string } | null;
+  controlAgent: { id: string; name: string } | null;
+  controlProvider: string | null;
   enabled: boolean;
   lastSeenAt: string | null;
   batteryPercent: number | null;
@@ -824,6 +826,7 @@ export interface CreateDeviceRegistryDeviceInput {
   locationId?: string | null;
   parentDeviceId?: string | null;
   healthProfileId?: string | null;
+  controlAgentId?: string | null;
   enabled?: boolean;
   lastSeenAt?: string | null;
   batteryPercent?: number | null;
@@ -1051,3 +1054,43 @@ export interface CreateMonitoringCheckInput {
 }
 
 export type UpdateMonitoringCheckInput = Partial<CreateMonitoringCheckInput>;
+
+export interface DeviceAgentCapability {
+  provider: string;
+  actions: string[];
+}
+
+export interface DeviceAgent {
+  id: string;
+  name: string;
+  enabled: boolean;
+  labels: Record<string, string>;
+  agentLabels: string[];
+  reportedName: string | null;
+  version: string | null;
+  hostname: string | null;
+  capabilities: DeviceAgentCapability[];
+  lastSeenAt: string | null;
+  heartbeatTimeoutSeconds: number;
+  online: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDeviceAgentInput {
+  name: string;
+  labels?: Record<string, string>;
+  heartbeatTimeoutSeconds?: number;
+}
+
+export interface UpdateDeviceAgentInput {
+  name?: string;
+  enabled?: boolean;
+  labels?: Record<string, string>;
+  heartbeatTimeoutSeconds?: number;
+}
+
+export interface DeviceAgentTokenResponse {
+  agent: DeviceAgent;
+  token: string;
+}

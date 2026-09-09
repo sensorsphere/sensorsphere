@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.28.3";
+export const MODULE_VERSION = "1.29.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.29.0": {
+    releasedAt: "2026-09-09T06:45:00+02:00",
+    patch: "PR-164-device-control-websocket-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Add Device Agents management and Control Agent assignment to Device Registry devices" },
+      { type: "changed", description: "Access Link publication indicators use a brighter green when published and a more attenuated gray otherwise" }
+    ]
+  },
   "1.28.3": {
     releasedAt: "2026-09-08T21:30:00+02:00",
     patch: "PR-163-access-link-service-publication-indicator-v1.patch",
