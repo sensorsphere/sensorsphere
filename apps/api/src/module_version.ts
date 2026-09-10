@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.14.2";
+export const MODULE_VERSION = "1.15.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.15.0": {
+    releasedAt: "2026-09-10T07:10:00+02:00",
+    patch: "PR-171-device-agent-discovery-ui-v1.patch",
+    changes: [
+      { type: "added", description: "Device Control API can dispatch provider discovery requests to online Device Agents and expose their asynchronous results" },
+      { type: "changed", description: "Device Agent capabilities now advertise provider discovery support alongside typed actions" }
+    ]
+  },
   "1.14.2": {
     releasedAt: "2026-09-10T06:45:00+02:00",
     patch: "PR-170-device-agent-yeelight-control-ui-v1.patch",

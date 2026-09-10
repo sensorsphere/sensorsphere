@@ -73,7 +73,8 @@ import type {
   CreateDeviceAgentInput,
   UpdateDeviceAgentInput,
   DeviceControlCommand,
-  DeviceControlState
+  DeviceControlState,
+  DeviceDiscovery
 } from "./types";
 
 async function readJson<T>(
@@ -1678,6 +1679,22 @@ export async function regenerateDeviceAgentToken(id: string): Promise<DeviceAgen
 export async function deleteDeviceAgent(id: string): Promise<void> {
   const response = await fetch(`/api/v1/device-control/agents/${id}`, { method: "DELETE" });
   if (!response.ok) await readJson<unknown>(response);
+}
+
+export async function startDeviceDiscovery(
+  agentId: string,
+  provider: string,
+  timeoutSeconds = 4
+): Promise<DeviceDiscovery> {
+  return readJson<DeviceDiscovery>(await fetch(`/api/v1/device-control/agents/${agentId}/discover`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, timeoutSeconds })
+  }));
+}
+
+export async function getDeviceDiscovery(id: string): Promise<DeviceDiscovery> {
+  return readJson<DeviceDiscovery>(await fetch(`/api/v1/device-control/discoveries/${id}`));
 }
 
 export async function createDeviceControlCommand(

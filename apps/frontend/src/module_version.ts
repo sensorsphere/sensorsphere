@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.31.0";
+export const MODULE_VERSION = "1.32.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.32.0": {
+    releasedAt: "2026-09-10T07:10:00+02:00",
+    patch: "PR-171-device-agent-discovery-ui-v1.patch",
+    changes: [
+      { type: "added", description: "Device Agents can launch provider discovery from SensorSphere and display discovered devices in a results dialog" },
+      { type: "changed", description: "Device Agent capability badges expose whether each provider supports discovery" }
+    ]
+  },
   "1.31.0": {
     releasedAt: "2026-09-10T06:45:00+02:00",
     patch: "PR-170-device-agent-yeelight-control-ui-v1.patch",

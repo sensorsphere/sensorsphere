@@ -26,6 +26,11 @@ const agentUpdateSchema = z.object({
   heartbeatTimeoutSeconds: z.number().int().min(15).max(3600).optional()
 }).strict().refine(value => Object.keys(value).length > 0, "At least one field is required");
 
+const discoveryCreateSchema = z.object({
+  provider: providerSchema,
+  timeoutSeconds: z.number().int().min(1).max(15).optional()
+}).strict();
+
 const commandCreateSchema = z.object({
   deviceId: z.string().uuid(),
   action: actionSchema,
@@ -41,7 +46,8 @@ const helloMessageSchema = z.object({
   agentLabels: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
   capabilities: z.array(z.object({
     provider: providerSchema,
-    actions: z.array(actionSchema).max(200)
+    actions: z.array(actionSchema).max(200),
+    discovery: z.boolean().optional()
   }).strict()).max(100).optional()
 }).strict();
 
@@ -66,7 +72,9 @@ const discoverResultMessageSchema = z.object({
   type: z.literal("DISCOVER_RESULT"),
   commandId: z.string().uuid(),
   provider: providerSchema,
-  devices: z.array(z.record(z.string(), z.unknown())).max(1000)
+  status: z.enum(["SUCCESS", "FAILED"]).optional(),
+  devices: z.array(z.record(z.string(), z.unknown())).max(1000),
+  error: z.string().max(5000).nullable().optional()
 }).strict();
 
 const agentMessageSchema = z.discriminatedUnion("type", [
@@ -86,7 +94,7 @@ interface AgentRow {
   reported_name: string | null;
   version: string | null;
   hostname: string | null;
-  capabilities: Array<{ provider: string; actions: string[] }>;
+  capabilities: Array<{ provider: string; actions: string[]; discovery?: boolean }>;
   last_seen_at: Date | null;
   heartbeat_timeout_seconds: number;
   created_at: Date;
@@ -98,7 +106,7 @@ interface DeviceControlRow {
   control_agent_id: string | null;
   control_provider: string | null;
   agent_enabled: boolean | null;
-  agent_capabilities: Array<{ provider: string; actions: string[] }> | null;
+  agent_capabilities: Array<{ provider: string; actions: string[]; discovery?: boolean }> | null;
 }
 
 function hashToken(token: string): string {
@@ -148,6 +156,44 @@ export async function registerDeviceControlFeature(
 ): Promise<void> {
   const sockets = new Map<string, WebSocket>();
   const wss = new WebSocketServer({ noServer: true });
+
+  type DiscoveryStatus = "SENT" | "SUCCESS" | "FAILED" | "TIMEOUT";
+  interface DiscoveryRecord {
+    id: string;
+    agentId: string;
+    provider: string;
+    status: DiscoveryStatus;
+    devices: Array<Record<string, unknown>>;
+    error: string | null;
+    createdAt: Date;
+    expiresAt: Date;
+    finishedAt: Date | null;
+  }
+  const discoveries = new Map<string, DiscoveryRecord>();
+
+  const discoveryDto = (record: DiscoveryRecord) => ({
+    commandId: record.id,
+    agentId: record.agentId,
+    provider: record.provider,
+    status: record.status,
+    devices: record.devices,
+    error: record.error,
+    createdAt: record.createdAt.toISOString(),
+    expiresAt: record.expiresAt.toISOString(),
+    finishedAt: record.finishedAt?.toISOString() ?? null
+  });
+
+  const expireDiscoveries = () => {
+    const now = Date.now();
+    for (const record of discoveries.values()) {
+      if (record.status === "SENT" && record.expiresAt.getTime() <= now) {
+        record.status = "TIMEOUT";
+        record.error = "Discovery timed out";
+        record.finishedAt = new Date();
+      }
+      if (record.createdAt.getTime() < now - 60 * 60 * 1000) discoveries.delete(record.id);
+    }
+  };
 
   const sendPendingCommands = async (agentId: string, socket: WebSocket) => {
     const result = await pool.query<{
@@ -271,10 +317,18 @@ export async function registerDeviceControlFeature(
           return;
         }
         if (message.type === "DISCOVER_RESULT") {
-          await pool.query(`
-            UPDATE device_control_commands SET status='SUCCESS', result=$3::jsonb, finished_at=NOW(), updated_at=NOW()
-            WHERE id=$1 AND agent_id=$2
-          `, [message.commandId, agent.id, JSON.stringify({ provider: message.provider, devices: message.devices })]);
+          const discovery = discoveries.get(message.commandId);
+          if (!discovery || discovery.agentId !== agent.id) return;
+          if (discovery.provider.toUpperCase() !== message.provider.toUpperCase()) {
+            discovery.status = "FAILED";
+            discovery.error = `Discovery provider mismatch: expected ${discovery.provider}, received ${message.provider}`;
+            discovery.finishedAt = new Date();
+            return;
+          }
+          discovery.status = message.status === "FAILED" ? "FAILED" : "SUCCESS";
+          discovery.devices = message.devices;
+          discovery.error = message.error ?? null;
+          discovery.finishedAt = new Date();
         }
       })().catch(error => app.log.error({ err: error, agentId: agent.id }, "Device agent WebSocket message failed"));
     });
@@ -354,6 +408,63 @@ export async function registerDeviceControlFeature(
     const result = await pool.query("DELETE FROM device_agents WHERE id=$1", [request.params.id]);
     if ((result.rowCount ?? 0) === 0) return reply.code(404).send({ error: "Device agent not found" });
     return reply.code(204).send();
+  });
+
+  app.post("/api/v1/device-control/agents/:id/discover", async (
+    request: FastifyRequest<{ Params: { id: string }; Body: unknown }>,
+    reply
+  ) => {
+    expireDiscoveries();
+    const parsed = discoveryCreateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid discovery request" });
+    const input = parsed.data;
+
+    const result = await pool.query<AgentRow>("SELECT * FROM device_agents WHERE id=$1", [request.params.id]);
+    const agent = result.rows[0];
+    if (!agent) return reply.code(404).send({ error: "Device Agent not found" });
+    if (!agent.enabled) return reply.code(409).send({ error: "Device Agent is disabled" });
+
+    const socket = sockets.get(agent.id);
+    if (socket?.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Device Agent is offline" });
+
+    const capabilities = Array.isArray(agent.capabilities) ? agent.capabilities : [];
+    const capability = capabilities.find(item => item.provider.toUpperCase() === input.provider.toUpperCase());
+    if (!capability) return reply.code(409).send({ error: `Device Agent does not advertise provider ${input.provider}` });
+    if (!capability.discovery) return reply.code(409).send({ error: `Device Agent provider ${input.provider} does not support discovery` });
+
+    const timeoutSeconds = input.timeoutSeconds ?? 4;
+    const commandId = randomUUID();
+    const record: DiscoveryRecord = {
+      id: commandId,
+      agentId: agent.id,
+      provider: input.provider.toUpperCase(),
+      status: "SENT",
+      devices: [],
+      error: null,
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + (timeoutSeconds + 5) * 1000),
+      finishedAt: null
+    };
+    discoveries.set(commandId, record);
+
+    socket.send(JSON.stringify({
+      type: "DISCOVER_REQUEST",
+      commandId,
+      provider: record.provider,
+      timeoutMs: timeoutSeconds * 1000
+    }));
+
+    return reply.code(202).send(discoveryDto(record));
+  });
+
+  app.get("/api/v1/device-control/discoveries/:id", async (
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply
+  ) => {
+    expireDiscoveries();
+    const discovery = discoveries.get(request.params.id);
+    if (!discovery) return reply.code(404).send({ error: "Discovery request not found" });
+    return reply.send(discoveryDto(discovery));
   });
 
   app.post("/api/v1/device-control/commands", async (request: FastifyRequest<{ Body: unknown }>, reply) => {

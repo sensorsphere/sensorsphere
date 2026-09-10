@@ -1058,6 +1058,7 @@ export type UpdateMonitoringCheckInput = Partial<CreateMonitoringCheckInput>;
 export interface DeviceAgentCapability {
   provider: string;
   actions: string[];
+  discovery?: boolean;
 }
 
 export interface DeviceAgent {
@@ -1118,6 +1119,22 @@ export interface DeviceControlCommand {
   sentAt?: string | null;
   finishedAt?: string | null;
   createdAt?: string;
+}
+
+
+
+export type DeviceDiscoveryStatus = "SENT" | "SUCCESS" | "FAILED" | "TIMEOUT";
+
+export interface DeviceDiscovery {
+  commandId: string;
+  agentId: string;
+  provider: string;
+  status: DeviceDiscoveryStatus;
+  devices: Array<Record<string, unknown>>;
+  error: string | null;
+  createdAt: string;
+  expiresAt: string;
+  finishedAt: string | null;
 }
 
 export interface DeviceControlState {
