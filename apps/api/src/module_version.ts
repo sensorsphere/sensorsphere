@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.14.1";
+export const MODULE_VERSION = "1.14.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.14.2": {
+    releasedAt: "2026-09-10T06:45:00+02:00",
+    patch: "PR-170-device-agent-yeelight-control-ui-v1.patch",
+    changes: [
+      { type: "changed", description: "Device Control command creation rejects offline Device Agents instead of leaving new interactive commands pending" },
+      { type: "changed", description: "Device Control API error messages use Device Agent terminology consistently" }
+    ]
+  },
   "1.14.1": {
     releasedAt: "2026-09-09T06:30:00+02:00",
     patch: "PR-165-device-control-command-target-identities-v1.patch",

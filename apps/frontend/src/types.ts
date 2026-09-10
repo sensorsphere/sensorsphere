@@ -1094,3 +1094,36 @@ export interface DeviceAgentTokenResponse {
   agent: DeviceAgent;
   token: string;
 }
+
+export type DeviceControlCommandStatus =
+  | "PENDING"
+  | "SENT"
+  | "SUCCESS"
+  | "FAILED"
+  | "TIMEOUT"
+  | "REJECTED";
+
+export interface DeviceControlCommand {
+  id?: string;
+  commandId?: string;
+  deviceId?: string;
+  agentId?: string;
+  provider?: string;
+  action?: string;
+  parameters?: Record<string, unknown>;
+  status: DeviceControlCommandStatus;
+  result?: Record<string, unknown> | null;
+  error?: string | null;
+  expiresAt: string;
+  sentAt?: string | null;
+  finishedAt?: string | null;
+  createdAt?: string;
+}
+
+export interface DeviceControlState {
+  deviceId: string;
+  agentId: string;
+  provider: string;
+  state: Record<string, unknown>;
+  observedAt: string;
+}

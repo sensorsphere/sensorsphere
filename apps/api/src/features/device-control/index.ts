@@ -368,9 +368,11 @@ export async function registerDeviceControlFeature(
     `, [input.deviceId]);
     const device = deviceResult.rows[0];
     if (!device) return reply.code(404).send({ error: "Device not found" });
-    if (!device.control_agent_id) return reply.code(409).send({ error: "Device has no control agent" });
+    if (!device.control_agent_id) return reply.code(409).send({ error: "Device has no Device Agent" });
     if (!device.control_provider) return reply.code(409).send({ error: "Device has no control provider" });
     if (!device.agent_enabled) return reply.code(409).send({ error: "Assigned Device Agent is disabled or unavailable" });
+    const socket = sockets.get(device.control_agent_id);
+    if (socket?.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Assigned Device Agent is offline" });
     const capabilities = Array.isArray(device.agent_capabilities) ? device.agent_capabilities : [];
     if (capabilities.length > 0) {
       const capability = capabilities.find(item => item.provider.toUpperCase() === device.control_provider!.toUpperCase());
@@ -387,9 +389,8 @@ export async function registerDeviceControlFeature(
       VALUES ($1,$2,$3,$4,$5,$6::jsonb,'PENDING',$7)
     `, [commandId, device.id, device.control_agent_id, device.control_provider, input.action, JSON.stringify(input.parameters ?? {}), expiresAt]);
 
-    const socket = sockets.get(device.control_agent_id);
-    if (socket?.readyState === WebSocket.OPEN) await sendPendingCommands(device.control_agent_id, socket);
-    return reply.code(202).send({ commandId, status: socket?.readyState === WebSocket.OPEN ? "SENT" : "PENDING", expiresAt: expiresAt.toISOString() });
+    await sendPendingCommands(device.control_agent_id, socket);
+    return reply.code(202).send({ commandId, status: "SENT", expiresAt: expiresAt.toISOString() });
   });
 
   app.get("/api/v1/device-control/commands/:id", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {

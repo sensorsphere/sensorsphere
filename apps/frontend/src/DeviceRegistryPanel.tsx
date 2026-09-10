@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   Checkbox,
+  ColorInput,
   Group,
   Modal,
   MultiSelect,
@@ -32,11 +33,14 @@ import {
 import {
   createDeviceHealthProfile,
   createDeviceRegistryDevice,
+  createDeviceControlCommand,
   deleteDeviceHealthProfile,
   deleteDeviceRegistryDevice,
   getAssets,
   getDeviceHealthProfiles,
   getDeviceAgents,
+  getDeviceControlCommand,
+  getDeviceControlState,
   getDeviceIdentityLabelReferences,
   getDeviceRegistryDevices,
   getDeviceClassReferences,
@@ -58,6 +62,7 @@ import type {
   DeviceRegistryClass,
   DeviceRegistryDevice,
   DeviceAccessLink,
+  DeviceControlState,
   DeviceIdentity
 } from "./types";
 
@@ -303,6 +308,27 @@ function TaxonomyOption({ icon, color, label, suffix }: { icon: string; color: s
   return <Group gap={7} wrap="nowrap"><DeviceGlyph icon={icon} color={color} /><Text size="sm">{label}{suffix ? ` · ${suffix}` : ""}</Text></Group>;
 }
 
+function stateNumber(state: DeviceControlState | null, key: string): number | null {
+  const value = state?.state[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function stateBoolean(state: DeviceControlState | null, key: string): boolean | null {
+  const value = state?.state[key];
+  return typeof value === "boolean" ? value : null;
+}
+
+function rgbNumberToHex(value: number | null): string {
+  if (value == null || value < 0 || value > 0xffffff) return "#ffffff";
+  return `#${Math.round(value).toString(16).padStart(6, "0")}`;
+}
+
+function hexToRgbNumber(value: string): number {
+  const normalized = value.trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) throw new Error("Color must be a 6-digit hexadecimal value");
+  return Number.parseInt(normalized, 16);
+}
+
 export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOpened, onDeviceSaved }: { openDeviceId?: string | null; openAccessLinkId?: string | null; onDeviceOpened?: () => void; onDeviceSaved?: () => void } = {}) {
   const queryClient = useQueryClient();
   const [tab, setTab] = usePersistentState<string | null>("device-registry.tab", "devices");
@@ -327,6 +353,15 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const [error, setError] = React.useState<string | null>(null);
   const [accessLinkToOpen, setAccessLinkToOpen] = React.useState<string | null>(null);
   const [quickCheckRequest, setQuickCheckRequest] = React.useState<MonitoringQuickCheckRequest | null>(null);
+
+  const [controlDevice, setControlDevice] = React.useState<DeviceRegistryDevice | null>(null);
+  const [controlState, setControlState] = React.useState<DeviceControlState | null>(null);
+  const [controlLoading, setControlLoading] = React.useState(false);
+  const [controlAction, setControlAction] = React.useState<string | null>(null);
+  const [controlError, setControlError] = React.useState<string | null>(null);
+  const [controlBrightness, setControlBrightness] = React.useState<number | string>(100);
+  const [controlColorTemperature, setControlColorTemperature] = React.useState<number | string>(4000);
+  const [controlColor, setControlColor] = React.useState("#ffffff");
 
   const devicesQuery = useQuery({ queryKey: ["device-registry", "devices"], queryFn: getDeviceRegistryDevices, refetchInterval: 15000 });
   const deviceClassesQuery = useQuery({ queryKey: ["device-registry", "classes"], queryFn: getDeviceClassReferences });
@@ -390,6 +425,83 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     onSuccess: refresh,
     onError: cause => setError(cause instanceof Error ? cause.message : "Unable to delete health profile")
   });
+
+  const applyControlState = (state: DeviceControlState | null) => {
+    setControlState(state);
+    const brightness = stateNumber(state, "brightness");
+    const colorTemperature = stateNumber(state, "colorTemperature");
+    const rgb = stateNumber(state, "rgb");
+    if (brightness != null) setControlBrightness(brightness);
+    if (colorTemperature != null) setControlColorTemperature(colorTemperature);
+    if (rgb != null) setControlColor(rgbNumberToHex(rgb));
+  };
+
+  const refreshControlState = async (deviceId: string) => {
+    const state = await getDeviceControlState(deviceId);
+    applyControlState(state);
+    return state;
+  };
+
+  const waitForControlCommand = async (commandId: string) => {
+    const deadline = Date.now() + 15000;
+    while (Date.now() < deadline) {
+      const command = await getDeviceControlCommand(commandId);
+      if (["SUCCESS", "FAILED", "TIMEOUT", "REJECTED"].includes(command.status)) return command;
+      await new Promise(resolve => window.setTimeout(resolve, 300));
+    }
+    throw new Error("Timed out waiting for the Device Agent response");
+  };
+
+  const runControlAction = async (action: string, parameters: Record<string, unknown> = {}) => {
+    if (!controlDevice) return;
+    setControlAction(action);
+    setControlError(null);
+    try {
+      const created = await createDeviceControlCommand(controlDevice.id, action, parameters, 30);
+      const commandId = created.commandId ?? created.id;
+      if (!commandId) throw new Error("SensorSphere did not return a command id");
+      const finished = await waitForControlCommand(commandId);
+      if (finished.status !== "SUCCESS") throw new Error(finished.error || `Command ${finished.status.toLowerCase()}`);
+      await new Promise(resolve => window.setTimeout(resolve, 200));
+      await refreshControlState(controlDevice.id);
+    } catch (cause) {
+      setControlError(cause instanceof Error ? cause.message : "Unable to control device");
+    } finally {
+      setControlAction(null);
+    }
+  };
+
+  const openDeviceControl = async (device: DeviceRegistryDevice) => {
+    setControlDevice(device);
+    setControlState(null);
+    setControlError(null);
+    setControlLoading(true);
+    try {
+      await runControlActionForDevice(device, "GET_STATE");
+    } catch (cause) {
+      setControlError(cause instanceof Error ? cause.message : "Unable to read device state");
+    } finally {
+      setControlLoading(false);
+    }
+  };
+
+  const runControlActionForDevice = async (device: DeviceRegistryDevice, action: string, parameters: Record<string, unknown> = {}) => {
+    setControlAction(action);
+    setControlError(null);
+    try {
+      const created = await createDeviceControlCommand(device.id, action, parameters, 30);
+      const commandId = created.commandId ?? created.id;
+      if (!commandId) throw new Error("SensorSphere did not return a command id");
+      const finished = await waitForControlCommand(commandId);
+      if (finished.status !== "SUCCESS") throw new Error(finished.error || `Command ${finished.status.toLowerCase()}`);
+      await new Promise(resolve => window.setTimeout(resolve, 200));
+      await refreshControlState(device.id);
+    } catch (cause) {
+      setControlError(cause instanceof Error ? cause.message : "Unable to control device");
+    } finally {
+      setControlAction(null);
+    }
+  };
 
   const devices = devicesQuery.data ?? [];
   const profiles = profilesQuery.data ?? [];
@@ -632,7 +744,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                       <SortableTableHeader active={sortKey === "health"} direction={sortDirection} onClick={() => toggleSort("health")}>Health</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "checks"} direction={sortDirection} onClick={() => toggleSort("checks")}>Checks</SortableTableHeader>
                       <Table.Th>Access</Table.Th>
-                      <Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th>
+                      <Table.Th style={{ width: 140, textAlign: "right" }}>Actions</Table.Th>
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
@@ -686,6 +798,13 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                         </Table.Td>
                         <Table.Td>
                           <Group gap={4} wrap="nowrap" justify="flex-end">
+                            {(() => {
+                              const agent = (deviceAgentsQuery.data ?? []).find(item => item.id === device.controlAgent?.id);
+                              const isYeelight = device.controlProvider?.toUpperCase() === "YEELIGHT";
+                              const canControl = Boolean(isYeelight && agent?.enabled && agent.online);
+                              const label = !isYeelight ? "Device control is not available for this provider" : !device.controlAgent ? "Assign a Device Agent first" : !agent?.online ? "Device Agent is offline" : "Control device";
+                              return <Tooltip label={label}><span><ActionIcon size="sm" variant="light" color="violet" disabled={!canControl} aria-label={`Control ${device.name}`} onClick={() => void openDeviceControl(device)}>◉</ActionIcon></span></Tooltip>;
+                            })()}
                             <EditActionIcon onClick={() => openEditDevice(device)} />
                             <Tooltip label="Copy device"><ActionIcon size="sm" variant="light" color="green" aria-label={`Copy ${device.name}`} onClick={() => openCopyDevice(device)}>⧉</ActionIcon></Tooltip>
                             <DeleteActionIcon onClick={() => { setError(null); setDeleteDeviceTarget(device); }} />
@@ -770,6 +889,65 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           <DeviceTaxonomyPanel />
         </Tabs.Panel>
       </Tabs>
+
+      <Modal
+        opened={controlDevice !== null}
+        onClose={() => !controlAction && setControlDevice(null)}
+        title={controlDevice ? `Device Control · ${controlDevice.name}` : "Device Control"}
+        size="lg"
+        centered
+      >
+        <Stack gap="md">
+          <Group justify="space-between" align="flex-start">
+            <Stack gap={2}>
+              <Text size="sm" fw={600}>{controlDevice?.controlProvider ?? "—"}</Text>
+              <Text size="xs" c="dimmed">via {controlDevice?.controlAgent?.name ?? "no Device Agent"}</Text>
+            </Stack>
+            {controlLoading ? <Badge variant="light" color="blue">LOADING</Badge> : (
+              <Badge variant="light" color={stateBoolean(controlState, "power") === true ? "green" : stateBoolean(controlState, "power") === false ? "gray" : "yellow"}>
+                {stateBoolean(controlState, "power") === true ? "ON" : stateBoolean(controlState, "power") === false ? "OFF" : "UNKNOWN"}
+              </Badge>
+            )}
+          </Group>
+
+          {controlError && <Text c="red" size="sm">{controlError}</Text>}
+
+          <Card withBorder padding="sm">
+            <Stack gap="sm">
+              <Group justify="space-between">
+                <Text fw={600} size="sm">Power</Text>
+                <Group gap="xs">
+                  <Button size="compact-sm" color="green" variant="light" loading={controlAction === "POWER_ON"} disabled={Boolean(controlAction)} onClick={() => void runControlAction("POWER_ON")}>On</Button>
+                  <Button size="compact-sm" color="gray" variant="light" loading={controlAction === "POWER_OFF"} disabled={Boolean(controlAction)} onClick={() => void runControlAction("POWER_OFF")}>Off</Button>
+                </Group>
+              </Group>
+
+              <Group align="end" grow>
+                <NumberInput label="Brightness" description="1–100 %" min={1} max={100} value={controlBrightness} onChange={setControlBrightness} />
+                <Button variant="light" loading={controlAction === "SET_BRIGHTNESS"} disabled={Boolean(controlAction) || typeof controlBrightness !== "number"} onClick={() => void runControlAction("SET_BRIGHTNESS", { brightness: Number(controlBrightness) })}>Apply</Button>
+              </Group>
+
+              <Group align="end" grow>
+                <NumberInput label="Color temperature" description="1700–6500 K" min={1700} max={6500} step={100} value={controlColorTemperature} onChange={setControlColorTemperature} />
+                <Button variant="light" loading={controlAction === "SET_COLOR_TEMPERATURE"} disabled={Boolean(controlAction) || typeof controlColorTemperature !== "number"} onClick={() => void runControlAction("SET_COLOR_TEMPERATURE", { colorTemperature: Number(controlColorTemperature) })}>Apply</Button>
+              </Group>
+
+              <Group align="end" grow>
+                <ColorInput label="RGB color" format="hex" value={controlColor} onChange={setControlColor} />
+                <Button variant="light" loading={controlAction === "SET_COLOR"} disabled={Boolean(controlAction)} onClick={() => { try { void runControlAction("SET_COLOR", { color: hexToRgbNumber(controlColor) }); } catch (cause) { setControlError(cause instanceof Error ? cause.message : "Invalid color"); } }}>Apply</Button>
+              </Group>
+            </Stack>
+          </Card>
+
+          <Group justify="space-between">
+            <Text size="xs" c="dimmed">{controlState?.observedAt ? `State observed ${new Date(controlState.observedAt).toLocaleString()}` : "No state received yet"}</Text>
+            <Group gap="xs">
+              <Button variant="subtle" size="compact-sm" loading={controlAction === "GET_STATE" || controlLoading} disabled={Boolean(controlAction)} onClick={() => void runControlAction("GET_STATE")}>Refresh state</Button>
+              <Button variant="default" disabled={Boolean(controlAction)} onClick={() => setControlDevice(null)}>Close</Button>
+            </Group>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal
         opened={deleteDeviceTarget !== null}

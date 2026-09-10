@@ -71,7 +71,9 @@ import type {
   DeviceAgent,
   DeviceAgentTokenResponse,
   CreateDeviceAgentInput,
-  UpdateDeviceAgentInput
+  UpdateDeviceAgentInput,
+  DeviceControlCommand,
+  DeviceControlState
 } from "./types";
 
 async function readJson<T>(
@@ -1676,6 +1678,27 @@ export async function regenerateDeviceAgentToken(id: string): Promise<DeviceAgen
 export async function deleteDeviceAgent(id: string): Promise<void> {
   const response = await fetch(`/api/v1/device-control/agents/${id}`, { method: "DELETE" });
   if (!response.ok) await readJson<unknown>(response);
+}
+
+export async function createDeviceControlCommand(
+  deviceId: string,
+  action: string,
+  parameters: Record<string, unknown> = {},
+  ttlSeconds = 30
+): Promise<DeviceControlCommand> {
+  return readJson<DeviceControlCommand>(await fetch("/api/v1/device-control/commands", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ deviceId, action, parameters, ttlSeconds })
+  }));
+}
+
+export async function getDeviceControlCommand(id: string): Promise<DeviceControlCommand> {
+  return readJson<DeviceControlCommand>(await fetch(`/api/v1/device-control/commands/${id}`));
+}
+
+export async function getDeviceControlState(id: string): Promise<DeviceControlState | null> {
+  return readJson<DeviceControlState | null>(await fetch(`/api/v1/device-control/devices/${id}/state`));
 }
 
 export async function getMonitoringAgents(): Promise<MonitoringAgent[]> {

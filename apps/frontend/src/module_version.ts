@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.30.1";
+export const MODULE_VERSION = "1.31.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.31.0": {
+    releasedAt: "2026-09-10T06:45:00+02:00",
+    patch: "PR-170-device-agent-yeelight-control-ui-v1.patch",
+    changes: [
+      { type: "added", description: "Device Registry adds a Device Control dialog for online Yeelight devices assigned to a Device Agent" },
+      { type: "added", description: "Yeelight Device Control supports state refresh, power, brightness, RGB color and color temperature through typed Device Agent commands" },
+      { type: "changed", description: "Device action rows expose control only when the assigned Device Agent is online and the provider is Yeelight" }
+    ]
+  },
   "1.30.1": {
     releasedAt: "2026-09-10T06:00:00+02:00",
     patch: "PR-169-device-agent-terminology-layout-v1.patch",
