@@ -75,7 +75,7 @@ import { MonitoringPanel, type MonitoringQuickCheckRequest } from "./MonitoringP
 import { DeviceAgentsPanel } from "./DeviceAgentsPanel";
 
 
-type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "battery" | "lastSeen" | "health" | "checks";
+type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "controlAgent" | "lastSeen" | "health" | "checks";
 type HealthProfileSortKey = "name" | "monitoring" | "warning" | "offline" | "batteryWarning" | "batteryCritical" | "rssiWarning" | "rssiCritical";
 
 function deviceAddress(device: DeviceRegistryDevice): string {
@@ -433,7 +433,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       : sortKey === "technology" ? left.technologies.map(item => item.label).join(", ")
       : sortKey === "location" ? left.location?.name ?? null
       : sortKey === "parent" ? left.parentDevice?.name ?? null
-      : sortKey === "battery" ? left.batteryPercent
+      : sortKey === "controlAgent" ? left.controlAgent?.name ?? null
       : sortKey === "lastSeen" ? (left.lastSeenAt ? new Date(left.lastSeenAt).getTime() : null)
       : sortKey === "health" ? left.health.status
       : deviceCheckCount(left.id);
@@ -444,7 +444,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       : sortKey === "technology" ? right.technologies.map(item => item.label).join(", ")
       : sortKey === "location" ? right.location?.name ?? null
       : sortKey === "parent" ? right.parentDevice?.name ?? null
-      : sortKey === "battery" ? right.batteryPercent
+      : sortKey === "controlAgent" ? right.controlAgent?.name ?? null
       : sortKey === "lastSeen" ? (right.lastSeenAt ? new Date(right.lastSeenAt).getTime() : null)
       : sortKey === "health" ? right.health.status
       : deviceCheckCount(right.id);
@@ -627,7 +627,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                       <SortableTableHeader active={sortKey === "technology"} direction={sortDirection} onClick={() => toggleSort("technology")}>Technology</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "location"} direction={sortDirection} onClick={() => toggleSort("location")}>Location</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "parent"} direction={sortDirection} onClick={() => toggleSort("parent")}>Parent</SortableTableHeader>
-                      <SortableTableHeader active={sortKey === "battery"} direction={sortDirection} onClick={() => toggleSort("battery")}>Battery</SortableTableHeader>
+                      <SortableTableHeader active={sortKey === "controlAgent"} direction={sortDirection} onClick={() => toggleSort("controlAgent")}>Control Agent</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "lastSeen"} direction={sortDirection} onClick={() => toggleSort("lastSeen")}>Last seen</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "health"} direction={sortDirection} onClick={() => toggleSort("health")}>Health</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "checks"} direction={sortDirection} onClick={() => toggleSort("checks")}>Checks</SortableTableHeader>
@@ -661,7 +661,10 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                         </Table.Td>
                         <Table.Td>{device.location ? <Group gap={6} wrap="nowrap"><LocationIcon name={getLocationIconName(device.location)} size={16} /><Text size="sm">{device.location.name}</Text></Group> : "—"}</Table.Td>
                         <Table.Td>{device.parentDevice?.name ?? "—"}</Table.Td>
-                        <Table.Td>{device.batteryPercent == null ? "—" : `${device.batteryPercent}%`}</Table.Td>
+                        <Table.Td>{device.controlAgent ? (() => {
+                          const agent = (deviceAgentsQuery.data ?? []).find(item => item.id === device.controlAgent?.id);
+                          return <Group gap={6} wrap="nowrap"><Text size="sm">{device.controlAgent.name}</Text>{agent && <Badge size="xs" variant="light" color={!agent.enabled ? "gray" : agent.online ? "green" : "red"}>{!agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE"}</Badge>}</Group>;
+                        })() : "—"}</Table.Td>
                         <Table.Td title={device.lastSeenAt ?? undefined}>{compactDate(device.lastSeenAt)}</Table.Td>
                         <Table.Td>
                           {device.healthProfile && (

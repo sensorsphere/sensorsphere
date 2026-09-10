@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.29.2";
+export const MODULE_VERSION = "1.30.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.30.0": {
+    releasedAt: "2026-09-10T05:00:00+02:00",
+    patch: "PR-168-device-control-ui-agent-visibility-v1.patch",
+    changes: [
+      { type: "added", description: "Device Registry Devices replaces the Battery column with a sortable Control Agent column showing the assigned agent and its current status" },
+      { type: "changed", description: "Device Agent row actions now match Monitoring Agents in icon style, size and order: edit, copy, regenerate token, delete" },
+      { type: "fixed", description: "Device Registry API responses expose controlAgentId alongside the existing Control Agent summary" }
+    ]
+  },
   "1.29.2": {
     releasedAt: "2026-09-09T07:10:00+02:00",
     patch: "PR-167-device-agent-token-copy-environment-v1.patch",
