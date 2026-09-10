@@ -627,7 +627,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                       <SortableTableHeader active={sortKey === "technology"} direction={sortDirection} onClick={() => toggleSort("technology")}>Technology</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "location"} direction={sortDirection} onClick={() => toggleSort("location")}>Location</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "parent"} direction={sortDirection} onClick={() => toggleSort("parent")}>Parent</SortableTableHeader>
-                      <SortableTableHeader active={sortKey === "controlAgent"} direction={sortDirection} onClick={() => toggleSort("controlAgent")}>Control Agent</SortableTableHeader>
+                      <SortableTableHeader active={sortKey === "controlAgent"} direction={sortDirection} onClick={() => toggleSort("controlAgent")}>Device Agent</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "lastSeen"} direction={sortDirection} onClick={() => toggleSort("lastSeen")}>Last seen</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "health"} direction={sortDirection} onClick={() => toggleSort("health")}>Health</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "checks"} direction={sortDirection} onClick={() => toggleSort("checks")}>Checks</SortableTableHeader>
@@ -663,7 +663,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                         <Table.Td>{device.parentDevice?.name ?? "—"}</Table.Td>
                         <Table.Td>{device.controlAgent ? (() => {
                           const agent = (deviceAgentsQuery.data ?? []).find(item => item.id === device.controlAgent?.id);
-                          return <Group gap={6} wrap="nowrap"><Text size="sm">{device.controlAgent.name}</Text>{agent && <Badge size="xs" variant="light" color={!agent.enabled ? "gray" : agent.online ? "green" : "red"}>{!agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE"}</Badge>}</Group>;
+                          return <Stack gap={2}><Text size="sm">{device.controlAgent.name}</Text>{agent && <Badge size="xs" variant="light" w="fit-content" color={!agent.enabled ? "gray" : agent.online ? "green" : "red"}>{!agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE"}</Badge>}</Stack>;
                         })() : "—"}</Table.Td>
                         <Table.Td title={device.lastSeenAt ?? undefined}>{compactDate(device.lastSeenAt)}</Table.Td>
                         <Table.Td>
@@ -835,7 +835,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
             />
             <Select label="Parent device" searchable clearable value={deviceForm.parentDeviceId} onChange={value => setDeviceForm(current => ({ ...current, parentDeviceId: value }))} data={devices.filter(device => device.id !== editingDevice?.id).map(device => ({ value: device.id, label: device.name }))} />
             <Select label="Health profile" searchable clearable value={deviceForm.healthProfileId} onChange={value => setDeviceForm(current => ({ ...current, healthProfileId: value }))} data={(profilesQuery.data ?? []).map(profile => ({ value: profile.id, label: profile.name }))} />
-            <Select label="Control agent" description={deviceForm.technologies.some(value => value.toLowerCase() === "yeelight") ? "Yeelight control will use this agent." : "Used by future Device Control providers."} searchable clearable value={deviceForm.controlAgentId} onChange={value => setDeviceForm(current => ({ ...current, controlAgentId: value }))} data={(deviceAgentsQuery.data ?? []).filter(agent => agent.enabled).map(agent => ({ value: agent.id, label: `${agent.name}${agent.online ? " · ONLINE" : " · OFFLINE"}` }))} />
+            <Select label="Device Agent" description={deviceForm.technologies.some(value => value.toLowerCase() === "yeelight") ? "Yeelight control will use this agent." : "Used by future Device Control providers."} searchable clearable value={deviceForm.controlAgentId} onChange={value => setDeviceForm(current => ({ ...current, controlAgentId: value }))} data={(deviceAgentsQuery.data ?? []).filter(agent => agent.enabled).map(agent => ({ value: agent.id, label: `${agent.name}${agent.online ? " · ONLINE" : " · OFFLINE"}` }))} />
             <TextInput type="datetime-local" label="Last seen" value={deviceForm.lastSeenAt} onChange={event => setDeviceForm(current => ({ ...current, lastSeenAt: event.currentTarget.value }))} />
             <NumberInput label="Battery %" min={0} max={100} value={deviceForm.batteryPercent} onChange={value => setDeviceForm(current => ({ ...current, batteryPercent: value }))} />
             <NumberInput label="RSSI dBm" value={deviceForm.rssi} onChange={value => setDeviceForm(current => ({ ...current, rssi: value }))} />

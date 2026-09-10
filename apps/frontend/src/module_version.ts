@@ -18,17 +18,25 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.30.0";
+export const MODULE_VERSION = "1.30.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.30.1": {
+    releasedAt: "2026-09-10T06:00:00+02:00",
+    patch: "PR-169-device-agent-terminology-layout-v1.patch",
+    changes: [
+      { type: "changed", description: "Device Registry consistently labels assigned control endpoints as Device Agents instead of Control Agents" },
+      { type: "changed", description: "The Devices table shows Device Agent status below the agent name to reduce column width" }
+    ]
+  },
   "1.30.0": {
     releasedAt: "2026-09-10T05:00:00+02:00",
     patch: "PR-168-device-control-ui-agent-visibility-v1.patch",
     changes: [
-      { type: "added", description: "Device Registry Devices replaces the Battery column with a sortable Control Agent column showing the assigned agent and its current status" },
+      { type: "added", description: "Device Registry Devices replaces the Battery column with a sortable Device Agent column showing the assigned agent and its current status" },
       { type: "changed", description: "Device Agent row actions now match Monitoring Agents in icon style, size and order: edit, copy, regenerate token, delete" },
-      { type: "fixed", description: "Device Registry API responses expose controlAgentId alongside the existing Control Agent summary" }
+      { type: "fixed", description: "Device Registry API responses expose controlAgentId alongside the existing Device Agent summary" }
     ]
   },
   "1.29.2": {
@@ -51,7 +59,7 @@ Record<string, ModuleChangelogEntry> = {
     releasedAt: "2026-09-09T06:45:00+02:00",
     patch: "PR-164-device-control-websocket-foundation-v1.patch",
     changes: [
-      { type: "added", description: "Add Device Agents management and Control Agent assignment to Device Registry devices" },
+      { type: "added", description: "Add Device Agents management and Device Agent assignment to Device Registry devices" },
       { type: "changed", description: "Access Link publication indicators use a brighter green when published and a more attenuated gray otherwise" }
     ]
   },
