@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.34.0";
+export const MODULE_VERSION = "1.35.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.35.0": {
+    releasedAt: "2026-09-14T07:20:00+02:00",
+    patch: "PR-175-device-agent-discovery-identity-refresh-ui-v1.patch",
+    changes: [
+      { type: "changed", description: "Device Agents tab is placed directly after Devices and discovery is visually separated from CRUD actions" },
+      { type: "changed", description: "Discovery results are sorted numerically by IP and registered Yeelight devices are matched by Yeelight ID or MAC instead of DHCP address" },
+      { type: "changed", description: "Discovered-device actions update only the affected row instead of launching a full discovery scan" },
+      { type: "added", description: "Yeelight import includes IP, MAC and YEELIGHT_ID identities when available" }
+    ]
+  },
   "1.34.0": {
     releasedAt: "2026-09-14T07:10:00+02:00",
     patch: "PR-174-device-agent-discovery-import-control-v1.patch",

@@ -76,6 +76,42 @@ function discoveryValue(device: Record<string, unknown>, key: string): string {
   return String(value);
 }
 
+function normalizeMac(value: unknown): string {
+  return typeof value === "string" ? value.toUpperCase().replace(/[^0-9A-F]/g, "") : "";
+}
+
+function normalizeYeelightId(value: unknown): string {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function discoveredDeviceKey(device: Record<string, unknown>): string {
+  return normalizeYeelightId(device.id)
+    || normalizeMac(device.mac)
+    || (typeof device.ip === "string" ? device.ip.trim() : "");
+}
+
+function ipv4SortValue(value: unknown): number[] | null {
+  if (typeof value !== "string") return null;
+  const parts = value.trim().split(".");
+  if (parts.length !== 4) return null;
+  const numbers = parts.map(part => Number(part));
+  if (numbers.some(part => !Number.isInteger(part) || part < 0 || part > 255)) return null;
+  return numbers;
+}
+
+function compareDiscoveryIp(left: Record<string, unknown>, right: Record<string, unknown>): number {
+  const leftIp = ipv4SortValue(left.ip);
+  const rightIp = ipv4SortValue(right.ip);
+  if (leftIp && rightIp) {
+    for (let index = 0; index < 4; index += 1) {
+      const difference = leftIp[index]! - rightIp[index]!;
+      if (difference !== 0) return difference;
+    }
+    return 0;
+  }
+  return discoveryValue(left, "ip").localeCompare(discoveryValue(right, "ip"), undefined, { numeric: true });
+}
+
 export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOpenRegisteredDevice }: DeviceAgentsPanelProps = {}) {
   const queryClient = useQueryClient();
   const agentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
@@ -92,6 +128,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOp
   const [discoveredActionId, setDiscoveredActionId] = React.useState<string | null>(null);
   const [powerActionTarget, setPowerActionTarget] = React.useState<Record<string, unknown> | null>(null);
   const [powerAction, setPowerAction] = React.useState<"POWER_ON" | "POWER_OFF" | null>(null);
+  const [discoveredDevices, setDiscoveredDevices] = React.useState<Array<Record<string, unknown>>>([]);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["device-control", "agents"] });
   const save = useMutation({
@@ -115,6 +152,11 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOp
     enabled: discoveryId != null,
     refetchInterval: query => query.state.data?.status === "SENT" ? 500 : false
   });
+  React.useEffect(() => {
+    if (discoveryQuery.data?.status !== "SUCCESS") return;
+    setDiscoveredDevices([...discoveryQuery.data.devices].sort(compareDiscoveryIp));
+  }, [discoveryQuery.data?.status, discoveryQuery.data?.devices]);
+
   const setNameMutation = useMutation({
     mutationFn: async () => {
       if (!discoveryAgent || !discoveryProvider || !setNameTarget) throw new Error("Discovery context is no longer available");
@@ -145,7 +187,15 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOp
   });
 
   React.useEffect(() => {
-    if (discoveredActionQuery.data?.status !== "SUCCESS") return;
+    const completedAction = discoveredActionQuery.data;
+    if (completedAction?.status !== "SUCCESS") return;
+
+    const targetKey = discoveredDeviceKey(completedAction.target);
+    const result = completedAction.result ?? {};
+    setDiscoveredDevices(current => current
+      .map(device => discoveredDeviceKey(device) === targetKey ? { ...device, ...result } : device)
+      .sort(compareDiscoveryIp));
+
     setSetNameTarget(null);
     setSetNameValue("");
     setPowerActionTarget(null);
@@ -153,10 +203,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOp
     setDiscoveredActionId(null);
     setNameMutation.reset();
     powerMutation.reset();
-    if (discoveryAgent && discoveryProvider) {
-      discoveryMutation.mutate({ agentId: discoveryAgent.id, provider: discoveryProvider });
-    }
-  }, [discoveredActionQuery.data?.status]);
+  }, [discoveredActionQuery.data?.status, discoveredActionQuery.data?.commandId]);
 
   const openCreate = () => { setEditing(null); setForm(emptyForm()); setOpened(true); };
   const openEdit = (agent: DeviceAgent) => { setEditing(agent); setForm({ name: agent.name, enabled: agent.enabled, labelsText: labelsText(agent), heartbeatTimeoutSeconds: agent.heartbeatTimeoutSeconds }); setOpened(true); };
@@ -166,6 +213,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOp
     setDiscoveryAgent(agent);
     setDiscoveryProvider(providers[0] ?? null);
     setDiscoveryId(null);
+    setDiscoveredDevices([]);
   };
   const closeDiscovery = () => {
     setDiscoveryAgent(null);
@@ -176,6 +224,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOp
     setDiscoveredActionId(null);
     setPowerActionTarget(null);
     setPowerAction(null);
+    setDiscoveredDevices([]);
     discoveryMutation.reset();
     setNameMutation.reset();
     powerMutation.reset();
@@ -188,12 +237,23 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOp
 
 
   const registeredDeviceFor = (device: Record<string, unknown>): DeviceRegistryDevice | null => {
-    const ip = discoveryValue(device, "ip");
-    if (ip === "—") return null;
-    return devices.find(existing =>
-      existing.ipAddress === ip ||
-      existing.identities.some(identity => identity.identityType.toUpperCase() === "IP" && identity.value === ip)
-    ) ?? null;
+    const yeelightId = normalizeYeelightId(device.id);
+    const mac = normalizeMac(device.mac);
+
+    return devices.find(existing => {
+      const idMatch = yeelightId && (
+        existing.identities.some(identity =>
+          identity.identityType.toUpperCase() === "YEELIGHT_ID"
+          && normalizeYeelightId(identity.value) === yeelightId
+        )
+        || (existing.description ?? "").toLowerCase().includes(yeelightId)
+      );
+      const macMatch = mac && existing.identities.some(identity =>
+        identity.identityType.toUpperCase() === "MAC"
+        && normalizeMac(identity.value) === mac
+      );
+      return Boolean(idMatch || macMatch);
+    }) ?? null;
   };
 
   return <Stack gap="md">
@@ -208,7 +268,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOp
           <Table.Td><Text size="sm">{agent.version ?? "—"}</Text></Table.Td>
           <Table.Td><Group gap={4}>{agent.capabilities.length ? agent.capabilities.map(item => <Tooltip key={item.provider} label={`${item.actions.join(", ") || "No actions reported"}${item.discovery ? " · discovery" : ""}`}><Badge variant="outline">{item.provider}</Badge></Tooltip>) : <Text size="sm" c="dimmed">—</Text>}</Group></Table.Td>
           <Table.Td><Text size="xs">{[...agent.agentLabels, ...Object.entries(agent.labels).map(([key,value]) => value === "true" ? key : `${key}=${value}`)].join(", ") || "—"}</Text></Table.Td>
-          <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => openEdit(agent)} /><Tooltip label="Copy device agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy device agent" onClick={() => openCopy(agent)}>⧉</ActionIcon></Tooltip><Tooltip label={agent.online ? "Discover devices" : "Device Agent must be online to discover"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Discover devices" disabled={!agent.online || !agent.capabilities.some(capability => capability.discovery)} onClick={() => openDiscovery(agent)}>⌖</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerate.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Table.Td>
+          <Table.Td><Group gap={10} wrap="nowrap" justify="flex-end"><Tooltip label={agent.online ? "Discover devices" : "Device Agent must be online to discover"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Discover devices" disabled={!agent.online || !agent.capabilities.some(capability => capability.discovery)} onClick={() => openDiscovery(agent)}>⌖</ActionIcon></Tooltip><Group gap={4} wrap="nowrap"><EditActionIcon onClick={() => openEdit(agent)} /><Tooltip label="Copy device agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy device agent" onClick={() => openCopy(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerate.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Group></Table.Td>
         </Table.Tr>)}{(agentsQuery.data ?? []).length === 0 && <Table.Tr><Table.Td colSpan={7}><Text ta="center" c="dimmed" py="xl">No Device Agents yet.</Text></Table.Td></Table.Tr>}</Table.Tbody>
       </Table></div>
     </Card>
@@ -243,12 +303,12 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOp
         {discoveryMutation.isError && <Text c="red" size="sm">{discoveryMutation.error instanceof Error ? discoveryMutation.error.message : "Unable to start discovery"}</Text>}
         {discoveryQuery.data?.error && <Text c="red" size="sm">{discoveryQuery.data.error}</Text>}
         {discoveryQuery.data?.status === "SENT" && <Text size="sm" c="dimmed">Discovery is running on the Device Agent…</Text>}
-        {discoveryQuery.data?.status === "SUCCESS" && discoveryQuery.data.devices.length === 0 && <Text size="sm" c="dimmed">No devices found.</Text>}
-        {discoveryQuery.data?.devices?.length ? (
+        {discoveryQuery.data?.status === "SUCCESS" && discoveredDevices.length === 0 && <Text size="sm" c="dimmed">No devices found.</Text>}
+        {discoveredDevices.length ? (
           <div style={{ overflow: "auto", maxHeight: 420 }}>
             <Table striped highlightOnHover stickyHeader style={{ minWidth: 760 }}>
               <Table.Thead><Table.Tr><Table.Th>Actions</Table.Th><Table.Th>Name</Table.Th><Table.Th>IP</Table.Th><Table.Th>Model</Table.Th><Table.Th>Power</Table.Th><Table.Th>Brightness</Table.Th><Table.Th>ID</Table.Th></Table.Tr></Table.Thead>
-              <Table.Tbody>{discoveryQuery.data.devices.map((device, index) => {
+              <Table.Tbody>{discoveredDevices.map((device, index) => {
                 const registeredDevice = registeredDeviceFor(device);
                 const isYeelight = discoveryProvider?.toUpperCase() === "YEELIGHT";
                 const power = device.power === true;
@@ -280,7 +340,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOp
                         variant="light"
                         color={power ? "orange" : "green"}
                         aria-label={power ? "Turn off" : "Turn on"}
-                        loading={powerActionTarget === device && powerMutation.isPending}
+                        loading={discoveredDeviceKey(powerActionTarget ?? {}) === discoveredDeviceKey(device) && powerMutation.isPending}
                         disabled={!isYeelight || discoveryValue(device, "ip") === "—" || actionBusy}
                         onClick={() => powerMutation.mutate({ device, action: power ? "POWER_OFF" : "POWER_ON" })}
                       >
@@ -288,9 +348,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOp
                       </ActionIcon>
                     </Tooltip>
                     {registeredDevice ? (
-                      <Tooltip label="Open registered device">
-                        <ActionIcon size="sm" variant="light" color="green" aria-label="Open registered device" onClick={() => onOpenRegisteredDevice?.(registeredDevice)}>✓</ActionIcon>
-                      </Tooltip>
+                      <EditActionIcon onClick={() => onOpenRegisteredDevice?.(registeredDevice)} />
                     ) : (
                       <Tooltip label="Add to Device Registry">
                         <ActionIcon

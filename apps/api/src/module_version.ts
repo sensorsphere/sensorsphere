@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.16.0";
+export const MODULE_VERSION = "1.16.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.16.1": {
+    releasedAt: "2026-09-14T07:20:00+02:00",
+    patch: "PR-175-device-agent-discovery-identity-refresh-ui-v1.patch",
+    changes: [
+      { type: "added", description: "Device Registry validates and enforces uniqueness for YEELIGHT_ID identities" }
+    ]
+  },
   "1.16.0": {
     releasedAt: "2026-09-14T06:55:00+02:00",
     patch: "PR-173-device-agent-discovered-set-name-v1.patch",

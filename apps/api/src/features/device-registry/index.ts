@@ -524,6 +524,11 @@ function normalizeIdentityValue(identityType: string, value: string): { value: s
     if (!isIP(trimmed)) throw new DeviceIdentityValidationError("IP identity must be a valid IPv4 or IPv6 address");
     return { value: trimmed, normalized: trimmed.toLowerCase() };
   }
+  if (type === "YEELIGHT_ID") {
+    const hex = trimmed.toUpperCase().replace(/^0X/, "").replace(/[^0-9A-F]/g, "");
+    if (hex.length !== 16) throw new DeviceIdentityValidationError("Yeelight ID must contain exactly 16 hexadecimal digits");
+    return { value: `0x${hex.toLowerCase()}`, normalized: hex };
+  }
   if (type === "FQDN") return { value: trimmed, normalized: trimmed.toLowerCase() };
   return { value: trimmed, normalized: trimmed };
 }
@@ -564,7 +569,7 @@ async function prepareIdentities(
     }
   }
 
-  for (const identity of prepared.filter(item => item.identityType === "MAC" || item.identityType === "IEEE" || item.identityType === "IP")) {
+  for (const identity of prepared.filter(item => ["MAC", "IEEE", "IP", "YEELIGHT_ID"].includes(item.identityType))) {
     const conflict = await client.query<{ id: string; name: string }>(`
       SELECT d.id, d.name
       FROM device_registry_identities i

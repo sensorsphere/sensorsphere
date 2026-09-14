@@ -586,6 +586,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       return raw == null ? "" : String(raw).trim();
     };
     const ip = value("ip");
+    const mac = value("mac");
+    const yeelightId = value("id");
     const model = value("model");
     const discoveredName = value("name");
     const firmwareVersion = value("firmwareVersion");
@@ -604,19 +606,39 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       deviceClass: "IOT",
       deviceType: preferredType?.code ?? "",
       technologies: [provider.toLowerCase()],
-      identities: ip ? [{
-        identityType: "IP",
-        value: ip,
-        source: "discovery",
-        labelCode: "LAN",
-        label: "LAN",
-        isPrimary: true,
-        sortOrder: 0
-      }] : [],
+      identities: [
+        ...(ip ? [{
+          identityType: "IP",
+          value: ip,
+          source: "discovery",
+          labelCode: "LAN",
+          label: "LAN",
+          isPrimary: true,
+          sortOrder: 0
+        }] : []),
+        ...(mac ? [{
+          identityType: "MAC",
+          value: mac,
+          source: "discovery",
+          labelCode: "LAN",
+          label: "LAN",
+          isPrimary: true,
+          sortOrder: 10
+        }] : []),
+        ...(yeelightId ? [{
+          identityType: "YEELIGHT_ID",
+          value: yeelightId,
+          source: "discovery",
+          labelCode: "LAN",
+          label: "LAN",
+          isPrimary: true,
+          sortOrder: 20
+        }] : [])
+      ],
       manufacturer: "Yeelight",
       model,
       firmwareVersion,
-      description: value("id") ? `Discovered Yeelight ID: ${value("id")}` : "",
+      description: yeelightId ? `Discovered Yeelight ID: ${yeelightId}` : "",
       controlAgentId: agent.id
     });
     setError(null);
@@ -710,8 +732,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       <Tabs value={tab} onChange={setTab} className="device-registry-tabs">
         <Tabs.List>
           <Tabs.Tab value="devices">Devices</Tabs.Tab>
-          <Tabs.Tab value="monitoring">Monitoring</Tabs.Tab>
           <Tabs.Tab value="device-agents">Device Agents</Tabs.Tab>
+          <Tabs.Tab value="monitoring">Monitoring</Tabs.Tab>
           <Tabs.Tab value="discovery">Discovery</Tabs.Tab>
           <Tabs.Tab value="health-profiles">Health Profiles</Tabs.Tab>
           <Tabs.Tab value="taxonomy">Taxonomy</Tabs.Tab>
