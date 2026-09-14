@@ -11,6 +11,7 @@ import {
   Group,
   Modal,
   MultiSelect,
+  Notification,
   NumberInput,
   Select,
   SimpleGrid,
@@ -262,6 +263,13 @@ export function MonitoringPanel({
   quickCheckRequest?: MonitoringQuickCheckRequest | null;
   onQuickCheckFinished?: () => void;
 } = {}) {
+  const [copyNotice, setCopyNotice] = React.useState<string | null>(null);
+
+  const showCopyNotice = React.useCallback((message: string) => {
+    setCopyNotice(message);
+    window.setTimeout(() => setCopyNotice(current => current === message ? null : current), 2200);
+  }, []);
+
   const queryClient = useQueryClient();
   const agentsQuery = useQuery({ queryKey: ["monitoring", "agents"], queryFn: getMonitoringAgents, refetchInterval: 15000 });
   const checksQuery = useQuery({ queryKey: ["monitoring", "checks"], queryFn: getMonitoringChecks, refetchInterval: 15000 });
@@ -661,6 +669,12 @@ export function MonitoringPanel({
         </Stack>
       </Modal>
 
+      {copyNotice && (
+        <Notification color="green" title="Copied" onClose={() => setCopyNotice(null)} style={{ position: "fixed", right: 20, bottom: 20, zIndex: 10000, width: 320 }}>
+          {copyNotice}
+        </Notification>
+      )}
+
       <Modal opened={tokenInfo !== null} onClose={() => setTokenInfo(null)} title="Monitoring agent token" size="lg">
         <Stack>
           <Text size="sm">Copy this token now. SensorSphere stores only its hash and cannot display it again.</Text>
@@ -673,7 +687,7 @@ export function MonitoringPanel({
                 <ActionIcon
                   variant="subtle"
                   aria-label="Copy token"
-                  onClick={() => tokenInfo && void writeClipboardText(tokenInfo.token)}
+                  onClick={() => { if (!tokenInfo) return; void writeClipboardText(tokenInfo.token).then(() => showCopyNotice("Token copied to clipboard")); }}
                 >
                   ⧉
                 </ActionIcon>
@@ -687,7 +701,7 @@ export function MonitoringPanel({
                 <ActionIcon
                   variant="subtle"
                   aria-label="Copy all environment variables"
-                  onClick={() => tokenInfo && void writeClipboardText(agentEnvironment)}
+                  onClick={() => { if (!tokenInfo) return; void writeClipboardText(agentEnvironment).then(() => showCopyNotice("Agent environment copied to clipboard")); }}
                 >
                   ⧉
                 </ActionIcon>

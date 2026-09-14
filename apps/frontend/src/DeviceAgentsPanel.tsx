@@ -1,5 +1,5 @@
 import React from "react";
-import { ActionIcon, Badge, Button, Card, Checkbox, Code, Group, Modal, NumberInput, Select, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Button, Card, Checkbox, Code, Group, Modal, Notification, NumberInput, Select, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createDeviceAgent, deleteDeviceAgent, getDeviceAgents, getDeviceDiscovery, getDiscoveredDeviceAction, regenerateDeviceAgentToken, startDeviceDiscovery, startDiscoveredDeviceAction, updateDeviceAgent } from "./api";
 import type { DeviceAgent, DeviceDiscovery, DeviceRegistryDevice, DiscoveredDeviceAction } from "./types";
@@ -167,6 +167,12 @@ function compareDiscoveryIp(left: Record<string, unknown>, right: Record<string,
 }
 
 export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUpdateDiscoveredDevice, onOpenRegisteredDevice }: DeviceAgentsPanelProps = {}) {
+  const [copyNotice, setCopyNotice] = React.useState<string | null>(null);
+
+  const showCopyNotice = React.useCallback((message: string) => {
+    setCopyNotice(message);
+    window.setTimeout(() => setCopyNotice(current => current === message ? null : current), 2200);
+  }, []);
   const queryClient = useQueryClient();
   const agentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
   const [opened, setOpened] = React.useState(false);
@@ -511,6 +517,12 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
       <Stack><Text>Delete <strong>{deleteTarget?.name}</strong>? Devices assigned to it will keep their provider but lose the Device Agent association.</Text><Group justify="flex-end"><Button variant="default" onClick={() => setDeleteTarget(null)}>Cancel</Button><Button color="red" loading={remove.isPending} onClick={() => deleteTarget && remove.mutate(deleteTarget.id)}>Delete</Button></Group></Stack>
     </Modal>
 
+    {copyNotice && (
+      <Notification color="green" title="Copied" onClose={() => setCopyNotice(null)} style={{ position: "fixed", right: 20, bottom: 20, zIndex: 10000, width: 320 }}>
+        {copyNotice}
+      </Notification>
+    )}
+
     <Modal opened={!!tokenInfo} onClose={() => setTokenInfo(null)} title="Device Agent token" size="lg">
       <Stack>
         <Text size="sm">Copy this token now. SensorSphere stores only its hash and cannot display it again.</Text>
@@ -525,7 +537,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
                 color="green"
                 variant="subtle"
                 aria-label="Copy token"
-                onClick={() => tokenInfo && void writeClipboardText(tokenInfo.token)}
+                onClick={() => { if (!tokenInfo) return; void writeClipboardText(tokenInfo.token).then(() => showCopyNotice("Token copied to clipboard")); }}
               >
                 ⧉
               </ActionIcon>
@@ -540,7 +552,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
                 color="green"
                 variant="subtle"
                 aria-label="Copy SensorSphere URL and token"
-                onClick={() => tokenInfo && void writeClipboardText(agentEnvironment)}
+                onClick={() => { if (!tokenInfo) return; void writeClipboardText(agentEnvironment).then(() => showCopyNotice("Agent environment copied to clipboard")); }}
               >
                 ⧉
               </ActionIcon>

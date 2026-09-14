@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.39.0";
+export const MODULE_VERSION = "1.39.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.39.1": {
+    releasedAt: "2026-09-14T21:35:00+02:00",
+    patch: "PR-181-device-registry-filter-copy-feedback-v1.patch",
+    changes: [
+      { type: "changed", description: "Device Registry Class and Type filter options are sorted alphabetically" },
+      { type: "added", description: "Device Agent and Monitoring Agent token/environment copy actions show clipboard confirmation notifications" }
+    ]
+  },
   "1.39.0": {
     releasedAt: "2026-09-14T20:20:00+02:00",
     patch: "PR-180-esphome-discovery-import-v1.patch",
