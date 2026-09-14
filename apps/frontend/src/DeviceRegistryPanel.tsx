@@ -83,6 +83,14 @@ import { DeviceAgentsPanel, type DiscoveredDeviceImportRequest } from "./DeviceA
 type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "controlAgent" | "lastSeen" | "health" | "checks";
 type HealthProfileSortKey = "name" | "monitoring" | "warning" | "offline" | "batteryWarning" | "batteryCritical" | "rssiWarning" | "rssiCritical";
 
+type EspHomeControlEntity = {
+  value: string;
+  label: string;
+  name: string;
+  type: "light" | "switch";
+  power: boolean | null;
+};
+
 function deviceAddress(device: DeviceRegistryDevice): string {
   return primaryIdentity(device.identities, "IP")?.value
     ?? device.ipAddress
@@ -429,7 +437,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const [controlSaturation, setControlSaturation] = React.useState<number | string>(100);
   const [controlTransitionMs, setControlTransitionMs] = React.useState<number | string>(300);
   const [controlName, setControlName] = React.useState("");
-  const [controlEntities, setControlEntities] = React.useState<Array<{ value: string; label: string }>>([]);
+  const [controlEntities, setControlEntities] = React.useState<EspHomeControlEntity[]>([]);
   const [controlEntity, setControlEntity] = React.useState<string | null>(null);
   const [controlEntityLoading, setControlEntityLoading] = React.useState(false);
   const [controlEntitySaving, setControlEntitySaving] = React.useState(false);
@@ -540,10 +548,15 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       const raw = Array.isArray(finished.result?.entities) ? finished.result.entities : [];
       const entities = raw.flatMap(item => {
         if (!item || typeof item !== "object") return [];
-        const value = typeof (item as Record<string, unknown>).value === "string" ? String((item as Record<string, unknown>).value) : "";
+        const record = item as Record<string, unknown>;
+        const value = typeof record.value === "string" ? record.value : "";
         if (!value) return [];
-        const label = typeof (item as Record<string, unknown>).label === "string" ? String((item as Record<string, unknown>).label) : value;
-        return [{ value, label }];
+        const label = typeof record.label === "string" ? record.label : value;
+        const name = typeof record.name === "string" ? record.name : label;
+        const type = record.type === "light" ? "light" : record.type === "switch" ? "switch" : null;
+        if (!type) return [];
+        const power = typeof record.power === "boolean" ? record.power : null;
+        return [{ value, label, name, type, power }];
       });
       setControlEntities(entities);
       const existing = primaryIdentity(device.identities, "ESPHOME_ENTITY")?.value ?? null;
@@ -554,8 +567,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     }
   };
 
-  const saveEspHomeEntity = async () => {
-    if (!controlDevice || !controlEntity) return;
+  const saveEspHomeEntity = async (entityValue: string = controlEntity ?? "") => {
+    if (!controlDevice || !entityValue) return;
     setControlEntitySaving(true);
     setControlError(null);
     try {
@@ -563,15 +576,47 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         .filter(identity => identity.identityType.toUpperCase() !== "ESPHOME_ENTITY")
         .map(({ id: _id, ...identity }) => identity);
       const updated = await updateDeviceRegistryDevice(controlDevice.id, {
-        identities: [...withoutEntity, { identityType: "ESPHOME_ENTITY", value: controlEntity, source: "device-control", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 30 }]
+        identities: [...withoutEntity, { identityType: "ESPHOME_ENTITY", value: entityValue, source: "device-control", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 30 }]
       });
       setControlDevice(updated);
+      setControlEntity(entityValue);
       await queryClient.invalidateQueries({ queryKey: ["device-registry", "devices"] });
       await runControlActionForDevice(updated, "GET_STATE");
     } catch (cause) {
       setControlError(cause instanceof Error ? cause.message : "Unable to save ESPHome entity");
     } finally {
       setControlEntitySaving(false);
+    }
+  };
+
+  const runEspHomeEntityAction = async (entityValue: string, action: "POWER_ON" | "POWER_OFF" | "TOGGLE") => {
+    if (!controlDevice) return;
+    const actionKey = `${action}:${entityValue}`;
+    setControlAction(actionKey);
+    setControlError(null);
+    try {
+      const created = await createDeviceControlCommand(controlDevice.id, action, { entity: entityValue }, 30);
+      const commandId = created.commandId ?? created.id;
+      if (!commandId) throw new Error("SensorSphere did not return a command id");
+      const finished = await waitForControlCommand(commandId);
+      if (finished.status !== "SUCCESS") throw new Error(finished.error || `Command ${finished.status.toLowerCase()}`);
+      const power = typeof finished.result?.power === "boolean" ? finished.result.power : null;
+      setControlEntities(current => current.map(entity =>
+        entity.value === entityValue ? { ...entity, power } : entity
+      ));
+      if (entityValue === primaryIdentity(controlDevice.identities, "ESPHOME_ENTITY")?.value && finished.result) {
+        applyControlState({
+          deviceId: controlDevice.id,
+          agentId: controlDevice.controlAgentId ?? "",
+          provider: controlDevice.controlProvider ?? "",
+          state: finished.result,
+          observedAt: new Date().toISOString()
+        });
+      }
+    } catch (cause) {
+      setControlError(cause instanceof Error ? cause.message : "Unable to control ESPHome entity");
+    } finally {
+      setControlAction(null);
     }
   };
 
@@ -1133,7 +1178,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         opened={controlDevice !== null}
         onClose={() => !controlAction && setControlDevice(null)}
         title={controlDevice ? `Device Control · ${controlDevice.name}` : "Device Control"}
-        size="lg"
+        size={920}
         centered
       >
         <Stack gap="md">
@@ -1155,37 +1200,71 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
             <Card withBorder padding="sm">
               <Stack gap="sm">
                 <Text size="sm" fw={600}>ESPHome Native API</Text>
-                {controlEntities.length > 1 ? (
-                  <Group align="end" grow>
-                    <Select
-                      label="Entity"
-                      description="Select the light/switch entity controlled by this Device Registry entry."
-                      searchable
-                      value={controlEntity}
-                      data={controlEntities}
-                      disabled={controlEntityLoading || Boolean(controlAction) || controlEntitySaving}
-                      onChange={setControlEntity}
-                    />
-                    <Button
-                      variant="light"
-                      loading={controlEntitySaving}
-                      disabled={!controlEntity || controlEntity === primaryIdentity(controlDevice.identities, "ESPHOME_ENTITY")?.value}
-                      onClick={() => void saveEspHomeEntity()}
-                    >
-                      Save entity
-                    </Button>
-                  </Group>
+                <Text size="xs" c="dimmed">
+                  Control every advertised light/switch entity. ESPHOME_ENTITY remains the default entity for external or single-entity actions.
+                </Text>
+                {controlEntityLoading ? (
+                  <Text size="sm" c="dimmed">Loading entities…</Text>
+                ) : controlEntities.length === 0 ? (
+                  <Text size="sm" c="dimmed">No controllable ESPHome light/switch entity was reported.</Text>
                 ) : (
-                  <Text size="xs" c="dimmed">Entity: {controlEntity ?? primaryIdentity(controlDevice.identities, "ESPHOME_ENTITY")?.value ?? (controlEntityLoading ? "loading…" : "auto-select the only light/switch entity")}</Text>
+                  <Table withTableBorder horizontalSpacing="sm" verticalSpacing="xs">
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Entity</Table.Th>
+                        <Table.Th w={100}>State</Table.Th>
+                        <Table.Th w={245}>Actions</Table.Th>
+                        <Table.Th w={115}>Default</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {controlEntities.map(entity => {
+                        const savedDefault = primaryIdentity(controlDevice.identities, "ESPHOME_ENTITY")?.value ?? null;
+                        const isDefault = savedDefault === entity.value || (!savedDefault && controlEntities.length === 1);
+                        return (
+                          <Table.Tr key={entity.value}>
+                            <Table.Td>
+                              <Stack gap={0}>
+                                <Text size="sm" fw={600}>{entity.name}</Text>
+                                <Text size="xs" c="dimmed">{entity.value}</Text>
+                              </Stack>
+                            </Table.Td>
+                            <Table.Td>
+                              <Badge variant="light" color={entity.power === true ? "green" : entity.power === false ? "gray" : "yellow"}>
+                                {entity.power === true ? "ON" : entity.power === false ? "OFF" : "UNKNOWN"}
+                              </Badge>
+                            </Table.Td>
+                            <Table.Td>
+                              <Group gap="xs" wrap="nowrap">
+                                <Button size="compact-sm" color="green" variant="light" loading={controlAction === `POWER_ON:${entity.value}`} disabled={Boolean(controlAction)} onClick={() => void runEspHomeEntityAction(entity.value, "POWER_ON")}>On</Button>
+                                <Button size="compact-sm" color="gray" variant="light" loading={controlAction === `POWER_OFF:${entity.value}`} disabled={Boolean(controlAction)} onClick={() => void runEspHomeEntityAction(entity.value, "POWER_OFF")}>Off</Button>
+                                <Button size="compact-sm" variant="light" loading={controlAction === `TOGGLE:${entity.value}`} disabled={Boolean(controlAction)} onClick={() => void runEspHomeEntityAction(entity.value, "TOGGLE")}>Toggle</Button>
+                              </Group>
+                            </Table.Td>
+                            <Table.Td>
+                              {isDefault ? (
+                                <Badge variant="light" color="blue">{savedDefault ? "DEFAULT" : "AUTO"}</Badge>
+                              ) : (
+                                <Button
+                                  size="compact-sm"
+                                  variant="subtle"
+                                  loading={controlEntitySaving && controlEntity === entity.value}
+                                  disabled={Boolean(controlAction) || controlEntitySaving}
+                                  onClick={() => {
+                                    setControlEntity(entity.value);
+                                    void saveEspHomeEntity(entity.value);
+                                  }}
+                                >
+                                  Set default
+                                </Button>
+                              )}
+                            </Table.Td>
+                          </Table.Tr>
+                        );
+                      })}
+                    </Table.Tbody>
+                  </Table>
                 )}
-                <Group justify="space-between">
-                  <Text fw={600} size="sm">Power</Text>
-                  <Group gap="xs">
-                    <Button size="compact-sm" color="green" variant="light" loading={controlAction === "POWER_ON"} disabled={Boolean(controlAction)} onClick={() => void runControlAction("POWER_ON")}>On</Button>
-                    <Button size="compact-sm" color="gray" variant="light" loading={controlAction === "POWER_OFF"} disabled={Boolean(controlAction)} onClick={() => void runControlAction("POWER_OFF")}>Off</Button>
-                    <Button size="compact-sm" variant="light" loading={controlAction === "TOGGLE"} disabled={Boolean(controlAction)} onClick={() => void runControlAction("TOGGLE")}>Toggle</Button>
-                  </Group>
-                </Group>
               </Stack>
             </Card>
           ) : (
@@ -1293,7 +1372,17 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           <Group justify="space-between">
             <Text size="xs" c="dimmed">{controlState?.observedAt ? `State observed ${new Date(controlState.observedAt).toLocaleString()}` : "No state received yet"}</Text>
             <Group gap="xs">
-              <Button variant="subtle" size="compact-sm" loading={controlAction === "GET_STATE" || controlLoading} disabled={Boolean(controlAction)} onClick={() => void runControlAction("GET_STATE")}>Refresh state</Button>
+              <Button
+                variant="subtle"
+                size="compact-sm"
+                loading={controlDevice?.controlProvider?.toUpperCase() === "ESPHOME" ? controlEntityLoading : controlAction === "GET_STATE" || controlLoading}
+                disabled={Boolean(controlAction) || controlEntityLoading}
+                onClick={() => controlDevice?.controlProvider?.toUpperCase() === "ESPHOME"
+                  ? void listEspHomeEntities(controlDevice)
+                  : void runControlAction("GET_STATE")}
+              >
+                {controlDevice?.controlProvider?.toUpperCase() === "ESPHOME" ? "Refresh entities" : "Refresh state"}
+              </Button>
               <Button variant="default" disabled={Boolean(controlAction)} onClick={() => setControlDevice(null)}>Close</Button>
             </Group>
           </Group>

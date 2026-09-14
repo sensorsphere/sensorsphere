@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.40.1";
+export const MODULE_VERSION = "1.41.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.41.0": {
+    releasedAt: "2026-09-15T01:20:00+02:00",
+    patch: "PR-186-esphome-multi-entity-control-v1.patch",
+    changes: [
+      { type: "added", description: "ESPHome Device Control displays all controllable light/switch entities with per-entity state and On/Off/Toggle actions" },
+      { type: "changed", description: "ESPHome Device Control dialog is wider and ESPHOME_ENTITY is treated as the persisted default instead of limiting interactive control" },
+      { type: "fixed", description: "ESPHome entity controls no longer rely on a Select that can reopen after control-state refreshes" }
+    ]
+  },
   "1.40.1": {
     releasedAt: "2026-09-15T01:05:00+02:00",
     patch: "PR-185-esphome-entity-save-identity-payload-v1.patch",
