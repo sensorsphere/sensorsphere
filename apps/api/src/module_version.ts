@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.15.0";
+export const MODULE_VERSION = "1.16.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.16.0": {
+    releasedAt: "2026-09-14T06:55:00+02:00",
+    patch: "PR-173-device-agent-discovered-set-name-v1.patch",
+    changes: [
+      { type: "added", description: "Device Control API can dispatch asynchronous provider actions to devices discovered by a Device Agent before Device Registry import" }
+    ]
+  },
   "1.15.0": {
     releasedAt: "2026-09-10T07:10:00+02:00",
     patch: "PR-171-device-agent-discovery-ui-v1.patch",

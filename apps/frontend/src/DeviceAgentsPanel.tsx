@@ -1,8 +1,8 @@
 import React from "react";
 import { ActionIcon, Badge, Button, Card, Checkbox, Code, Group, Modal, NumberInput, Select, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createDeviceAgent, deleteDeviceAgent, getDeviceAgents, getDeviceDiscovery, regenerateDeviceAgentToken, startDeviceDiscovery, updateDeviceAgent } from "./api";
-import type { DeviceAgent, DeviceDiscovery } from "./types";
+import { createDeviceAgent, deleteDeviceAgent, getDeviceAgents, getDeviceDiscovery, getDiscoveredDeviceAction, regenerateDeviceAgentToken, startDeviceDiscovery, startDiscoveredDeviceAction, updateDeviceAgent } from "./api";
+import type { DeviceAgent, DeviceDiscovery, DiscoveredDeviceAction } from "./types";
 import { DeleteActionIcon, EditActionIcon } from "./TableActionIcons";
 
 interface AgentFormState {
@@ -74,6 +74,9 @@ export function DeviceAgentsPanel() {
   const [discoveryAgent, setDiscoveryAgent] = React.useState<DeviceAgent | null>(null);
   const [discoveryProvider, setDiscoveryProvider] = React.useState<string | null>(null);
   const [discoveryId, setDiscoveryId] = React.useState<string | null>(null);
+  const [setNameTarget, setSetNameTarget] = React.useState<Record<string, unknown> | null>(null);
+  const [setNameValue, setSetNameValue] = React.useState("");
+  const [discoveredActionId, setDiscoveredActionId] = React.useState<string | null>(null);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["device-control", "agents"] });
   const save = useMutation({
@@ -97,6 +100,36 @@ export function DeviceAgentsPanel() {
     enabled: discoveryId != null,
     refetchInterval: query => query.state.data?.status === "SENT" ? 500 : false
   });
+  const setNameMutation = useMutation({
+    mutationFn: async () => {
+      if (!discoveryAgent || !discoveryProvider || !setNameTarget) throw new Error("Discovery context is no longer available");
+      return startDiscoveredDeviceAction(
+        discoveryAgent.id,
+        discoveryProvider,
+        "SET_NAME",
+        setNameTarget,
+        { name: setNameValue.trim() }
+      );
+    },
+    onSuccess: result => setDiscoveredActionId(result.commandId)
+  });
+  const discoveredActionQuery = useQuery<DiscoveredDeviceAction>({
+    queryKey: ["device-control", "discovered-action", discoveredActionId],
+    queryFn: () => getDiscoveredDeviceAction(discoveredActionId!),
+    enabled: discoveredActionId != null,
+    refetchInterval: query => query.state.data?.status === "SENT" ? 300 : false
+  });
+
+  React.useEffect(() => {
+    if (discoveredActionQuery.data?.status !== "SUCCESS") return;
+    setSetNameTarget(null);
+    setSetNameValue("");
+    setDiscoveredActionId(null);
+    setNameMutation.reset();
+    if (discoveryAgent && discoveryProvider) {
+      discoveryMutation.mutate({ agentId: discoveryAgent.id, provider: discoveryProvider });
+    }
+  }, [discoveredActionQuery.data?.status]);
 
   const openCreate = () => { setEditing(null); setForm(emptyForm()); setOpened(true); };
   const openEdit = (agent: DeviceAgent) => { setEditing(agent); setForm({ name: agent.name, enabled: agent.enabled, labelsText: labelsText(agent), heartbeatTimeoutSeconds: agent.heartbeatTimeoutSeconds }); setOpened(true); };
@@ -111,7 +144,11 @@ export function DeviceAgentsPanel() {
     setDiscoveryAgent(null);
     setDiscoveryProvider(null);
     setDiscoveryId(null);
+    setSetNameTarget(null);
+    setSetNameValue("");
+    setDiscoveredActionId(null);
     discoveryMutation.reset();
+    setNameMutation.reset();
   };
 
   const sensorsphereUrl = typeof window === "undefined" ? "" : window.location.origin;
@@ -170,8 +207,28 @@ export function DeviceAgentsPanel() {
         {discoveryQuery.data?.devices?.length ? (
           <div style={{ overflow: "auto", maxHeight: 420 }}>
             <Table striped highlightOnHover stickyHeader style={{ minWidth: 760 }}>
-              <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>IP</Table.Th><Table.Th>Model</Table.Th><Table.Th>Power</Table.Th><Table.Th>Brightness</Table.Th><Table.Th>ID</Table.Th></Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th>Actions</Table.Th><Table.Th>Name</Table.Th><Table.Th>IP</Table.Th><Table.Th>Model</Table.Th><Table.Th>Power</Table.Th><Table.Th>Brightness</Table.Th><Table.Th>ID</Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>{discoveryQuery.data.devices.map((device, index) => <Table.Tr key={`${discoveryValue(device, "id")}-${index}`}>
+                <Table.Td>
+                  <Tooltip label="Set name">
+                    <ActionIcon
+                      size="sm"
+                      variant="light"
+                      color="blue"
+                      aria-label="Set name"
+                      disabled={discoveryProvider?.toUpperCase() !== "YEELIGHT" || discoveryValue(device, "ip") === "—"}
+                      onClick={() => {
+                        setSetNameTarget(device);
+                        const currentName = discoveryValue(device, "name");
+                        setSetNameValue(currentName === "—" ? "" : currentName);
+                        setDiscoveredActionId(null);
+                        setNameMutation.reset();
+                      }}
+                    >
+                      ✎
+                    </ActionIcon>
+                  </Tooltip>
+                </Table.Td>
                 <Table.Td>{discoveryValue(device, "name")}</Table.Td>
                 <Table.Td><Text ff="monospace" size="sm">{discoveryValue(device, "ip")}</Text></Table.Td>
                 <Table.Td>{discoveryValue(device, "model")}</Table.Td>
@@ -183,6 +240,38 @@ export function DeviceAgentsPanel() {
           </div>
         ) : null}
         <Group justify="flex-end"><Button variant="default" onClick={closeDiscovery}>Close</Button></Group>
+      </Stack>
+    </Modal>
+
+    <Modal
+      opened={!!setNameTarget}
+      onClose={() => { setSetNameTarget(null); setDiscoveredActionId(null); setNameMutation.reset(); }}
+      title="Set Yeelight name"
+      centered
+    >
+      <Stack>
+        <Text size="sm" c="dimmed">{discoveryValue(setNameTarget ?? {}, "ip")}</Text>
+        <TextInput
+          data-autofocus
+          label="Name"
+          required
+          maxLength={64}
+          value={setNameValue}
+          onChange={event => setSetNameValue(event.currentTarget.value)}
+        />
+        {setNameMutation.isError && <Text c="red" size="sm">{setNameMutation.error instanceof Error ? setNameMutation.error.message : "Unable to set name"}</Text>}
+        {discoveredActionQuery.data?.status === "FAILED" && <Text c="red" size="sm">{discoveredActionQuery.data.error ?? "Unable to set name"}</Text>}
+        {discoveredActionQuery.data?.status === "TIMEOUT" && <Text c="red" size="sm">Set name timed out.</Text>}
+        <Group justify="flex-end">
+          <Button variant="default" onClick={() => { setSetNameTarget(null); setDiscoveredActionId(null); setNameMutation.reset(); }}>Cancel</Button>
+          <Button
+            loading={setNameMutation.isPending || discoveredActionQuery.data?.status === "SENT"}
+            disabled={!setNameValue.trim() || setNameValue.trim().length > 64}
+            onClick={() => setNameMutation.mutate()}
+          >
+            Set name
+          </Button>
+        </Group>
       </Stack>
     </Modal>
 

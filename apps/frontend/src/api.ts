@@ -74,7 +74,8 @@ import type {
   UpdateDeviceAgentInput,
   DeviceControlCommand,
   DeviceControlState,
-  DeviceDiscovery
+  DeviceDiscovery,
+  DiscoveredDeviceAction
 } from "./types";
 
 async function readJson<T>(
@@ -1695,6 +1696,25 @@ export async function startDeviceDiscovery(
 
 export async function getDeviceDiscovery(id: string): Promise<DeviceDiscovery> {
   return readJson<DeviceDiscovery>(await fetch(`/api/v1/device-control/discoveries/${id}`));
+}
+
+export async function startDiscoveredDeviceAction(
+  agentId: string,
+  provider: string,
+  action: string,
+  target: Record<string, unknown>,
+  parameters: Record<string, unknown> = {},
+  timeoutSeconds = 10
+): Promise<DiscoveredDeviceAction> {
+  return readJson<DiscoveredDeviceAction>(await fetch(`/api/v1/device-control/agents/${agentId}/discovered-actions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, action, target, parameters, timeoutSeconds })
+  }));
+}
+
+export async function getDiscoveredDeviceAction(id: string): Promise<DiscoveredDeviceAction> {
+  return readJson<DiscoveredDeviceAction>(await fetch(`/api/v1/device-control/discovered-actions/${id}`));
 }
 
 export async function createDeviceControlCommand(

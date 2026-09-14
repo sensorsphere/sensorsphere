@@ -31,6 +31,14 @@ const discoveryCreateSchema = z.object({
   timeoutSeconds: z.number().int().min(1).max(15).optional()
 }).strict();
 
+const discoveredDeviceActionCreateSchema = z.object({
+  provider: providerSchema,
+  action: actionSchema,
+  target: z.record(z.string(), z.unknown()),
+  parameters: z.record(z.string(), z.unknown()).optional(),
+  timeoutSeconds: z.number().int().min(1).max(30).optional()
+}).strict();
+
 const commandCreateSchema = z.object({
   deviceId: z.string().uuid(),
   action: actionSchema,
@@ -77,12 +85,23 @@ const discoverResultMessageSchema = z.object({
   error: z.string().max(5000).nullable().optional()
 }).strict();
 
+const discoveredDeviceActionResultMessageSchema = z.object({
+  type: z.literal("DISCOVERED_DEVICE_ACTION_RESULT"),
+  commandId: z.string().uuid(),
+  provider: providerSchema,
+  action: actionSchema,
+  status: z.enum(["SUCCESS", "FAILED"]),
+  result: z.record(z.string(), z.unknown()).nullable().optional(),
+  error: z.string().max(5000).nullable().optional()
+}).strict();
+
 const agentMessageSchema = z.discriminatedUnion("type", [
   helloMessageSchema,
   heartbeatMessageSchema,
   commandResultMessageSchema,
   deviceStateMessageSchema,
-  discoverResultMessageSchema
+  discoverResultMessageSchema,
+  discoveredDeviceActionResultMessageSchema
 ]);
 
 interface AgentRow {
@@ -171,12 +190,42 @@ export async function registerDeviceControlFeature(
   }
   const discoveries = new Map<string, DiscoveryRecord>();
 
+  type DiscoveredDeviceActionStatus = "SENT" | "SUCCESS" | "FAILED" | "TIMEOUT";
+  interface DiscoveredDeviceActionRecord {
+    id: string;
+    agentId: string;
+    provider: string;
+    action: string;
+    target: Record<string, unknown>;
+    status: DiscoveredDeviceActionStatus;
+    result: Record<string, unknown> | null;
+    error: string | null;
+    createdAt: Date;
+    expiresAt: Date;
+    finishedAt: Date | null;
+  }
+  const discoveredDeviceActions = new Map<string, DiscoveredDeviceActionRecord>();
+
   const discoveryDto = (record: DiscoveryRecord) => ({
     commandId: record.id,
     agentId: record.agentId,
     provider: record.provider,
     status: record.status,
     devices: record.devices,
+    error: record.error,
+    createdAt: record.createdAt.toISOString(),
+    expiresAt: record.expiresAt.toISOString(),
+    finishedAt: record.finishedAt?.toISOString() ?? null
+  });
+
+  const discoveredDeviceActionDto = (record: DiscoveredDeviceActionRecord) => ({
+    commandId: record.id,
+    agentId: record.agentId,
+    provider: record.provider,
+    action: record.action,
+    target: record.target,
+    status: record.status,
+    result: record.result,
     error: record.error,
     createdAt: record.createdAt.toISOString(),
     expiresAt: record.expiresAt.toISOString(),
@@ -192,6 +241,14 @@ export async function registerDeviceControlFeature(
         record.finishedAt = new Date();
       }
       if (record.createdAt.getTime() < now - 60 * 60 * 1000) discoveries.delete(record.id);
+    }
+    for (const record of discoveredDeviceActions.values()) {
+      if (record.status === "SENT" && record.expiresAt.getTime() <= now) {
+        record.status = "TIMEOUT";
+        record.error = "Discovered device action timed out";
+        record.finishedAt = new Date();
+      }
+      if (record.createdAt.getTime() < now - 60 * 60 * 1000) discoveredDeviceActions.delete(record.id);
     }
   };
 
@@ -316,6 +373,22 @@ export async function registerDeviceControlFeature(
           `, [message.deviceId, agent.id, message.provider, JSON.stringify(message.state)]);
           return;
         }
+        if (message.type === "DISCOVERED_DEVICE_ACTION_RESULT") {
+          const action = discoveredDeviceActions.get(message.commandId);
+          if (!action || action.agentId !== agent.id) return;
+          if (action.provider.toUpperCase() !== message.provider.toUpperCase() || action.action.toUpperCase() !== message.action.toUpperCase()) {
+            action.status = "FAILED";
+            action.error = "Discovered device action response does not match the request";
+            action.finishedAt = new Date();
+            return;
+          }
+          action.status = message.status;
+          action.result = message.result ?? null;
+          action.error = message.error ?? null;
+          action.finishedAt = new Date();
+          return;
+        }
+
         if (message.type === "DISCOVER_RESULT") {
           const discovery = discoveries.get(message.commandId);
           if (!discovery || discovery.agentId !== agent.id) return;
@@ -408,6 +481,66 @@ export async function registerDeviceControlFeature(
     const result = await pool.query("DELETE FROM device_agents WHERE id=$1", [request.params.id]);
     if ((result.rowCount ?? 0) === 0) return reply.code(404).send({ error: "Device agent not found" });
     return reply.code(204).send();
+  });
+
+
+  app.post("/api/v1/device-control/agents/:id/discovered-actions", async (
+    request: FastifyRequest<{ Params: { id: string }; Body: unknown }>,
+    reply
+  ) => {
+    expireDiscoveries();
+    const parsed = discoveredDeviceActionCreateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid discovered device action" });
+    const input = parsed.data;
+
+    const result = await pool.query<AgentRow>("SELECT * FROM device_agents WHERE id=$1", [request.params.id]);
+    const agent = result.rows[0];
+    if (!agent) return reply.code(404).send({ error: "Device Agent not found" });
+    if (!agent.enabled) return reply.code(409).send({ error: "Device Agent is disabled" });
+    const socket = sockets.get(agent.id);
+    if (socket?.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Device Agent is offline" });
+
+    const capabilities = Array.isArray(agent.capabilities) ? agent.capabilities : [];
+    if (!capabilities.some(item => item.provider.toUpperCase() === input.provider.toUpperCase())) {
+      return reply.code(409).send({ error: `Device Agent does not advertise provider ${input.provider}` });
+    }
+
+    const commandId = randomUUID();
+    const createdAt = new Date();
+    const expiresAt = new Date(createdAt.getTime() + (input.timeoutSeconds ?? 10) * 1000);
+    const record: DiscoveredDeviceActionRecord = {
+      id: commandId,
+      agentId: agent.id,
+      provider: input.provider.toUpperCase(),
+      action: input.action.toUpperCase(),
+      target: input.target,
+      status: "SENT",
+      result: null,
+      error: null,
+      createdAt,
+      expiresAt,
+      finishedAt: null
+    };
+    discoveredDeviceActions.set(commandId, record);
+    socket.send(JSON.stringify({
+      type: "DISCOVERED_DEVICE_ACTION_REQUEST",
+      commandId,
+      provider: record.provider,
+      action: record.action,
+      target: record.target,
+      parameters: input.parameters ?? {}
+    }));
+    return reply.code(202).send(discoveredDeviceActionDto(record));
+  });
+
+  app.get("/api/v1/device-control/discovered-actions/:id", async (
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply
+  ) => {
+    expireDiscoveries();
+    const record = discoveredDeviceActions.get(request.params.id);
+    if (!record) return reply.code(404).send({ error: "Discovered device action not found" });
+    return reply.send(discoveredDeviceActionDto(record));
   });
 
   app.post("/api/v1/device-control/agents/:id/discover", async (

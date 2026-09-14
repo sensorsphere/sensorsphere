@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.32.0";
+export const MODULE_VERSION = "1.33.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.33.0": {
+    releasedAt: "2026-09-14T06:55:00+02:00",
+    patch: "PR-173-device-agent-discovered-set-name-v1.patch",
+    changes: [
+      { type: "added", description: "Discovery results add an Actions column before Name with a Set name action for discovered Yeelight devices" },
+      { type: "added", description: "Set name opens an autofocus dialog, executes the action through the discovering Device Agent and automatically refreshes discovery results" }
+    ]
+  },
   "1.32.0": {
     releasedAt: "2026-09-10T07:10:00+02:00",
     patch: "PR-171-device-agent-discovery-ui-v1.patch",

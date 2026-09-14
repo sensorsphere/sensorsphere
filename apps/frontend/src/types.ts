@@ -1137,6 +1137,22 @@ export interface DeviceDiscovery {
   finishedAt: string | null;
 }
 
+export type DiscoveredDeviceActionStatus = "SENT" | "SUCCESS" | "FAILED" | "TIMEOUT";
+
+export interface DiscoveredDeviceAction {
+  commandId: string;
+  agentId: string;
+  provider: string;
+  action: string;
+  target: Record<string, unknown>;
+  status: DiscoveredDeviceActionStatus;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  createdAt: string;
+  expiresAt: string;
+  finishedAt: string | null;
+}
+
 export interface DeviceControlState {
   deviceId: string;
   agentId: string;
