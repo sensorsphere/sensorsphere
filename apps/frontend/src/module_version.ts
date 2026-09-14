@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.37.0";
+export const MODULE_VERSION = "1.38.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.38.0": {
+    releasedAt: "2026-09-14T20:10:00+02:00",
+    patch: "PR-179-esphome-provider-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Device Control supports ESPHome light and switch power actions through the Device Agent Native API provider" },
+      { type: "added", description: "Device Registry Address cells expose a green copy action for the primary IP address" },
+      { type: "changed", description: "ESPHome Device Agent assignment documents ESPHOME_ENTITY selection for multi-entity nodes" }
+    ]
+  },
   "1.37.0": {
     releasedAt: "2026-09-14T18:50:00+02:00",
     patch: "PR-178-yeelight-richer-control-ui-v1.patch",

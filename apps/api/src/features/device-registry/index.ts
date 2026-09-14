@@ -506,6 +506,14 @@ function canonicalIdentityType(value: string): string {
 
 class DeviceIdentityValidationError extends Error {}
 
+
+function controlProviderFromTechnologies(technologies: string[]): string | null {
+  const normalized = technologies.map(value => value.toLowerCase());
+  if (normalized.includes("yeelight")) return "YEELIGHT";
+  if (normalized.includes("esphome")) return "ESPHOME";
+  return null;
+}
+
 function normalizeIdentityValue(identityType: string, value: string): { value: string; normalized: string } {
   const type = canonicalIdentityType(identityType);
   const trimmed = value.trim();
@@ -941,7 +949,7 @@ export async function registerDeviceRegistryFeature(
         input.manufacturer ?? null, input.model ?? null, input.firmwareVersion ?? null,
         input.description ?? null, input.locationId ?? null, input.parentDeviceId ?? null,
         input.healthProfileId ?? null, input.controlAgentId ?? null,
-        ((input.technologies ?? (input.technology ? [input.technology] : [])).some(value => value.toLowerCase() === "yeelight")) ? "YEELIGHT" : null,
+        controlProviderFromTechnologies(input.technologies ?? (input.technology ? [input.technology] : [])),
         input.enabled ?? true, input.lastSeenAt ?? null, input.batteryPercent ?? null, input.rssi ?? null
       ]);
       const id = result.rows[0]!.id;
@@ -1025,7 +1033,7 @@ export async function registerDeviceRegistryFeature(
         Object.prototype.hasOwnProperty.call(input, "healthProfileId"), input.healthProfileId ?? null,
         Object.prototype.hasOwnProperty.call(input, "controlAgentId"), input.controlAgentId ?? null,
         Object.prototype.hasOwnProperty.call(input, "technologies"),
-        input.technologies?.some(value => value.toLowerCase() === "yeelight") ? "YEELIGHT" : null,
+        input.technologies ? controlProviderFromTechnologies(input.technologies) : null,
         input.enabled ?? null,
         Object.prototype.hasOwnProperty.call(input, "lastSeenAt"), input.lastSeenAt ?? null,
         Object.prototype.hasOwnProperty.call(input, "batteryPercent"), input.batteryPercent ?? null,

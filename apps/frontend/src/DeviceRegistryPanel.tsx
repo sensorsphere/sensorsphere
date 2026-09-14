@@ -107,6 +107,31 @@ function deviceAddressSearchText(device: DeviceRegistryDevice): string {
   ].join(" ").toLowerCase();
 }
 
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall through for HTTP/insecure contexts or browsers denying Clipboard API access.
+    }
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try {
+    document.execCommand("copy");
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
 function copyDeviceToForm(device: DeviceRegistryDevice): DeviceFormState {
   const form = deviceToForm(device);
   return {
@@ -912,7 +937,11 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                             <Text size="xs" c="dimmed">{device.manufacturer || device.model ? [device.manufacturer, device.model].filter(Boolean).join(" · ") : device.identities[0]?.value ?? ""}</Text>
                           </Stack>
                         </Table.Td>
-                        <Table.Td><Text size="sm" ff="monospace">{deviceAddress(device) || "—"}</Text></Table.Td>
+                        <Table.Td>{(() => {
+                          const address = deviceAddress(device);
+                          const ip = primaryIdentity(device.identities, "IP")?.value ?? device.ipAddress ?? null;
+                          return <Group gap={4} wrap="nowrap"><Text size="sm" ff="monospace">{address || "—"}</Text>{ip && <Tooltip label="Copy IP address"><ActionIcon size="xs" variant="subtle" color="green" aria-label={`Copy IP ${ip}`} onClick={() => void copyTextToClipboard(ip)}>⧉</ActionIcon></Tooltip>}</Group>;
+                        })()}</Table.Td>
                         <Table.Td><Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceClassInfo.icon} color={device.deviceClassInfo.color} /><Text size="sm">{device.deviceClassInfo.label}</Text></Group></Table.Td>
                         <Table.Td><Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceTypeInfo.icon} color={device.deviceTypeInfo.color} /><Text size="sm">{device.deviceTypeInfo.label}</Text></Group></Table.Td>
                         <Table.Td>
@@ -956,9 +985,11 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                           <Group gap={4} wrap="nowrap" justify="flex-end">
                             {(() => {
                               const agent = (deviceAgentsQuery.data ?? []).find(item => item.id === device.controlAgent?.id);
-                              const isYeelight = device.controlProvider?.toUpperCase() === "YEELIGHT";
-                              const canControl = Boolean(isYeelight && agent?.enabled && agent.online);
-                              const label = !isYeelight ? "Device control is not available for this provider" : !device.controlAgent ? "Assign a Device Agent first" : !agent?.online ? "Device Agent is offline" : "Control device";
+                              const provider = device.controlProvider?.toUpperCase() ?? "";
+                              const capability = agent?.capabilities.find(item => item.provider.toUpperCase() === provider);
+                              const supported = provider === "YEELIGHT" || provider === "ESPHOME";
+                              const canControl = Boolean(supported && capability && agent?.enabled && agent.online);
+                              const label = !supported ? "Device control is not available for this provider" : !device.controlAgent ? "Assign a Device Agent first" : !agent?.online ? "Device Agent is offline" : !capability ? `Device Agent does not advertise ${provider}` : "Control device";
                               return <Tooltip label={label}><span><ActionIcon size="sm" variant="light" color="violet" disabled={!canControl} aria-label={`Control ${device.name}`} onClick={() => void openDeviceControl(device)}>◉</ActionIcon></span></Tooltip>;
                             })()}
                             <EditActionIcon onClick={() => openEditDevice(device)} />
@@ -1068,6 +1099,22 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
 
           {controlError && <Text c="red" size="sm">{controlError}</Text>}
 
+          {controlDevice?.controlProvider?.toUpperCase() === "ESPHOME" ? (
+            <Card withBorder padding="sm">
+              <Stack gap="sm">
+                <Text size="sm" fw={600}>ESPHome Native API</Text>
+                <Text size="xs" c="dimmed">Entity: {primaryIdentity(controlDevice.identities, "ESPHOME_ENTITY")?.value ?? "auto-select the only light/switch entity"}</Text>
+                <Group justify="space-between">
+                  <Text fw={600} size="sm">Power</Text>
+                  <Group gap="xs">
+                    <Button size="compact-sm" color="green" variant="light" loading={controlAction === "POWER_ON"} disabled={Boolean(controlAction)} onClick={() => void runControlAction("POWER_ON")}>On</Button>
+                    <Button size="compact-sm" color="gray" variant="light" loading={controlAction === "POWER_OFF"} disabled={Boolean(controlAction)} onClick={() => void runControlAction("POWER_OFF")}>Off</Button>
+                    <Button size="compact-sm" variant="light" loading={controlAction === "TOGGLE"} disabled={Boolean(controlAction)} onClick={() => void runControlAction("TOGGLE")}>Toggle</Button>
+                  </Group>
+                </Group>
+              </Stack>
+            </Card>
+          ) : (
           <Card withBorder padding="sm">
             <Stack gap="sm">
               <Group align="end" grow>
@@ -1167,6 +1214,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
               </Group>
             </Stack>
           </Card>
+          )}
 
           <Group justify="space-between">
             <Text size="xs" c="dimmed">{controlState?.observedAt ? `State observed ${new Date(controlState.observedAt).toLocaleString()}` : "No state received yet"}</Text>
@@ -1242,7 +1290,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
             />
             <Select label="Parent device" searchable clearable value={deviceForm.parentDeviceId} onChange={value => setDeviceForm(current => ({ ...current, parentDeviceId: value }))} data={devices.filter(device => device.id !== editingDevice?.id).map(device => ({ value: device.id, label: device.name }))} />
             <Select label="Health profile" searchable clearable value={deviceForm.healthProfileId} onChange={value => setDeviceForm(current => ({ ...current, healthProfileId: value }))} data={(profilesQuery.data ?? []).map(profile => ({ value: profile.id, label: profile.name }))} />
-            <Select label="Device Agent" description={deviceForm.technologies.some(value => value.toLowerCase() === "yeelight") ? "Yeelight control will use this agent." : "Used by future Device Control providers."} searchable clearable value={deviceForm.controlAgentId} onChange={value => setDeviceForm(current => ({ ...current, controlAgentId: value }))} data={(deviceAgentsQuery.data ?? []).filter(agent => agent.enabled).map(agent => ({ value: agent.id, label: `${agent.name}${agent.online ? " · ONLINE" : " · OFFLINE"}` }))} />
+            <Select label="Device Agent" description={deviceForm.technologies.some(value => value.toLowerCase() === "yeelight") ? "Yeelight control will use this agent." : deviceForm.technologies.some(value => value.toLowerCase() === "esphome") ? "ESPHome Native API control will use this agent. Add ESPHOME_ENTITY when the node exposes multiple light/switch entities." : "Used by Device Control providers."} searchable clearable value={deviceForm.controlAgentId} onChange={value => setDeviceForm(current => ({ ...current, controlAgentId: value }))} data={(deviceAgentsQuery.data ?? []).filter(agent => agent.enabled).map(agent => ({ value: agent.id, label: `${agent.name}${agent.online ? " · ONLINE" : " · OFFLINE"}` }))} />
             <TextInput type="datetime-local" label="Last seen" value={deviceForm.lastSeenAt} onChange={event => setDeviceForm(current => ({ ...current, lastSeenAt: event.currentTarget.value }))} />
             <NumberInput label="Battery %" min={0} max={100} value={deviceForm.batteryPercent} onChange={value => setDeviceForm(current => ({ ...current, batteryPercent: value }))} />
             <NumberInput label="RSSI dBm" value={deviceForm.rssi} onChange={value => setDeviceForm(current => ({ ...current, rssi: value }))} />

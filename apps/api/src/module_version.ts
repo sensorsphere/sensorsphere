@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.16.1";
+export const MODULE_VERSION = "1.17.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.17.0": {
+    releasedAt: "2026-09-14T20:10:00+02:00",
+    patch: "PR-179-esphome-provider-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Device Registry maps ESPHome technology to the ESPHOME Device Control provider" }
+    ]
+  },
   "1.16.1": {
     releasedAt: "2026-09-14T07:20:00+02:00",
     patch: "PR-175-device-agent-discovery-identity-refresh-ui-v1.patch",
