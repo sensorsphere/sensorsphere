@@ -665,59 +665,45 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       const raw = device[key];
       return raw == null ? "" : String(raw).trim();
     };
+    const providerName = provider.toUpperCase();
     const ip = value("ip");
     const mac = value("mac");
-    const yeelightId = value("id");
+    const hostname = value("hostname");
+    const id = value("id");
+    const discoveredName = value("name");
     const model = value("model");
     const firmwareVersion = value("firmwareVersion");
+    const entities = Array.isArray(device.entities) ? device.entities.map(item => String(item).trim()).filter(Boolean) : [];
     const typeCandidates = (deviceTypesQuery.data ?? []).filter(type => type.deviceClass === "IOT" || type.deviceClass === "OTHER");
     const normalizedModel = model.toLowerCase();
-    const preferredType = typeCandidates.find(type =>
-      normalizedModel.includes("strip")
+    const preferredType = providerName === "YEELIGHT"
+      ? typeCandidates.find(type => normalizedModel.includes("strip")
         ? /strip/.test(`${type.code} ${type.label}`.toLowerCase())
-        : /(bulb|light|lamp)/.test(`${type.code} ${type.label}`.toLowerCase())
-    ) ?? null;
+        : /(bulb|light|lamp)/.test(`${type.code} ${type.label}`.toLowerCase())) ?? null
+      : typeCandidates.find(type => /(controller|microcontroller|iot|esp)/.test(`${type.code} ${type.label}`.toLowerCase())) ?? null;
+
+    const identities: DeviceIdentity[] = [
+      ...(ip ? [{ identityType: "IP", value: ip, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 0 }] : []),
+      ...(mac ? [{ identityType: "MAC", value: mac, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 10 }] : []),
+      ...(providerName === "ESPHOME" && hostname ? [{ identityType: "FQDN", value: hostname, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 20 }] : []),
+      ...(providerName === "ESPHOME" && entities.length === 1 ? [{ identityType: "ESPHOME_ENTITY", value: entities[0]!, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 30 }] : []),
+      ...(providerName === "YEELIGHT" && id ? [{ identityType: "YEELIGHT_ID", value: id, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 20 }] : [])
+    ];
 
     setEditingDevice(null);
     setDeviceForm({
       ...emptyDeviceForm(),
-      name: discoveredYeelightDeviceName(mac, yeelightId),
+      name: providerName === "YEELIGHT" ? discoveredYeelightDeviceName(mac, id) : (discoveredName || hostname || "ESPHome"),
       deviceClass: "IOT",
       deviceType: preferredType?.code ?? "",
       technologies: [provider.toLowerCase()],
-      identities: [
-        ...(ip ? [{
-          identityType: "IP",
-          value: ip,
-          source: "discovery",
-          labelCode: "LAN",
-          label: "LAN",
-          isPrimary: true,
-          sortOrder: 0
-        }] : []),
-        ...(mac ? [{
-          identityType: "MAC",
-          value: mac,
-          source: "discovery",
-          labelCode: "LAN",
-          label: "LAN",
-          isPrimary: true,
-          sortOrder: 10
-        }] : []),
-        ...(yeelightId ? [{
-          identityType: "YEELIGHT_ID",
-          value: yeelightId,
-          source: "discovery",
-          labelCode: "LAN",
-          label: "LAN",
-          isPrimary: true,
-          sortOrder: 20
-        }] : [])
-      ],
-      manufacturer: "Yeelight",
+      identities,
+      manufacturer: providerName === "YEELIGHT" ? "Yeelight" : "ESPHome",
       model,
       firmwareVersion,
-      description: yeelightId ? `Discovered Yeelight ID: ${yeelightId}` : "",
+      description: providerName === "YEELIGHT"
+        ? (id ? `Discovered Yeelight ID: ${id}` : "")
+        : (entities.length ? `Discovered ESPHome entities: ${entities.join(", ")}` : "Discovered through ESPHome mDNS"),
       controlAgentId: agent.id
     });
     setError(null);
@@ -733,20 +719,28 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       const raw = device[key];
       return raw == null ? "" : String(raw).trim();
     };
+    const providerName = provider.toUpperCase();
     const ip = value("ip");
     const mac = value("mac");
-    const yeelightId = value("id");
+    const hostname = value("hostname");
+    const id = value("id");
     const model = value("model");
     const firmwareVersion = value("firmwareVersion");
+    const entities = Array.isArray(device.entities) ? device.entities.map(item => String(item).trim()).filter(Boolean) : [];
 
     let identities = registered.identities.map(identity => ({ ...identity }));
     identities = upsertDiscoveredIdentity(identities, "IP", ip, 0);
     identities = upsertDiscoveredIdentity(identities, "MAC", mac, 10);
-    identities = upsertDiscoveredIdentity(identities, "YEELIGHT_ID", yeelightId, 20);
+    if (providerName === "ESPHOME") {
+      identities = upsertDiscoveredIdentity(identities, "FQDN", hostname, 20);
+      if (entities.length === 1) identities = upsertDiscoveredIdentity(identities, "ESPHOME_ENTITY", entities[0]!, 30);
+    } else if (providerName === "YEELIGHT") {
+      identities = upsertDiscoveredIdentity(identities, "YEELIGHT_ID", id, 20);
+    }
 
     const form = deviceToForm(registered);
     form.identities = identities;
-    form.manufacturer = "Yeelight";
+    form.manufacturer = providerName === "YEELIGHT" ? "Yeelight" : "ESPHome";
     if (model) form.model = model;
     if (firmwareVersion) form.firmwareVersion = firmwareVersion;
     form.controlAgentId = agent.id;

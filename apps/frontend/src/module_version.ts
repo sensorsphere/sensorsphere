@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.38.0";
+export const MODULE_VERSION = "1.39.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.39.0": {
+    releasedAt: "2026-09-14T20:20:00+02:00",
+    patch: "PR-180-esphome-discovery-import-v1.patch",
+    changes: [
+      { type: "added", description: "Device Agent discovery UI supports ESPHome mDNS results and shows controllable entities" },
+      { type: "added", description: "Discovered ESPHome nodes can be imported or updated in Device Registry using MAC and hostname identities" },
+      { type: "changed", description: "ESPHome discovery registration uses the local Device Agent and auto-selects ESPHOME_ENTITY when exactly one controllable entity is advertised" }
+    ]
+  },
   "1.38.0": {
     releasedAt: "2026-09-14T20:10:00+02:00",
     patch: "PR-179-esphome-provider-foundation-v1.patch",

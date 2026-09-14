@@ -99,8 +99,9 @@ function normalizeYeelightId(value: unknown): string {
 }
 
 function discoveredDeviceKey(device: Record<string, unknown>): string {
-  return normalizeYeelightId(device.id)
-    || normalizeMac(device.mac)
+  return normalizeMac(device.mac)
+    || normalizeYeelightId(device.id)
+    || (typeof device.hostname === "string" ? device.hostname.trim().toLowerCase() : "")
     || (typeof device.ip === "string" ? device.ip.trim() : "");
 }
 
@@ -120,23 +121,34 @@ function discoveryNeedsRegistryUpdate(
   agent: DeviceAgent | null,
   provider: string | null
 ): boolean {
+  const providerName = provider?.toUpperCase() ?? "";
   const ip = typeof discovered.ip === "string" ? discovered.ip.trim() : "";
   const mac = normalizeMac(discovered.mac);
-  const yeelightId = normalizeYeelightId(discovered.id);
+  const hostname = typeof discovered.hostname === "string" ? discovered.hostname.trim().toLowerCase() : "";
   const model = typeof discovered.model === "string" ? discovered.model.trim() : "";
   const firmwareVersion = typeof discovered.firmwareVersion === "string" ? discovered.firmwareVersion.trim() : "";
 
   const hasIdentity = (type: string, predicate: (value: string) => boolean) =>
     registered.identities.some(identity => identity.identityType.toUpperCase() === type && predicate(identity.value));
 
-  if (yeelightId && !hasIdentity("YEELIGHT_ID", value => normalizeYeelightId(value) === yeelightId)) return true;
+  if (providerName === "YEELIGHT") {
+    const yeelightId = normalizeYeelightId(discovered.id);
+    if (yeelightId && !hasIdentity("YEELIGHT_ID", value => normalizeYeelightId(value) === yeelightId)) return true;
+    if ((registered.manufacturer ?? "").trim().toLowerCase() !== "yeelight") return true;
+  } else if (providerName === "ESPHOME") {
+    if (hostname && !registered.identities.some(identity =>
+      ["FQDN", "HOSTNAME"].includes(identity.identityType.toUpperCase())
+      && identity.value.trim().toLowerCase() === hostname
+    )) return true;
+    if ((registered.manufacturer ?? "").trim().toLowerCase() !== "esphome") return true;
+  }
+
   if (mac && !hasIdentity("MAC", value => normalizeMac(value) === mac)) return true;
   if (ip && !hasIdentity("IP", value => value.trim() === ip)) return true;
   if (model && (registered.model ?? "").trim() !== model) return true;
   if (firmwareVersion && (registered.firmwareVersion ?? "").trim() !== firmwareVersion) return true;
-  if ((registered.manufacturer ?? "").trim().toLowerCase() !== "yeelight") return true;
   if (agent && registered.controlAgent?.id !== agent.id) return true;
-  if (provider && registered.controlProvider?.toUpperCase() !== provider.toUpperCase()) return true;
+  if (provider && registered.controlProvider?.toUpperCase() !== providerName) return true;
   if (provider && !registered.technologies.some(item => item.code.toLowerCase() === provider.toLowerCase())) return true;
   return false;
 }
@@ -285,20 +297,29 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
 
 
   const registeredDeviceFor = (device: Record<string, unknown>): DeviceRegistryDevice | null => {
-    const yeelightId = normalizeYeelightId(device.id);
+    const provider = discoveryProvider?.toUpperCase();
     const mac = normalizeMac(device.mac);
+    const yeelightId = normalizeYeelightId(device.id);
+    const hostname = typeof device.hostname === "string" ? device.hostname.trim().toLowerCase() : "";
 
     return devices.find(existing => {
+      const macMatch = mac && existing.identities.some(identity =>
+        identity.identityType.toUpperCase() === "MAC"
+        && normalizeMac(identity.value) === mac
+      );
+      if (provider === "ESPHOME") {
+        const hostnameMatch = hostname && existing.identities.some(identity =>
+          ["FQDN", "HOSTNAME"].includes(identity.identityType.toUpperCase())
+          && identity.value.trim().toLowerCase() === hostname
+        );
+        return Boolean(macMatch || hostnameMatch);
+      }
       const idMatch = yeelightId && (
         existing.identities.some(identity =>
           identity.identityType.toUpperCase() === "YEELIGHT_ID"
           && normalizeYeelightId(identity.value) === yeelightId
         )
         || (existing.description ?? "").toLowerCase().includes(yeelightId)
-      );
-      const macMatch = mac && existing.identities.some(identity =>
-        identity.identityType.toUpperCase() === "MAC"
-        && normalizeMac(identity.value) === mac
       );
       return Boolean(idMatch || macMatch);
     }) ?? null;
@@ -356,10 +377,11 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
         {discoveredDevices.length ? (
           <div style={{ overflow: "auto", maxHeight: 420 }}>
             <Table striped highlightOnHover stickyHeader style={{ minWidth: 760 }}>
-              <Table.Thead><Table.Tr><Table.Th>Actions</Table.Th><Table.Th>Registry</Table.Th><Table.Th>Name</Table.Th><Table.Th>IP</Table.Th><Table.Th>Model</Table.Th><Table.Th>Power</Table.Th><Table.Th>Brightness</Table.Th><Table.Th>ID</Table.Th></Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th>Actions</Table.Th><Table.Th>Registry</Table.Th><Table.Th>Name</Table.Th><Table.Th>IP</Table.Th><Table.Th>Model</Table.Th><Table.Th>Power</Table.Th><Table.Th>Brightness</Table.Th><Table.Th>Entities</Table.Th><Table.Th>ID</Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>{discoveredDevices.map((device, index) => {
                 const registeredDevice = registeredDeviceFor(device);
                 const isYeelight = discoveryProvider?.toUpperCase() === "YEELIGHT";
+                const isEspHome = discoveryProvider?.toUpperCase() === "ESPHOME";
                 const power = device.power === true;
                 const needsUpdate = registeredDevice ? discoveryNeedsRegistryUpdate(device, registeredDevice, discoveryAgent, discoveryProvider) : false;
                 const updatingThisDevice = updateRegisteredMutation.isPending && updateRegisteredMutation.variables?.registered.id === registeredDevice?.id;
@@ -442,6 +464,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
                 <Table.Td>{discoveryValue(device, "model")}</Table.Td>
                 <Table.Td>{discoveryValue(device, "power")}</Table.Td>
                 <Table.Td>{discoveryValue(device, "brightness")}</Table.Td>
+                <Table.Td><Text size="xs">{isEspHome ? discoveryValue(device, "entities") : "—"}</Text></Table.Td>
                 <Table.Td><Text ff="monospace" size="xs">{discoveryValue(device, "id")}</Text></Table.Td>
               </Table.Tr>;
               })}</Table.Tbody>
