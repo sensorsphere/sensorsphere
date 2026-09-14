@@ -866,7 +866,9 @@ export function GatewayCatalog() {
                     ["lastSeen", "Last seen"]
                   ].map(([key, label]) => (
                     <SortableTableHeader key={key} active={tableSortKey === key} direction={tableSortDirection} onClick={() => toggleTableSort(key)}>
-                      {label}
+                      <div style={key === "lastSeen" ? { width: 110, minWidth: 110, maxWidth: 110 } : undefined}>
+                        {label}
+                      </div>
                     </SortableTableHeader>
                   ))}
                   <Table.Th>Actions</Table.Th>
@@ -924,7 +926,7 @@ export function GatewayCatalog() {
                       </Badge>
                     </Table.Td>
                     <Table.Td>{gateway.sensorCount}</Table.Td>
-                    <Table.Td><LastSeen value={gateway.lastSeenAt} /></Table.Td>
+                    <Table.Td style={{ width: 110, minWidth: 110, maxWidth: 110, whiteSpace: "nowrap" }}><LastSeen value={gateway.lastSeenAt} /></Table.Td>
                     <Table.Td>
                       <Group gap={4} wrap="nowrap">
                         <EditActionIcon onClick={() => openEdit(gateway)} />

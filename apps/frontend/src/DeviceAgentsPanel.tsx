@@ -276,8 +276,15 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
   const openCopy = (agent: DeviceAgent) => { setEditing(null); setForm({ name: `${agent.name} (copy)`, enabled: true, labelsText: labelsText(agent), heartbeatTimeoutSeconds: agent.heartbeatTimeoutSeconds }); setOpened(true); };
   const openDiscovery = (agent: DeviceAgent) => {
     const providers = agent.capabilities.filter(capability => capability.discovery).map(capability => capability.provider);
+    const savedProvider = typeof window === "undefined"
+      ? null
+      : window.localStorage.getItem(DEVICE_DISCOVERY_PROVIDER_STORAGE_KEY);
+    const initialProvider = savedProvider
+      ? providers.find(provider => provider.toUpperCase() === savedProvider.toUpperCase()) ?? providers[0] ?? null
+      : providers[0] ?? null;
+
     setDiscoveryAgent(agent);
-    setDiscoveryProvider(providers[0] ?? null);
+    setDiscoveryProvider(initialProvider);
     setDiscoveryId(null);
     setDiscoveredDevices([]);
   };
@@ -363,7 +370,12 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
           <Select
             label="Provider"
             value={discoveryProvider}
-            onChange={setDiscoveryProvider}
+            onChange={provider => {
+              setDiscoveryProvider(provider);
+              if (provider && typeof window !== "undefined") {
+                window.localStorage.setItem(DEVICE_DISCOVERY_PROVIDER_STORAGE_KEY, provider);
+              }
+            }}
             data={(discoveryAgent?.capabilities ?? []).filter(capability => capability.discovery).map(capability => ({ value: capability.provider, label: capability.provider }))}
             style={{ flex: 1 }}
           />

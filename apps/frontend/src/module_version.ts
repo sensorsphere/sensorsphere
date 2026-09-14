@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.39.1";
+export const MODULE_VERSION = "1.39.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.39.2": {
+    releasedAt: "2026-09-14T22:30:00+02:00",
+    patch: "PR-182-discovery-provider-last-seen-width-v1.patch",
+    changes: [
+      { type: "changed", description: "Discover devices remembers the last selected provider when reopening the dialog" },
+      { type: "changed", description: "Gateways table uses a fixed width for the Last seen column" }
+    ]
+  },
   "1.39.1": {
     releasedAt: "2026-09-14T21:35:00+02:00",
     patch: "PR-181-device-registry-filter-copy-feedback-v1.patch",
