@@ -400,6 +400,9 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const [controlBrightness, setControlBrightness] = React.useState<number | string>(100);
   const [controlColorTemperature, setControlColorTemperature] = React.useState<number | string>(4000);
   const [controlColor, setControlColor] = React.useState("#ffffff");
+  const [controlHue, setControlHue] = React.useState<number | string>(0);
+  const [controlSaturation, setControlSaturation] = React.useState<number | string>(100);
+  const [controlTransitionMs, setControlTransitionMs] = React.useState<number | string>(300);
   const [controlName, setControlName] = React.useState("");
 
   const devicesQuery = useQuery({ queryKey: ["device-registry", "devices"], queryFn: getDeviceRegistryDevices, refetchInterval: 15000 });
@@ -470,11 +473,15 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     const brightness = stateNumber(state, "brightness");
     const colorTemperature = stateNumber(state, "colorTemperature");
     const rgb = stateNumber(state, "rgb");
+    const hue = stateNumber(state, "hue");
+    const saturation = stateNumber(state, "saturation");
     const name = typeof state?.state?.name === "string" ? state.state.name : null;
     if (name != null) setControlName(name);
     if (brightness != null) setControlBrightness(brightness);
     if (colorTemperature != null) setControlColorTemperature(colorTemperature);
     if (rgb != null) setControlColor(rgbNumberToHex(rgb));
+    if (hue != null) setControlHue(hue);
+    if (saturation != null) setControlSaturation(saturation);
   };
 
   const refreshControlState = async (deviceId: string) => {
@@ -872,7 +879,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
               <TextInput placeholder="Address" value={addressFilter} onChange={event => setAddressFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(addressFilter.trim()))} style={{ flex: 1, minWidth: 180 }} />
               <Select placeholder="All classes" clearable value={classFilter} onChange={setClassFilter} styles={activeFilterStyles(Boolean(classFilter))} data={(deviceClassesQuery.data ?? []).map(item => ({ value: item.code, label: item.label }))} leftSection={classFilter ? <DeviceGlyph icon={(deviceClassesQuery.data ?? []).find(item => item.code === classFilter)?.icon ?? "device"} color={(deviceClassesQuery.data ?? []).find(item => item.code === classFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (deviceClassesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={180} />
               <Select placeholder="All types" searchable clearable value={typeFilter} onChange={setTypeFilter} styles={activeFilterStyles(Boolean(typeFilter))} data={(deviceTypesQuery.data ?? []).map(type => ({ value: type.code, label: type.label }))} leftSection={typeFilter ? <DeviceGlyph icon={(deviceTypesQuery.data ?? []).find(item => item.code === typeFilter)?.icon ?? "device"} color={(deviceTypesQuery.data ?? []).find(item => item.code === typeFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (deviceTypesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={190} />
-              <Select placeholder="All technologies" searchable clearable value={technologyFilter} onChange={setTechnologyFilter} styles={activeFilterStyles(Boolean(technologyFilter))} data={(technologiesQuery.data ?? []).map(technology => ({ value: technology.code, label: technology.label }))} leftSection={technologyFilter ? <DeviceGlyph icon={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.icon ?? "link"} color={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (technologiesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={205} />
+              <Select placeholder="All technologies" searchable clearable value={technologyFilter} onChange={setTechnologyFilter} styles={activeFilterStyles(Boolean(technologyFilter))} data={[...(technologiesQuery.data ?? [])].sort((a, b) => a.label.localeCompare(b.label)).map(technology => ({ value: technology.code, label: technology.label }))} leftSection={technologyFilter ? <DeviceGlyph icon={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.icon ?? "link"} color={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (technologiesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={205} />
               <Select placeholder="All health" clearable value={healthFilter} onChange={setHealthFilter} styles={activeFilterStyles(Boolean(healthFilter))} data={Object.keys(HEALTH_COLORS)} w={150} />
             </Group>
 
@@ -1080,27 +1087,83 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                 </Button>
               </Group>
 
+              <Group align="end" grow>
+                <NumberInput
+                  label="Transition"
+                  description="0 = immediate, otherwise smooth duration in ms"
+                  min={0}
+                  max={30000}
+                  step={100}
+                  value={controlTransitionMs}
+                  onChange={setControlTransitionMs}
+                />
+              </Group>
+
               <Group justify="space-between">
                 <Text fw={600} size="sm">Power</Text>
                 <Group gap="xs">
-                  <Button size="compact-sm" color="green" variant="light" loading={controlAction === "POWER_ON"} disabled={Boolean(controlAction)} onClick={() => void runControlAction("POWER_ON")}>On</Button>
-                  <Button size="compact-sm" color="gray" variant="light" loading={controlAction === "POWER_OFF"} disabled={Boolean(controlAction)} onClick={() => void runControlAction("POWER_OFF")}>Off</Button>
+                  <Button size="compact-sm" color="green" variant="light" loading={controlAction === "POWER_ON"} disabled={Boolean(controlAction)} onClick={() => void runControlAction("POWER_ON", { transitionMs: Number(controlTransitionMs) || 0 })}>On</Button>
+                  <Button size="compact-sm" color="gray" variant="light" loading={controlAction === "POWER_OFF"} disabled={Boolean(controlAction)} onClick={() => void runControlAction("POWER_OFF", { transitionMs: Number(controlTransitionMs) || 0 })}>Off</Button>
+                  <Button size="compact-sm" variant="light" loading={controlAction === "TOGGLE"} disabled={Boolean(controlAction)} onClick={() => void runControlAction("TOGGLE")}>Toggle</Button>
                 </Group>
               </Group>
 
               <Group align="end" grow>
                 <NumberInput label="Brightness" description="1–100 %" min={1} max={100} value={controlBrightness} onChange={setControlBrightness} />
-                <Button variant="light" loading={controlAction === "SET_BRIGHTNESS"} disabled={Boolean(controlAction) || typeof controlBrightness !== "number"} onClick={() => void runControlAction("SET_BRIGHTNESS", { brightness: Number(controlBrightness) })}>Apply</Button>
+                <Button variant="light" loading={controlAction === "SET_BRIGHTNESS"} disabled={Boolean(controlAction) || typeof controlBrightness !== "number"} onClick={() => void runControlAction("SET_BRIGHTNESS", { brightness: Number(controlBrightness), transitionMs: Number(controlTransitionMs) || 0 })}>Apply</Button>
               </Group>
 
               <Group align="end" grow>
                 <NumberInput label="Color temperature" description="1700–6500 K" min={1700} max={6500} step={100} value={controlColorTemperature} onChange={setControlColorTemperature} />
-                <Button variant="light" loading={controlAction === "SET_COLOR_TEMPERATURE"} disabled={Boolean(controlAction) || typeof controlColorTemperature !== "number"} onClick={() => void runControlAction("SET_COLOR_TEMPERATURE", { colorTemperature: Number(controlColorTemperature) })}>Apply</Button>
+                <Button variant="light" loading={controlAction === "SET_COLOR_TEMPERATURE"} disabled={Boolean(controlAction) || typeof controlColorTemperature !== "number"} onClick={() => void runControlAction("SET_COLOR_TEMPERATURE", { colorTemperature: Number(controlColorTemperature), transitionMs: Number(controlTransitionMs) || 0 })}>Apply</Button>
               </Group>
 
               <Group align="end" grow>
                 <ColorInput label="RGB color" format="hex" value={controlColor} onChange={setControlColor} />
-                <Button variant="light" loading={controlAction === "SET_COLOR"} disabled={Boolean(controlAction)} onClick={() => { try { void runControlAction("SET_COLOR", { color: hexToRgbNumber(controlColor) }); } catch (cause) { setControlError(cause instanceof Error ? cause.message : "Invalid color"); } }}>Apply</Button>
+                <Button variant="light" loading={controlAction === "SET_COLOR"} disabled={Boolean(controlAction)} onClick={() => { try { void runControlAction("SET_COLOR", { color: hexToRgbNumber(controlColor), transitionMs: Number(controlTransitionMs) || 0 }); } catch (cause) { setControlError(cause instanceof Error ? cause.message : "Invalid color"); } }}>Apply</Button>
+              </Group>
+
+              <Group gap="xs" wrap="wrap">
+                <Text size="xs" c="dimmed" w="100%">Color presets</Text>
+                {[
+                  ["Red", "#ff0000"],
+                  ["Green", "#00ff00"],
+                  ["Blue", "#0000ff"],
+                  ["Cyan", "#00ffff"],
+                  ["Purple", "#a020f0"],
+                  ["Warm", "#ffb45c"]
+                ].map(([label, color]) => (
+                  <Button
+                    key={color}
+                    size="compact-xs"
+                    variant="light"
+                    disabled={Boolean(controlAction)}
+                    onClick={() => {
+                      setControlColor(color);
+                      void runControlAction("SET_COLOR", { color: hexToRgbNumber(color), transitionMs: Number(controlTransitionMs) || 0 });
+                    }}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </Group>
+
+              <Group align="end" grow>
+                <NumberInput label="Hue" description="0–359°" min={0} max={359} value={controlHue} onChange={setControlHue} />
+                <NumberInput label="Saturation" description="0–100 %" min={0} max={100} value={controlSaturation} onChange={setControlSaturation} />
+                <Button
+                  variant="light"
+                  loading={controlAction === "SET_HSV"}
+                  disabled={Boolean(controlAction) || typeof controlHue !== "number" || typeof controlSaturation !== "number"}
+                  onClick={() => void runControlAction("SET_HSV", { hue: Number(controlHue), saturation: Number(controlSaturation), transitionMs: Number(controlTransitionMs) || 0 })}
+                >
+                  Apply HSV
+                </Button>
+              </Group>
+
+              <Group justify="space-between">
+                <Text size="xs" c="dimmed">Save the current light state as the Yeelight default.</Text>
+                <Button variant="light" color="orange" loading={controlAction === "SET_DEFAULT"} disabled={Boolean(controlAction)} onClick={() => void runControlAction("SET_DEFAULT")}>Set default</Button>
               </Group>
             </Stack>
           </Card>

@@ -330,7 +330,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
       </Stack>
     </Modal>
 
-    <Modal opened={!!discoveryAgent} onClose={closeDiscovery} title={`Discover devices${discoveryAgent ? ` — ${discoveryAgent.name}` : ""}`} size="xl" centered>
+    <Modal opened={!!discoveryAgent} onClose={closeDiscovery} title={`Discover devices${discoveryAgent ? ` — ${discoveryAgent.name}` : ""}`} size={1035} centered>
       <Stack>
         <Group align="flex-end">
           <Select

@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.36.0";
+export const MODULE_VERSION = "1.37.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.37.0": {
+    releasedAt: "2026-09-14T18:50:00+02:00",
+    patch: "PR-178-yeelight-richer-control-ui-v1.patch",
+    changes: [
+      { type: "added", description: "Yeelight Device Control adds HSV, color presets, Toggle, transition duration and Set default actions" },
+      { type: "changed", description: "Discover devices dialog is widened by approximately 15 percent" },
+      { type: "changed", description: "Device Registry technology filter options are sorted alphabetically" }
+    ]
+  },
   "1.36.0": {
     releasedAt: "2026-09-14T09:00:00+02:00",
     patch: "PR-177-yeelight-discovery-registry-lifecycle-v1.patch",
