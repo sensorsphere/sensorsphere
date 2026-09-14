@@ -77,7 +77,7 @@ import { usePersistentState } from "./preferences/usePersistentState";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { MonitoringPanel, type MonitoringQuickCheckRequest } from "./MonitoringPanel";
-import { DeviceAgentsPanel } from "./DeviceAgentsPanel";
+import { DeviceAgentsPanel, type DiscoveredDeviceImportRequest } from "./DeviceAgentsPanel";
 
 
 type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "controlAgent" | "lastSeen" | "health" | "checks";
@@ -362,6 +362,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const [controlBrightness, setControlBrightness] = React.useState<number | string>(100);
   const [controlColorTemperature, setControlColorTemperature] = React.useState<number | string>(4000);
   const [controlColor, setControlColor] = React.useState("#ffffff");
+  const [controlName, setControlName] = React.useState("");
 
   const devicesQuery = useQuery({ queryKey: ["device-registry", "devices"], queryFn: getDeviceRegistryDevices, refetchInterval: 15000 });
   const deviceClassesQuery = useQuery({ queryKey: ["device-registry", "classes"], queryFn: getDeviceClassReferences });
@@ -431,6 +432,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     const brightness = stateNumber(state, "brightness");
     const colorTemperature = stateNumber(state, "colorTemperature");
     const rgb = stateNumber(state, "rgb");
+    const name = typeof state?.state?.name === "string" ? state.state.name : null;
+    if (name != null) setControlName(name);
     if (brightness != null) setControlBrightness(brightness);
     if (colorTemperature != null) setControlColorTemperature(colorTemperature);
     if (rgb != null) setControlColor(rgbNumberToHex(rgb));
@@ -576,6 +579,50 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     acc[device.health.status] += 1;
     return acc;
   }, { ONLINE: 0, WARNING: 0, OFFLINE: 0, UNKNOWN: 0, DISABLED: 0 });
+
+  const openDiscoveredDeviceImport = ({ agent, provider, device }: DiscoveredDeviceImportRequest) => {
+    const value = (key: string): string => {
+      const raw = device[key];
+      return raw == null ? "" : String(raw).trim();
+    };
+    const ip = value("ip");
+    const model = value("model");
+    const discoveredName = value("name");
+    const firmwareVersion = value("firmwareVersion");
+    const typeCandidates = (deviceTypesQuery.data ?? []).filter(type => type.deviceClass === "IOT" || type.deviceClass === "OTHER");
+    const normalizedModel = model.toLowerCase();
+    const preferredType = typeCandidates.find(type =>
+      normalizedModel.includes("strip")
+        ? /strip/.test(`${type.code} ${type.label}`.toLowerCase())
+        : /(bulb|light|lamp)/.test(`${type.code} ${type.label}`.toLowerCase())
+    ) ?? null;
+
+    setEditingDevice(null);
+    setDeviceForm({
+      ...emptyDeviceForm(),
+      name: discoveredName || (ip ? `Yeelight ${ip}` : "Yeelight"),
+      deviceClass: "IOT",
+      deviceType: preferredType?.code ?? "",
+      technologies: [provider.toLowerCase()],
+      identities: ip ? [{
+        identityType: "IP",
+        value: ip,
+        source: "discovery",
+        labelCode: "LAN",
+        label: "LAN",
+        isPrimary: true,
+        sortOrder: 0
+      }] : [],
+      manufacturer: "Yeelight",
+      model,
+      firmwareVersion,
+      description: value("id") ? `Discovered Yeelight ID: ${value("id")}` : "",
+      controlAgentId: agent.id
+    });
+    setError(null);
+    setTab("devices");
+    setDeviceModalOpen(true);
+  };
 
   const openCreateDevice = () => {
     setEditingDevice(null);
@@ -827,7 +874,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         </Tabs.Panel>
 
         <Tabs.Panel value="device-agents" pt="md">
-          <DeviceAgentsPanel />
+          <DeviceAgentsPanel devices={devices} onImportDiscoveredDevice={openDiscoveredDeviceImport} onOpenRegisteredDevice={openEditDevice} />
         </Tabs.Panel>
 
         <Tabs.Panel value="discovery" pt="md">
@@ -914,6 +961,23 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
 
           <Card withBorder padding="sm">
             <Stack gap="sm">
+              <Group align="end" grow>
+                <TextInput
+                  label="Name"
+                  value={controlName}
+                  maxLength={64}
+                  onChange={event => setControlName(event.currentTarget.value)}
+                />
+                <Button
+                  variant="light"
+                  loading={controlAction === "SET_NAME"}
+                  disabled={Boolean(controlAction) || !controlName.trim() || controlName.trim().length > 64}
+                  onClick={() => void runControlAction("SET_NAME", { name: controlName.trim() })}
+                >
+                  Apply
+                </Button>
+              </Group>
+
               <Group justify="space-between">
                 <Text fw={600} size="sm">Power</Text>
                 <Group gap="xs">

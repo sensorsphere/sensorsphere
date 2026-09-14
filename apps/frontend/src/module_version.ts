@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.33.0";
+export const MODULE_VERSION = "1.34.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.34.0": {
+    releasedAt: "2026-09-14T07:10:00+02:00",
+    patch: "PR-174-device-agent-discovery-import-control-v1.patch",
+    changes: [
+      { type: "added", description: "Discovery results can toggle Yeelight power to identify devices visually and can prefill Device Registry import from discovered metadata" },
+      { type: "added", description: "Discovery identifies already registered devices by IP and opens them instead of offering a duplicate import" },
+      { type: "added", description: "Yeelight Device Control displays the bulb name above Power and allows changing it with SET_NAME" }
+    ]
+  },
   "1.33.0": {
     releasedAt: "2026-09-14T06:55:00+02:00",
     patch: "PR-173-device-agent-discovered-set-name-v1.patch",
