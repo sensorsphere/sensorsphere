@@ -329,6 +329,16 @@ function hexToRgbNumber(value: string): number {
   return Number.parseInt(normalized, 16);
 }
 
+function discoveredYeelightDeviceName(mac: string, yeelightId: string): string {
+  const normalizedMac = mac.replace(/[^0-9A-Fa-f]/g, "").toLowerCase();
+  if (normalizedMac.length >= 6) return `Yeelight-${normalizedMac.slice(-6)}`;
+
+  const normalizedId = yeelightId.replace(/^0x/i, "").replace(/[^0-9A-Fa-f]/g, "").toLowerCase();
+  if (normalizedId.length >= 6) return `Yeelight-${normalizedId.slice(-6)}`;
+
+  return "Yeelight";
+}
+
 export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOpened, onDeviceSaved }: { openDeviceId?: string | null; openAccessLinkId?: string | null; onDeviceOpened?: () => void; onDeviceSaved?: () => void } = {}) {
   const queryClient = useQueryClient();
   const [tab, setTab] = usePersistentState<string | null>("device-registry.tab", "devices");
@@ -477,6 +487,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const openDeviceControl = async (device: DeviceRegistryDevice) => {
     setControlDevice(device);
     setControlState(null);
+    setControlName("");
     setControlError(null);
     setControlLoading(true);
     try {
@@ -497,6 +508,15 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       if (!commandId) throw new Error("SensorSphere did not return a command id");
       const finished = await waitForControlCommand(commandId);
       if (finished.status !== "SUCCESS") throw new Error(finished.error || `Command ${finished.status.toLowerCase()}`);
+      if (action === "GET_STATE" && finished.result) {
+        applyControlState({
+          deviceId: device.id,
+          agentId: device.controlAgentId ?? "",
+          provider: device.controlProvider ?? "",
+          state: finished.result,
+          observedAt: new Date().toISOString()
+        });
+      }
       await new Promise(resolve => window.setTimeout(resolve, 200));
       await refreshControlState(device.id);
     } catch (cause) {
@@ -589,7 +609,6 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     const mac = value("mac");
     const yeelightId = value("id");
     const model = value("model");
-    const discoveredName = value("name");
     const firmwareVersion = value("firmwareVersion");
     const typeCandidates = (deviceTypesQuery.data ?? []).filter(type => type.deviceClass === "IOT" || type.deviceClass === "OTHER");
     const normalizedModel = model.toLowerCase();
@@ -602,7 +621,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     setEditingDevice(null);
     setDeviceForm({
       ...emptyDeviceForm(),
-      name: discoveredName || (ip ? `Yeelight ${ip}` : "Yeelight"),
+      name: discoveredYeelightDeviceName(mac, yeelightId),
       deviceClass: "IOT",
       deviceType: preferredType?.code ?? "",
       technologies: [provider.toLowerCase()],

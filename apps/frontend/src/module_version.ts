@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.35.0";
+export const MODULE_VERSION = "1.35.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.35.1": {
+    releasedAt: "2026-09-14T08:20:00+02:00",
+    patch: "PR-176-device-control-name-import-radar-v1.patch",
+    changes: [
+      { type: "fixed", description: "Device Control applies the fresh GET_STATE command result immediately so the Yeelight name is populated reliably" },
+      { type: "changed", description: "Discovered Yeelight imports use a stable Yeelight-<last 6 MAC hex> Device Registry name with Yeelight ID fallback" },
+      { type: "changed", description: "Device Agent discovery uses a radar icon instead of the previous target glyph" }
+    ]
+  },
   "1.35.0": {
     releasedAt: "2026-09-14T07:20:00+02:00",
     patch: "PR-175-device-agent-discovery-identity-refresh-ui-v1.patch",
