@@ -40,6 +40,7 @@ interface AgentFormState {
 }
 
 const emptyForm = (): AgentFormState => ({ name: "", enabled: true, labelsText: "", heartbeatTimeoutSeconds: 60 });
+const DEVICE_DISCOVERY_PROVIDER_STORAGE_KEY = "sensorsphere.deviceDiscovery.lastProvider";
 
 function parseLabels(value: string): Record<string, string> {
   const labels: Record<string, string> = {};

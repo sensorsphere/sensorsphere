@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.39.2";
+export const MODULE_VERSION = "1.39.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.39.3": {
+    releasedAt: "2026-09-14T23:59:00+02:00",
+    patch: "PR-183-discovery-provider-storage-key-hotfix-v1.patch",
+    changes: [
+      { type: "fixed", description: "Define the Discover devices provider localStorage key used by provider persistence" }
+    ]
+  },
   "1.39.2": {
     releasedAt: "2026-09-14T22:30:00+02:00",
     patch: "PR-182-discovery-provider-last-seen-width-v1.patch",
