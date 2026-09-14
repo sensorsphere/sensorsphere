@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.39.3";
+export const MODULE_VERSION = "1.40.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.40.0": {
+    releasedAt: "2026-09-15T00:20:00+02:00",
+    patch: "PR-184-esphome-entity-selection-v1.patch",
+    changes: [
+      { type: "added", description: "ESPHome Device Control lists controllable light/switch entities and can persist the selected ESPHOME_ENTITY identity" },
+      { type: "changed", description: "ESPHome Device Control avoids issuing GET_STATE until an entity can be resolved when multiple entities are exposed" },
+      { type: "fixed", description: "Device Agent clipboard feedback coalesces its auto-dismiss timer and cleans it up when the panel unmounts" }
+    ]
+  },
   "1.39.3": {
     releasedAt: "2026-09-14T23:59:00+02:00",
     patch: "PR-183-discovery-provider-storage-key-hotfix-v1.patch",

@@ -429,6 +429,10 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const [controlSaturation, setControlSaturation] = React.useState<number | string>(100);
   const [controlTransitionMs, setControlTransitionMs] = React.useState<number | string>(300);
   const [controlName, setControlName] = React.useState("");
+  const [controlEntities, setControlEntities] = React.useState<Array<{ value: string; label: string }>>([]);
+  const [controlEntity, setControlEntity] = React.useState<string | null>(null);
+  const [controlEntityLoading, setControlEntityLoading] = React.useState(false);
+  const [controlEntitySaving, setControlEntitySaving] = React.useState(false);
 
   const devicesQuery = useQuery({ queryKey: ["device-registry", "devices"], queryFn: getDeviceRegistryDevices, refetchInterval: 15000 });
   const deviceClassesQuery = useQuery({ queryKey: ["device-registry", "classes"], queryFn: getDeviceClassReferences });
@@ -525,6 +529,50 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     throw new Error("Timed out waiting for the Device Agent response");
   };
 
+  const listEspHomeEntities = async (device: DeviceRegistryDevice) => {
+    setControlEntityLoading(true);
+    try {
+      const created = await createDeviceControlCommand(device.id, "LIST_ENTITIES", {}, 30);
+      const commandId = created.commandId ?? created.id;
+      if (!commandId) throw new Error("SensorSphere did not return a command id");
+      const finished = await waitForControlCommand(commandId);
+      if (finished.status !== "SUCCESS") throw new Error(finished.error || `Command ${finished.status.toLowerCase()}`);
+      const raw = Array.isArray(finished.result?.entities) ? finished.result.entities : [];
+      const entities = raw.flatMap(item => {
+        if (!item || typeof item !== "object") return [];
+        const value = typeof (item as Record<string, unknown>).value === "string" ? String((item as Record<string, unknown>).value) : "";
+        if (!value) return [];
+        const label = typeof (item as Record<string, unknown>).label === "string" ? String((item as Record<string, unknown>).label) : value;
+        return [{ value, label }];
+      });
+      setControlEntities(entities);
+      const existing = primaryIdentity(device.identities, "ESPHOME_ENTITY")?.value ?? null;
+      setControlEntity(existing ?? (entities.length === 1 ? entities[0]!.value : null));
+      return entities;
+    } finally {
+      setControlEntityLoading(false);
+    }
+  };
+
+  const saveEspHomeEntity = async () => {
+    if (!controlDevice || !controlEntity) return;
+    setControlEntitySaving(true);
+    setControlError(null);
+    try {
+      const withoutEntity = controlDevice.identities.filter(identity => identity.identityType.toUpperCase() !== "ESPHOME_ENTITY");
+      const updated = await updateDeviceRegistryDevice(controlDevice.id, {
+        identities: [...withoutEntity, { identityType: "ESPHOME_ENTITY", value: controlEntity, source: "device-control", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 30 }]
+      });
+      setControlDevice(updated);
+      await queryClient.invalidateQueries({ queryKey: ["device-registry", "devices"] });
+      await runControlActionForDevice(updated, "GET_STATE");
+    } catch (cause) {
+      setControlError(cause instanceof Error ? cause.message : "Unable to save ESPHome entity");
+    } finally {
+      setControlEntitySaving(false);
+    }
+  };
+
   const runControlAction = async (action: string, parameters: Record<string, unknown> = {}) => {
     if (!controlDevice) return;
     setControlAction(action);
@@ -548,10 +596,18 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     setControlDevice(device);
     setControlState(null);
     setControlName("");
+    setControlEntities([]);
+    setControlEntity(primaryIdentity(device.identities, "ESPHOME_ENTITY")?.value ?? null);
     setControlError(null);
     setControlLoading(true);
     try {
-      await runControlActionForDevice(device, "GET_STATE");
+      if (device.controlProvider?.toUpperCase() === "ESPHOME") {
+        const entities = await listEspHomeEntities(device);
+        const explicit = primaryIdentity(device.identities, "ESPHOME_ENTITY")?.value ?? null;
+        if (explicit || entities.length === 1) await runControlActionForDevice(device, "GET_STATE");
+      } else {
+        await runControlActionForDevice(device, "GET_STATE");
+      }
     } catch (cause) {
       setControlError(cause instanceof Error ? cause.message : "Unable to read device state");
     } finally {
@@ -1097,7 +1153,29 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
             <Card withBorder padding="sm">
               <Stack gap="sm">
                 <Text size="sm" fw={600}>ESPHome Native API</Text>
-                <Text size="xs" c="dimmed">Entity: {primaryIdentity(controlDevice.identities, "ESPHOME_ENTITY")?.value ?? "auto-select the only light/switch entity"}</Text>
+                {controlEntities.length > 1 ? (
+                  <Group align="end" grow>
+                    <Select
+                      label="Entity"
+                      description="Select the light/switch entity controlled by this Device Registry entry."
+                      searchable
+                      value={controlEntity}
+                      data={controlEntities}
+                      disabled={controlEntityLoading || Boolean(controlAction) || controlEntitySaving}
+                      onChange={setControlEntity}
+                    />
+                    <Button
+                      variant="light"
+                      loading={controlEntitySaving}
+                      disabled={!controlEntity || controlEntity === primaryIdentity(controlDevice.identities, "ESPHOME_ENTITY")?.value}
+                      onClick={() => void saveEspHomeEntity()}
+                    >
+                      Save entity
+                    </Button>
+                  </Group>
+                ) : (
+                  <Text size="xs" c="dimmed">Entity: {controlEntity ?? primaryIdentity(controlDevice.identities, "ESPHOME_ENTITY")?.value ?? (controlEntityLoading ? "loading…" : "auto-select the only light/switch entity")}</Text>
+                )}
                 <Group justify="space-between">
                   <Text fw={600} size="sm">Power</Text>
                   <Group gap="xs">

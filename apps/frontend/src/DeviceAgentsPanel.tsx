@@ -169,10 +169,19 @@ function compareDiscoveryIp(left: Record<string, unknown>, right: Record<string,
 
 export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUpdateDiscoveredDevice, onOpenRegisteredDevice }: DeviceAgentsPanelProps = {}) {
   const [copyNotice, setCopyNotice] = React.useState<string | null>(null);
+  const copyNoticeTimerRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => () => {
+    if (copyNoticeTimerRef.current != null) window.clearTimeout(copyNoticeTimerRef.current);
+  }, []);
 
   const showCopyNotice = React.useCallback((message: string) => {
+    if (copyNoticeTimerRef.current != null) window.clearTimeout(copyNoticeTimerRef.current);
     setCopyNotice(message);
-    window.setTimeout(() => setCopyNotice(current => current === message ? null : current), 2200);
+    copyNoticeTimerRef.current = window.setTimeout(() => {
+      setCopyNotice(null);
+      copyNoticeTimerRef.current = null;
+    }, 2200);
   }, []);
   const queryClient = useQueryClient();
   const agentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
