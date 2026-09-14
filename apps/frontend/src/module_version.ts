@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.40.0";
+export const MODULE_VERSION = "1.40.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.40.1": {
+    releasedAt: "2026-09-15T01:05:00+02:00",
+    patch: "PR-185-esphome-entity-save-identity-payload-v1.patch",
+    changes: [
+      { type: "fixed", description: "Strip database identity ids before persisting ESPHOME_ENTITY from Device Control" }
+    ]
+  },
   "1.40.0": {
     releasedAt: "2026-09-15T00:20:00+02:00",
     patch: "PR-184-esphome-entity-selection-v1.patch",

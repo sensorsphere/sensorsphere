@@ -559,7 +559,9 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     setControlEntitySaving(true);
     setControlError(null);
     try {
-      const withoutEntity = controlDevice.identities.filter(identity => identity.identityType.toUpperCase() !== "ESPHOME_ENTITY");
+      const withoutEntity = controlDevice.identities
+        .filter(identity => identity.identityType.toUpperCase() !== "ESPHOME_ENTITY")
+        .map(({ id: _id, ...identity }) => identity);
       const updated = await updateDeviceRegistryDevice(controlDevice.id, {
         identities: [...withoutEntity, { identityType: "ESPHOME_ENTITY", value: controlEntity, source: "device-control", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 30 }]
       });
