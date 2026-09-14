@@ -28,6 +28,7 @@ export interface DiscoveredDeviceImportRequest {
 interface DeviceAgentsPanelProps {
   devices?: DeviceRegistryDevice[];
   onImportDiscoveredDevice?: (request: DiscoveredDeviceImportRequest) => void;
+  onUpdateDiscoveredDevice?: (request: DiscoveredDeviceImportRequest, device: DeviceRegistryDevice) => Promise<void>;
   onOpenRegisteredDevice?: (device: DeviceRegistryDevice) => void;
 }
 
@@ -112,6 +113,34 @@ function ipv4SortValue(value: unknown): number[] | null {
   return numbers;
 }
 
+
+function discoveryNeedsRegistryUpdate(
+  discovered: Record<string, unknown>,
+  registered: DeviceRegistryDevice,
+  agent: DeviceAgent | null,
+  provider: string | null
+): boolean {
+  const ip = typeof discovered.ip === "string" ? discovered.ip.trim() : "";
+  const mac = normalizeMac(discovered.mac);
+  const yeelightId = normalizeYeelightId(discovered.id);
+  const model = typeof discovered.model === "string" ? discovered.model.trim() : "";
+  const firmwareVersion = typeof discovered.firmwareVersion === "string" ? discovered.firmwareVersion.trim() : "";
+
+  const hasIdentity = (type: string, predicate: (value: string) => boolean) =>
+    registered.identities.some(identity => identity.identityType.toUpperCase() === type && predicate(identity.value));
+
+  if (yeelightId && !hasIdentity("YEELIGHT_ID", value => normalizeYeelightId(value) === yeelightId)) return true;
+  if (mac && !hasIdentity("MAC", value => normalizeMac(value) === mac)) return true;
+  if (ip && !hasIdentity("IP", value => value.trim() === ip)) return true;
+  if (model && (registered.model ?? "").trim() !== model) return true;
+  if (firmwareVersion && (registered.firmwareVersion ?? "").trim() !== firmwareVersion) return true;
+  if ((registered.manufacturer ?? "").trim().toLowerCase() !== "yeelight") return true;
+  if (agent && registered.controlAgent?.id !== agent.id) return true;
+  if (provider && registered.controlProvider?.toUpperCase() !== provider.toUpperCase()) return true;
+  if (provider && !registered.technologies.some(item => item.code.toLowerCase() === provider.toLowerCase())) return true;
+  return false;
+}
+
 function compareDiscoveryIp(left: Record<string, unknown>, right: Record<string, unknown>): number {
   const leftIp = ipv4SortValue(left.ip);
   const rightIp = ipv4SortValue(right.ip);
@@ -125,7 +154,7 @@ function compareDiscoveryIp(left: Record<string, unknown>, right: Record<string,
   return discoveryValue(left, "ip").localeCompare(discoveryValue(right, "ip"), undefined, { numeric: true });
 }
 
-export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOpenRegisteredDevice }: DeviceAgentsPanelProps = {}) {
+export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUpdateDiscoveredDevice, onOpenRegisteredDevice }: DeviceAgentsPanelProps = {}) {
   const queryClient = useQueryClient();
   const agentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
   const [opened, setOpened] = React.useState(false);
@@ -191,6 +220,12 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOp
       return startDiscoveredDeviceAction(discoveryAgent.id, discoveryProvider, action, device);
     },
     onSuccess: result => setDiscoveredActionId(result.commandId)
+  });
+  const updateRegisteredMutation = useMutation({
+    mutationFn: async ({ request, registered }: { request: DiscoveredDeviceImportRequest; registered: DeviceRegistryDevice }) => {
+      if (!onUpdateDiscoveredDevice) throw new Error("Update callback is not available");
+      await onUpdateDiscoveredDevice(request, registered);
+    }
   });
   const discoveredActionQuery = useQuery<DiscoveredDeviceAction>({
     queryKey: ["device-control", "discovered-action", discoveredActionId],
@@ -315,17 +350,20 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOp
         </Group>
         {discoveryMutation.isError && <Text c="red" size="sm">{discoveryMutation.error instanceof Error ? discoveryMutation.error.message : "Unable to start discovery"}</Text>}
         {discoveryQuery.data?.error && <Text c="red" size="sm">{discoveryQuery.data.error}</Text>}
+        {updateRegisteredMutation.isError && <Text c="red" size="sm">{updateRegisteredMutation.error instanceof Error ? updateRegisteredMutation.error.message : "Unable to update registered device"}</Text>}
         {discoveryQuery.data?.status === "SENT" && <Text size="sm" c="dimmed">Discovery is running on the Device Agent…</Text>}
         {discoveryQuery.data?.status === "SUCCESS" && discoveredDevices.length === 0 && <Text size="sm" c="dimmed">No devices found.</Text>}
         {discoveredDevices.length ? (
           <div style={{ overflow: "auto", maxHeight: 420 }}>
             <Table striped highlightOnHover stickyHeader style={{ minWidth: 760 }}>
-              <Table.Thead><Table.Tr><Table.Th>Actions</Table.Th><Table.Th>Name</Table.Th><Table.Th>IP</Table.Th><Table.Th>Model</Table.Th><Table.Th>Power</Table.Th><Table.Th>Brightness</Table.Th><Table.Th>ID</Table.Th></Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th>Actions</Table.Th><Table.Th>Registry</Table.Th><Table.Th>Name</Table.Th><Table.Th>IP</Table.Th><Table.Th>Model</Table.Th><Table.Th>Power</Table.Th><Table.Th>Brightness</Table.Th><Table.Th>ID</Table.Th></Table.Tr></Table.Thead>
               <Table.Tbody>{discoveredDevices.map((device, index) => {
                 const registeredDevice = registeredDeviceFor(device);
                 const isYeelight = discoveryProvider?.toUpperCase() === "YEELIGHT";
                 const power = device.power === true;
-                const actionBusy = discoveredActionQuery.data?.status === "SENT" || setNameMutation.isPending || powerMutation.isPending;
+                const needsUpdate = registeredDevice ? discoveryNeedsRegistryUpdate(device, registeredDevice, discoveryAgent, discoveryProvider) : false;
+                const updatingThisDevice = updateRegisteredMutation.isPending && updateRegisteredMutation.variables?.registered.id === registeredDevice?.id;
+                const actionBusy = discoveredActionQuery.data?.status === "SENT" || setNameMutation.isPending || powerMutation.isPending || updatingThisDevice;
                 return <Table.Tr key={`${discoveryValue(device, "id")}-${index}`}>
                 <Table.Td>
                   <Group gap={4} wrap="nowrap">
@@ -361,7 +399,27 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOp
                       </ActionIcon>
                     </Tooltip>
                     {registeredDevice ? (
-                      <EditActionIcon onClick={() => onOpenRegisteredDevice?.(registeredDevice)} />
+                      <>
+                        {needsUpdate && (
+                          <Tooltip label="Update registered device from discovery">
+                            <ActionIcon
+                              size="sm"
+                              variant="light"
+                              color="cyan"
+                              aria-label="Update registered device"
+                              loading={updatingThisDevice}
+                              disabled={!onUpdateDiscoveredDevice || !discoveryAgent || !discoveryProvider}
+                              onClick={() => discoveryAgent && discoveryProvider && updateRegisteredMutation.mutate({
+                                request: { agent: discoveryAgent, provider: discoveryProvider, device },
+                                registered: registeredDevice
+                              })}
+                            >
+                              ↻
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                        <EditActionIcon onClick={() => onOpenRegisteredDevice?.(registeredDevice)} />
+                      </>
                     ) : (
                       <Tooltip label="Add to Device Registry">
                         <ActionIcon
@@ -378,6 +436,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onOp
                     )}
                   </Group>
                 </Table.Td>
+                <Table.Td>{registeredDevice ? <Badge size="sm" variant="light" color={needsUpdate ? "orange" : "green"}>{needsUpdate ? "Needs update" : "Registered"}</Badge> : <Badge size="sm" variant="light" color="gray">New</Badge>}</Table.Td>
                 <Table.Td>{discoveryValue(device, "name")}</Table.Td>
                 <Table.Td><Text ff="monospace" size="sm">{discoveryValue(device, "ip")}</Text></Table.Td>
                 <Table.Td>{discoveryValue(device, "model")}</Table.Td>

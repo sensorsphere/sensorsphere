@@ -339,6 +339,34 @@ function discoveredYeelightDeviceName(mac: string, yeelightId: string): string {
   return "Yeelight";
 }
 
+function upsertDiscoveredIdentity(
+  identities: DeviceIdentity[],
+  identityType: string,
+  value: string,
+  sortOrder: number
+): DeviceIdentity[] {
+  if (!value) return identities;
+  const normalizedType = identityType.toUpperCase();
+  const next = identities.map(identity => ({ ...identity }));
+  const index = next.findIndex(identity =>
+    identity.identityType.toUpperCase() === normalizedType
+    && (identity.source === "discovery" || identity.labelCode === "LAN" || identity.isPrimary)
+  );
+  const replacement: DeviceIdentity = {
+    ...(index >= 0 ? next[index] : {}),
+    identityType: normalizedType,
+    value,
+    source: "discovery",
+    labelCode: "LAN",
+    label: "LAN",
+    isPrimary: true,
+    sortOrder
+  };
+  if (index >= 0) next[index] = replacement;
+  else next.push(replacement);
+  return next;
+}
+
 export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOpened, onDeviceSaved }: { openDeviceId?: string | null; openAccessLinkId?: string | null; onDeviceOpened?: () => void; onDeviceSaved?: () => void } = {}) {
   const queryClient = useQueryClient();
   const [tab, setTab] = usePersistentState<string | null>("device-registry.tab", "devices");
@@ -665,6 +693,39 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     setDeviceModalOpen(true);
   };
 
+  const updateRegisteredDeviceFromDiscovery = async (
+    { agent, provider, device }: DiscoveredDeviceImportRequest,
+    registered: DeviceRegistryDevice
+  ) => {
+    const value = (key: string): string => {
+      const raw = device[key];
+      return raw == null ? "" : String(raw).trim();
+    };
+    const ip = value("ip");
+    const mac = value("mac");
+    const yeelightId = value("id");
+    const model = value("model");
+    const firmwareVersion = value("firmwareVersion");
+
+    let identities = registered.identities.map(identity => ({ ...identity }));
+    identities = upsertDiscoveredIdentity(identities, "IP", ip, 0);
+    identities = upsertDiscoveredIdentity(identities, "MAC", mac, 10);
+    identities = upsertDiscoveredIdentity(identities, "YEELIGHT_ID", yeelightId, 20);
+
+    const form = deviceToForm(registered);
+    form.identities = identities;
+    form.manufacturer = "Yeelight";
+    if (model) form.model = model;
+    if (firmwareVersion) form.firmwareVersion = firmwareVersion;
+    form.controlAgentId = agent.id;
+    if (!form.technologies.some(item => item.toLowerCase() === provider.toLowerCase())) {
+      form.technologies = [...form.technologies, provider.toLowerCase()];
+    }
+
+    await updateDeviceRegistryDevice(registered.id, deviceFormPayload(form));
+    await refresh();
+  };
+
   const openCreateDevice = () => {
     setEditingDevice(null);
     setDeviceForm(emptyDeviceForm());
@@ -915,7 +976,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         </Tabs.Panel>
 
         <Tabs.Panel value="device-agents" pt="md">
-          <DeviceAgentsPanel devices={devices} onImportDiscoveredDevice={openDiscoveredDeviceImport} onOpenRegisteredDevice={openEditDevice} />
+          <DeviceAgentsPanel devices={devices} onImportDiscoveredDevice={openDiscoveredDeviceImport} onUpdateDiscoveredDevice={updateRegisteredDeviceFromDiscovery} onOpenRegisteredDevice={openEditDevice} />
         </Tabs.Panel>
 
         <Tabs.Panel value="discovery" pt="md">

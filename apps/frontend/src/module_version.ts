@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.35.1";
+export const MODULE_VERSION = "1.36.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.36.0": {
+    releasedAt: "2026-09-14T09:00:00+02:00",
+    patch: "PR-177-yeelight-discovery-registry-lifecycle-v1.patch",
+    changes: [
+      { type: "added", description: "Yeelight discovery distinguishes New, Registered and Needs update devices using stable Yeelight ID and MAC identities" },
+      { type: "added", description: "Registered Yeelight devices can be updated directly from discovery without changing their SensorSphere name or unrelated registry metadata" },
+      { type: "changed", description: "Discovery updates refresh DHCP IP, MAC, Yeelight ID, model, firmware, Device Agent and provider metadata while preserving existing Device Registry configuration" }
+    ]
+  },
   "1.35.1": {
     releasedAt: "2026-09-14T08:20:00+02:00",
     patch: "PR-176-device-control-name-import-radar-v1.patch",
