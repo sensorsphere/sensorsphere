@@ -1171,3 +1171,23 @@ export interface DeviceControlEntitiesState {
   entities: Array<Record<string, unknown>>;
   observedAt: string;
 }
+
+export interface RealtimeEntityRecord {
+  deviceId: string;
+  deviceName: string;
+  agentId: string;
+  agentName: string | null;
+  provider: string;
+  connected: boolean;
+  host: string | null;
+  error: string | null;
+  entityId: string;
+  entityValue: string;
+  entityName: string;
+  entityType: string;
+  currentValue: boolean | number | string | null;
+  unit: string | null;
+  controllable: boolean;
+  observedAt: string;
+  deviceObservedAt: string;
+}

@@ -705,6 +705,60 @@ export async function registerDeviceControlFeature(
     return reply.send(result.rows[0]);
   });
 
+  app.get("/api/v1/device-control/entities", async (_request, reply) => {
+    const result = await pool.query<{
+      deviceId: string;
+      deviceName: string;
+      agentId: string;
+      agentName: string | null;
+      provider: string;
+      state: Record<string, unknown>;
+      observedAt: Date;
+    }>(`
+      SELECT s.device_id AS "deviceId", d.name AS "deviceName", s.agent_id AS "agentId",
+        a.name AS "agentName", s.provider, s.state, s.observed_at AS "observedAt"
+      FROM device_control_states s
+      JOIN device_registry_devices d ON d.id = s.device_id
+      LEFT JOIN device_agents a ON a.id = s.agent_id
+      ORDER BY lower(d.name), d.id
+    `);
+
+    const entities = result.rows.flatMap(row => {
+      const state = row.state ?? {};
+      const connected = state.connected === true;
+      const host = typeof state.host === "string" ? state.host : null;
+      const error = typeof state.error === "string" ? state.error : null;
+      const rawEntities = Array.isArray(state.entities) ? state.entities : [];
+      return rawEntities.flatMap(raw => {
+        if (!raw || typeof raw !== "object") return [];
+        const entity = raw as Record<string, unknown>;
+        const value = typeof entity.value === "string" ? entity.value : typeof entity.id === "string" ? entity.id : null;
+        if (!value) return [];
+        return [{
+          deviceId: row.deviceId,
+          deviceName: row.deviceName,
+          agentId: row.agentId,
+          agentName: row.agentName,
+          provider: row.provider,
+          connected,
+          host,
+          error,
+          entityId: typeof entity.id === "string" ? entity.id : value,
+          entityValue: value,
+          entityName: typeof entity.name === "string" ? entity.name : typeof entity.label === "string" ? entity.label : value,
+          entityType: typeof entity.type === "string" ? entity.type : "unknown",
+          currentValue: entity.currentValue ?? entity.power ?? null,
+          unit: typeof entity.unit === "string" ? entity.unit : null,
+          controllable: entity.controllable === true,
+          observedAt: typeof entity.observedAt === "string" ? entity.observedAt : row.observedAt.toISOString(),
+          deviceObservedAt: row.observedAt.toISOString()
+        }];
+      });
+    });
+
+    return reply.send(entities);
+  });
+
   app.get("/api/v1/device-control/devices/:id/state", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
     const result = await pool.query(`
       SELECT device_id AS "deviceId", agent_id AS "agentId", provider, state, observed_at AS "observedAt"

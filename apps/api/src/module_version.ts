@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.19.0";
+export const MODULE_VERSION = "1.20.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.20.0": {
+    releasedAt: "2026-09-16T01:15:00+02:00",
+    patch: "PR-192-realtime-entity-browser-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Device Control exposes a cross-device provider-neutral realtime entity feed for Entity Browser and future dashboards" }
+    ]
+  },
   "1.19.0": {
     releasedAt: "2026-09-15T22:55:00+02:00",
     patch: "PR-189-esphome-entity-model-foundation-v1.patch",

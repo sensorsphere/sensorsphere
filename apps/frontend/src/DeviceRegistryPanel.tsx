@@ -78,6 +78,7 @@ import { ResetFiltersAction } from "./ResetFiltersAction";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { MonitoringPanel, type MonitoringQuickCheckRequest } from "./MonitoringPanel";
 import { DeviceAgentsPanel, type DiscoveredDeviceImportRequest } from "./DeviceAgentsPanel";
+import { RealtimeEntityBrowser } from "./RealtimeEntityBrowser";
 
 
 type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "controlAgent" | "lastSeen" | "health" | "checks";
@@ -1043,6 +1044,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         <Tabs.List>
           <Tabs.Tab value="devices">Devices</Tabs.Tab>
           <Tabs.Tab value="device-agents">Device Agents</Tabs.Tab>
+          <Tabs.Tab value="entities">Entities</Tabs.Tab>
           <Tabs.Tab value="monitoring">Monitoring</Tabs.Tab>
           <Tabs.Tab value="discovery">Discovery</Tabs.Tab>
           <Tabs.Tab value="health-profiles">Health Profiles</Tabs.Tab>
@@ -1207,6 +1209,10 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           </Stack>
         </Tabs.Panel>
 
+        <Tabs.Panel value="entities" pt="md">
+          <RealtimeEntityBrowser />
+        </Tabs.Panel>
+
         <Tabs.Panel value="monitoring" pt="md">
           <MonitoringPanel quickCheckRequest={quickCheckRequest} onQuickCheckFinished={returnFromQuickCheck} />
         </Tabs.Panel>
@@ -1287,7 +1293,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         size={1150}
         centered
         styles={{
-          content: { height: "90vh", maxHeight: "90vh" },
+          content: { height: "90vh", maxHeight: "90vh", overflow: "hidden" },
           body: {
             height: "calc(90vh - 60px)",
             overflowY: controlDevice?.controlProvider?.toUpperCase() === "ESPHOME" ? "hidden" : "auto"

@@ -75,6 +75,7 @@ import type {
   DeviceControlCommand,
   DeviceControlState,
   DeviceControlEntitiesState,
+  RealtimeEntityRecord,
   DeviceDiscovery,
   DiscoveredDeviceAction
 } from "./types";
@@ -1741,6 +1742,10 @@ export async function getDeviceControlState(id: string): Promise<DeviceControlSt
 
 export async function getDeviceControlEntities(id: string): Promise<DeviceControlEntitiesState | null> {
   return readJson<DeviceControlEntitiesState | null>(await fetch(`/api/v1/device-control/devices/${id}/entities`));
+}
+
+export async function getRealtimeEntities(): Promise<RealtimeEntityRecord[]> {
+  return readJson<RealtimeEntityRecord[]>(await fetch("/api/v1/device-control/entities"));
 }
 
 export async function getMonitoringAgents(): Promise<MonitoringAgent[]> {

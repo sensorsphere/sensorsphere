@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.46.0";
+export const MODULE_VERSION = "1.47.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.47.0": {
+    releasedAt: "2026-09-16T01:15:00+02:00",
+    patch: "PR-192-realtime-entity-browser-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Device Registry includes a cross-device Realtime Entity Browser with persistent sorting and filters" },
+      { type: "added", description: "Realtime Entity Browser exposes provider-neutral current values, units, actionability and observation time for dashboard-oriented workflows" },
+      { type: "fixed", description: "ESPHome Device Control suppresses the dialog-level vertical scrollbar so only entity rows scroll" }
+    ]
+  },
   "1.46.0": {
     releasedAt: "2026-09-16T00:10:00+02:00",
     patch: "PR-191-device-control-layout-filters-v1.patch",
