@@ -68,8 +68,8 @@ export function RealtimeEntityBrowser() {
     queryFn: getSimpleDashboards
   });
   const [addEntity, setAddEntity] = React.useState<RealtimeEntityRecord | null>(null);
-  const [dashboardId, setDashboardId] = React.useState<string | null>(null);
-  const [sectionId, setSectionId] = React.useState<string | null>(null);
+  const [dashboardId, setDashboardId] = usePersistentState<string | null>("realtime-entities.add.dashboard", null);
+  const [sectionId, setSectionId] = usePersistentState<string | null>("realtime-entities.add.section", null);
   const [widgetType, setWidgetType] = React.useState<"switch" | "status" | "value">("value");
   const addEntityMutation = useMutation({
     mutationFn: async () => {
@@ -200,9 +200,12 @@ export function RealtimeEntityBrowser() {
                       title="Add entity to dashboard"
                       aria-label="Add entity to dashboard"
                       onClick={() => {
+                        const dashboards = (dashboardsQuery.data?.dashboards ?? []).filter(item => !item.templateId);
+                        const selectedDashboard = dashboards.some(item => item.id === dashboardId) ? dashboardId : (dashboards[0]?.id ?? null);
+                        const selectedSection = (dashboardsQuery.data?.sections ?? []).some(item => item.id === sectionId && item.dashboardId === selectedDashboard) ? sectionId : null;
                         setAddEntity(entity);
-                        setDashboardId(dashboardsQuery.data?.dashboards[0]?.id ?? null);
-                        setSectionId(null);
+                        setDashboardId(selectedDashboard);
+                        setSectionId(selectedSection);
                         setWidgetType(defaultWidgetType(entity));
                       }}
                     >+</ActionIcon>

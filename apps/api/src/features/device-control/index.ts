@@ -51,6 +51,11 @@ const helloMessageSchema = z.object({
   agentName: z.string().trim().min(1).max(200).optional(),
   version: z.string().trim().max(200).nullable().optional(),
   hostname: z.string().trim().max(500).nullable().optional(),
+  systemInfo: z.object({
+    os: z.string().trim().min(1).max(200),
+    osVersion: z.string().trim().min(1).max(300),
+    architecture: z.string().trim().min(1).max(100)
+  }).strict().optional(),
   agentLabels: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
   capabilities: z.array(z.object({
     provider: providerSchema,
@@ -113,6 +118,9 @@ interface AgentRow {
   reported_name: string | null;
   version: string | null;
   hostname: string | null;
+  os_name: string | null;
+  os_version: string | null;
+  architecture: string | null;
   capabilities: Array<{ provider: string; actions: string[]; discovery?: boolean }>;
   last_seen_at: Date | null;
   heartbeat_timeout_seconds: number;
@@ -148,6 +156,9 @@ function agentDto(row: AgentRow, connected: boolean) {
     reportedName: row.reported_name,
     version: row.version,
     hostname: row.hostname,
+    os: row.os_name,
+    osVersion: row.os_version,
+    architecture: row.architecture,
     capabilities: Array.isArray(row.capabilities) ? row.capabilities : [],
     lastSeenAt: row.last_seen_at?.toISOString() ?? null,
     heartbeatTimeoutSeconds: row.heartbeat_timeout_seconds,
@@ -400,9 +411,12 @@ export async function registerDeviceControlFeature(
           await pool.query(`
             UPDATE device_agents SET
               reported_name=COALESCE($2,reported_name), version=COALESCE($3,version), hostname=COALESCE($4,hostname),
-              agent_labels=$5::jsonb, capabilities=$6::jsonb, last_seen_at=NOW(), updated_at=NOW()
+              agent_labels=$5::jsonb, capabilities=$6::jsonb,
+              os_name=COALESCE($7,os_name), os_version=COALESCE($8,os_version), architecture=COALESCE($9,architecture),
+              last_seen_at=NOW(), updated_at=NOW()
             WHERE id=$1
-          `, [agent.id, message.agentName ?? null, message.version ?? null, message.hostname ?? null, JSON.stringify(labels), JSON.stringify(message.capabilities ?? [])]);
+          `, [agent.id, message.agentName ?? null, message.version ?? null, message.hostname ?? null, JSON.stringify(labels), JSON.stringify(message.capabilities ?? []),
+              message.systemInfo?.os ?? null, message.systemInfo?.osVersion ?? null, message.systemInfo?.architecture ?? null]);
           socket.send(JSON.stringify({ type: "HELLO_ACK", agentId: agent.id, serverTime: new Date().toISOString() }));
           await sendPendingCommands(agent.id, socket);
           await sendRealtimeDeviceSync(agent.id, socket);

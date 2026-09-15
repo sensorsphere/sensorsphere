@@ -65,6 +65,8 @@ export interface SimpleDashboardEntityCardRecord {
   device_id: string;
   entity_value: string;
   widget_type: string;
+  title: string | null;
+  size: string;
   sort_order: number;
   created_at: Date;
   updated_at: Date;
@@ -82,12 +84,16 @@ export class PostgresSimpleDashboardRepository {
         device_id uuid NOT NULL,
         entity_value text NOT NULL,
         widget_type text NOT NULL DEFAULT 'auto',
+        title text NULL,
+        size text NOT NULL DEFAULT 'medium',
         sort_order integer NOT NULL DEFAULT 0,
         created_at timestamptz NOT NULL DEFAULT NOW(),
         updated_at timestamptz NOT NULL DEFAULT NOW(),
         UNIQUE (dashboard_id, device_id, entity_value)
       )
     `);
+    await this.pool.query(`ALTER TABLE simple_dashboard_entity_cards ADD COLUMN IF NOT EXISTS title text NULL`);
+    await this.pool.query(`ALTER TABLE simple_dashboard_entity_cards ADD COLUMN IF NOT EXISTS size text NOT NULL DEFAULT 'medium'`);
     await this.pool.query(`
       CREATE INDEX IF NOT EXISTS simple_dashboard_entity_cards_dashboard_idx
       ON simple_dashboard_entity_cards (dashboard_id, section_id, sort_order)
@@ -96,7 +102,7 @@ export class PostgresSimpleDashboardRepository {
 
   async listEntityCards(): Promise<SimpleDashboardEntityCardRecord[]> {
     const result = await this.pool.query<SimpleDashboardEntityCardRecord>(`
-      SELECT id, dashboard_id, section_id, device_id, entity_value, widget_type, sort_order, created_at, updated_at
+      SELECT id, dashboard_id, section_id, device_id, entity_value, widget_type, title, size, sort_order, created_at, updated_at
       FROM simple_dashboard_entity_cards
       ORDER BY dashboard_id, section_id NULLS FIRST, sort_order, created_at, id
     `);
@@ -116,9 +122,26 @@ export class PostgresSimpleDashboardRepository {
         $1, $2, $6, $3, $4, $5,
         COALESCE((SELECT MAX(sort_order) + 1 FROM simple_dashboard_entity_cards WHERE dashboard_id = $2 AND section_id IS NOT DISTINCT FROM $6), 0)
       )
-      RETURNING id, dashboard_id, section_id, device_id, entity_value, widget_type, sort_order, created_at, updated_at
+      RETURNING id, dashboard_id, section_id, device_id, entity_value, widget_type, title, size, sort_order, created_at, updated_at
     `, [randomUUID(), dashboardId, deviceId, entityValue, widgetType, sectionId]);
     return result.rows[0]!;
+  }
+
+  async updateEntityCard(
+    dashboardId: string,
+    cardId: string,
+    widgetType: string,
+    sectionId: string | null,
+    title: string | null,
+    size: string
+  ): Promise<SimpleDashboardEntityCardRecord | null> {
+    const result = await this.pool.query<SimpleDashboardEntityCardRecord>(`
+      UPDATE simple_dashboard_entity_cards
+      SET widget_type=$3, section_id=$4, title=$5, size=$6, updated_at=NOW()
+      WHERE id=$1 AND dashboard_id=$2
+      RETURNING id, dashboard_id, section_id, device_id, entity_value, widget_type, title, size, sort_order, created_at, updated_at
+    `, [cardId, dashboardId, widgetType, sectionId, title, size]);
+    return result.rows[0] ?? null;
   }
 
   async deleteEntityCard(dashboardId: string, cardId: string): Promise<boolean> {

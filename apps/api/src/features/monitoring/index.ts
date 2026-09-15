@@ -87,6 +87,11 @@ const heartbeatSchema = z.object({
   hostname: z.string().trim().max(500).nullable().optional(),
   localIp: z.string().trim().max(200).nullable().optional(),
   agentLabels: z.array(z.string().trim().min(1).max(200)).max(100).optional(),
+  systemInfo: z.object({
+    os: z.string().trim().min(1).max(200),
+    osVersion: z.string().trim().min(1).max(300),
+    architecture: z.string().trim().min(1).max(100)
+  }).strict().optional(),
   // Backward compatibility for agents <= 1.0.4. These values are treated as
   // agent-reported labels and never overwrite SensorSphere-managed labels.
   labels: z.record(z.string(), z.string()).optional()
@@ -111,6 +116,9 @@ interface AgentRow {
   agent_labels: string[];
   version: string | null;
   hostname: string | null;
+  os_name: string | null;
+  os_version: string | null;
+  architecture: string | null;
   last_ip: string | null;
   local_ip: string | null;
   source_ip: string | null;
@@ -190,6 +198,9 @@ function agentDto(row: AgentRow) {
     agentLabels: Array.isArray(row.agent_labels) ? row.agent_labels : [],
     version: row.version,
     hostname: row.hostname,
+    os: row.os_name,
+    osVersion: row.os_version,
+    architecture: row.architecture,
     lastIp: row.last_ip,
     localIp: row.local_ip,
     sourceIp: row.source_ip,
@@ -523,9 +534,11 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
       `UPDATE monitoring_agents SET last_seen_at=NOW(), last_ip=$2, version=COALESCE($3,version),
               hostname=COALESCE($4,hostname), agent_labels=COALESCE($5::jsonb,agent_labels),
               local_ip=COALESCE($6,local_ip), source_ip=$7, x_forwarded_for=$8, x_real_ip=$9,
+              os_name=COALESCE($10,os_name), os_version=COALESCE($11,os_version), architecture=COALESCE($12,architecture),
               updated_at=NOW() WHERE id=$1 RETURNING *`,
       [agent.id, connection.effectiveIp, input.version ?? null, input.hostname ?? null, reportedLabels == null ? null : JSON.stringify(reportedLabels),
-       input.localIp ?? null, connection.sourceIp, connection.xForwardedFor, connection.xRealIp]
+       input.localIp ?? null, connection.sourceIp, connection.xForwardedFor, connection.xRealIp,
+       input.systemInfo?.os ?? null, input.systemInfo?.osVersion ?? null, input.systemInfo?.architecture ?? null]
     );
     return { agentId: agent.id, configRevision: Number(result.rows[0]!.config_revision), serverTime: new Date().toISOString() };
   });

@@ -1350,6 +1350,17 @@ export async function addSimpleDashboardEntityCard(
   );
 }
 
+export async function updateSimpleDashboardEntityCard(
+  dashboardId: string,
+  cardId: string,
+  input: { widgetType: "auto" | "switch" | "value" | "status"; sectionId: string | null; title: string | null; size: "small" | "medium" | "large" }
+): Promise<SimpleDashboardEntityCard> {
+  return readJson<SimpleDashboardEntityCard>(await fetch(
+    `/api/v1/simple-dashboards/${encodeURIComponent(dashboardId)}/entity-cards/${encodeURIComponent(cardId)}`,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }
+  ));
+}
+
 export async function deleteSimpleDashboardEntityCard(
   dashboardId: string,
   cardId: string

@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.48.0";
+export const MODULE_VERSION = "1.49.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.49.0": {
+    releasedAt: "2026-09-16T01:10:00+02:00",
+    patch: "PR-194-agent-system-dashboard-editor-v1.patch",
+    changes: [
+      { type: "added", description: "Agent tables display host OS, OS version and CPU architecture reported by Device and Monitoring Agents" },
+      { type: "changed", description: "Add realtime entity remembers the last selected dashboard and section" },
+      { type: "added", description: "Realtime dashboard widgets can be edited for title, widget type, section and size" }
+    ]
+  },
+
   "1.48.0": {
     releasedAt: "2026-09-16T02:45:00+02:00",
     patch: "PR-193-dashboard-realtime-entity-foundation-v1.patch",

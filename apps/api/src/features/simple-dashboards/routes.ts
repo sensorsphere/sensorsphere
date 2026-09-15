@@ -18,6 +18,7 @@ export async function registerSimpleDashboardRoutes(
   app.put("/simple-dashboards/:id/sections/order", options.controller.reorderSections);
   app.post("/simple-dashboards/:id/cards", options.controller.createCard);
   app.post("/simple-dashboards/:id/entity-cards", options.controller.createEntityCard);
+  app.patch("/simple-dashboards/:id/entity-cards/:cardId", options.controller.updateEntityCard);
   app.delete("/simple-dashboards/:id/entity-cards/:cardId", options.controller.deleteEntityCard);
   app.patch("/simple-dashboards/:id/cards/:cardId", options.controller.updateCard);
   app.delete("/simple-dashboards/:id/cards/:cardId", options.controller.deleteCard);

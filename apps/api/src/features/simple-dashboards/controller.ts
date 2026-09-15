@@ -26,6 +26,12 @@ const createEntityCardSchema = z.object({
   widgetType: z.enum(["auto", "switch", "value", "status"]).default("auto"),
   sectionId: uuid.nullable().optional()
 }).strict();
+const updateEntityCardSchema = z.object({
+  widgetType: z.enum(["auto", "switch", "value", "status"]),
+  sectionId: uuid.nullable(),
+  title: z.string().trim().max(120).nullable(),
+  size: z.enum(["small", "medium", "large"])
+}).strict();
 const reorderCardsSchema = z.object({
   cardIds: z.array(uuid).max(500)
 }).strict();
@@ -85,6 +91,8 @@ function mapEntityCard(row: SimpleDashboardEntityCardRecord) {
     deviceId: row.device_id,
     entityValue: row.entity_value,
     widgetType: row.widget_type,
+    title: row.title,
+    size: row.size,
     sortOrder: row.sort_order,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString()
@@ -304,6 +312,17 @@ export class SimpleDashboardController {
       }
       throw error;
     }
+  };
+
+  updateEntityCard = async (request: FastifyRequest<{ Params: { id: string; cardId: string }; Body: unknown }>, reply: FastifyReply) => {
+    const parsedId = uuid.safeParse(request.params.id);
+    const parsedCardId = uuid.safeParse(request.params.cardId);
+    const parsed = updateEntityCardSchema.safeParse(request.body);
+    if (!parsedId.success || !parsedCardId.success || !parsed.success) return reply.code(400).send({ error: "Invalid realtime entity card" });
+    if (!(await this.repository.dashboardIsEditable(parsedId.data))) return reply.code(409).send({ error: "Template instances are read-only" });
+    const card = await this.repository.updateEntityCard(parsedId.data, parsedCardId.data, parsed.data.widgetType, parsed.data.sectionId, parsed.data.title, parsed.data.size);
+    if (!card) return reply.code(404).send({ error: "Realtime entity card not found" });
+    return reply.send(mapEntityCard(card));
   };
 
   deleteEntityCard = async (request: FastifyRequest<{ Params: { id: string; cardId: string } }>, reply: FastifyReply) => {

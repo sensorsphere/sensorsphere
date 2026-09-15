@@ -649,6 +649,8 @@ export interface SimpleDashboardEntityCard {
   deviceId: string;
   entityValue: string;
   widgetType: "auto" | "switch" | "value" | "status";
+  title: string | null;
+  size: "small" | "medium" | "large";
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -975,6 +977,9 @@ export interface MonitoringAgent {
   agentLabels: string[];
   version: string | null;
   hostname: string | null;
+  os: string | null;
+  osVersion: string | null;
+  architecture: string | null;
   lastIp: string | null;
   localIp: string | null;
   sourceIp: string | null;
@@ -1084,6 +1089,9 @@ export interface DeviceAgent {
   reportedName: string | null;
   version: string | null;
   hostname: string | null;
+  os: string | null;
+  osVersion: string | null;
+  architecture: string | null;
   capabilities: DeviceAgentCapability[];
   lastSeenAt: string | null;
   heartbeatTimeoutSeconds: number;

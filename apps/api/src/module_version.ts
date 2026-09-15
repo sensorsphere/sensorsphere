@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.21.0";
+export const MODULE_VERSION = "1.22.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.22.0": {
+    releasedAt: "2026-09-16T01:10:00+02:00",
+    patch: "PR-194-agent-system-dashboard-editor-v1.patch",
+    changes: [
+      { type: "added", description: "Device and Monitoring Agent heartbeats persist host OS, OS version and processor architecture" },
+      { type: "added", description: "Realtime dashboard entity cards support editable title, widget type, section and size" }
+    ]
+  },
+
   "1.21.0": {
     releasedAt: "2026-09-16T02:45:00+02:00",
     patch: "PR-193-dashboard-realtime-entity-foundation-v1.patch",

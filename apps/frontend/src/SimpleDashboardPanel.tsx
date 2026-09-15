@@ -41,6 +41,7 @@ import {
   reorderSimpleDashboardCards,
   reorderSimpleDashboards,
   updateSimpleDashboardCard,
+  updateSimpleDashboardEntityCard,
   detachSimpleDashboard,
   convertSimpleDashboardToTemplate
 } from "./api";
@@ -233,6 +234,12 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
   const [convertMetricKey, setConvertMetricKey] = React.useState<string | null>(null);
   const convertTemplateNameRef = React.useRef<HTMLInputElement>(null);
 
+  const [entityEditorCard, setEntityEditorCard] = React.useState<SimpleDashboardEntityCard | null>(null);
+  const [entityEditorTitle, setEntityEditorTitle] = React.useState("");
+  const [entityEditorWidgetType, setEntityEditorWidgetType] = React.useState<"auto" | "switch" | "value" | "status">("auto");
+  const [entityEditorSectionId, setEntityEditorSectionId] = React.useState<string | null>(null);
+  const [entityEditorSize, setEntityEditorSize] = React.useState<"small" | "medium" | "large">("medium");
+
   const [deleteTarget, setDeleteTarget] = React.useState<
     | { type: "dashboard"; id: string; name: string }
     | { type: "card"; dashboardId: string; cardId: string; label: string }
@@ -373,6 +380,15 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
     mutationFn: ({ dashboardId, cardId }: { dashboardId: string; cardId: string }) =>
       deleteSimpleDashboardEntityCard(dashboardId, cardId),
     onSuccess: invalidate
+  });
+  const updateEntityCardMutation = useMutation({
+    mutationFn: (card: SimpleDashboardEntityCard) => updateSimpleDashboardEntityCard(card.dashboardId, card.id, {
+      widgetType: entityEditorWidgetType,
+      sectionId: entityEditorSectionId,
+      title: entityEditorTitle.trim() || null,
+      size: entityEditorSize
+    }),
+    onSuccess: async () => { setEntityEditorCard(null); await invalidate(); }
   });
   const entityCommandMutation = useMutation({
     mutationFn: ({ deviceId, entityValue, action }: { deviceId: string; entityValue: string; action: "POWER_ON" | "POWER_OFF" }) =>
@@ -1214,15 +1230,18 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                         : card.widgetType;
                       const isBoolean = typeof entity?.currentValue === "boolean";
                       return (
-                        <Card key={card.id} withBorder radius="md" p="sm" style={{ borderLeft: "4px solid var(--mantine-color-blue-6)" }}>
+                        <Card key={card.id} withBorder radius="md" p="sm" style={{ borderLeft: "4px solid var(--mantine-color-blue-6)", minHeight: card.size === "small" ? 120 : card.size === "large" ? 190 : 150, gridColumn: card.size === "large" ? "span 2" : undefined }}>
                           <Stack gap={6}>
                             <Group justify="space-between" align="center" wrap="nowrap">
                               <div style={{ minWidth: 0 }}>
-                                <Text size="sm" fw={700} lineClamp={1}>{entity?.entityName ?? card.entityValue}</Text>
+                                <Text size="sm" fw={700} lineClamp={1}>{card.title || entity?.entityName || card.entityValue}</Text>
                                 <Text size="xs" c="dimmed" lineClamp={1}>{entity?.deviceName ?? card.deviceId}</Text>
                               </div>
                               {!activeDashboardIsTemplateInstance && (
-                                <ActionIcon size="sm" variant="light" color="red" title="Remove realtime widget" onClick={() => setDeleteTarget({ type: "entity-card", dashboardId: activeDashboard.id, cardId: card.id, label: `${entity?.deviceName ?? card.deviceId} · ${entity?.entityName ?? card.entityValue}` })}>×</ActionIcon>
+                                <Group gap={4} wrap="nowrap">
+                                  <ActionIcon size="sm" variant="light" title="Edit realtime widget" onClick={() => { setEntityEditorCard(card); setEntityEditorTitle(card.title ?? ""); setEntityEditorWidgetType(card.widgetType); setEntityEditorSectionId(card.sectionId); setEntityEditorSize(card.size ?? "medium"); }}>✎</ActionIcon>
+                                  <ActionIcon size="sm" variant="light" color="red" title="Remove realtime widget" onClick={() => setDeleteTarget({ type: "entity-card", dashboardId: activeDashboard.id, cardId: card.id, label: `${entity?.deviceName ?? card.deviceId} · ${entity?.entityName ?? card.entityValue}` })}>×</ActionIcon>
+                                </Group>
                               )}
                             </Group>
                             <Group justify="space-between" align="center" wrap="nowrap">
@@ -1250,6 +1269,16 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
           })}
         </Stack>
       )}
+
+      <Modal opened={entityEditorCard !== null} onClose={() => setEntityEditorCard(null)} title="Edit realtime widget" centered>
+        <Stack>
+          <TextInput label="Title" placeholder="Use entity name" value={entityEditorTitle} onChange={event => setEntityEditorTitle(event.currentTarget.value)} />
+          <Select label="Widget" value={entityEditorWidgetType} onChange={value => value && setEntityEditorWidgetType(value as typeof entityEditorWidgetType)} allowDeselect={false} data={[{value:"auto",label:"Auto"},{value:"switch",label:"Switch control"},{value:"status",label:"Binary status"},{value:"value",label:"Value"}]} />
+          <Select label="Section" value={entityEditorSectionId} onChange={setEntityEditorSectionId} clearable placeholder="Dashboard default" data={sections.filter(item => item.dashboardId === entityEditorCard?.dashboardId).map(item => ({ value: item.id, label: item.name }))} />
+          <Select label="Size" value={entityEditorSize} onChange={value => value && setEntityEditorSize(value as typeof entityEditorSize)} allowDeselect={false} data={[{value:"small",label:"Small"},{value:"medium",label:"Medium"},{value:"large",label:"Large"}]} />
+          <Group justify="flex-end"><Button variant="light" color="gray" onClick={() => setEntityEditorCard(null)}>Cancel</Button><Button loading={updateEntityCardMutation.isPending} onClick={() => entityEditorCard && updateEntityCardMutation.mutate(entityEditorCard)}>Save</Button></Group>
+        </Stack>
+      </Modal>
 
       <DashboardTemplateManager
         opened={templateManagerOpened}
