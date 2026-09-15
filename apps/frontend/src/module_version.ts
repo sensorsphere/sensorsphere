@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.45.0";
+export const MODULE_VERSION = "1.46.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.46.0": {
+    releasedAt: "2026-09-16T00:10:00+02:00",
+    patch: "PR-191-device-control-layout-filters-v1.patch",
+    changes: [
+      { type: "changed", description: "Device Control uses a wider fixed-height dialog with scrolling confined to ESPHome entity rows" },
+      { type: "changed", description: "ESPHome entity headers and filters remain visible while entity rows scroll" },
+      { type: "changed", description: "ESPHome Type and Actions filters use finite selectable values and replace the separate Actionable only filter" },
+      { type: "changed", description: "Device Control emphasizes the controlled device name in the dialog title" }
+    ]
+  },
   "1.45.0": {
     releasedAt: "2026-09-15T23:55:00+02:00",
     patch: "PR-190-device-control-table-ux-v1.patch",

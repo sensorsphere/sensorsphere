@@ -468,11 +468,10 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const [controlEntitySortKey, setControlEntitySortKey] = React.useState<EspHomeEntitySortKey>("entity");
   const [controlEntitySortDirection, setControlEntitySortDirection] = React.useState<SortDirection>("asc");
   const [controlEntityNameFilter, setControlEntityNameFilter] = React.useState("");
-  const [controlEntityTypeFilter, setControlEntityTypeFilter] = React.useState("");
+  const [controlEntityTypeFilter, setControlEntityTypeFilter] = React.useState<string | null>(null);
   const [controlEntityStateFilter, setControlEntityStateFilter] = React.useState("");
-  const [controlEntityActionsFilter, setControlEntityActionsFilter] = React.useState("");
+  const [controlEntityActionsFilter, setControlEntityActionsFilter] = React.useState<string | null>(null);
   const [controlEntityDefaultFilter, setControlEntityDefaultFilter] = React.useState("");
-  const [controlEntityActionableOnly, setControlEntityActionableOnly] = React.useState(false);
 
   const devicesQuery = useQuery({ queryKey: ["device-registry", "devices"], queryFn: getDeviceRegistryDevices, refetchInterval: 15000 });
   const deviceClassesQuery = useQuery({ queryKey: ["device-registry", "classes"], queryFn: getDeviceClassReferences });
@@ -776,11 +775,10 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const controlEntityActionsLabel = (entity: EspHomeControlEntity): string => entity.controllable ? "On Off Toggle" : "Read-only";
   const filteredControlEntities = controlEntities.filter(entity => {
     const includes = (value: string, filter: string) => !filter.trim() || value.toLowerCase().includes(filter.trim().toLowerCase());
-    return (!controlEntityActionableOnly || entity.controllable)
-      && includes(`${entity.name} ${entity.value}`, controlEntityNameFilter)
-      && includes(entity.type.replace("_", " "), controlEntityTypeFilter)
+    return includes(`${entity.name} ${entity.value}`, controlEntityNameFilter)
+      && (!controlEntityTypeFilter || entity.type === controlEntityTypeFilter)
       && includes(espHomeEntityStateLabel(entity), controlEntityStateFilter)
-      && includes(controlEntityActionsLabel(entity), controlEntityActionsFilter)
+      && (!controlEntityActionsFilter || (controlEntityActionsFilter === "actionable" ? entity.controllable : !entity.controllable))
       && includes(controlEntityDefaultLabel(entity), controlEntityDefaultFilter);
   }).sort((left, right) => {
     const value = (entity: EspHomeControlEntity): string | number | boolean | null => controlEntitySortKey === "entity" ? `${entity.name} ${entity.value}`
@@ -1280,11 +1278,23 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       <Modal
         opened={controlDevice !== null}
         onClose={() => !controlAction && setControlDevice(null)}
-        title={controlDevice ? `Device Control · ${controlDevice.name}` : "Device Control"}
-        size={920}
+        title={controlDevice ? (
+          <Group gap="xs" align="baseline">
+            <Text size="sm" c="dimmed">Device Control</Text>
+            <Text size="lg" fw={700}>{controlDevice.name}</Text>
+          </Group>
+        ) : "Device Control"}
+        size={1150}
         centered
+        styles={{
+          content: { height: "90vh", maxHeight: "90vh" },
+          body: {
+            height: "calc(90vh - 60px)",
+            overflowY: controlDevice?.controlProvider?.toUpperCase() === "ESPHOME" ? "hidden" : "auto"
+          }
+        }}
       >
-        <Stack gap="md">
+        <Stack gap="md" style={controlDevice?.controlProvider?.toUpperCase() === "ESPHOME" ? { height: "100%", minHeight: 0 } : undefined}>
           <Group justify="space-between" align="flex-start">
             <Stack gap={2}>
               <Text size="sm" fw={600}>{controlDevice?.controlProvider ?? "—"}</Text>
@@ -1307,8 +1317,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           {controlError && <Text c="red" size="sm">{controlError}</Text>}
 
           {controlDevice?.controlProvider?.toUpperCase() === "ESPHOME" ? (
-            <Card withBorder padding="sm">
-              <Stack gap="sm">
+            <Card withBorder padding="sm" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+              <Stack gap="sm" style={{ height: "100%", minHeight: 0 }}>
                 <Text size="sm" fw={600}>ESPHome Native API</Text>
                 <Text size="xs" c="dimmed">
                   Realtime ESPHome entities. Light and switch entities are controllable; sensor, binary sensor, text sensor, number and select entities are currently read-only.
@@ -1318,29 +1328,53 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                 ) : controlEntities.length === 0 ? (
                   <Text size="sm" c="dimmed">No realtime ESPHome entity was reported.</Text>
                 ) : (
-                  <Stack gap="xs">
-                    <Group justify="flex-end">
-                      <Checkbox
-                        size="xs"
-                        label="Actionable only"
-                        checked={controlEntityActionableOnly}
-                        onChange={event => setControlEntityActionableOnly(event.currentTarget.checked)}
-                      />
-                    </Group>
-                    <Table withTableBorder horizontalSpacing="sm" verticalSpacing="xs">
+                  <Stack gap="xs" style={{ flex: 1, minHeight: 0 }}>
+                    <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto" }}>
+                    <Table withTableBorder horizontalSpacing="sm" verticalSpacing="xs" style={{ minWidth: 980 }}>
                       <Table.Thead>
-                        <Table.Tr>
+                        <Table.Tr style={{ position: "sticky", top: 0, zIndex: 4, background: "var(--mantine-color-body)" }}>
                           <SortableTableHeader active={controlEntitySortKey === "entity"} direction={controlEntitySortDirection} onClick={() => toggleControlEntitySort("entity")}>Entity</SortableTableHeader>
                           <SortableTableHeader active={controlEntitySortKey === "type"} direction={controlEntitySortDirection} onClick={() => toggleControlEntitySort("type")}>Type</SortableTableHeader>
                           <SortableTableHeader active={controlEntitySortKey === "state"} direction={controlEntitySortDirection} onClick={() => toggleControlEntitySort("state")}>State</SortableTableHeader>
                           <SortableTableHeader active={controlEntitySortKey === "actions"} direction={controlEntitySortDirection} onClick={() => toggleControlEntitySort("actions")}>Actions</SortableTableHeader>
                           <SortableTableHeader active={controlEntitySortKey === "default"} direction={controlEntitySortDirection} onClick={() => toggleControlEntitySort("default")}>Default</SortableTableHeader>
                         </Table.Tr>
-                        <Table.Tr>
+                        <Table.Tr style={{ position: "sticky", top: 39, zIndex: 3, background: "var(--mantine-color-body)" }}>
                           <Table.Th><TextInput size="xs" placeholder="Filter entity" value={controlEntityNameFilter} onChange={event => setControlEntityNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityNameFilter.trim()))} /></Table.Th>
-                          <Table.Th><TextInput size="xs" placeholder="Filter type" value={controlEntityTypeFilter} onChange={event => setControlEntityTypeFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityTypeFilter.trim()))} /></Table.Th>
+                          <Table.Th>
+                            <Select
+                              size="xs"
+                              placeholder="All types"
+                              clearable
+                              value={controlEntityTypeFilter}
+                              onChange={setControlEntityTypeFilter}
+                              data={[
+                                { value: "light", label: "Light" },
+                                { value: "switch", label: "Switch" },
+                                { value: "sensor", label: "Sensor" },
+                                { value: "binary_sensor", label: "Binary sensor" },
+                                { value: "text_sensor", label: "Text sensor" },
+                                { value: "number", label: "Number" },
+                                { value: "select", label: "Select" }
+                              ]}
+                              styles={activeFilterStyles(Boolean(controlEntityTypeFilter))}
+                            />
+                          </Table.Th>
                           <Table.Th><TextInput size="xs" placeholder="Filter state" value={controlEntityStateFilter} onChange={event => setControlEntityStateFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityStateFilter.trim()))} /></Table.Th>
-                          <Table.Th><TextInput size="xs" placeholder="Filter actions" value={controlEntityActionsFilter} onChange={event => setControlEntityActionsFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityActionsFilter.trim()))} /></Table.Th>
+                          <Table.Th>
+                            <Select
+                              size="xs"
+                              placeholder="All actions"
+                              clearable
+                              value={controlEntityActionsFilter}
+                              onChange={setControlEntityActionsFilter}
+                              data={[
+                                { value: "actionable", label: "Actionable" },
+                                { value: "read-only", label: "Read-only" }
+                              ]}
+                              styles={activeFilterStyles(Boolean(controlEntityActionsFilter))}
+                            />
+                          </Table.Th>
                           <Table.Th><TextInput size="xs" placeholder="Filter default" value={controlEntityDefaultFilter} onChange={event => setControlEntityDefaultFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityDefaultFilter.trim()))} /></Table.Th>
                         </Table.Tr>
                       </Table.Thead>
@@ -1401,6 +1435,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                         )}
                       </Table.Tbody>
                     </Table>
+                    </div>
                   </Stack>
                 )}
               </Stack>
