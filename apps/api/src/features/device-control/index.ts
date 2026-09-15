@@ -317,6 +317,62 @@ export async function registerDeviceControlFeature(
     }
   };
 
+  const sendRealtimeDeviceSync = async (agentId: string, socket: WebSocket) => {
+    if (socket.readyState !== WebSocket.OPEN) return;
+    const result = await pool.query<{
+      device_id: string;
+      device_name: string;
+      provider: string;
+      identities: Array<{
+        identityType: string;
+        value: string;
+        source: string | null;
+        labelCode: string | null;
+        label: string | null;
+        isPrimary: boolean;
+        sortOrder: number;
+      }>;
+    }>(`
+      SELECT
+        d.id AS device_id,
+        d.name AS device_name,
+        UPPER(d.control_provider) AS provider,
+        COALESCE(
+          jsonb_agg(
+            jsonb_build_object(
+              'identityType', i.identity_type,
+              'value', i.value,
+              'source', i.source,
+              'labelCode', i.label_code,
+              'label', COALESCE(il.label, i.label),
+              'isPrimary', i.is_primary,
+              'sortOrder', i.sort_order
+            ) ORDER BY i.identity_type, i.is_primary DESC, i.sort_order, i.value
+          ) FILTER (WHERE i.id IS NOT NULL),
+          '[]'::jsonb
+        ) AS identities
+      FROM device_registry_devices d
+      LEFT JOIN device_registry_identities i ON i.device_id = d.id
+      LEFT JOIN device_identity_labels il ON il.code = i.label_code
+      WHERE d.control_agent_id = $1
+        AND d.enabled = TRUE
+        AND UPPER(COALESCE(d.control_provider, '')) = 'ESPHOME'
+      GROUP BY d.id, d.name, d.control_provider
+      ORDER BY LOWER(d.name), d.id
+    `, [agentId]);
+
+    socket.send(JSON.stringify({
+      type: "SYNC_DEVICES",
+      provider: "ESPHOME",
+      devices: result.rows.map(row => ({
+        deviceId: row.device_id,
+        deviceName: row.device_name,
+        provider: row.provider,
+        identities: row.identities ?? []
+      }))
+    }));
+  };
+
   const handleConnection = (socket: WebSocket, agent: AgentRow) => {
     const previous = sockets.get(agent.id);
     if (previous && previous !== socket) previous.close(4001, "Replaced by a newer connection");
@@ -349,11 +405,13 @@ export async function registerDeviceControlFeature(
           `, [agent.id, message.agentName ?? null, message.version ?? null, message.hostname ?? null, JSON.stringify(labels), JSON.stringify(message.capabilities ?? [])]);
           socket.send(JSON.stringify({ type: "HELLO_ACK", agentId: agent.id, serverTime: new Date().toISOString() }));
           await sendPendingCommands(agent.id, socket);
+          await sendRealtimeDeviceSync(agent.id, socket);
           return;
         }
         if (message.type === "HEARTBEAT") {
           await pool.query("UPDATE device_agents SET last_seen_at=NOW(), updated_at=NOW() WHERE id=$1", [agent.id]);
           socket.send(JSON.stringify({ type: "HEARTBEAT_ACK", serverTime: new Date().toISOString() }));
+          await sendRealtimeDeviceSync(agent.id, socket);
           return;
         }
         if (message.type === "COMMAND_RESULT") {

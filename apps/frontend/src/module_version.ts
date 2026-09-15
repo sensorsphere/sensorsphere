@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.42.0";
+export const MODULE_VERSION = "1.43.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.43.0": {
+    releasedAt: "2026-09-15T21:55:00+02:00",
+    patch: "PR-188-esphome-realtime-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "ESPHome Device Control follows realtime Native API entity state while the dialog is open" },
+      { type: "changed", description: "ESPHome control commands rely on telemetry as the state source of truth instead of optimistic command results" },
+      { type: "added", description: "ESPHome Device Control displays LIVE/CONNECTING status for the persistent agent connection" }
+    ]
+  },
   "1.42.0": {
     releasedAt: "2026-09-15T06:15:00+02:00",
     patch: "PR-187-device-agent-last-seen-esphome-state-v1.patch",

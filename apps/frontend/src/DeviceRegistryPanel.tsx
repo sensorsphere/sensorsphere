@@ -526,6 +526,25 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     applyControlState(state);
     return state;
   };
+  const applyEspHomeRealtimeState = (state: DeviceControlState | null): boolean => {
+    if (!state || state.provider.toUpperCase() !== "ESPHOME" || state.state.realtime !== true) return false;
+    const raw = Array.isArray(state.state.entities) ? state.state.entities : [];
+    const entities = raw.flatMap(item => {
+      if (!item || typeof item !== "object") return [];
+      const record = item as Record<string, unknown>;
+      const value = typeof record.value === "string" ? record.value : "";
+      const type = record.type === "light" ? "light" : record.type === "switch" ? "switch" : null;
+      if (!value || !type) return [];
+      const label = typeof record.label === "string" ? record.label : value;
+      const name = typeof record.name === "string" ? record.name : label;
+      const power = typeof record.power === "boolean" ? record.power : null;
+      return [{ value, label, name, type, power }];
+    });
+    setControlState(state);
+    setControlEntities(entities);
+    return true;
+  };
+
 
   const waitForControlCommand = async (commandId: string) => {
     const deadline = Date.now() + 15000;
@@ -600,19 +619,11 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       if (!commandId) throw new Error("SensorSphere did not return a command id");
       const finished = await waitForControlCommand(commandId);
       if (finished.status !== "SUCCESS") throw new Error(finished.error || `Command ${finished.status.toLowerCase()}`);
-      const power = typeof finished.result?.power === "boolean" ? finished.result.power : null;
-      setControlEntities(current => current.map(entity =>
-        entity.value === entityValue ? { ...entity, power } : entity
-      ));
-      if (entityValue === primaryIdentity(controlDevice.identities, "ESPHOME_ENTITY")?.value && finished.result) {
-        applyControlState({
-          deviceId: controlDevice.id,
-          agentId: controlDevice.controlAgentId ?? "",
-          provider: controlDevice.controlProvider ?? "",
-          state: finished.result,
-          observedAt: new Date().toISOString()
-        });
-      }
+      // Do not infer the final UI state from the command response. ESPHome realtime
+      // telemetry is the source of truth and will update the entity row independently.
+      await new Promise(resolve => window.setTimeout(resolve, 100));
+      const realtime = await getDeviceControlState(controlDevice.id);
+      applyEspHomeRealtimeState(realtime);
     } catch (cause) {
       setControlError(cause instanceof Error ? cause.message : "Unable to control ESPHome entity");
     } finally {
@@ -649,9 +660,10 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     setControlLoading(true);
     try {
       if (device.controlProvider?.toUpperCase() === "ESPHOME") {
-        const entities = await listEspHomeEntities(device);
-        const explicit = primaryIdentity(device.identities, "ESPHOME_ENTITY")?.value ?? null;
-        if (explicit || entities.length === 1) await runControlActionForDevice(device, "GET_STATE");
+        const realtime = await getDeviceControlState(device.id);
+        if (!applyEspHomeRealtimeState(realtime)) {
+          await listEspHomeEntities(device);
+        }
       } else {
         await runControlActionForDevice(device, "GET_STATE");
       }
@@ -688,6 +700,25 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       setControlAction(null);
     }
   };
+
+  React.useEffect(() => {
+    if (!controlDevice || controlDevice.controlProvider?.toUpperCase() !== "ESPHOME") return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const state = await getDeviceControlState(controlDevice.id);
+        if (!cancelled) applyEspHomeRealtimeState(state);
+      } catch {
+        // Keep the last real ESPHome state visible during transient API failures.
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [controlDevice?.id, controlDevice?.controlProvider]);
 
   const devices = devicesQuery.data ?? [];
   const profiles = profilesQuery.data ?? [];
@@ -1199,7 +1230,12 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           {controlDevice?.controlProvider?.toUpperCase() === "ESPHOME" ? (
             <Card withBorder padding="sm">
               <Stack gap="sm">
-                <Text size="sm" fw={600}>ESPHome Native API</Text>
+                <Group justify="space-between">
+                  <Text size="sm" fw={600}>ESPHome Native API</Text>
+                  <Badge variant="light" color={controlState?.state?.connected === true ? "green" : "gray"}>
+                    {controlState?.state?.connected === true ? "LIVE" : "CONNECTING"}
+                  </Badge>
+                </Group>
                 <Text size="xs" c="dimmed">
                   Control every advertised light/switch entity. ESPHOME_ENTITY remains the default entity for external or single-entity actions.
                 </Text>

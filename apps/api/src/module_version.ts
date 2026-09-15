@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.17.0";
+export const MODULE_VERSION = "1.18.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.18.0": {
+    releasedAt: "2026-09-15T21:55:00+02:00",
+    patch: "PR-188-esphome-realtime-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Device Control synchronizes registered ESPHome devices to Device Agents for persistent Native API telemetry" },
+      { type: "changed", description: "ESPHome realtime entity state is stored continuously in the existing Device Control state record" }
+    ]
+  },
   "1.17.0": {
     releasedAt: "2026-09-14T20:10:00+02:00",
     patch: "PR-179-esphome-provider-foundation-v1.patch",
