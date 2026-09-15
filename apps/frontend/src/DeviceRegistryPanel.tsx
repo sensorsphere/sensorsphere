@@ -1238,7 +1238,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                               <Group gap="xs" wrap="nowrap">
                                 <Button size="compact-sm" color="green" variant="light" loading={controlAction === `POWER_ON:${entity.value}`} disabled={Boolean(controlAction)} onClick={() => void runEspHomeEntityAction(entity.value, "POWER_ON")}>On</Button>
                                 <Button size="compact-sm" color="gray" variant="light" loading={controlAction === `POWER_OFF:${entity.value}`} disabled={Boolean(controlAction)} onClick={() => void runEspHomeEntityAction(entity.value, "POWER_OFF")}>Off</Button>
-                                <Button size="compact-sm" variant="light" loading={controlAction === `TOGGLE:${entity.value}`} disabled={Boolean(controlAction)} onClick={() => void runEspHomeEntityAction(entity.value, "TOGGLE")}>Toggle</Button>
+                                <Tooltip label={entity.power == null ? "Toggle requires a known entity state. Use On or Off first." : "Toggle entity state"}><span><Button size="compact-sm" variant="light" loading={controlAction === `TOGGLE:${entity.value}`} disabled={Boolean(controlAction) || entity.power == null} onClick={() => void runEspHomeEntityAction(entity.value, "TOGGLE")}>Toggle</Button></span></Tooltip>
                               </Group>
                             </Table.Td>
                             <Table.Td>

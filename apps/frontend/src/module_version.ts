@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.41.0";
+export const MODULE_VERSION = "1.42.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.42.0": {
+    releasedAt: "2026-09-15T06:15:00+02:00",
+    patch: "PR-187-device-agent-last-seen-esphome-state-v1.patch",
+    changes: [
+      { type: "added", description: "Device Agents table shows relative Last seen immediately after Version with the exact timestamp on hover" },
+      { type: "changed", description: "ESPHome Toggle is disabled until the selected entity has a known boolean state" }
+    ]
+  },
   "1.41.0": {
     releasedAt: "2026-09-15T01:20:00+02:00",
     patch: "PR-186-esphome-multi-entity-control-v1.patch",
