@@ -712,4 +712,30 @@ export async function registerDeviceControlFeature(
     `, [request.params.id]);
     return reply.send(result.rows[0] ?? null);
   });
+
+  app.get("/api/v1/device-control/devices/:id/entities", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    const result = await pool.query<{
+      deviceId: string;
+      agentId: string;
+      provider: string;
+      state: Record<string, unknown>;
+      observedAt: Date;
+    }>(`
+      SELECT device_id AS "deviceId", agent_id AS "agentId", provider, state, observed_at AS "observedAt"
+      FROM device_control_states WHERE device_id=$1
+    `, [request.params.id]);
+    const row = result.rows[0];
+    if (!row) return reply.send(null);
+    const state = row.state ?? {};
+    return reply.send({
+      deviceId: row.deviceId,
+      agentId: row.agentId,
+      provider: row.provider,
+      connected: state.connected === true,
+      host: typeof state.host === "string" ? state.host : null,
+      error: typeof state.error === "string" ? state.error : null,
+      entities: Array.isArray(state.entities) ? state.entities : [],
+      observedAt: row.observedAt.toISOString()
+    });
+  });
 }

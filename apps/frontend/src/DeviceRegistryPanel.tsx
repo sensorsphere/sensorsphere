@@ -83,13 +83,36 @@ import { DeviceAgentsPanel, type DiscoveredDeviceImportRequest } from "./DeviceA
 type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "controlAgent" | "lastSeen" | "health" | "checks";
 type HealthProfileSortKey = "name" | "monitoring" | "warning" | "offline" | "batteryWarning" | "batteryCritical" | "rssiWarning" | "rssiCritical";
 
+type EspHomeControlEntityType = "light" | "switch" | "sensor" | "binary_sensor" | "text_sensor" | "number" | "select";
+
 type EspHomeControlEntity = {
   value: string;
   label: string;
   name: string;
-  type: "light" | "switch";
+  type: EspHomeControlEntityType;
   power: boolean | null;
+  currentValue: boolean | number | string | null;
+  unit: string | null;
+  controllable: boolean;
+  observedAt: string | null;
 };
+
+
+function espHomeEntityStateLabel(entity: EspHomeControlEntity): string {
+  if (entity.type === "light" || entity.type === "switch" || entity.type === "binary_sensor") {
+    return entity.currentValue === true ? "ON" : entity.currentValue === false ? "OFF" : "UNKNOWN";
+  }
+  if (entity.currentValue == null) return "UNKNOWN";
+  const value = String(entity.currentValue);
+  return entity.unit ? `${value} ${entity.unit}` : value || "—";
+}
+
+function espHomeEntityStateColor(entity: EspHomeControlEntity): string {
+  if (entity.type === "light" || entity.type === "switch" || entity.type === "binary_sensor") {
+    return entity.currentValue === true ? "green" : entity.currentValue === false ? "gray" : "yellow";
+  }
+  return entity.currentValue == null ? "yellow" : "blue";
+}
 
 function deviceAddress(device: DeviceRegistryDevice): string {
   return primaryIdentity(device.identities, "IP")?.value
@@ -529,16 +552,25 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const applyEspHomeRealtimeState = (state: DeviceControlState | null): boolean => {
     if (!state || state.provider.toUpperCase() !== "ESPHOME" || state.state.realtime !== true) return false;
     const raw = Array.isArray(state.state.entities) ? state.state.entities : [];
+    const supportedTypes: EspHomeControlEntityType[] = ["light", "switch", "sensor", "binary_sensor", "text_sensor", "number", "select"];
     const entities = raw.flatMap(item => {
       if (!item || typeof item !== "object") return [];
       const record = item as Record<string, unknown>;
       const value = typeof record.value === "string" ? record.value : "";
-      const type = record.type === "light" ? "light" : record.type === "switch" ? "switch" : null;
+      const type = typeof record.type === "string" && supportedTypes.includes(record.type as EspHomeControlEntityType)
+        ? record.type as EspHomeControlEntityType
+        : null;
       if (!value || !type) return [];
       const label = typeof record.label === "string" ? record.label : value;
       const name = typeof record.name === "string" ? record.name : label;
       const power = typeof record.power === "boolean" ? record.power : null;
-      return [{ value, label, name, type, power }];
+      const currentValue = typeof record.currentValue === "boolean" || typeof record.currentValue === "number" || typeof record.currentValue === "string"
+        ? record.currentValue
+        : power;
+      const unit = typeof record.unit === "string" && record.unit.trim() ? record.unit.trim() : null;
+      const controllable = record.controllable === true || type === "light" || type === "switch";
+      const observedAt = typeof record.observedAt === "string" ? record.observedAt : null;
+      return [{ value, label, name, type, power, currentValue, unit, controllable, observedAt }];
     });
     setControlState(state);
     setControlEntities(entities);
@@ -575,7 +607,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         const type = record.type === "light" ? "light" : record.type === "switch" ? "switch" : null;
         if (!type) return [];
         const power = typeof record.power === "boolean" ? record.power : null;
-        return [{ value, label, name, type, power }];
+        return [{ value, label, name, type, power, currentValue: power, unit: null, controllable: true, observedAt: null }];
       });
       setControlEntities(entities);
       const existing = primaryIdentity(device.identities, "ESPHOME_ENTITY")?.value ?? null;
@@ -1218,7 +1250,14 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
               <Text size="sm" fw={600}>{controlDevice?.controlProvider ?? "—"}</Text>
               <Text size="xs" c="dimmed">via {controlDevice?.controlAgent?.name ?? "no Device Agent"}</Text>
             </Stack>
-            {controlLoading ? <Badge variant="light" color="blue">LOADING</Badge> : (
+            {controlLoading ? <Badge variant="light" color="blue">LOADING</Badge> : controlDevice?.controlProvider?.toUpperCase() === "ESPHOME" ? (
+              <Badge
+                variant="light"
+                color={controlState?.state?.connected === true ? "green" : controlState?.state?.error ? "red" : "gray"}
+              >
+                {controlState?.state?.connected === true ? "LIVE" : controlState?.state?.error ? "ERROR" : "OFFLINE"}
+              </Badge>
+            ) : (
               <Badge variant="light" color={stateBoolean(controlState, "power") === true ? "green" : stateBoolean(controlState, "power") === false ? "gray" : "yellow"}>
                 {stateBoolean(controlState, "power") === true ? "ON" : stateBoolean(controlState, "power") === false ? "OFF" : "UNKNOWN"}
               </Badge>
@@ -1230,25 +1269,21 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           {controlDevice?.controlProvider?.toUpperCase() === "ESPHOME" ? (
             <Card withBorder padding="sm">
               <Stack gap="sm">
-                <Group justify="space-between">
-                  <Text size="sm" fw={600}>ESPHome Native API</Text>
-                  <Badge variant="light" color={controlState?.state?.connected === true ? "green" : "gray"}>
-                    {controlState?.state?.connected === true ? "LIVE" : "CONNECTING"}
-                  </Badge>
-                </Group>
+                <Text size="sm" fw={600}>ESPHome Native API</Text>
                 <Text size="xs" c="dimmed">
-                  Control every advertised light/switch entity. ESPHOME_ENTITY remains the default entity for external or single-entity actions.
+                  Realtime ESPHome entities. Light and switch entities are controllable; sensor, binary sensor, text sensor, number and select entities are currently read-only.
                 </Text>
                 {controlEntityLoading ? (
                   <Text size="sm" c="dimmed">Loading entities…</Text>
                 ) : controlEntities.length === 0 ? (
-                  <Text size="sm" c="dimmed">No controllable ESPHome light/switch entity was reported.</Text>
+                  <Text size="sm" c="dimmed">No realtime ESPHome entity was reported.</Text>
                 ) : (
                   <Table withTableBorder horizontalSpacing="sm" verticalSpacing="xs">
                     <Table.Thead>
                       <Table.Tr>
                         <Table.Th>Entity</Table.Th>
-                        <Table.Th w={100}>State</Table.Th>
+                        <Table.Th w={120}>Type</Table.Th>
+                        <Table.Th w={150}>State</Table.Th>
                         <Table.Th w={245}>Actions</Table.Th>
                         <Table.Th w={115}>Default</Table.Th>
                       </Table.Tr>
@@ -1256,7 +1291,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                     <Table.Tbody>
                       {controlEntities.map(entity => {
                         const savedDefault = primaryIdentity(controlDevice.identities, "ESPHOME_ENTITY")?.value ?? null;
-                        const isDefault = savedDefault === entity.value || (!savedDefault && controlEntities.length === 1);
+                        const controllableCount = controlEntities.filter(item => item.controllable).length;
+                        const isDefault = entity.controllable && (savedDefault === entity.value || (!savedDefault && controllableCount === 1));
                         return (
                           <Table.Tr key={entity.value}>
                             <Table.Td>
@@ -1266,19 +1302,26 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                               </Stack>
                             </Table.Td>
                             <Table.Td>
-                              <Badge variant="light" color={entity.power === true ? "green" : entity.power === false ? "gray" : "yellow"}>
-                                {entity.power === true ? "ON" : entity.power === false ? "OFF" : "UNKNOWN"}
-                              </Badge>
+                              <Badge variant="outline">{entity.type.replace("_", " ")}</Badge>
                             </Table.Td>
                             <Table.Td>
-                              <Group gap="xs" wrap="nowrap">
-                                <Button size="compact-sm" color="green" variant="light" loading={controlAction === `POWER_ON:${entity.value}`} disabled={Boolean(controlAction)} onClick={() => void runEspHomeEntityAction(entity.value, "POWER_ON")}>On</Button>
-                                <Button size="compact-sm" color="gray" variant="light" loading={controlAction === `POWER_OFF:${entity.value}`} disabled={Boolean(controlAction)} onClick={() => void runEspHomeEntityAction(entity.value, "POWER_OFF")}>Off</Button>
-                                <Tooltip label={entity.power == null ? "Toggle requires a known entity state. Use On or Off first." : "Toggle entity state"}><span><Button size="compact-sm" variant="light" loading={controlAction === `TOGGLE:${entity.value}`} disabled={Boolean(controlAction) || entity.power == null} onClick={() => void runEspHomeEntityAction(entity.value, "TOGGLE")}>Toggle</Button></span></Tooltip>
-                              </Group>
+                              <Tooltip label={entity.observedAt ? `Observed ${new Date(entity.observedAt).toLocaleString()}` : "No state observed yet"}>
+                                <Badge variant="light" color={espHomeEntityStateColor(entity)}>
+                                  {espHomeEntityStateLabel(entity)}
+                                </Badge>
+                              </Tooltip>
                             </Table.Td>
                             <Table.Td>
-                              {isDefault ? (
+                              {entity.controllable ? (
+                                <Group gap="xs" wrap="nowrap">
+                                  <Button size="compact-sm" color="green" variant="light" loading={controlAction === `POWER_ON:${entity.value}`} disabled={Boolean(controlAction)} onClick={() => void runEspHomeEntityAction(entity.value, "POWER_ON")}>On</Button>
+                                  <Button size="compact-sm" color="gray" variant="light" loading={controlAction === `POWER_OFF:${entity.value}`} disabled={Boolean(controlAction)} onClick={() => void runEspHomeEntityAction(entity.value, "POWER_OFF")}>Off</Button>
+                                  <Tooltip label={entity.power == null ? "Toggle requires a known entity state. Use On or Off first." : "Toggle entity state"}><span><Button size="compact-sm" variant="light" loading={controlAction === `TOGGLE:${entity.value}`} disabled={Boolean(controlAction) || entity.power == null} onClick={() => void runEspHomeEntityAction(entity.value, "TOGGLE")}>Toggle</Button></span></Tooltip>
+                                </Group>
+                              ) : <Text size="xs" c="dimmed">Read-only</Text>}
+                            </Table.Td>
+                            <Table.Td>
+                              {entity.controllable ? (isDefault ? (
                                 <Badge variant="light" color="blue">{savedDefault ? "DEFAULT" : "AUTO"}</Badge>
                               ) : (
                                 <Button
@@ -1293,7 +1336,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                                 >
                                   Set default
                                 </Button>
-                              )}
+                              )) : <Text size="xs" c="dimmed">—</Text>}
                             </Table.Td>
                           </Table.Tr>
                         );

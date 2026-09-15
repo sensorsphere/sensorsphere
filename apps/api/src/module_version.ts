@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.18.0";
+export const MODULE_VERSION = "1.19.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.19.0": {
+    releasedAt: "2026-09-15T22:55:00+02:00",
+    patch: "PR-189-esphome-entity-model-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Device Control exposes a normalized realtime entities endpoint for dashboard-oriented consumers" },
+      { type: "changed", description: "ESPHome realtime state accepts a provider-neutral entity list carrying values and metadata for multiple entity types" }
+    ]
+  },
   "1.18.0": {
     releasedAt: "2026-09-15T21:55:00+02:00",
     patch: "PR-188-esphome-realtime-foundation-v1.patch",

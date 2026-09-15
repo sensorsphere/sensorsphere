@@ -1160,3 +1160,14 @@ export interface DeviceControlState {
   state: Record<string, unknown>;
   observedAt: string;
 }
+
+export interface DeviceControlEntitiesState {
+  deviceId: string;
+  agentId: string;
+  provider: string;
+  connected: boolean;
+  host: string | null;
+  error: string | null;
+  entities: Array<Record<string, unknown>>;
+  observedAt: string;
+}

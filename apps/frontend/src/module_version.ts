@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.43.0";
+export const MODULE_VERSION = "1.44.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.44.0": {
+    releasedAt: "2026-09-15T22:55:00+02:00",
+    patch: "PR-189-esphome-entity-model-foundation-v1.patch",
+    changes: [
+      { type: "changed", description: "ESPHome Device Control header reports the persistent Native API connection as LIVE, OFFLINE or ERROR" },
+      { type: "added", description: "ESPHome Device Control displays realtime sensor, binary sensor, text sensor, number and select entities alongside light and switch" },
+      { type: "changed", description: "Read-only ESPHome entities show current value, unit and observation time while light and switch retain control actions" }
+    ]
+  },
   "1.43.0": {
     releasedAt: "2026-09-15T21:55:00+02:00",
     patch: "PR-188-esphome-realtime-foundation-v1.patch",
