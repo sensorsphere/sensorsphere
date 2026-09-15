@@ -84,6 +84,7 @@ type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "loc
 type HealthProfileSortKey = "name" | "monitoring" | "warning" | "offline" | "batteryWarning" | "batteryCritical" | "rssiWarning" | "rssiCritical";
 
 type EspHomeControlEntityType = "light" | "switch" | "sensor" | "binary_sensor" | "text_sensor" | "number" | "select";
+type EspHomeEntitySortKey = "entity" | "type" | "state" | "actions" | "default";
 
 type EspHomeControlEntity = {
   value: string;
@@ -464,6 +465,14 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const [controlEntity, setControlEntity] = React.useState<string | null>(null);
   const [controlEntityLoading, setControlEntityLoading] = React.useState(false);
   const [controlEntitySaving, setControlEntitySaving] = React.useState(false);
+  const [controlEntitySortKey, setControlEntitySortKey] = React.useState<EspHomeEntitySortKey>("entity");
+  const [controlEntitySortDirection, setControlEntitySortDirection] = React.useState<SortDirection>("asc");
+  const [controlEntityNameFilter, setControlEntityNameFilter] = React.useState("");
+  const [controlEntityTypeFilter, setControlEntityTypeFilter] = React.useState("");
+  const [controlEntityStateFilter, setControlEntityStateFilter] = React.useState("");
+  const [controlEntityActionsFilter, setControlEntityActionsFilter] = React.useState("");
+  const [controlEntityDefaultFilter, setControlEntityDefaultFilter] = React.useState("");
+  const [controlEntityActionableOnly, setControlEntityActionableOnly] = React.useState(false);
 
   const devicesQuery = useQuery({ queryKey: ["device-registry", "devices"], queryFn: getDeviceRegistryDevices, refetchInterval: 15000 });
   const deviceClassesQuery = useQuery({ queryKey: ["device-registry", "classes"], queryFn: getDeviceClassReferences });
@@ -758,6 +767,37 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     if (profileSortKey === key) setProfileSortDirection(current => current === "asc" ? "desc" : "asc");
     else { setProfileSortKey(key); setProfileSortDirection("asc"); }
   };
+  const savedControlEntityDefault = controlDevice ? primaryIdentity(controlDevice.identities, "ESPHOME_ENTITY")?.value ?? null : null;
+  const controlEntityControllableCount = controlEntities.filter(item => item.controllable).length;
+  const isControlEntityDefault = (entity: EspHomeControlEntity): boolean =>
+    entity.controllable && (savedControlEntityDefault === entity.value || (!savedControlEntityDefault && controlEntityControllableCount === 1));
+  const controlEntityDefaultLabel = (entity: EspHomeControlEntity): string =>
+    !entity.controllable ? "—" : isControlEntityDefault(entity) ? (savedControlEntityDefault ? "DEFAULT" : "AUTO") : "SET DEFAULT";
+  const controlEntityActionsLabel = (entity: EspHomeControlEntity): string => entity.controllable ? "On Off Toggle" : "Read-only";
+  const filteredControlEntities = controlEntities.filter(entity => {
+    const includes = (value: string, filter: string) => !filter.trim() || value.toLowerCase().includes(filter.trim().toLowerCase());
+    return (!controlEntityActionableOnly || entity.controllable)
+      && includes(`${entity.name} ${entity.value}`, controlEntityNameFilter)
+      && includes(entity.type.replace("_", " "), controlEntityTypeFilter)
+      && includes(espHomeEntityStateLabel(entity), controlEntityStateFilter)
+      && includes(controlEntityActionsLabel(entity), controlEntityActionsFilter)
+      && includes(controlEntityDefaultLabel(entity), controlEntityDefaultFilter);
+  }).sort((left, right) => {
+    const value = (entity: EspHomeControlEntity): string | number | boolean | null => controlEntitySortKey === "entity" ? `${entity.name} ${entity.value}`
+      : controlEntitySortKey === "type" ? entity.type
+      : controlEntitySortKey === "state" ? espHomeEntityStateLabel(entity)
+      : controlEntitySortKey === "actions" ? controlEntityActionsLabel(entity)
+      : controlEntityDefaultLabel(entity);
+    return compareTableValues(value(left), value(right), controlEntitySortDirection);
+  });
+  const toggleControlEntitySort = (key: EspHomeEntitySortKey) => {
+    if (controlEntitySortKey === key) setControlEntitySortDirection(current => current === "asc" ? "desc" : "asc");
+    else {
+      setControlEntitySortKey(key);
+      setControlEntitySortDirection("asc");
+    }
+  };
+
   const filteredProfiles = profiles.filter(profile => {
     const needle = profileFilter.trim().toLowerCase();
     return !needle || `${profile.name} ${profile.description ?? ""}`.toLowerCase().includes(needle);
@@ -1120,7 +1160,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                         <Table.Td>{device.parentDevice?.name ?? "—"}</Table.Td>
                         <Table.Td>{device.controlAgent ? (() => {
                           const agent = (deviceAgentsQuery.data ?? []).find(item => item.id === device.controlAgent?.id);
-                          return <Stack gap={2}><Text size="sm">{device.controlAgent.name}</Text>{agent && <Badge size="xs" variant="light" w="fit-content" color={!agent.enabled ? "gray" : agent.online ? "green" : "red"}>{!agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE"}</Badge>}</Stack>;
+                          return <Stack gap={2}><Text size="sm">{device.controlAgent.name}</Text>{agent && <Group gap={6} wrap="nowrap"><Badge size="xs" variant="light" w="fit-content" color={!agent.enabled ? "gray" : agent.online ? "green" : "red"}>{!agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE"}</Badge><Text size="xs" c="dimmed">{agent.version ? `v${agent.version.replace(/^v/i, "")}` : "—"}</Text></Group>}</Stack>;
                         })() : "—"}</Table.Td>
                         <Table.Td title={device.lastSeenAt ?? undefined}>{compactDate(device.lastSeenAt)}</Table.Td>
                         <Table.Td>
@@ -1278,22 +1318,37 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                 ) : controlEntities.length === 0 ? (
                   <Text size="sm" c="dimmed">No realtime ESPHome entity was reported.</Text>
                 ) : (
-                  <Table withTableBorder horizontalSpacing="sm" verticalSpacing="xs">
-                    <Table.Thead>
-                      <Table.Tr>
-                        <Table.Th>Entity</Table.Th>
-                        <Table.Th w={120}>Type</Table.Th>
-                        <Table.Th w={150}>State</Table.Th>
-                        <Table.Th w={245}>Actions</Table.Th>
-                        <Table.Th w={115}>Default</Table.Th>
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                      {controlEntities.map(entity => {
-                        const savedDefault = primaryIdentity(controlDevice.identities, "ESPHOME_ENTITY")?.value ?? null;
-                        const controllableCount = controlEntities.filter(item => item.controllable).length;
-                        const isDefault = entity.controllable && (savedDefault === entity.value || (!savedDefault && controllableCount === 1));
-                        return (
+                  <Stack gap="xs">
+                    <Group justify="flex-end">
+                      <Checkbox
+                        size="xs"
+                        label="Actionable only"
+                        checked={controlEntityActionableOnly}
+                        onChange={event => setControlEntityActionableOnly(event.currentTarget.checked)}
+                      />
+                    </Group>
+                    <Table withTableBorder horizontalSpacing="sm" verticalSpacing="xs">
+                      <Table.Thead>
+                        <Table.Tr>
+                          <SortableTableHeader active={controlEntitySortKey === "entity"} direction={controlEntitySortDirection} onClick={() => toggleControlEntitySort("entity")}>Entity</SortableTableHeader>
+                          <SortableTableHeader active={controlEntitySortKey === "type"} direction={controlEntitySortDirection} onClick={() => toggleControlEntitySort("type")}>Type</SortableTableHeader>
+                          <SortableTableHeader active={controlEntitySortKey === "state"} direction={controlEntitySortDirection} onClick={() => toggleControlEntitySort("state")}>State</SortableTableHeader>
+                          <SortableTableHeader active={controlEntitySortKey === "actions"} direction={controlEntitySortDirection} onClick={() => toggleControlEntitySort("actions")}>Actions</SortableTableHeader>
+                          <SortableTableHeader active={controlEntitySortKey === "default"} direction={controlEntitySortDirection} onClick={() => toggleControlEntitySort("default")}>Default</SortableTableHeader>
+                        </Table.Tr>
+                        <Table.Tr>
+                          <Table.Th><TextInput size="xs" placeholder="Filter entity" value={controlEntityNameFilter} onChange={event => setControlEntityNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityNameFilter.trim()))} /></Table.Th>
+                          <Table.Th><TextInput size="xs" placeholder="Filter type" value={controlEntityTypeFilter} onChange={event => setControlEntityTypeFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityTypeFilter.trim()))} /></Table.Th>
+                          <Table.Th><TextInput size="xs" placeholder="Filter state" value={controlEntityStateFilter} onChange={event => setControlEntityStateFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityStateFilter.trim()))} /></Table.Th>
+                          <Table.Th><TextInput size="xs" placeholder="Filter actions" value={controlEntityActionsFilter} onChange={event => setControlEntityActionsFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityActionsFilter.trim()))} /></Table.Th>
+                          <Table.Th><TextInput size="xs" placeholder="Filter default" value={controlEntityDefaultFilter} onChange={event => setControlEntityDefaultFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityDefaultFilter.trim()))} /></Table.Th>
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {filteredControlEntities.map(entity => {
+                          const savedDefault = savedControlEntityDefault;
+                          const isDefault = isControlEntityDefault(entity);
+                          return (
                           <Table.Tr key={entity.value}>
                             <Table.Td>
                               <Stack gap={0}>
@@ -1340,9 +1395,13 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                             </Table.Td>
                           </Table.Tr>
                         );
-                      })}
-                    </Table.Tbody>
-                  </Table>
+                        })}
+                        {filteredControlEntities.length === 0 && (
+                          <Table.Tr><Table.Td colSpan={5}><Text size="sm" c="dimmed" ta="center" py="md">No ESPHome entities match the active filters.</Text></Table.Td></Table.Tr>
+                        )}
+                      </Table.Tbody>
+                    </Table>
+                  </Stack>
                 )}
               </Stack>
             </Card>

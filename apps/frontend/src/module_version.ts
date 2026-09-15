@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.44.0";
+export const MODULE_VERSION = "1.45.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.45.0": {
+    releasedAt: "2026-09-15T23:55:00+02:00",
+    patch: "PR-190-device-control-table-ux-v1.patch",
+    changes: [
+      { type: "changed", description: "Devices table shows the assigned Device Agent version next to its online status" },
+      { type: "added", description: "ESPHome Device Control entity columns support sorting and per-column filters below the headers" },
+      { type: "added", description: "ESPHome Device Control can filter the entity table to actionable entities only" }
+    ]
+  },
   "1.44.0": {
     releasedAt: "2026-09-15T22:55:00+02:00",
     patch: "PR-189-esphome-entity-model-foundation-v1.patch",
