@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 
 export interface SimpleDashboardRecord {
@@ -56,8 +57,77 @@ export interface SimpleDashboardCardRecord {
   updated_at: Date;
 }
 
+
+export interface SimpleDashboardEntityCardRecord {
+  id: string;
+  dashboard_id: string;
+  section_id: string | null;
+  device_id: string;
+  entity_value: string;
+  widget_type: string;
+  sort_order: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
 export class PostgresSimpleDashboardRepository {
   constructor(private readonly pool: Pool) {}
+
+  async ensureEntityCardSchema(): Promise<void> {
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS simple_dashboard_entity_cards (
+        id uuid PRIMARY KEY,
+        dashboard_id uuid NOT NULL REFERENCES simple_dashboards(id) ON DELETE CASCADE,
+        section_id uuid NULL REFERENCES simple_dashboard_sections(id) ON DELETE SET NULL,
+        device_id uuid NOT NULL,
+        entity_value text NOT NULL,
+        widget_type text NOT NULL DEFAULT 'auto',
+        sort_order integer NOT NULL DEFAULT 0,
+        created_at timestamptz NOT NULL DEFAULT NOW(),
+        updated_at timestamptz NOT NULL DEFAULT NOW(),
+        UNIQUE (dashboard_id, device_id, entity_value)
+      )
+    `);
+    await this.pool.query(`
+      CREATE INDEX IF NOT EXISTS simple_dashboard_entity_cards_dashboard_idx
+      ON simple_dashboard_entity_cards (dashboard_id, section_id, sort_order)
+    `);
+  }
+
+  async listEntityCards(): Promise<SimpleDashboardEntityCardRecord[]> {
+    const result = await this.pool.query<SimpleDashboardEntityCardRecord>(`
+      SELECT id, dashboard_id, section_id, device_id, entity_value, widget_type, sort_order, created_at, updated_at
+      FROM simple_dashboard_entity_cards
+      ORDER BY dashboard_id, section_id NULLS FIRST, sort_order, created_at, id
+    `);
+    return result.rows;
+  }
+
+  async createEntityCard(
+    dashboardId: string,
+    deviceId: string,
+    entityValue: string,
+    widgetType: string,
+    sectionId: string | null
+  ): Promise<SimpleDashboardEntityCardRecord> {
+    const result = await this.pool.query<SimpleDashboardEntityCardRecord>(`
+      INSERT INTO simple_dashboard_entity_cards (id, dashboard_id, section_id, device_id, entity_value, widget_type, sort_order)
+      VALUES (
+        $1, $2, $6, $3, $4, $5,
+        COALESCE((SELECT MAX(sort_order) + 1 FROM simple_dashboard_entity_cards WHERE dashboard_id = $2 AND section_id IS NOT DISTINCT FROM $6), 0)
+      )
+      RETURNING id, dashboard_id, section_id, device_id, entity_value, widget_type, sort_order, created_at, updated_at
+    `, [randomUUID(), dashboardId, deviceId, entityValue, widgetType, sectionId]);
+    return result.rows[0]!;
+  }
+
+  async deleteEntityCard(dashboardId: string, cardId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `DELETE FROM simple_dashboard_entity_cards WHERE id = $1 AND dashboard_id = $2`,
+      [cardId, dashboardId]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
 
   async listDashboards(): Promise<SimpleDashboardRecord[]> {
     const result = await this.pool.query<SimpleDashboardRecord>(`

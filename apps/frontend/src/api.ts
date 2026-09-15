@@ -41,6 +41,7 @@ import type {
   SimpleDashboardData,
   SimpleDashboard,
   SimpleDashboardCard,
+  SimpleDashboardEntityCard,
   SimpleDashboardSection,
   SimpleDashboardTemplate,
   SimpleDashboardTemplateCard,
@@ -1331,6 +1332,33 @@ export async function addSimpleDashboardCard(
       }
     )
   );
+}
+
+export async function addSimpleDashboardEntityCard(
+  dashboardId: string,
+  deviceId: string,
+  entityValue: string,
+  widgetType: "auto" | "switch" | "value" | "status" = "auto",
+  sectionId: string | null = null
+): Promise<SimpleDashboardEntityCard> {
+  return readJson<SimpleDashboardEntityCard>(
+    await fetch(`/api/v1/simple-dashboards/${encodeURIComponent(dashboardId)}/entity-cards`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceId, entityValue, widgetType, sectionId })
+    })
+  );
+}
+
+export async function deleteSimpleDashboardEntityCard(
+  dashboardId: string,
+  cardId: string
+): Promise<void> {
+  const response = await fetch(
+    `/api/v1/simple-dashboards/${encodeURIComponent(dashboardId)}/entity-cards/${encodeURIComponent(cardId)}`,
+    { method: "DELETE" }
+  );
+  if (!response.ok) await readJson<never>(response);
 }
 
 export async function updateSimpleDashboardCard(

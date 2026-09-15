@@ -3,6 +3,7 @@ import { z } from "zod";
 import type {
   PostgresSimpleDashboardRepository,
   SimpleDashboardCardRecord,
+  SimpleDashboardEntityCardRecord,
   SimpleDashboardRecord,
   SimpleDashboardSectionRecord,
   SimpleDashboardTemplateCardRecord,
@@ -17,6 +18,12 @@ const createDashboardSchema = z.object({
 const renameDashboardSchema = createDashboardSchema;
 const createCardSchema = z.object({
   assetMetricId: uuid,
+  sectionId: uuid.nullable().optional()
+}).strict();
+const createEntityCardSchema = z.object({
+  deviceId: uuid,
+  entityValue: z.string().trim().min(1).max(300),
+  widgetType: z.enum(["auto", "switch", "value", "status"]).default("auto"),
   sectionId: uuid.nullable().optional()
 }).strict();
 const reorderCardsSchema = z.object({
@@ -69,6 +76,21 @@ function mapCard(row: SimpleDashboardCardRecord) {
   };
 }
 
+
+function mapEntityCard(row: SimpleDashboardEntityCardRecord) {
+  return {
+    id: row.id,
+    dashboardId: row.dashboard_id,
+    sectionId: row.section_id,
+    deviceId: row.device_id,
+    entityValue: row.entity_value,
+    widgetType: row.widget_type,
+    sortOrder: row.sort_order,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString()
+  };
+}
+
 function mapTemplate(row: SimpleDashboardTemplateRecord) {
   return { id: row.id, name: row.name, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() };
 }
@@ -85,15 +107,17 @@ export class SimpleDashboardController {
   constructor(private readonly repository: PostgresSimpleDashboardRepository) {}
 
   list = async (_request: FastifyRequest, reply: FastifyReply) => {
-    const [dashboards, sections, cards] = await Promise.all([
+    const [dashboards, sections, cards, entityCards] = await Promise.all([
       this.repository.listDashboards(),
       this.repository.listSections(),
-      this.repository.listCards()
+      this.repository.listCards(),
+      this.repository.listEntityCards()
     ]);
     return reply.send({
       dashboards: dashboards.map(mapDashboard),
       sections: sections.map(mapSection),
-      cards: cards.map(mapCard)
+      cards: cards.map(mapCard),
+      entityCards: entityCards.map(mapEntityCard)
     });
   };
 
@@ -261,6 +285,35 @@ export class SimpleDashboardController {
       }
       throw error;
     }
+  };
+
+  createEntityCard = async (request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply: FastifyReply) => {
+    const parsedId = uuid.safeParse(request.params.id);
+    const parsed = createEntityCardSchema.safeParse(request.body);
+    if (!parsedId.success || !parsed.success) return reply.code(400).send({ error: "Invalid realtime entity card" });
+    if (!(await this.repository.dashboardExists(parsedId.data))) return reply.code(404).send({ error: "Dashboard not found" });
+    if (!(await this.repository.dashboardIsEditable(parsedId.data))) return reply.code(409).send({ error: "Template instances are read-only" });
+    try {
+      const card = await this.repository.createEntityCard(
+        parsedId.data, parsed.data.deviceId, parsed.data.entityValue, parsed.data.widgetType, parsed.data.sectionId ?? null
+      );
+      return reply.code(201).send(mapEntityCard(card));
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "23505") {
+        return reply.code(409).send({ error: "Entity already exists on this dashboard" });
+      }
+      throw error;
+    }
+  };
+
+  deleteEntityCard = async (request: FastifyRequest<{ Params: { id: string; cardId: string } }>, reply: FastifyReply) => {
+    const parsedId = uuid.safeParse(request.params.id);
+    const parsedCardId = uuid.safeParse(request.params.cardId);
+    if (!parsedId.success || !parsedCardId.success) return reply.code(400).send({ error: "Invalid realtime entity card" });
+    if (!(await this.repository.dashboardIsEditable(parsedId.data))) return reply.code(409).send({ error: "Template instances are read-only" });
+    const deleted = await this.repository.deleteEntityCard(parsedId.data, parsedCardId.data);
+    if (!deleted) return reply.code(404).send({ error: "Realtime entity card not found" });
+    return reply.code(204).send();
   };
 
   deleteCard = async (

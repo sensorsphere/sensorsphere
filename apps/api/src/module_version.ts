@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.20.0";
+export const MODULE_VERSION = "1.21.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.21.0": {
+    releasedAt: "2026-09-16T02:45:00+02:00",
+    patch: "PR-193-dashboard-realtime-entity-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Simple Dashboards persist provider-neutral realtime entity widgets alongside metric cards" },
+      { type: "added", description: "Simple Dashboard API exposes create/delete operations for realtime entity cards" }
+    ]
+  },
+
   "1.20.0": {
     releasedAt: "2026-09-16T01:15:00+02:00",
     patch: "PR-192-realtime-entity-browser-foundation-v1.patch",

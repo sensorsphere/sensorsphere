@@ -9,6 +9,7 @@ export async function registerSimpleDashboardFeature(
   options: { pool: Pool }
 ): Promise<void> {
   const repository = new PostgresSimpleDashboardRepository(options.pool);
+  await repository.ensureEntityCardSchema();
   const controller = new SimpleDashboardController(repository);
   await app.register(registerSimpleDashboardRoutes, {
     prefix: "/api/v1",

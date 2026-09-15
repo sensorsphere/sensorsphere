@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.47.0";
+export const MODULE_VERSION = "1.48.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.48.0": {
+    releasedAt: "2026-09-16T02:45:00+02:00",
+    patch: "PR-193-dashboard-realtime-entity-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Dashboards can persist realtime entity widgets selected from the Realtime Entity Browser" },
+      { type: "added", description: "Realtime dashboard widgets support switch controls, binary status and generic value presentation" },
+      { type: "changed", description: "Realtime Entity Browser can add provider-neutral entities directly to editable dashboards" }
+    ]
+  },
+
   "1.47.0": {
     releasedAt: "2026-09-16T01:15:00+02:00",
     patch: "PR-192-realtime-entity-browser-foundation-v1.patch",

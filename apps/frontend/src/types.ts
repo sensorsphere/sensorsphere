@@ -639,7 +639,21 @@ export interface SimpleDashboardData {
   dashboards: SimpleDashboard[];
   sections: SimpleDashboardSection[];
   cards: SimpleDashboardCard[];
+  entityCards: SimpleDashboardEntityCard[];
 }
+
+export interface SimpleDashboardEntityCard {
+  id: string;
+  dashboardId: string;
+  sectionId: string | null;
+  deviceId: string;
+  entityValue: string;
+  widgetType: "auto" | "switch" | "value" | "status";
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 
 export interface SimpleDashboardTemplate {
   id: string;

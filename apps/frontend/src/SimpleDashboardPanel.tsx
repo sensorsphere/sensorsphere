@@ -29,6 +29,9 @@ import {
   deleteSimpleDashboard,
   deleteSimpleDashboardCard,
   deleteSimpleDashboardSection,
+  deleteSimpleDashboardEntityCard,
+  createDeviceControlCommand,
+  getRealtimeEntities,
   getAssets,
   getLatestObservations,
   getMetricDisplaySettings,
@@ -45,7 +48,9 @@ import type {
   Asset,
   AssetMetric,
   LatestObservation,
-  SimpleDashboardCard
+  SimpleDashboardCard,
+  SimpleDashboardEntityCard,
+  RealtimeEntityRecord
 } from "./types";
 import { usePersistentState } from "./preferences/usePersistentState";
 import { NavigationIcon } from "./NavigationIcon";
@@ -93,6 +98,20 @@ function qualityLabel(observation: LatestObservation | undefined): string | null
     default:
       return null;
   }
+}
+
+function realtimeEntityState(entity: RealtimeEntityRecord | undefined): string {
+  if (!entity || entity.currentValue == null) return "UNKNOWN";
+  if (entity.currentValue === true) return "ON";
+  if (entity.currentValue === false) return "OFF";
+  return `${String(entity.currentValue)}${entity.unit ? ` ${entity.unit}` : ""}`;
+}
+
+function realtimeEntityColor(entity: RealtimeEntityRecord | undefined): string {
+  if (!entity || entity.currentValue == null) return "yellow";
+  if (entity.currentValue === true) return "green";
+  if (entity.currentValue === false) return "gray";
+  return "blue";
 }
 
 function PencilIcon() {
@@ -168,6 +187,11 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
     queryKey: ["metric-display-settings"],
     queryFn: getMetricDisplaySettings
   });
+  const realtimeEntitiesQuery = useQuery({
+    queryKey: ["device-control", "realtime-entities"],
+    queryFn: getRealtimeEntities,
+    refetchInterval: 1000
+  });
 
   const [selectedDashboardId, setSelectedDashboardId] =
     usePersistentState<string>(
@@ -212,6 +236,7 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
   const [deleteTarget, setDeleteTarget] = React.useState<
     | { type: "dashboard"; id: string; name: string }
     | { type: "card"; dashboardId: string; cardId: string; label: string }
+    | { type: "entity-card"; dashboardId: string; cardId: string; label: string }
     | { type: "section"; dashboardId: string; sectionId: string; name: string }
     | null
   >(null);
@@ -344,11 +369,23 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
       deleteSimpleDashboardCard(dashboardId, cardId),
     onSuccess: invalidate
   });
+  const deleteEntityCardMutation = useMutation({
+    mutationFn: ({ dashboardId, cardId }: { dashboardId: string; cardId: string }) =>
+      deleteSimpleDashboardEntityCard(dashboardId, cardId),
+    onSuccess: invalidate
+  });
+  const entityCommandMutation = useMutation({
+    mutationFn: ({ deviceId, entityValue, action }: { deviceId: string; entityValue: string; action: "POWER_ON" | "POWER_OFF" }) =>
+      createDeviceControlCommand(deviceId, action, { entity: entityValue }, 30)
+  });
   const dashboards = dashboardsQuery.data?.dashboards ?? [];
   const assets = assetsQuery.data ?? [];
   const observations = observationsQuery.data ?? [];
   const sections = dashboardsQuery.data?.sections ?? [];
   const cards = dashboardsQuery.data?.cards ?? [];
+  const entityCards = dashboardsQuery.data?.entityCards ?? [];
+  const realtimeEntities = realtimeEntitiesQuery.data ?? [];
+  const realtimeEntityByKey = new Map(realtimeEntities.map(entity => [`${entity.deviceId}:${entity.entityValue}`, entity]));
 
   const activeDashboard =
     dashboards.find(item => item.id === selectedDashboardId) ?? dashboards[0] ?? null;
@@ -531,6 +568,12 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
             : null;
         })
         .filter((value): value is ResolvedMetricCard => value !== null)
+    : [];
+
+  const activeEntityCards: SimpleDashboardEntityCard[] = activeDashboard
+    ? entityCards
+        .filter(card => card.dashboardId === activeDashboard.id)
+        .sort((left, right) => left.sortOrder - right.sortOrder)
     : [];
 
   const activeSections = activeDashboard
@@ -1082,6 +1125,7 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
         <Stack gap="lg">
           {activeSections.map(section => {
             const sectionCards = orderedActiveCards.filter(item => effectiveSectionId(item.card) === section.id);
+            const sectionEntityCards = activeEntityCards.filter(item => (item.sectionId ?? activeSections[0]?.id ?? null) === section.id);
             return (
               <Stack
                 key={section.id}
@@ -1099,7 +1143,7 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                     <Button size="compact-xs" variant="light" color="green" onClick={() => openAddCardEditor(section.id)}>+ Add card</Button>
                   </>)}
                 </Group>
-                {sectionCards.length === 0 ? (
+                {sectionCards.length === 0 && sectionEntityCards.length === 0 ? (
                   <Text size="xs" c="dimmed">No cards in this section.</Text>
                 ) : (
                   <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="md">
@@ -1158,6 +1202,42 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                               <Badge size="xs" variant="light" color={asset.health.status === "offline" ? "red" : "green"}>
                                 {asset.health.status === "offline" ? "OFFLINE" : "ONLINE"}
                               </Badge>
+                            </Group>
+                          </Stack>
+                        </Card>
+                      );
+                    })}
+                    {sectionEntityCards.map(card => {
+                      const entity = realtimeEntityByKey.get(`${card.deviceId}:${card.entityValue}`);
+                      const widgetType = card.widgetType === "auto"
+                        ? (entity?.controllable ? "switch" : entity?.entityType === "binary_sensor" ? "status" : "value")
+                        : card.widgetType;
+                      const isBoolean = typeof entity?.currentValue === "boolean";
+                      return (
+                        <Card key={card.id} withBorder radius="md" p="sm" style={{ borderLeft: "4px solid var(--mantine-color-blue-6)" }}>
+                          <Stack gap={6}>
+                            <Group justify="space-between" align="center" wrap="nowrap">
+                              <div style={{ minWidth: 0 }}>
+                                <Text size="sm" fw={700} lineClamp={1}>{entity?.entityName ?? card.entityValue}</Text>
+                                <Text size="xs" c="dimmed" lineClamp={1}>{entity?.deviceName ?? card.deviceId}</Text>
+                              </div>
+                              {!activeDashboardIsTemplateInstance && (
+                                <ActionIcon size="sm" variant="light" color="red" title="Remove realtime widget" onClick={() => setDeleteTarget({ type: "entity-card", dashboardId: activeDashboard.id, cardId: card.id, label: `${entity?.deviceName ?? card.deviceId} · ${entity?.entityName ?? card.entityValue}` })}>×</ActionIcon>
+                              )}
+                            </Group>
+                            <Group justify="space-between" align="center" wrap="nowrap">
+                              <Badge variant="light" color={realtimeEntityColor(entity)}>{realtimeEntityState(entity)}</Badge>
+                              <Badge variant="outline" size="xs">{(entity?.entityType ?? "entity").replaceAll("_", " ").toUpperCase()}</Badge>
+                            </Group>
+                            {widgetType === "switch" && entity?.controllable && isBoolean && (
+                              <Group grow gap="xs">
+                                <Button size="compact-xs" color="green" variant={entity.currentValue === true ? "filled" : "light"} loading={entityCommandMutation.isPending} onClick={() => entityCommandMutation.mutate({ deviceId: card.deviceId, entityValue: card.entityValue, action: "POWER_ON" })}>On</Button>
+                                <Button size="compact-xs" color="gray" variant={entity.currentValue === false ? "filled" : "light"} loading={entityCommandMutation.isPending} onClick={() => entityCommandMutation.mutate({ deviceId: card.deviceId, entityValue: card.entityValue, action: "POWER_OFF" })}>Off</Button>
+                              </Group>
+                            )}
+                            <Group justify="space-between" gap="xs">
+                              <Text size="xs" c="dimmed">{widgetType === "status" ? "Binary status" : widgetType === "switch" ? "Realtime control" : "Realtime value"}</Text>
+                              <Badge size="xs" variant="light" color={entity?.connected ? "green" : "gray"}>{entity?.connected ? "LIVE" : "OFFLINE"}</Badge>
                             </Group>
                           </Stack>
                         </Card>
@@ -1300,7 +1380,7 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
       <Modal
         opened={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
-        title={deleteTarget?.type === "dashboard" ? "Delete dashboard" : deleteTarget?.type === "section" ? "Delete section" : "Remove metric card"}
+        title={deleteTarget?.type === "dashboard" ? "Delete dashboard" : deleteTarget?.type === "section" ? "Delete section" : deleteTarget?.type === "entity-card" ? "Remove realtime widget" : "Remove metric card"}
         centered
       >
         <Stack>
@@ -1311,7 +1391,9 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                 ? `Delete section "${deleteTarget.name}"? Its cards will move to another section.`
                 : deleteTarget?.type === "card"
                   ? `Remove "${deleteTarget.label}" from this dashboard?`
-                  : ""}
+                  : deleteTarget?.type === "entity-card"
+                    ? `Remove realtime widget "${deleteTarget.label}" from this dashboard?`
+                    : ""}
           </Alert>
           <Text size="sm" c="dimmed">This action cannot be undone.</Text>
           <Group justify="flex-end">
@@ -1319,7 +1401,7 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
             <Button
               variant="light"
               color="red"
-              loading={deleteDashboardMutation.isPending || deleteCardMutation.isPending || deleteSectionMutation.isPending}
+              loading={deleteDashboardMutation.isPending || deleteCardMutation.isPending || deleteEntityCardMutation.isPending || deleteSectionMutation.isPending}
               onClick={() => {
                 if (!deleteTarget) return;
                 if (deleteTarget.type === "dashboard") {
@@ -1331,6 +1413,11 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                     { dashboardId: deleteTarget.dashboardId, sectionId: deleteTarget.sectionId },
                     { onSuccess: () => setDeleteTarget(null) }
                   );
+                } else if (deleteTarget.type === "entity-card") {
+                  deleteEntityCardMutation.mutate(
+                    { dashboardId: deleteTarget.dashboardId, cardId: deleteTarget.cardId },
+                    { onSuccess: () => setDeleteTarget(null) }
+                  );
                 } else {
                   deleteCardMutation.mutate(
                     { dashboardId: deleteTarget.dashboardId, cardId: deleteTarget.cardId },
@@ -1339,7 +1426,7 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                 }
               }}
             >
-              {deleteTarget?.type === "dashboard" ? "Delete dashboard" : deleteTarget?.type === "section" ? "Delete section" : "Remove card"}
+              {deleteTarget?.type === "dashboard" ? "Delete dashboard" : deleteTarget?.type === "section" ? "Delete section" : deleteTarget?.type === "entity-card" ? "Remove widget" : "Remove card"}
             </Button>
           </Group>
         </Stack>

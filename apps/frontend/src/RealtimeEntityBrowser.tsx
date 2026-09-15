@@ -1,9 +1,12 @@
 import React from "react";
 
 import {
+  ActionIcon,
   Badge,
+  Button,
   Card,
   Group,
+  Modal,
   Select,
   Stack,
   Table,
@@ -11,9 +14,9 @@ import {
   TextInput
 } from "@mantine/core";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getRealtimeEntities } from "./api";
+import { addSimpleDashboardEntityCard, getRealtimeEntities, getSimpleDashboards } from "./api";
 import type { RealtimeEntityRecord } from "./types";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
@@ -47,11 +50,36 @@ function compactDate(value: string | null | undefined): string {
   return `${Math.round(seconds / 86400)}d ago`;
 }
 
+function defaultWidgetType(entity: RealtimeEntityRecord): "switch" | "status" | "value" {
+  if (entity.controllable && (entity.entityType === "switch" || entity.entityType === "light")) return "switch";
+  if (entity.entityType === "binary_sensor") return "status";
+  return "value";
+}
+
 export function RealtimeEntityBrowser() {
+  const queryClient = useQueryClient();
   const entitiesQuery = useQuery({
     queryKey: ["device-control", "realtime-entities"],
     queryFn: getRealtimeEntities,
     refetchInterval: 1000
+  });
+  const dashboardsQuery = useQuery({
+    queryKey: ["simple-dashboards"],
+    queryFn: getSimpleDashboards
+  });
+  const [addEntity, setAddEntity] = React.useState<RealtimeEntityRecord | null>(null);
+  const [dashboardId, setDashboardId] = React.useState<string | null>(null);
+  const [sectionId, setSectionId] = React.useState<string | null>(null);
+  const [widgetType, setWidgetType] = React.useState<"switch" | "status" | "value">("value");
+  const addEntityMutation = useMutation({
+    mutationFn: async () => {
+      if (!addEntity || !dashboardId) throw new Error("Dashboard and entity are required");
+      return addSimpleDashboardEntityCard(dashboardId, addEntity.deviceId, addEntity.entityValue, widgetType, sectionId);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["simple-dashboards"] });
+      setAddEntity(null);
+    }
   });
 
   const [sortKey, setSortKey] = usePersistentState<EntitySortKey>("realtime-entities.sort.key", "device");
@@ -133,6 +161,7 @@ export function RealtimeEntityBrowser() {
                 <SortableTableHeader active={sortKey === "provider"} direction={sortDirection} onClick={() => toggleSort("provider")}>Provider</SortableTableHeader>
                 <SortableTableHeader active={sortKey === "controllable"} direction={sortDirection} onClick={() => toggleSort("controllable")}>Actions</SortableTableHeader>
                 <SortableTableHeader active={sortKey === "updated"} direction={sortDirection} onClick={() => toggleSort("updated")}>Last update</SortableTableHeader>
+                <Table.Th>Dashboard</Table.Th>
               </Table.Tr>
               <Table.Tr style={{ position: "sticky", top: 39, zIndex: 3, background: "var(--mantine-color-body)" }}>
                 <Table.Th><TextInput size="xs" placeholder="Filter device" value={deviceFilter} onChange={event => setDeviceFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(deviceFilter.trim()))} /></Table.Th>
@@ -142,6 +171,7 @@ export function RealtimeEntityBrowser() {
                 <Table.Th><TextInput size="xs" placeholder="Filter unit" value={unitFilter} onChange={event => setUnitFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(unitFilter.trim()))} /></Table.Th>
                 <Table.Th><Select size="xs" placeholder="All providers" clearable value={providerFilter} onChange={setProviderFilter} data={providerOptions} styles={activeFilterStyles(Boolean(providerFilter))} /></Table.Th>
                 <Table.Th><Select size="xs" placeholder="All actions" clearable value={controllableFilter} onChange={setControllableFilter} data={[{ value: "actionable", label: "Actionable" }, { value: "readonly", label: "Read-only" }]} styles={activeFilterStyles(Boolean(controllableFilter))} /></Table.Th>
+                <Table.Th />
                 <Table.Th />
               </Table.Tr>
             </Table.Thead>
@@ -162,15 +192,71 @@ export function RealtimeEntityBrowser() {
                   <Table.Td><Badge variant="outline" color={entity.connected ? "green" : "gray"}>{entity.provider}</Badge></Table.Td>
                   <Table.Td><Text size="sm" c={entity.controllable ? undefined : "dimmed"}>{entity.controllable ? "Actionable" : "Read-only"}</Text></Table.Td>
                   <Table.Td title={entity.observedAt}><Text size="sm">{compactDate(entity.observedAt)}</Text></Table.Td>
+                  <Table.Td>
+                    <ActionIcon
+                      size="sm"
+                      variant="light"
+                      color="green"
+                      title="Add entity to dashboard"
+                      aria-label="Add entity to dashboard"
+                      onClick={() => {
+                        setAddEntity(entity);
+                        setDashboardId(dashboardsQuery.data?.dashboards[0]?.id ?? null);
+                        setSectionId(null);
+                        setWidgetType(defaultWidgetType(entity));
+                      }}
+                    >+</ActionIcon>
+                  </Table.Td>
                 </Table.Tr>
               ))}
               {!entitiesQuery.isLoading && filtered.length === 0 && (
-                <Table.Tr><Table.Td colSpan={8}><Text c="dimmed" ta="center" py="xl">{entities.length === 0 ? "No realtime entities have been reported yet." : "No realtime entities match the active filters."}</Text></Table.Td></Table.Tr>
+                <Table.Tr><Table.Td colSpan={9}><Text c="dimmed" ta="center" py="xl">{entities.length === 0 ? "No realtime entities have been reported yet." : "No realtime entities match the active filters."}</Text></Table.Td></Table.Tr>
               )}
             </Table.Tbody>
           </Table>
         </div>
       </Card>
+
+      <Modal opened={addEntity !== null} onClose={() => setAddEntity(null)} title="Add realtime entity to dashboard" centered>
+        <Stack>
+          <div>
+            <Text fw={600}>{addEntity?.entityName}</Text>
+            <Text size="xs" c="dimmed">{addEntity?.deviceName} · {addEntity?.entityValue}</Text>
+          </div>
+          <Select
+            label="Dashboard"
+            value={dashboardId}
+            onChange={value => { setDashboardId(value); setSectionId(null); }}
+            data={(dashboardsQuery.data?.dashboards ?? []).filter(item => !item.templateId).map(item => ({ value: item.id, label: item.name }))}
+            allowDeselect={false}
+            placeholder="Select dashboard"
+          />
+          <Select
+            label="Section"
+            value={sectionId}
+            onChange={setSectionId}
+            clearable
+            placeholder="Dashboard default"
+            data={(dashboardsQuery.data?.sections ?? []).filter(item => item.dashboardId === dashboardId).map(item => ({ value: item.id, label: item.name }))}
+          />
+          <Select
+            label="Widget"
+            value={widgetType}
+            onChange={value => value && setWidgetType(value as "switch" | "status" | "value")}
+            allowDeselect={false}
+            data={[
+              { value: "switch", label: "Switch control" },
+              { value: "status", label: "Binary status" },
+              { value: "value", label: "Value" }
+            ]}
+          />
+          {addEntityMutation.isError && <Text size="sm" c="red">{addEntityMutation.error instanceof Error ? addEntityMutation.error.message : "Unable to add entity"}</Text>}
+          <Group justify="flex-end">
+            <Button variant="light" color="gray" onClick={() => setAddEntity(null)}>Cancel</Button>
+            <Button color="green" disabled={!dashboardId} loading={addEntityMutation.isPending} onClick={() => addEntityMutation.mutate()}>Add widget</Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }
