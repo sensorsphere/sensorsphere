@@ -61,6 +61,17 @@ const supervisorUpdateRequestSchema = z.object({
   version: z.string().trim().min(1).max(100).regex(/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/, "Invalid Supervisor Agent version")
 }).strict();
 
+const managedAgentRequestSchema = z.object({
+  operation: z.enum(["LIST", "DEPLOY", "UPDATE", "REMOVE"]),
+  agentType: z.enum(["device-agent", "monitor-agent"]).optional(),
+  instance: z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/).optional(),
+  version: z.string().trim().min(1).max(100).regex(/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/).optional(),
+  environment: z.record(z.string(), z.string()).optional()
+}).strict().superRefine((value, ctx) => {
+  if (value.operation !== "LIST" && !value.agentType) ctx.addIssue({ code: "custom", message: "agentType is required" });
+  if (["DEPLOY", "UPDATE"].includes(value.operation) && !value.version) ctx.addIssue({ code: "custom", message: "version is required" });
+});
+
 const helloMessageSchema = z.object({
   type: z.literal("HELLO"),
   agentName: z.string().trim().min(1).max(200).optional(),
@@ -148,6 +159,15 @@ const supervisorUpdateResultMessageSchema = z.object({
   error: z.string().max(5000).nullable().optional()
 }).strict();
 
+const managedAgentResultMessageSchema = z.object({
+  type: z.literal("MANAGED_AGENT_RESULT"),
+  commandId: z.string().uuid(),
+  operation: z.enum(["LIST", "DEPLOY", "UPDATE", "REMOVE"]),
+  status: z.enum(["SUCCESS", "FAILED"]),
+  result: z.unknown().nullable().optional(),
+  error: z.string().max(5000).nullable().optional()
+}).strict();
+
 const agentMessageSchema = z.discriminatedUnion("type", [
   helloMessageSchema,
   heartbeatMessageSchema,
@@ -156,7 +176,8 @@ const agentMessageSchema = z.discriminatedUnion("type", [
   discoverResultMessageSchema,
   discoveredDeviceActionResultMessageSchema,
   agentUpdateResultMessageSchema,
-  supervisorUpdateResultMessageSchema
+  supervisorUpdateResultMessageSchema,
+  managedAgentResultMessageSchema
 ]);
 
 interface AgentRow {
@@ -386,6 +407,20 @@ export async function registerDeviceControlFeature(
   }
   const discoveredDeviceActions = new Map<string, DiscoveredDeviceActionRecord>();
 
+  type ManagedAgentOperationStatus = "SENT" | "SUCCESS" | "FAILED" | "TIMEOUT";
+  interface ManagedAgentOperationRecord {
+    id: string;
+    agentId: string;
+    operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE";
+    status: ManagedAgentOperationStatus;
+    result: unknown;
+    error: string | null;
+    createdAt: Date;
+    expiresAt: Date;
+    finishedAt: Date | null;
+  }
+  const managedAgentOperations = new Map<string, ManagedAgentOperationRecord>();
+
   const discoveryDto = (record: DiscoveryRecord) => ({
     commandId: record.id,
     agentId: record.agentId,
@@ -411,6 +446,30 @@ export async function registerDeviceControlFeature(
     expiresAt: record.expiresAt.toISOString(),
     finishedAt: record.finishedAt?.toISOString() ?? null
   });
+
+  const managedAgentOperationDto = (record: ManagedAgentOperationRecord) => ({
+    commandId: record.id,
+    agentId: record.agentId,
+    operation: record.operation,
+    status: record.status,
+    result: record.result,
+    error: record.error,
+    createdAt: record.createdAt.toISOString(),
+    expiresAt: record.expiresAt.toISOString(),
+    finishedAt: record.finishedAt?.toISOString() ?? null
+  });
+
+  const expireManagedAgentOperations = () => {
+    const now = Date.now();
+    for (const record of managedAgentOperations.values()) {
+      if (record.status === "SENT" && record.expiresAt.getTime() <= now) {
+        record.status = "TIMEOUT";
+        record.error = "Managed Agent operation timed out";
+        record.finishedAt = new Date();
+      }
+      if (record.finishedAt && now - record.finishedAt.getTime() > 10 * 60 * 1000) managedAgentOperations.delete(record.id);
+    }
+  };
 
   const expireDiscoveries = () => {
     const now = Date.now();
@@ -784,6 +843,21 @@ export async function registerDeviceControlFeature(
           return;
         }
 
+        if (message.type === "MANAGED_AGENT_RESULT") {
+          const operation = managedAgentOperations.get(message.commandId);
+          if (!operation || operation.agentId !== agent.id) return;
+          if (operation.operation !== message.operation) {
+            operation.status = "FAILED";
+            operation.error = `Managed Agent operation mismatch: expected ${operation.operation}, received ${message.operation}`;
+          } else {
+            operation.status = message.status;
+            operation.result = message.result ?? null;
+            operation.error = message.error ?? null;
+          }
+          operation.finishedAt = new Date();
+          return;
+        }
+
         if (message.type === "DISCOVER_RESULT") {
           const discovery = discoveries.get(message.commandId);
           if (!discovery || discovery.agentId !== agent.id) return;
@@ -992,6 +1066,42 @@ export async function registerDeviceControlFeature(
     }));
 
     return reply.code(202).send(agentDto(updated.rows[0]!, true));
+  });
+
+  app.post("/api/v1/device-control/agents/:id/managed-agents", async (request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply) => {
+    expireManagedAgentOperations();
+    const parsed = managedAgentRequestSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid Managed Agent request" });
+    const agentResult = await pool.query<AgentRow>("SELECT * FROM device_agents WHERE id=$1", [request.params.id]);
+    const agent = agentResult.rows[0];
+    if (!agent) return reply.code(404).send({ error: "Device Agent not found" });
+    if (!agent.enabled) return reply.code(409).send({ error: "Device Agent is disabled" });
+    if (!agent.supervisor_available) return reply.code(409).send({ error: "Supervisor Agent is unavailable" });
+    const socket = sockets.get(agent.id);
+    if (socket?.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Device Agent is offline" });
+
+    const commandId = randomUUID();
+    const expiresAt = new Date(Date.now() + 3 * 60 * 1000);
+    const record: ManagedAgentOperationRecord = { id: commandId, agentId: agent.id, operation: parsed.data.operation, status: "SENT", result: null, error: null, createdAt: new Date(), expiresAt, finishedAt: null };
+    managedAgentOperations.set(commandId, record);
+    socket.send(JSON.stringify({
+      type: "MANAGED_AGENT_REQUEST",
+      commandId,
+      operation: parsed.data.operation,
+      agentType: parsed.data.agentType,
+      instance: parsed.data.instance ?? "main",
+      version: parsed.data.version,
+      environment: parsed.data.environment,
+      expiresAt: expiresAt.toISOString()
+    }));
+    return reply.code(202).send(managedAgentOperationDto(record));
+  });
+
+  app.get("/api/v1/device-control/managed-agents/:id", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    expireManagedAgentOperations();
+    const record = managedAgentOperations.get(request.params.id);
+    if (!record) return reply.code(404).send({ error: "Managed Agent operation not found" });
+    return reply.send(managedAgentOperationDto(record));
   });
 
   app.post("/api/v1/device-control/agents/:id/regenerate-token", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {

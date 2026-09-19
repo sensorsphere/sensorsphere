@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.56.2";
+export const MODULE_VERSION = "1.57.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.57.0": {
+    releasedAt: "2026-09-20T00:20:00+02:00",
+    patch: "PR-218c-managed-agents-sensorsphere-v1.patch",
+    changes: [
+      { type: "added", description: "Device Agents expose a Managed Agents dialog for Supervisor-managed Device and Monitoring Agent instances" }
+    ]
+  },
+
   "1.56.2": {
     releasedAt: "2026-09-19T23:55:00+02:00",
     patch: "PR-217-device-agent-version-status-column-v1.patch",

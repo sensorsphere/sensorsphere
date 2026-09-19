@@ -70,7 +70,7 @@ import type {
   CreateMonitoringCheckInput,
   UpdateMonitoringCheckInput,
   DeviceAgent,
-  DeviceAgentTokenResponse,
+  DeviceAgentTokenResponse, ManagedAgentOperation, ManagedAgentOperationInput,
   CreateDeviceAgentInput,
   UpdateDeviceAgentInput,
   DeviceControlCommand,
@@ -1734,6 +1734,30 @@ export async function requestSupervisorAgentUpdate(id: string, version: string):
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ version })
   }));
+}
+
+export async function startManagedAgentOperation(id: string, input: ManagedAgentOperationInput): Promise<ManagedAgentOperation> {
+  return readJson<ManagedAgentOperation>(await fetch(`/api/v1/device-control/agents/${id}/managed-agents`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input)
+  }));
+}
+
+export async function getManagedAgentOperation(commandId: string): Promise<ManagedAgentOperation> {
+  return readJson<ManagedAgentOperation>(await fetch(`/api/v1/device-control/managed-agents/${commandId}`));
+}
+
+export async function runManagedAgentOperation(id: string, input: ManagedAgentOperationInput): Promise<ManagedAgentOperation> {
+  let operation = await startManagedAgentOperation(id, input);
+  const deadline = Date.now() + 185000;
+  while (operation.status === "SENT" && Date.now() < deadline) {
+    await new Promise(resolve => window.setTimeout(resolve, 400));
+    operation = await getManagedAgentOperation(operation.commandId);
+  }
+  if (operation.status === "SENT") throw new Error("Managed Agent operation did not finish before the client timeout");
+  if (operation.status !== "SUCCESS") throw new Error(operation.error ?? `Managed Agent operation ${operation.status.toLowerCase()}`);
+  return operation;
 }
 
 export async function deleteDeviceAgent(id: string): Promise<void> {

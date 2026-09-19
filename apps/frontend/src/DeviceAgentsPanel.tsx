@@ -1,8 +1,8 @@
 import React from "react";
-import { ActionIcon, Badge, Button, Card, Checkbox, Code, Group, Modal, Notification, NumberInput, Select, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Button, Card, Checkbox, Code, Group, Modal, Notification, NumberInput, Select, Stack, Table, Text, Textarea, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createDeviceAgent, deleteDeviceAgent, getDeviceAgents, getDeviceDiscovery, getDiscoveredDeviceAction, regenerateDeviceAgentToken, requestDeviceAgentUpdate, requestSupervisorAgentUpdate, startDeviceDiscovery, startDiscoveredDeviceAction, updateDeviceAgent } from "./api";
-import type { DeviceAgent, DeviceDiscovery, DeviceRegistryDevice, DiscoveredDeviceAction } from "./types";
+import { createDeviceAgent, deleteDeviceAgent, getDeviceAgents, getDeviceDiscovery, getDiscoveredDeviceAction, regenerateDeviceAgentToken, requestDeviceAgentUpdate, requestSupervisorAgentUpdate, runManagedAgentOperation, startDeviceDiscovery, startDiscoveredDeviceAction, updateDeviceAgent } from "./api";
+import type { DeviceAgent, DeviceDiscovery, DeviceRegistryDevice, DiscoveredDeviceAction, ManagedAgentStatus } from "./types";
 import { DeleteActionIcon, EditActionIcon } from "./TableActionIcons";
 
 
@@ -214,6 +214,12 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
   const [updateVersion, setUpdateVersion] = React.useState("");
   const [supervisorUpdateTarget, setSupervisorUpdateTarget] = React.useState<DeviceAgent | null>(null);
   const [supervisorUpdateVersion, setSupervisorUpdateVersion] = React.useState("");
+  const [managedTarget, setManagedTarget] = React.useState<DeviceAgent | null>(null);
+  const [managedStatuses, setManagedStatuses] = React.useState<ManagedAgentStatus[]>([]);
+  const [managedAgentType, setManagedAgentType] = React.useState<"device-agent" | "monitor-agent">("monitor-agent");
+  const [managedInstance, setManagedInstance] = React.useState("main");
+  const [managedVersion, setManagedVersion] = React.useState("");
+  const [managedEnvironment, setManagedEnvironment] = React.useState("{}");
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["device-control", "agents"] });
   const save = useMutation({
@@ -234,6 +240,27 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
   const supervisorUpdateMutation = useMutation({
     mutationFn: ({ agentId, version }: { agentId: string; version: string }) => requestSupervisorAgentUpdate(agentId, version),
     onSuccess: async () => { setSupervisorUpdateTarget(null); setSupervisorUpdateVersion(""); await refresh(); }
+  });
+  const managedMutation = useMutation({
+    mutationFn: async ({ agent, operation, status }: { agent: DeviceAgent; operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE"; status?: ManagedAgentStatus }) => {
+      const environment = operation === "DEPLOY" ? JSON.parse(managedEnvironment || "{}") as Record<string, string> : undefined;
+      return runManagedAgentOperation(agent.id, {
+        operation,
+        agentType: operation === "LIST" ? undefined : status?.agent_type ?? managedAgentType,
+        instance: operation === "LIST" ? undefined : status?.instance ?? (managedInstance.trim() || "main"),
+        version: ["DEPLOY", "UPDATE"].includes(operation) ? managedVersion.trim() || status?.configured_version || undefined : undefined,
+        environment
+      });
+    },
+    onSuccess: async (result, variables) => {
+      if (variables.operation === "LIST") {
+        setManagedStatuses(Array.isArray(result.result) ? result.result as ManagedAgentStatus[] : []);
+      } else if (managedTarget) {
+        const refreshResult = await runManagedAgentOperation(managedTarget.id, { operation: "LIST" });
+        setManagedStatuses(Array.isArray(refreshResult.result) ? refreshResult.result as ManagedAgentStatus[] : []);
+        setManagedVersion("");
+      }
+    }
   });
   const discoveryMutation = useMutation({
     mutationFn: ({ agentId, provider }: { agentId: string; provider: string }) => startDeviceDiscovery(agentId, provider),
@@ -352,6 +379,15 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
     : "";
 
 
+  const openManagedAgents = (agent: DeviceAgent) => {
+    setManagedTarget(agent);
+    setManagedStatuses([]);
+    setManagedVersion("");
+    setManagedEnvironment("{}");
+    managedMutation.reset();
+    managedMutation.mutate({ agent, operation: "LIST" });
+  };
+
   const registeredDeviceFor = (device: Record<string, unknown>): DeviceRegistryDevice | null => {
     const provider = discoveryProvider?.toUpperCase();
     const mac = normalizeMac(device.mac);
@@ -396,7 +432,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
           <Table.Td title={agent.lastSeenAt ?? undefined}><Text size="sm">{compactDate(agent.lastSeenAt)}</Text></Table.Td>
           <Table.Td><Group gap={4}>{agent.capabilities.length ? agent.capabilities.map(item => <Tooltip key={item.provider} label={`${item.actions.join(", ") || "No actions reported"}${item.discovery ? " · discovery" : ""}`}><Badge variant="outline">{item.provider}</Badge></Tooltip>) : <Text size="sm" c="dimmed">—</Text>}</Group></Table.Td>
           <Table.Td><Text size="xs">{[...agent.agentLabels, ...Object.entries(agent.labels).map(([key,value]) => value === "true" ? key : `${key}=${value}`)].join(", ") || "—"}</Text></Table.Td>
-          <Table.Td><Group gap={10} wrap="nowrap" justify="flex-end"><Tooltip label={agent.online ? "Discover devices" : "Device Agent must be online to discover"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Discover devices" disabled={!agent.online || !agent.capabilities.some(capability => capability.discovery)} onClick={() => openDiscovery(agent)}><RadarIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online to update" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? "An update is already in progress" : "Update Device Agent"}><ActionIcon size="sm" variant="light" color="violet" aria-label="Update Device Agent" disabled={!agent.online || !agent.supervisorAvailable || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => openAgentUpdate(agent)}>↑</ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : !agent.supervisorSelfUpdateSupported ? "Supervisor Agent does not support self-update" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus) ? "Supervisor update already in progress" : "Update Supervisor Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.supervisorAvailable || !agent.supervisorSelfUpdateSupported || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus)} onClick={() => openSupervisorUpdate(agent)}>S↑</ActionIcon></Tooltip><Group gap={4} wrap="nowrap"><EditActionIcon onClick={() => openEdit(agent)} /><Tooltip label="Copy device agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy device agent" onClick={() => openCopy(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerate.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Group></Table.Td>
+          <Table.Td><Group gap={10} wrap="nowrap" justify="flex-end"><Tooltip label={agent.online ? "Discover devices" : "Device Agent must be online to discover"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Discover devices" disabled={!agent.online || !agent.capabilities.some(capability => capability.discovery)} onClick={() => openDiscovery(agent)}><RadarIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online to update" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? "An update is already in progress" : "Update Device Agent"}><ActionIcon size="sm" variant="light" color="violet" aria-label="Update Device Agent" disabled={!agent.online || !agent.supervisorAvailable || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => openAgentUpdate(agent)}>↑</ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : !agent.supervisorSelfUpdateSupported ? "Supervisor Agent does not support self-update" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus) ? "Supervisor update already in progress" : "Update Supervisor Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.supervisorAvailable || !agent.supervisorSelfUpdateSupported || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus)} onClick={() => openSupervisorUpdate(agent)}>S↑</ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : "Managed agents"}><ActionIcon size="sm" variant="light" color="indigo" aria-label="Managed agents" disabled={!agent.online || !agent.supervisorAvailable} onClick={() => openManagedAgents(agent)}>M</ActionIcon></Tooltip><Group gap={4} wrap="nowrap"><EditActionIcon onClick={() => openEdit(agent)} /><Tooltip label="Copy device agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy device agent" onClick={() => openCopy(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerate.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Group></Table.Td>
         </Table.Tr>)}{(agentsQuery.data ?? []).length === 0 && <Table.Tr><Table.Td colSpan={10}><Text ta="center" c="dimmed" py="xl">No Device Agents yet.</Text></Table.Td></Table.Tr>}</Table.Tbody>
       </Table></div>
     </Card>
@@ -568,6 +604,46 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
             Set name
           </Button>
         </Group>
+      </Stack>
+    </Modal>
+
+    <Modal opened={managedTarget != null} onClose={() => { setManagedTarget(null); setManagedStatuses([]); managedMutation.reset(); }} title={`Managed Agents${managedTarget ? ` — ${managedTarget.name}` : ""}`} size="xl" centered>
+      <Stack>
+        <Group justify="space-between">
+          <Text size="sm" c="dimmed">Agents installed and controlled by the local Supervisor Agent.</Text>
+          <Button size="xs" variant="light" loading={managedMutation.isPending} onClick={() => managedTarget && managedMutation.mutate({ agent: managedTarget, operation: "LIST" })}>Refresh</Button>
+        </Group>
+        {managedMutation.isError && <Text c="red" size="sm">{managedMutation.error instanceof Error ? managedMutation.error.message : "Managed Agent operation failed"}</Text>}
+        <Table striped withTableBorder>
+          <Table.Thead><Table.Tr><Table.Th>Type</Table.Th><Table.Th>Instance</Table.Th><Table.Th>Version</Table.Th><Table.Th>State</Table.Th><Table.Th style={{ textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {managedStatuses.map(status => <Table.Tr key={`${status.agent_type}/${status.instance}`}>
+              <Table.Td>{status.agent_type}</Table.Td>
+              <Table.Td><Text ff="monospace" size="sm">{status.instance}</Text></Table.Td>
+              <Table.Td>{status.configured_version ?? "—"}</Table.Td>
+              <Table.Td><Badge size="xs" variant="light" color={status.container_state === "running" ? "green" : "gray"}>{status.container_state}</Badge></Table.Td>
+              <Table.Td><Group gap={4} justify="flex-end">
+                <Button size="compact-xs" variant="light" onClick={() => { setManagedVersion(status.configured_version ?? ""); }} disabled={managedMutation.isPending}>Select</Button>
+                <Button size="compact-xs" color="violet" variant="light" disabled={!managedVersion.trim() || managedMutation.isPending} onClick={() => managedTarget && managedMutation.mutate({ agent: managedTarget, operation: "UPDATE", status })}>Update</Button>
+                <Button size="compact-xs" color="red" variant="light" disabled={(status.agent_type === "device-agent" && status.instance === "main") || managedMutation.isPending} onClick={() => managedTarget && managedMutation.mutate({ agent: managedTarget, operation: "REMOVE", status })}>Remove</Button>
+              </Group></Table.Td>
+            </Table.Tr>)}
+            {!managedStatuses.length && !managedMutation.isPending && <Table.Tr><Table.Td colSpan={5}><Text ta="center" c="dimmed">No managed agents reported.</Text></Table.Td></Table.Tr>}
+          </Table.Tbody>
+        </Table>
+        <Card withBorder>
+          <Stack gap="xs">
+            <Text fw={600} size="sm">Deploy managed agent</Text>
+            <Group grow align="flex-end">
+              <Select label="Agent type" value={managedAgentType} onChange={value => setManagedAgentType((value as "device-agent" | "monitor-agent") ?? "monitor-agent")} data={[{ value: "monitor-agent", label: "Monitoring Agent" }, { value: "device-agent", label: "Device Agent" }]} />
+              <TextInput label="Instance" value={managedInstance} onChange={event => setManagedInstance(event.currentTarget.value)} placeholder="main or i2" />
+              <TextInput label="Version" value={managedVersion} onChange={event => setManagedVersion(event.currentTarget.value)} placeholder="1.0.0" />
+            </Group>
+            <Textarea label="Environment (JSON)" description="Required deployment variables are validated by the Supervisor. Secrets are sent only to the target host." minRows={4} autosize value={managedEnvironment} onChange={event => setManagedEnvironment(event.currentTarget.value)} placeholder={'{"SENSORSPHERE_URL":"http://na-01:8080","SENSORSPHERE_AGENT_TOKEN":"..."}'} />
+            <Group justify="flex-end"><Button loading={managedMutation.isPending} disabled={!managedInstance.trim() || !/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(managedVersion.trim())} onClick={() => managedTarget && managedMutation.mutate({ agent: managedTarget, operation: "DEPLOY" })}>Deploy</Button></Group>
+          </Stack>
+        </Card>
+        <Group justify="flex-end"><Button variant="default" onClick={() => setManagedTarget(null)}>Close</Button></Group>
       </Stack>
     </Modal>
 

@@ -1137,6 +1137,38 @@ export interface DeviceAgentTokenResponse {
   token: string;
 }
 
+export interface ManagedAgentStatus {
+  agent_type: "device-agent" | "monitor-agent";
+  instance: string;
+  install_dir: string;
+  installed: boolean;
+  configured_image: string | null;
+  configured_version: string | null;
+  container_id: string | null;
+  container_state: string;
+  running_image: string | null;
+}
+
+export interface ManagedAgentOperation {
+  commandId: string;
+  agentId: string;
+  operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE";
+  status: "SENT" | "SUCCESS" | "FAILED" | "TIMEOUT";
+  result: unknown;
+  error: string | null;
+  createdAt: string;
+  expiresAt: string;
+  finishedAt: string | null;
+}
+
+export interface ManagedAgentOperationInput {
+  operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE";
+  agentType?: "device-agent" | "monitor-agent";
+  instance?: string;
+  version?: string;
+  environment?: Record<string, string>;
+}
+
 export type DeviceControlCommandStatus =
   | "PENDING"
   | "SENT"
