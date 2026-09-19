@@ -164,6 +164,18 @@ function readPower(value: unknown): boolean | null {
   return null;
 }
 
+
+function yeelightStateSummary(state: Record<string, unknown>): Record<string, unknown> {
+  const entities = Array.isArray(state.entities) ? state.entities as Array<Record<string, unknown>> : [];
+  const powerEntity = entities.find(entity => String(entity.value ?? entity.id ?? "").toLowerCase() === "power");
+  const power = readPower(state.power ?? powerEntity?.currentValue ?? powerEntity?.power);
+  return {
+    connected: typeof state.connected === "boolean" ? state.connected : null,
+    power,
+    entitiesCount: entities.length,
+    entityValues: entities.slice(0, 12).map(entity => String(entity.value ?? entity.id ?? ""))
+  };
+}
 function normalizeYeelightState(result: Record<string, unknown>): Record<string, unknown> {
   const source = result.state && typeof result.state === "object" && !Array.isArray(result.state)
     ? result.state as Record<string, unknown>
@@ -502,6 +514,18 @@ export async function registerDeviceControlFeature(
             RETURNING device_id, provider, action
           `, [message.commandId, agent.id, message.status, JSON.stringify(message.result ?? {}), message.error ?? null]);
           const command = updated.rows[0];
+          if (command?.provider.toUpperCase() === "YEELIGHT") {
+            app.log.info({
+              event: "YEELIGHT_COMMAND_RESULT",
+              commandId: message.commandId,
+              deviceId: command.device_id,
+              agentId: agent.id,
+              action: command.action,
+              status: message.status,
+              error: message.error ?? null,
+              result: message.result ?? null
+            }, "[YEELIGHT] COMMAND_RESULT");
+          }
           if (
             command
             && message.status === "SUCCESS"
@@ -510,6 +534,14 @@ export async function registerDeviceControlFeature(
             && message.result
           ) {
             const state = normalizeYeelightState(message.result);
+            app.log.info({
+              event: "YEELIGHT_NORMALIZED_STATE",
+              commandId: message.commandId,
+              deviceId: command.device_id,
+              agentId: agent.id,
+              source: "GET_STATE",
+              ...yeelightStateSummary(state)
+            }, "[YEELIGHT] NORMALIZED_STATE");
             await pool.query(`
               INSERT INTO device_control_states (device_id, agent_id, provider, state, observed_at, updated_at)
               VALUES ($1,$2,'YEELIGHT',$3::jsonb,NOW(),NOW())
@@ -517,10 +549,29 @@ export async function registerDeviceControlFeature(
                 agent_id=EXCLUDED.agent_id, provider=EXCLUDED.provider, state=EXCLUDED.state,
                 observed_at=EXCLUDED.observed_at, updated_at=NOW()
             `, [command.device_id, agent.id, JSON.stringify(state)]);
+            app.log.info({
+              event: "YEELIGHT_STATE_PERSISTED",
+              commandId: message.commandId,
+              deviceId: command.device_id,
+              agentId: agent.id,
+              source: "GET_STATE",
+              ...yeelightStateSummary(state)
+            }, "[YEELIGHT] STATE_PERSISTED");
           }
           return;
         }
         if (message.type === "DEVICE_STATE") {
+          const isYeelight = message.provider.toUpperCase() === "YEELIGHT";
+          if (isYeelight) {
+            app.log.info({
+              event: "YEELIGHT_DEVICE_STATE",
+              deviceId: message.deviceId,
+              agentId: agent.id,
+              source: "DEVICE_STATE",
+              ...yeelightStateSummary(message.state),
+              state: message.state
+            }, "[YEELIGHT] DEVICE_STATE");
+          }
           await pool.query(`
             INSERT INTO device_control_states (device_id, agent_id, provider, state, observed_at, updated_at)
             VALUES ($1,$2,$3,$4::jsonb,NOW(),NOW())
@@ -528,6 +579,15 @@ export async function registerDeviceControlFeature(
               agent_id=EXCLUDED.agent_id, provider=EXCLUDED.provider, state=EXCLUDED.state,
               observed_at=EXCLUDED.observed_at, updated_at=NOW()
           `, [message.deviceId, agent.id, message.provider, JSON.stringify(message.state)]);
+          if (isYeelight) {
+            app.log.info({
+              event: "YEELIGHT_STATE_PERSISTED",
+              deviceId: message.deviceId,
+              agentId: agent.id,
+              source: "DEVICE_STATE",
+              ...yeelightStateSummary(message.state)
+            }, "[YEELIGHT] STATE_PERSISTED");
+          }
           return;
         }
         if (message.type === "DISCOVERED_DEVICE_ACTION_RESULT") {
@@ -851,6 +911,17 @@ export async function registerDeviceControlFeature(
       INSERT INTO device_control_commands (id, device_id, agent_id, provider, action, parameters, status, expires_at)
       VALUES ($1,$2,$3,$4,$5,$6::jsonb,'PENDING',$7)
     `, [commandId, device.id, device.control_agent_id, device.control_provider, input.action, JSON.stringify(input.parameters ?? {}), expiresAt]);
+
+    if (device.control_provider.toUpperCase() === "YEELIGHT") {
+      app.log.info({
+        event: "YEELIGHT_COMMAND_CREATED",
+        commandId,
+        deviceId: device.id,
+        agentId: device.control_agent_id,
+        action: input.action,
+        parameters: input.parameters ?? {}
+      }, "[YEELIGHT] COMMAND_CREATED");
+    }
 
     await sendPendingCommands(device.control_agent_id, socket);
     return reply.code(202).send({ commandId, status: "SENT", expiresAt: expiresAt.toISOString() });

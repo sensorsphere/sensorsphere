@@ -1284,6 +1284,9 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                               <Group justify="space-between" align="center" wrap="nowrap">
                                 <Text size="xs" fw={600}>Power</Text>
                                 <Group gap="xs" wrap="nowrap">
+                                  <div style={{ width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 16px" }}>
+                                    {powerPending && <Loader size={14} />}
+                                  </div>
                                   <Switch
                                     size="sm"
                                     checked={displayedPower}
@@ -1304,7 +1307,6 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                                   <Text size="xs" fw={700} c={displayedPower ? "green" : "red"}>
                                     {displayedPower ? "ON" : "OFF"}
                                   </Text>
-                                  {powerPending && <Text size="xs" c="dimmed">Pending…</Text>}
                                 </Group>
                               </Group>
                             )}

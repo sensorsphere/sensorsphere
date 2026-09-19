@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.23.0";
+export const MODULE_VERSION = "1.23.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.23.1": {
+    releasedAt: "2026-09-19T10:15:00+02:00",
+    patch: "PR-197-yeelight-state-diagnostics-spinner-v1.patch",
+    changes: [
+      { type: "added", description: "Device Control logs targeted Yeelight command, DEVICE_STATE, normalization and persistence events for realtime state diagnostics" }
+    ]
+  },
+
   "1.23.0": {
     releasedAt: "2026-09-19T09:15:00+02:00",
     patch: "PR-195-yeelight-realtime-entities-v1.patch",

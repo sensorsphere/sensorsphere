@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.50.1";
+export const MODULE_VERSION = "1.50.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.50.2": {
+    releasedAt: "2026-09-19T10:15:00+02:00",
+    patch: "PR-197-yeelight-state-diagnostics-spinner-v1.patch",
+    changes: [
+      { type: "changed", description: "Realtime Power controls use a fixed-width spinner before the switch while a command is pending, preventing control layout shifts" }
+    ]
+  },
+
   "1.50.1": {
     releasedAt: "2026-09-19T09:30:00+02:00",
     patch: "PR-196-realtime-entity-switch-toggle-v1.patch",
