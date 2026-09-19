@@ -670,6 +670,7 @@ export async function registerDeviceControlFeature(
               supervisor_desired_version=CASE WHEN $3='UPDATED' THEN NULL ELSE supervisor_desired_version END,
               supervisor_previous_version=COALESCE(supervisor_previous_version,$5),
               supervisor_version=CASE WHEN $3='UPDATED' THEN COALESCE($6,supervisor_version) ELSE supervisor_version END,
+              supervisor_configured_version=CASE WHEN $3='UPDATED' THEN COALESCE($6,supervisor_configured_version) ELSE supervisor_configured_version END,
               updated_at=NOW()
             WHERE id=$1 AND supervisor_update_command_id=$2
           `, [agent.id, message.commandId, nextStatus, message.error ?? null, message.currentVersion ?? null, message.targetVersion ?? null]);

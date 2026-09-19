@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.28.2";
+export const MODULE_VERSION = "1.28.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.28.3": {
+    releasedAt: "2026-09-19T23:50:00+02:00",
+    patch: "PR-216-supervisor-configured-version-v1.patch",
+    changes: [
+      { type: "fixed", description: "Successful Supervisor self-updates persist the configured Supervisor version together with the verified running version" }
+    ]
+  },
+
   "1.28.2": {
     releasedAt: "2026-09-19T23:35:00+02:00",
     patch: "PR-214-agent-update-target-cleanup-v1.patch",
