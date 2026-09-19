@@ -369,7 +369,18 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const registeredCount = logicalStatuses.filter(item => item === "REGISTERED").length;
   const discardedCount = logicalStatuses.filter(item => item === "DISCARDED").length;
   const runningCount = discoveries.filter(item => item.status === "SENT").length;
-  const failedDiscoveries = discoveries.filter(item => item.status === "FAILED" || item.status === "TIMEOUT").slice(0, 3);
+  // A failed scan is only relevant until a newer successful scan for the same provider/agent supersedes it.
+  // This prevents historical authentication/permission errors from remaining visible after a successful retry.
+  const failedDiscoveries = discoveries
+    .filter(item => item.status === "FAILED" || item.status === "TIMEOUT")
+    .filter(failed => !discoveries.some(candidate =>
+      candidate.agentId === failed.agentId
+      && candidate.provider.toUpperCase() === failed.provider.toUpperCase()
+      && candidate.status === "SUCCESS"
+      && new Date(candidate.createdAt).getTime() > new Date(failed.createdAt).getTime()
+    ))
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+    .slice(0, 3);
   const discoveryAgents = agents.filter(agent => agent.capabilities.some(capability => capability.discovery && DISCOVERY_PROVIDERS.includes(capability.provider.toUpperCase() as DiscoveryProvider)));
   const onlineAgents = discoveryAgents.filter(agent => agent.online && agent.enabled).length;
   const offlineAgents = discoveryAgents.length - onlineAgents;
@@ -505,6 +516,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
             {!sortedRows.length && <Table.Tr><Table.Td colSpan={9}><Text c="dimmed" ta="center" py="xl">No discovery matches the current filters.</Text></Table.Td></Table.Tr>}
           </Table.Tbody>
         </Table>
+        <div className="device-registry-discovery-scroll-spacer" aria-hidden="true" />
       </div>
     </Card>
 

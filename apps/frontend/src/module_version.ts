@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.58.1";
+export const MODULE_VERSION = "1.58.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.58.2": {
+    releasedAt: "2026-09-20T00:55:00+02:00",
+    patch: "PR-220-proxmox-discovery-ux-v2.patch",
+    changes: [
+      { type: "fixed", description: "Device Discovery hides failed scans once a newer successful scan for the same provider and agent supersedes them" },
+      { type: "fixed", description: "Device Discovery keeps the final table row fully scrollable above the viewport edge" }
+    ]
+  },
+
   "1.58.1": {
     releasedAt: "2026-09-20T01:20:00+02:00",
     patch: "PR-220-proxmox-discovery-ux-v1.patch",

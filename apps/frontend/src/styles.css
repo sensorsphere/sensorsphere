@@ -575,8 +575,14 @@ body { background: var(--ss-page-bg); }
 .device-registry-discovery-scroll {
   overflow: auto;
   max-height: calc(100vh - 430px);
-  padding-bottom: 32px;
-  scroll-padding-bottom: 32px;
+  padding-bottom: 0;
+  scroll-padding-bottom: 40px;
   box-sizing: border-box;
   scrollbar-gutter: stable;
+}
+
+.device-registry-discovery-scroll-spacer {
+  height: 40px;
+  flex: 0 0 40px;
+  pointer-events: none;
 }
