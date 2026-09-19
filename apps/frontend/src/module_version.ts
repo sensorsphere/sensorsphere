@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.54.1";
+export const MODULE_VERSION = "1.54.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.54.2": {
+    releasedAt: "2026-09-19T14:00:00+02:00",
+    patch: "PR-204-device-discovery-copy-details-registry-layout-v1.patch",
+    changes: [
+      { type: "added", description: "Discovery Name, IP and MAC/ID values can be copied directly from the table" },
+      { type: "changed", description: "Discovery Details exposes a concise hover summary and Registry is positioned immediately before Actions" },
+      { type: "changed", description: "Discovery Registry filter can be cleared directly to All from its clear action" }
+    ]
+  },
+
   "1.54.1": {
     releasedAt: "2026-09-19T13:00:00+02:00",
     patch: "PR-203-device-discovery-filter-layout-v1.patch",

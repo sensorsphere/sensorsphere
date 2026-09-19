@@ -145,6 +145,32 @@ function registryUpdateReasons(
   return reasons;
 }
 
+
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall through for HTTP/insecure contexts or browsers denying Clipboard API access.
+    }
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try {
+    document.execCommand("copy");
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
 function providerColor(provider: string): string {
   return provider.toUpperCase() === "YEELIGHT" ? "yellow" : "green";
 }
@@ -390,9 +416,9 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       <TextInput size="xs" placeholder="Name / IP / MAC / ID" value={textFilter} onChange={event => setTextFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(textFilter.trim()))} style={{ flex: 1 }} />
       <Switch size="xs" label="Show duplicate agent discoveries" checked={showDuplicateAgents} onChange={event => setShowDuplicateAgents(event.currentTarget.checked)} />
       <Switch size="xs" label="Show discarded" checked={showDiscarded} onChange={event => setShowDiscarded(event.currentTarget.checked)} />
-      <Select size="xs" value={actionFilter} onChange={value => setActionFilter((value as DiscoveryActionFilter | null) ?? "CAN_ADD")} data={[
-        { value: "ALL", label: "All" }, { value: "CAN_ADD", label: "Can be added" }, { value: "UPDATE", label: "To be updated" }, { value: "REGISTERED", label: "Registered" }, { value: "DISCARDED", label: "Discarded" }
-      ]} styles={activeFilterStyles(actionFilter !== "CAN_ADD")} w={155} />
+      <Select size="xs" clearable placeholder="All" value={actionFilter === "ALL" ? null : actionFilter} onChange={value => setActionFilter((value as DiscoveryActionFilter | null) ?? "ALL")} data={[
+        { value: "CAN_ADD", label: "Can be added" }, { value: "UPDATE", label: "To be updated" }, { value: "REGISTERED", label: "Registered" }, { value: "DISCARDED", label: "Discarded" }
+      ]} styles={activeFilterStyles(actionFilter !== "ALL")} w={155} />
       <Text size="xs" c="dimmed">{sortedRows.length}</Text>
     </Group>
 
@@ -402,12 +428,13 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
           <Table.Thead><Table.Tr>
             <SortableTableHeader active={sortKey === "provider"} direction={sortDirection} onClick={() => toggleSort("provider")}>Provider</SortableTableHeader>
             <SortableTableHeader active={sortKey === "agent"} direction={sortDirection} onClick={() => toggleSort("agent")}>Agent</SortableTableHeader>
-            <SortableTableHeader active={sortKey === "status"} direction={sortDirection} onClick={() => toggleSort("status")}>Registry</SortableTableHeader>
             <SortableTableHeader active={sortKey === "name"} direction={sortDirection} onClick={() => toggleSort("name")}>Name</SortableTableHeader>
             <SortableTableHeader active={sortKey === "ip"} direction={sortDirection} onClick={() => toggleSort("ip")}>IP</SortableTableHeader>
             <SortableTableHeader active={sortKey === "identity"} direction={sortDirection} onClick={() => toggleSort("identity")}>MAC / ID</SortableTableHeader>
             <SortableTableHeader active={sortKey === "model"} direction={sortDirection} onClick={() => toggleSort("model")}>Model</SortableTableHeader>
-            <Table.Th>Details</Table.Th><Table.Th style={{ width: 150, textAlign: "right" }}>Actions</Table.Th>
+            <Table.Th>Details</Table.Th>
+            <SortableTableHeader active={sortKey === "status"} direction={sortDirection} onClick={() => toggleSort("status")}>Registry</SortableTableHeader>
+            <Table.Th style={{ width: 150, textAlign: "right" }}>Actions</Table.Th>
           </Table.Tr></Table.Thead>
           <Table.Tbody>
             {sortedRows.map(row => {
@@ -426,12 +453,12 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
               return <Table.Tr key={rowKey}>
                 <Table.Td><Badge variant="light" color={providerColor(provider)}>{provider === "ESPHOME" ? "ESPHome" : "Yeelight"}</Badge></Table.Td>
                 <Table.Td>{agentContent}</Table.Td>
-                <Table.Td>{row.status === "UPDATE" ? <Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Expected updates</Text>{row.updateReasons.map(reason => <Text key={reason} size="xs">• {reason}</Text>)}</Stack>}>{statusBadge}</Tooltip> : statusBadge}</Table.Td>
-                <Table.Td><Text size="sm" fw={600}>{textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")}</Text></Table.Td>
-                <Table.Td><Text ff="monospace" size="sm">{textValue(row.device, "ip")}</Text></Table.Td>
-                <Table.Td><Text ff="monospace" size="xs">{provider === "YEELIGHT" ? textValue(row.device, "id") : textValue(row.device, "mac")}</Text></Table.Td>
+                <Table.Td><CopyableDiscoveryValue value={textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")} fw={600} /></Table.Td>
+                <Table.Td><CopyableDiscoveryValue value={textValue(row.device, "ip")} monospace /></Table.Td>
+                <Table.Td><CopyableDiscoveryValue value={provider === "YEELIGHT" ? textValue(row.device, "id") : textValue(row.device, "mac")} monospace compact /></Table.Td>
                 <Table.Td><Text size="sm">{textValue(row.device, "model")}</Text></Table.Td>
-                <Table.Td><Text size="xs" c="dimmed">{details}</Text></Table.Td>
+                <Table.Td><Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Discovery details</Text><Text size="xs">Name: {textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")}</Text><Text size="xs">IP: {textValue(row.device, "ip")}</Text><Text size="xs">MAC / ID: {provider === "YEELIGHT" ? textValue(row.device, "id") : textValue(row.device, "mac")}</Text><Text size="xs">Model: {textValue(row.device, "model")}</Text><Text size="xs">{details}</Text></Stack>}><Text size="xs" c="dimmed" style={{ cursor: "help" }}>{details}</Text></Tooltip></Table.Td>
+                <Table.Td>{row.status === "UPDATE" ? <Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Expected updates</Text>{row.updateReasons.map(reason => <Text key={reason} size="xs">• {reason}</Text>)}</Stack>}>{statusBadge}</Tooltip> : statusBadge}</Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">
                   {row.status === "CAN_ADD" && row.agent && <Tooltip label="Import into Device Registry"><ActionIcon size="sm" variant="light" color="green" onClick={() => onImportDiscoveredDevice(request)}>+</ActionIcon></Tooltip>}
                   {row.status === "UPDATE" && row.registered && row.agent && <Tooltip label="Update registered device from discovery"><ActionIcon size="sm" variant="light" color="orange" loading={updateKey === rowKey} onClick={() => beginUpdate(row, rowKey)}>↻</ActionIcon></Tooltip>}
@@ -465,6 +492,14 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       </Stack>
     </Modal>
   </Stack>;
+}
+
+function CopyableDiscoveryValue({ value, monospace = false, compact = false, fw }: { value: string; monospace?: boolean; compact?: boolean; fw?: number }) {
+  const canCopy = Boolean(value && value !== "—");
+  return <Group gap={4} wrap="nowrap">
+    <Text ff={monospace ? "monospace" : undefined} size={compact ? "xs" : "sm"} fw={fw}>{value}</Text>
+    {canCopy && <Tooltip label={`Copy ${value}`}><ActionIcon size="xs" variant="subtle" color="gray" aria-label={`Copy ${value}`} onClick={() => void copyTextToClipboard(value)}>⧉</ActionIcon></Tooltip>}
+  </Group>;
 }
 
 function FilterCardAction({ active, color, label, onClick }: { active: boolean; color: string; label: string; onClick: () => void }) {
