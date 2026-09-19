@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.23.1";
+export const MODULE_VERSION = "1.23.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.23.2": {
+    releasedAt: "2026-09-19T11:00:00+02:00",
+    patch: "PR-198-yeelight-device-state-normalization-v1.patch",
+    changes: [
+      { type: "fixed", description: "Normalize Yeelight DEVICE_STATE payloads before persistence so partial provider state cannot replace realtime entities with OFFLINE or UNKNOWN state" }
+    ]
+  },
+
   "1.23.1": {
     releasedAt: "2026-09-19T10:15:00+02:00",
     patch: "PR-197-yeelight-state-diagnostics-spinner-v1.patch",

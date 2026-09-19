@@ -562,6 +562,7 @@ export async function registerDeviceControlFeature(
         }
         if (message.type === "DEVICE_STATE") {
           const isYeelight = message.provider.toUpperCase() === "YEELIGHT";
+          const persistedState = isYeelight ? normalizeYeelightState(message.state) : message.state;
           if (isYeelight) {
             app.log.info({
               event: "YEELIGHT_DEVICE_STATE",
@@ -571,6 +572,13 @@ export async function registerDeviceControlFeature(
               ...yeelightStateSummary(message.state),
               state: message.state
             }, "[YEELIGHT] DEVICE_STATE");
+            app.log.info({
+              event: "YEELIGHT_NORMALIZED_STATE",
+              deviceId: message.deviceId,
+              agentId: agent.id,
+              source: "DEVICE_STATE",
+              ...yeelightStateSummary(persistedState)
+            }, "[YEELIGHT] NORMALIZED_STATE");
           }
           await pool.query(`
             INSERT INTO device_control_states (device_id, agent_id, provider, state, observed_at, updated_at)
@@ -578,14 +586,14 @@ export async function registerDeviceControlFeature(
             ON CONFLICT (device_id) DO UPDATE SET
               agent_id=EXCLUDED.agent_id, provider=EXCLUDED.provider, state=EXCLUDED.state,
               observed_at=EXCLUDED.observed_at, updated_at=NOW()
-          `, [message.deviceId, agent.id, message.provider, JSON.stringify(message.state)]);
+          `, [message.deviceId, agent.id, message.provider, JSON.stringify(persistedState)]);
           if (isYeelight) {
             app.log.info({
               event: "YEELIGHT_STATE_PERSISTED",
               deviceId: message.deviceId,
               agentId: agent.id,
               source: "DEVICE_STATE",
-              ...yeelightStateSummary(message.state)
+              ...yeelightStateSummary(persistedState)
             }, "[YEELIGHT] STATE_PERSISTED");
           }
           return;
