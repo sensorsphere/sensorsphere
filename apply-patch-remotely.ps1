@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true, Position = 0)]
     [ValidateSet("check", "apply", "revert", "status")]
     [string]$Action,
@@ -24,6 +24,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
 
 function Write-Header {
     param(
@@ -52,9 +53,39 @@ function Invoke-Native {
     )
 
     & $Command @Arguments
+    $ExitCode = $LASTEXITCODE
 
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Command failed with exit code $LASTEXITCODE."
+    if ($ExitCode -ne 0) {
+        throw "$Command failed with exit code $ExitCode."
+    }
+}
+
+function Test-PatchFormat {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $Content = Get-Content -LiteralPath $Path -Raw
+
+    if (-not $Content.StartsWith("diff --git ")) {
+        throw "Invalid patch format: file must start with 'diff --git'."
+    }
+
+    if (
+        $Content -notmatch "(?m)^--- (?:a/.+|/dev/null)$"
+    ) {
+        throw "Invalid patch format: missing valid '--- a/...' or '--- /dev/null' header."
+    }
+
+    if (
+        $Content -notmatch "(?m)^\+\+\+ (?:b/.+|/dev/null)$"
+    ) {
+        throw "Invalid patch format: missing valid '+++ b/...' or '+++ /dev/null' header."
+    }
+
+    if ($Content -notmatch "(?m)^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@") {
+        throw "Invalid patch format: no valid unified-diff hunk header found."
     }
 }
 
@@ -68,13 +99,23 @@ if ($PatchFile.Extension -ne ".patch" -and $PatchFile.Extension -ne ".diff") {
     throw "Expected a .patch or .diff file: $($PatchFile.Name)"
 }
 
+if ($PatchFile.Name -notmatch '^[A-Za-z0-9._-]+$') {
+    throw "Unsafe patch filename: $($PatchFile.Name)"
+}
+
+Test-PatchFormat -Path $PatchFile.FullName
+
 $PatchName = $PatchFile.Name
 $RemotePatch = "$RemotePatchDir/$PatchName"
 $Target = "$RemoteUser@$RemoteHost"
 
+$LocalHash = (
+    Get-FileHash -LiteralPath $PatchFile.FullName -Algorithm SHA256
+).Hash.ToLowerInvariant()
+
 Write-Header -PatchName $PatchName -SelectedAction $Action
 
-$SshBaseArgs = @()
+$SshBaseArgs = @("-A")
 
 if ($IdentityFile) {
     if (-not (Test-Path -LiteralPath $IdentityFile -PathType Leaf)) {
@@ -90,7 +131,7 @@ if ($IdentityFile) {
     $ScpBaseArgs += @("-i", $IdentityFile)
 }
 
-Write-Host "[1/3] Preparing remote patch directory..."
+Write-Host "[1/4] Preparing remote patch directory..."
 Invoke-Native -Command "ssh" -Arguments (
     $SshBaseArgs + @(
         $Target,
@@ -98,13 +139,29 @@ Invoke-Native -Command "ssh" -Arguments (
     )
 )
 
-Write-Host "[2/3] Uploading patch..."
+Write-Host "[2/4] Uploading patch..."
 Invoke-Native -Command "scp" -Arguments (
     $ScpBaseArgs + @(
         $PatchFile.FullName,
         "${Target}:$RemotePatch"
     )
 )
+
+Write-Host "[3/4] Verifying uploaded patch integrity..."
+$RemoteHashOutput = & ssh @SshBaseArgs $Target "sha256sum '$RemotePatch' | awk '{print `$1}'"
+$HashExitCode = $LASTEXITCODE
+
+if ($HashExitCode -ne 0) {
+    throw "Unable to calculate remote SHA256."
+}
+
+$RemoteHash = ($RemoteHashOutput | Select-Object -First 1).Trim().ToLowerInvariant()
+
+if ($RemoteHash -ne $LocalHash) {
+    throw "Patch integrity check failed. Local SHA256=$LocalHash Remote SHA256=$RemoteHash"
+}
+
+Write-Host "Patch SHA256: OK"
 
 $DirtyGuard = @'
 if [ -n "$(git status --porcelain)" ]; then
@@ -122,12 +179,54 @@ git status --short || true
 '@
 }
 
+$VerifyBlock = ""
+
+if ($Action -eq "apply" -and $VerifyCommand) {
+    $VerifyBlock = @"
+
+echo
+echo "Running verification:"
+printf '%s\n' '$($VerifyCommand.Replace("'", "'\''"))'
+
+set +e
+(
+    set -euo pipefail
+$VerifyCommand
+)
+VERIFY_RC=`$?
+set -e
+
+if [ "`$VERIFY_RC" -ne 0 ]; then
+    echo
+    echo "ERROR: Verification failed with exit code `$VERIFY_RC."
+    exit "`$VERIFY_RC"
+fi
+
+echo
+echo "Verification: OK"
+"@
+}
+
+$CleanupBlock = ""
+
+if (-not $KeepRemotePatch) {
+    $CleanupBlock = @"
+
+rm -f '$RemotePatch'
+"@
+}
+
 $RemoteScript = switch ($Action) {
     "check" {
 @"
 set -euo pipefail
 
 cd '$RemoteProject'
+
+test -d .git || {
+    echo "ERROR: '$RemoteProject' is not a Git repository."
+    exit 22
+}
 
 $DirtyGuard
 
@@ -137,6 +236,7 @@ git apply --check '$RemotePatch'
 
 echo
 echo "Patch check: OK"
+$CleanupBlock
 "@
     }
 
@@ -145,6 +245,11 @@ echo "Patch check: OK"
 set -euo pipefail
 
 cd '$RemoteProject'
+
+test -d .git || {
+    echo "ERROR: '$RemoteProject' is not a Git repository."
+    exit 22
+}
 
 $DirtyGuard
 
@@ -160,6 +265,8 @@ echo
 echo "Patch applied."
 echo
 git status --short
+$VerifyBlock
+$CleanupBlock
 "@
     }
 
@@ -168,6 +275,11 @@ git status --short
 set -euo pipefail
 
 cd '$RemoteProject'
+
+test -d .git || {
+    echo "ERROR: '$RemoteProject' is not a Git repository."
+    exit 22
+}
 
 echo
 echo "Checking reverse patch..."
@@ -181,6 +293,7 @@ echo
 echo "Patch reverted."
 echo
 git status --short
+$CleanupBlock
 "@
     }
 
@@ -189,6 +302,11 @@ git status --short
 set -euo pipefail
 
 cd '$RemoteProject'
+
+test -d .git || {
+    echo "ERROR: '$RemoteProject' is not a Git repository."
+    exit 22
+}
 
 echo "Git status:"
 git status --short
@@ -202,33 +320,13 @@ else
     echo "Patch status: CONFLICT OR PARTIALLY APPLIED"
     exit 21
 fi
+$CleanupBlock
 "@
     }
 }
 
-if ($Action -eq "apply" -and $VerifyCommand) {
-    $RemoteScript += @"
+Write-Host "[4/4] Running remote action..."
 
-echo
-echo "Running verification:"
-echo '$VerifyCommand'
-$VerifyCommand
-
-echo
-echo "Verification: OK"
-"@
-}
-
-if (-not $KeepRemotePatch) {
-    $RemoteScript += @"
-
-rm -f '$RemotePatch'
-"@
-}
-
-Write-Host "[3/3] Running remote action..."
-
-# Normalize Windows CRLF to Unix LF before sending to Bash.
 $RemoteScript = $RemoteScript -replace "`r`n", "`n"
 $RemoteScript = $RemoteScript -replace "`r", "`n"
 
@@ -236,7 +334,7 @@ $EncodedRemoteScript = [Convert]::ToBase64String(
     [Text.Encoding]::UTF8.GetBytes($RemoteScript)
 )
 
-$Launcher = "echo '$EncodedRemoteScript' | base64 -d | bash"
+$Launcher = "printf '%s' '$EncodedRemoteScript' | base64 -d | bash"
 
 Invoke-Native -Command "ssh" -Arguments (
     $SshBaseArgs + @(
