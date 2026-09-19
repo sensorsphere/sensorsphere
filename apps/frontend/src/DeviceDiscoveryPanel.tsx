@@ -423,6 +423,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
         <Group gap="xs">
           <Button size="compact-sm" variant="light" color="yellow" disabled={scanBusy} loading={scanMutation.isPending && scanProvider === "YEELIGHT"} onClick={() => scanMutation.mutate("YEELIGHT")}>Scan Yeelight</Button>
           <Button size="compact-sm" variant="light" color="green" disabled={scanBusy} loading={scanMutation.isPending && scanProvider === "ESPHOME"} onClick={() => scanMutation.mutate("ESPHOME")}>Scan ESPHome</Button>
+          <Button size="compact-sm" variant="light" color="indigo" disabled={scanBusy} loading={scanMutation.isPending && scanProvider === "PROXMOX"} onClick={() => scanMutation.mutate("PROXMOX")}>Scan Proxmox</Button>
           <Button size="compact-sm" disabled={scanBusy} loading={scanMutation.isPending && scanProvider === "ALL"} onClick={() => scanMutation.mutate("ALL")}>Scan all</Button>
         </Group>
       </Group>

@@ -53,6 +53,28 @@ function compactDate(value: string | null): string {
 const emptyForm = (): AgentFormState => ({ name: "", enabled: true, labelsText: "", heartbeatTimeoutSeconds: 60 });
 const DEVICE_DISCOVERY_PROVIDER_STORAGE_KEY = "sensorsphere.deviceDiscovery.lastProvider";
 
+type DiscoveryModalSortKey = "registry" | "name" | "ip" | "model" | "power" | "brightness" | "entities" | "id";
+type DiscoveryModalSortDirection = "asc" | "desc";
+
+function DiscoveryModalSortHeader({
+  label,
+  column,
+  activeColumn,
+  direction,
+  onSort
+}: {
+  label: string;
+  column: DiscoveryModalSortKey;
+  activeColumn: DiscoveryModalSortKey;
+  direction: DiscoveryModalSortDirection;
+  onSort: (column: DiscoveryModalSortKey) => void;
+}) {
+  const active = activeColumn === column;
+  return <Table.Th onClick={() => onSort(column)} style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}>
+    {label}{active ? (direction === "asc" ? " ↑" : " ↓") : ""}
+  </Table.Th>;
+}
+
 function parseLabels(value: string): Record<string, string> {
   const labels: Record<string, string> = {};
   for (const item of value.split(",").map(part => part.trim()).filter(Boolean)) {
@@ -219,6 +241,8 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
   const [powerActionTarget, setPowerActionTarget] = React.useState<Record<string, unknown> | null>(null);
   const [powerAction, setPowerAction] = React.useState<"POWER_ON" | "POWER_OFF" | null>(null);
   const [discoveredDevices, setDiscoveredDevices] = React.useState<Array<Record<string, unknown>>>([]);
+  const [discoverySortKey, setDiscoverySortKey] = React.useState<DiscoveryModalSortKey>("name");
+  const [discoverySortDirection, setDiscoverySortDirection] = React.useState<DiscoveryModalSortDirection>("asc");
   const [updateTarget, setUpdateTarget] = React.useState<DeviceAgent | null>(null);
   const [updateVersion, setUpdateVersion] = React.useState("");
   const [supervisorUpdateTarget, setSupervisorUpdateTarget] = React.useState<DeviceAgent | null>(null);
@@ -433,6 +457,43 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
     }) ?? null;
   };
 
+  const toggleDiscoverySort = (column: DiscoveryModalSortKey) => {
+    if (discoverySortKey === column) {
+      setDiscoverySortDirection(current => current === "asc" ? "desc" : "asc");
+      return;
+    }
+    setDiscoverySortKey(column);
+    setDiscoverySortDirection("asc");
+  };
+
+  const sortedDiscoveredDevices = React.useMemo(() => {
+    const provider = discoveryProvider?.toUpperCase() ?? "";
+    const valueFor = (device: Record<string, unknown>, column: DiscoveryModalSortKey): string | number => {
+      const registered = registeredDeviceFor(device);
+      const needsUpdate = registered ? discoveryNeedsRegistryUpdate(device, registered, discoveryAgent, discoveryProvider) : false;
+      if (column === "registry") return registered ? (needsUpdate ? 1 : 2) : 0;
+      if (column === "name") return discoveryValue(device, "name").toLowerCase();
+      if (column === "ip") {
+        const parts = ipv4SortValue(device.ip);
+        return parts ? (((parts[0]! * 256 + parts[1]!) * 256 + parts[2]!) * 256 + parts[3]!) : discoveryValue(device, "ip").toLowerCase();
+      }
+      if (column === "model") return discoveryValue(device, provider === "PROXMOX" ? "kind" : "model").toLowerCase();
+      if (column === "power") return discoveryValue(device, provider === "PROXMOX" ? "status" : "power").toLowerCase();
+      if (column === "brightness") return discoveryValue(device, provider === "PROXMOX" ? "node" : "brightness").toLowerCase();
+      if (column === "entities") return discoveryValue(device, provider === "PROXMOX" ? "vmid" : "entities").toLowerCase();
+      return discoveryValue(device, provider === "PROXMOX" ? "providerId" : "id").toLowerCase();
+    };
+    const compare = (left: string | number, right: string | number) => {
+      if (typeof left === "number" && typeof right === "number") return left - right;
+      return String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: "base" });
+    };
+    return [...discoveredDevices].sort((left, right) => {
+      const result = compare(valueFor(left, discoverySortKey), valueFor(right, discoverySortKey));
+      if (result !== 0) return discoverySortDirection === "asc" ? result : -result;
+      return discoveryValue(left, "name").localeCompare(discoveryValue(right, "name"), undefined, { numeric: true, sensitivity: "base" });
+    });
+  }, [discoveredDevices, discoverySortKey, discoverySortDirection, discoveryProvider, discoveryAgent, devices]);
+
   return <Stack gap="md">
     <Group justify="space-between"><div><Text fw={600}>Device Agents</Text><Text size="xs" c="dimmed">Outbound WebSocket agents used for discovery and interactive device control.</Text></div><Button onClick={openCreate}>Add Device Agent</Button></Group>
     <Card withBorder padding={0}>
@@ -493,8 +554,8 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
         {discoveredDevices.length ? (
           <div style={{ overflow: "auto", maxHeight: 420 }}>
             <Table striped highlightOnHover stickyHeader style={{ minWidth: 760 }}>
-              <Table.Thead><Table.Tr><Table.Th>Actions</Table.Th><Table.Th>Registry</Table.Th><Table.Th>Name</Table.Th><Table.Th>IP</Table.Th><Table.Th>Model</Table.Th><Table.Th>Power</Table.Th><Table.Th>Brightness</Table.Th><Table.Th>Entities</Table.Th><Table.Th>ID</Table.Th></Table.Tr></Table.Thead>
-              <Table.Tbody>{discoveredDevices.map((device, index) => {
+              <Table.Thead><Table.Tr><Table.Th>Actions</Table.Th><DiscoveryModalSortHeader label="Registry" column="registry" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label="Name" column="name" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label="IP" column="ip" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label="Model" column="model" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label="Power" column="power" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label="Brightness" column="brightness" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label="Entities" column="entities" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label="ID" column="id" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /></Table.Tr></Table.Thead>
+              <Table.Tbody>{sortedDiscoveredDevices.map((device, index) => {
                 const registeredDevice = registeredDeviceFor(device);
                 const isYeelight = discoveryProvider?.toUpperCase() === "YEELIGHT";
                 const isEspHome = discoveryProvider?.toUpperCase() === "ESPHOME";
