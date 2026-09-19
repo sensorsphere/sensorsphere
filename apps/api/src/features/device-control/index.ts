@@ -877,6 +877,15 @@ export async function registerDeviceControlFeature(
     return reply.code(202).send(discoveryDto(record));
   });
 
+  app.get("/api/v1/device-control/discoveries", async (_request, reply) => {
+    expireDiscoveries();
+    return reply.send(
+      [...discoveries.values()]
+        .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+        .map(discoveryDto)
+    );
+  });
+
   app.get("/api/v1/device-control/discoveries/:id", async (
     request: FastifyRequest<{ Params: { id: string } }>,
     reply

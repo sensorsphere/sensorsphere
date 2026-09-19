@@ -79,6 +79,7 @@ import { activeFilterStyles } from "./ActiveFilterStyles";
 import { MonitoringPanel, type MonitoringQuickCheckRequest } from "./MonitoringPanel";
 import { DeviceAgentsPanel, type DiscoveredDeviceImportRequest } from "./DeviceAgentsPanel";
 import { RealtimeEntityBrowser } from "./RealtimeEntityBrowser";
+import { DeviceDiscoveryPanel } from "./DeviceDiscoveryPanel";
 
 
 type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "controlAgent" | "lastSeen" | "health" | "checks";
@@ -1222,12 +1223,12 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         </Tabs.Panel>
 
         <Tabs.Panel value="discovery" pt="md">
-          <Card withBorder>
-            <Stack gap="xs">
-              <Title order={4}>Discovery providers</Title>
-              <Text c="dimmed">No discovery provider is enabled in the foundation release. Zigbee2MQTT, SensorSphere BLE, ESPHome and Proxmox adapters can be added independently without changing the registry core.</Text>
-            </Stack>
-          </Card>
+          <DeviceDiscoveryPanel
+            devices={devices}
+            onImportDiscoveredDevice={openDiscoveredDeviceImport}
+            onUpdateDiscoveredDevice={updateRegisteredDeviceFromDiscovery}
+            onOpenRegisteredDevice={openEditDevice}
+          />
         </Tabs.Panel>
 
         <Tabs.Panel value="health-profiles" pt="md">

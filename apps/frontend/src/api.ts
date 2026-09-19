@@ -1740,6 +1740,10 @@ export async function getDeviceDiscovery(id: string): Promise<DeviceDiscovery> {
   return readJson<DeviceDiscovery>(await fetch(`/api/v1/device-control/discoveries/${id}`));
 }
 
+export async function getDeviceDiscoveries(): Promise<DeviceDiscovery[]> {
+  return readJson<DeviceDiscovery[]>(await fetch("/api/v1/device-control/discoveries"));
+}
+
 export async function startDiscoveredDeviceAction(
   agentId: string,
   provider: string,

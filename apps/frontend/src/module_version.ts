@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.51.0";
+export const MODULE_VERSION = "1.52.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.52.0": {
+    releasedAt: "2026-09-19T11:30:00+02:00",
+    patch: "PR-200-device-discovery-yeelight-esphome-v1.patch",
+    changes: [
+      { type: "added", description: "Device Registry Discovery consolidates Yeelight and ESPHome results from discovery-capable Device Agents" },
+      { type: "added", description: "Discovery supports provider/agent filtering, scan-all actions and direct import/update/open workflows for registry devices" }
+    ]
+  },
+
   "1.51.0": {
     releasedAt: "2026-09-19T10:30:00+02:00",
     patch: "PR-199-dashboard-latency-card-move-v1.patch",

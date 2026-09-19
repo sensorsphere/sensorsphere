@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.24.0";
+export const MODULE_VERSION = "1.25.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.25.0": {
+    releasedAt: "2026-09-19T11:30:00+02:00",
+    patch: "PR-200-device-discovery-yeelight-esphome-v1.patch",
+    changes: [
+      { type: "added", description: "Device Control exposes recent in-memory discovery requests so the Device Registry Discovery tab can aggregate Yeelight and ESPHome results" }
+    ]
+  },
+
   "1.24.0": {
     releasedAt: "2026-09-19T10:30:00+02:00",
     patch: "PR-199-dashboard-latency-card-move-v1.patch",
