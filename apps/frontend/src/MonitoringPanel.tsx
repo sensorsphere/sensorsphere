@@ -532,7 +532,7 @@ export function MonitoringPanel({
     : "";
 
   return (
-    <Stack gap="md">
+    <Stack gap="md" className="monitoring-panel">
       <SimpleGrid cols={{ base: 2, sm: 3, lg: 6 }}>
         {[
           ["Agents", agents.length, "blue"],
@@ -551,14 +551,14 @@ export function MonitoringPanel({
 
       {error && <Text c="red" size="sm">{error}</Text>}
 
-      <Tabs value={monitoringTab} onChange={value => value && setMonitoringTab(value as "checks" | "agents")} keepMounted={false}>
+      <Tabs value={monitoringTab} onChange={value => value && setMonitoringTab(value as "checks" | "agents")} keepMounted={false} className="monitoring-tabs">
         <Tabs.List mb="sm">
           <Tabs.Tab value="checks">Device Checks</Tabs.Tab>
           <Tabs.Tab value="agents">Monitoring Agents</Tabs.Tab>
         </Tabs.List>
 
-        <Tabs.Panel value="checks">
-      <Card withBorder>
+        <Tabs.Panel value="checks" className="monitoring-tab-panel">
+      <Card withBorder className="monitoring-table-card">
                   <Group justify="space-between" mb="sm">
                     <div><Title order={4}>Device checks</Title><Text size="xs" c="dimmed">PING is the first executable check. TCP/HTTP/HTTPS are already represented by the generic contract for future agents.</Text></div>
                     <Button size="xs" onClick={openCreateCheck} disabled={agents.length === 0}>+ Add check</Button>
@@ -574,7 +574,7 @@ export function MonitoringPanel({
                     <Select size="xs" clearable placeholder="Status" data={["UP","DOWN","UNKNOWN"]} value={checkStatusFilter} onChange={setCheckStatusFilter} styles={activeFilterStyles(Boolean(checkStatusFilter))} w={135} />
                     <Text size="xs" c="dimmed">{filteredChecks.length}/{checks.length}</Text>
                   </Group>
-                  <div style={{ maxHeight: 440, overflow: "auto" }}>
+                  <div className="monitoring-table-scroll">
                       <Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
                     <Table.Thead><Table.Tr>
                       <SortableTableHeader active={checkSortKey === "device"} direction={checkSortDirection} onClick={() => toggleCheckSort("device")}>Device</SortableTableHeader>
@@ -616,8 +616,8 @@ export function MonitoringPanel({
                 </Card>
         </Tabs.Panel>
 
-        <Tabs.Panel value="agents">
-      <Card withBorder>
+        <Tabs.Panel value="agents" className="monitoring-tab-panel">
+      <Card withBorder className="monitoring-table-card">
                   <Group justify="space-between" mb="sm">
                     <div><Title order={4}>Monitoring agents</Title><Text size="xs" c="dimmed">Independent pull agents authenticate with a SensorSphere-generated token.</Text></div>
                     <Button size="xs" onClick={openCreateAgent}>+ Add agent</Button>
@@ -630,7 +630,7 @@ export function MonitoringPanel({
                     <TextInput size="xs" placeholder="Labels / agent labels" value={agentLabelsFilter} onChange={event => setAgentLabelsFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentLabelsFilter.trim()))} w={220} />
                     <Text size="xs" c="dimmed">{filteredAgents.length}/{agents.length}</Text>
                   </Group>
-                  <div style={{ maxHeight: 320, overflow: "auto" }}>
+                  <div className="monitoring-table-scroll">
                       <Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
                     <Table.Thead><Table.Tr>
                       <SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader>

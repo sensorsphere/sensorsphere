@@ -18,15 +18,15 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.49.1";
+export const MODULE_VERSION = "1.49.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
-  "1.49.1": {
+  "1.49.2": {
     releasedAt: "2026-09-19T05:45:00+02:00",
-    patch: "PR-150-monitoring-foundation-v6b.patch",
+    patch: "PR-150-monitoring-foundation-v7.patch",
     changes: [
-      { type: "changed", description: "Device Registry Monitoring is split into persistent Device Checks and Monitoring Agents tabs, with Device Checks first" }
+      { type: "changed", description: "Device Checks and Monitoring Agents tables now fill the available Monitoring tab height with internal scrolling" }
     ]
   },
 

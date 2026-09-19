@@ -1213,7 +1213,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           <RealtimeEntityBrowser />
         </Tabs.Panel>
 
-        <Tabs.Panel value="monitoring" pt="md">
+        <Tabs.Panel value="monitoring" pt="md" className="device-registry-monitoring-panel">
           <MonitoringPanel quickCheckRequest={quickCheckRequest} onQuickCheckFinished={returnFromQuickCheck} />
         </Tabs.Panel>
 
