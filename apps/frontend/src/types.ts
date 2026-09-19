@@ -1159,6 +1159,13 @@ export interface DeviceDiscovery {
   finishedAt: string | null;
 }
 
+export interface DiscardedDeviceDiscovery {
+  provider: string;
+  identityKey: string;
+  label: string | null;
+  createdAt: string;
+}
+
 export type DiscoveredDeviceActionStatus = "SENT" | "SUCCESS" | "FAILED" | "TIMEOUT";
 
 export interface DiscoveredDeviceAction {

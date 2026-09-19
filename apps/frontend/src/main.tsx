@@ -2002,6 +2002,7 @@ function Dashboard() {
       </AppShell.Header>
 
       <AppShell.Navbar
+        className={navbarCollapsed ? "app-navbar app-navbar-collapsed" : "app-navbar"}
         p={
           navbarCollapsed
             ? "xs"

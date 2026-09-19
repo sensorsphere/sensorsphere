@@ -78,6 +78,7 @@ import type {
   DeviceControlEntitiesState,
   RealtimeEntityRecord,
   DeviceDiscovery,
+  DiscardedDeviceDiscovery,
   DiscoveredDeviceAction
 } from "./types";
 
@@ -1742,6 +1743,19 @@ export async function getDeviceDiscovery(id: string): Promise<DeviceDiscovery> {
 
 export async function getDeviceDiscoveries(): Promise<DeviceDiscovery[]> {
   return readJson<DeviceDiscovery[]>(await fetch("/api/v1/device-control/discoveries"));
+}
+
+export async function getDiscardedDeviceDiscoveries(): Promise<DiscardedDeviceDiscovery[]> {
+  return readJson<DiscardedDeviceDiscovery[]>(await fetch("/api/v1/device-control/discovery-discarded"));
+}
+
+export async function setDeviceDiscoveryDiscarded(input: { provider: string; identityKey: string; label?: string | null; discarded: boolean }): Promise<void> {
+  const response = await fetch("/api/v1/device-control/discovery-discarded", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) await readJson<unknown>(response);
 }
 
 export async function startDiscoveredDeviceAction(

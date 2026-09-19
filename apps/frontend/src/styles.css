@@ -87,6 +87,19 @@ body { background: var(--ss-page-bg); }
   scrollbar-gutter: stable;
 }
 
+/* Keep active icon backgrounds centered when the navigation is collapsed. */
+.app-navbar-collapsed .mantine-NavLink-root {
+  width: 40px;
+  min-width: 40px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.app-navbar-collapsed .mantine-NavLink-section {
+  margin-inline-end: 0;
+}
+
 .metric-routing-main {
   height: 100dvh;
   min-height: 0;

@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.52.0";
+export const MODULE_VERSION = "1.53.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.53.0": {
+    releasedAt: "2026-09-19T11:55:00+02:00",
+    patch: "PR-201-device-discovery-dedup-discard-v1.patch",
+    changes: [
+      { type: "added", description: "Discovery groups multi-agent detections, explains expected registry updates, persists discarded devices and adds action filtering and sortable columns" },
+      { type: "changed", description: "Discovery scan controls show Device Agent availability and disable concurrent scans" },
+      { type: "fixed", description: "Collapsed navigation icon backgrounds are centered consistently" }
+    ]
+  },
+
   "1.52.0": {
     releasedAt: "2026-09-19T11:30:00+02:00",
     patch: "PR-200-device-discovery-yeelight-esphome-v1.patch",

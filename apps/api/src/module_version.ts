@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.25.0";
+export const MODULE_VERSION = "1.26.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.26.0": {
+    releasedAt: "2026-09-19T11:55:00+02:00",
+    patch: "PR-201-device-discovery-dedup-discard-v1.patch",
+    changes: [
+      { type: "added", description: "Device discovery supports persistent discard/restore decisions and exposes discarded discovery records through Device Control" },
+      { type: "changed", description: "Discovery UI can aggregate the same logical device reported by multiple Device Agents without treating healthy alternate agents as registry updates" }
+    ]
+  },
+
   "1.25.0": {
     releasedAt: "2026-09-19T11:30:00+02:00",
     patch: "PR-200-device-discovery-yeelight-esphome-v1.patch",

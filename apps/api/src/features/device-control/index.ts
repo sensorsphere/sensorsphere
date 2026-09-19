@@ -31,6 +31,13 @@ const discoveryCreateSchema = z.object({
   timeoutSeconds: z.number().int().min(1).max(15).optional()
 }).strict();
 
+const discoveryDiscardSchema = z.object({
+  provider: providerSchema,
+  identityKey: z.string().trim().min(1).max(500),
+  label: z.string().trim().max(500).nullable().optional(),
+  discarded: z.boolean()
+}).strict();
+
 const discoveredDeviceActionCreateSchema = z.object({
   provider: providerSchema,
   action: actionSchema,
@@ -884,6 +891,37 @@ export async function registerDeviceControlFeature(
         .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
         .map(discoveryDto)
     );
+  });
+
+  app.get("/api/v1/device-control/discovery-discarded", async (_request, reply) => {
+    const result = await pool.query<{ provider: string; identity_key: string; label: string | null; created_at: Date }>(`
+      SELECT provider, identity_key, label, created_at
+      FROM device_discovery_discarded
+      ORDER BY provider, identity_key
+    `);
+    return reply.send(result.rows.map(row => ({
+      provider: row.provider,
+      identityKey: row.identity_key,
+      label: row.label,
+      createdAt: row.created_at.toISOString()
+    })));
+  });
+
+  app.post("/api/v1/device-control/discovery-discarded", async (request: FastifyRequest<{ Body: unknown }>, reply) => {
+    const parsed = discoveryDiscardSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid discarded discovery request" });
+    const input = parsed.data;
+    const provider = input.provider.toUpperCase();
+    if (input.discarded) {
+      await pool.query(`
+        INSERT INTO device_discovery_discarded (provider, identity_key, label)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (provider, identity_key) DO UPDATE SET label = EXCLUDED.label
+      `, [provider, input.identityKey, input.label ?? null]);
+    } else {
+      await pool.query("DELETE FROM device_discovery_discarded WHERE provider=$1 AND identity_key=$2", [provider, input.identityKey]);
+    }
+    return reply.code(204).send();
   });
 
   app.get("/api/v1/device-control/discoveries/:id", async (
