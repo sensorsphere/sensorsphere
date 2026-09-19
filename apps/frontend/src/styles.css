@@ -569,3 +569,12 @@ body { background: var(--ss-page-bg); }
   min-height: 0;
   overflow: auto;
 }
+
+
+/* Device Discovery: keep the final row fully visible above overlay scrollbars. */
+.device-registry-discovery-scroll {
+  overflow: auto;
+  max-height: calc(100vh - 430px);
+  padding-bottom: 12px;
+  scrollbar-gutter: stable;
+}

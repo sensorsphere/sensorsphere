@@ -1,5 +1,5 @@
 import React from "react";
-import { ActionIcon, Badge, Button, Card, Group, Select, SimpleGrid, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Button, Card, Group, Modal, Select, SimpleGrid, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDeviceAgents, getDeviceDiscoveries, getDiscardedDeviceDiscoveries, setDeviceDiscoveryDiscarded, startDeviceDiscovery } from "./api";
 import type { DeviceAgent, DeviceRegistryDevice } from "./types";
@@ -173,10 +173,12 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const [actionFilter, setActionFilter] = usePersistentState<DiscoveryActionFilter>("device-registry.discovery.filter.action", "CAN_ADD");
   const [showDuplicateAgents, setShowDuplicateAgents] = usePersistentState("device-registry.discovery.show-duplicate-agents", false);
   const [showDiscarded, setShowDiscarded] = usePersistentState("device-registry.discovery.show-discarded", false);
-  const [sortKey, setSortKey] = usePersistentState<DiscoverySortKey>("device-registry.discovery.sort.key", "status");
-  const [sortDirection, setSortDirection] = usePersistentState<SortDirection>("device-registry.discovery.sort.direction", "asc");
+  const [sortKey, setSortKey] = usePersistentState<DiscoverySortKey>("device-registry.discovery.sort.key.v2", "name");
+  const [sortDirection, setSortDirection] = usePersistentState<SortDirection>("device-registry.discovery.sort.direction.v2", "asc");
   const [updateKey, setUpdateKey] = React.useState<string | null>(null);
   const [scanProvider, setScanProvider] = React.useState<DiscoveryProvider | "ALL" | null>(null);
+  const [agentChoice, setAgentChoice] = React.useState<{ row: DisplayDiscoveryRow; rowKey: string } | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
 
   const agentsQuery = useQuery({ queryKey: ["device-agents"], queryFn: getDeviceAgents, refetchInterval: 5000 });
   const discoveriesQuery = useQuery({
@@ -269,8 +271,11 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   }
 
   const filteredRows = displayRows
-    .filter(row => showDiscarded || actionFilter === "DISCARDED" || !row.discarded)
-    .filter(row => actionFilter === "ALL" || row.status === actionFilter)
+    .filter(row => {
+      if (row.discarded) return actionFilter === "DISCARDED" || showDiscarded;
+      if (actionFilter === "DISCARDED") return false;
+      return actionFilter === "ALL" || row.status === actionFilter;
+    })
     .filter(row => !providerFilter || row.discovery.provider.toUpperCase() === providerFilter)
     .filter(row => !agentFilter || row.sourceRows.some(source => source.discovery.agentId === agentFilter))
     .filter(row => {
@@ -320,6 +325,37 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     else { setSortKey(key); setSortDirection("asc"); }
   };
 
+  const beginUpdate = (row: DisplayDiscoveryRow, rowKey: string) => {
+    if (!row.registered) return;
+    const candidateRows = row.sourceRows.filter(source => source.agent?.enabled && source.agent.online);
+    const candidates = candidateRows.length ? candidateRows : row.sourceRows;
+    const assignedAgentId = row.registered.controlAgent?.id ?? null;
+    const assignedIsCandidate = Boolean(assignedAgentId && candidates.some(source => source.discovery.agentId === assignedAgentId));
+    if (candidates.length > 1 && !assignedIsCandidate) {
+      setAgentChoice({ row, rowKey });
+      setSelectedAgentId(candidates[0]?.discovery.agentId ?? null);
+      return;
+    }
+    const selected = assignedIsCandidate
+      ? candidates.find(source => source.discovery.agentId === assignedAgentId) ?? row
+      : row;
+    if (!selected.agent) return;
+    updateMutation.mutate({ request: { agent: selected.agent, provider: selected.discovery.provider.toUpperCase(), device: selected.device }, registered: row.registered, key: rowKey });
+  };
+
+  const confirmAgentChoice = () => {
+    if (!agentChoice?.row.registered || !selectedAgentId) return;
+    const selected = agentChoice.row.sourceRows.find(source => source.discovery.agentId === selectedAgentId);
+    if (!selected?.agent) return;
+    updateMutation.mutate({
+      request: { agent: selected.agent, provider: selected.discovery.provider.toUpperCase(), device: selected.device },
+      registered: agentChoice.row.registered,
+      key: agentChoice.rowKey
+    });
+    setAgentChoice(null);
+    setSelectedAgentId(null);
+  };
+
   return <Stack gap="sm" className="device-registry-discovery-panel">
     <Group justify="space-between" align="flex-end" wrap="wrap">
       <div>
@@ -337,10 +373,10 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     </Group>
 
     <SimpleGrid cols={{ base: 2, sm: 5 }} spacing="sm">
-      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-blue-6)" }}><Text size="xs" c="dimmed">Can be added</Text><Text fw={700} size="xl">{canAddCount}</Text></Card>
-      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-orange-6)" }}><Text size="xs" c="dimmed">To be updated</Text><Text fw={700} size="xl">{updateCount}</Text></Card>
-      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-green-6)" }}><Text size="xs" c="dimmed">Registered</Text><Text fw={700} size="xl">{registeredCount}</Text></Card>
-      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-gray-6)" }}><Text size="xs" c="dimmed">Discarded</Text><Text fw={700} size="xl">{discardedCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-blue-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "CAN_ADD"} color="blue" label="Filter Can be added" onClick={() => setActionFilter("CAN_ADD")} /><Text size="xs" c="dimmed">Can be added</Text></Group><Text fw={700} size="xl">{canAddCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-orange-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "UPDATE"} color="orange" label="Filter To be updated" onClick={() => setActionFilter("UPDATE")} /><Text size="xs" c="dimmed">To be updated</Text></Group><Text fw={700} size="xl">{updateCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-green-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "REGISTERED"} color="green" label="Filter Registered" onClick={() => setActionFilter("REGISTERED")} /><Text size="xs" c="dimmed">Registered</Text></Group><Text fw={700} size="xl">{registeredCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-gray-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "DISCARDED"} color="gray" label="Filter Discarded" onClick={() => { setShowDiscarded(true); setActionFilter("DISCARDED"); }} /><Text size="xs" c="dimmed">Discarded</Text></Group><Text fw={700} size="xl">{discardedCount}</Text></Card>
       <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-cyan-6)" }}><Text size="xs" c="dimmed">Scans running</Text><Text fw={700} size="xl">{runningCount}</Text></Card>
     </SimpleGrid>
 
@@ -361,7 +397,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     </Group>
 
     <Card withBorder padding={0}>
-      <div style={{ overflow: "auto", maxHeight: "calc(100vh - 430px)" }}>
+      <div className="device-registry-discovery-scroll">
         <Table striped highlightOnHover stickyHeader style={{ minWidth: 1040 }}>
           <Table.Thead><Table.Tr>
             <SortableTableHeader active={sortKey === "provider"} direction={sortDirection} onClick={() => toggleSort("provider")}>Provider</SortableTableHeader>
@@ -382,9 +418,10 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                 ? `${Array.isArray(row.device.entities) ? row.device.entities.length : 0} entities`
                 : `Power ${textValue(row.device, "power")} · ${textValue(row.device, "brightness")}%`;
               const agentNames = row.sourceRows.map(source => source.agent?.name ?? source.discovery.agentId);
+              const primaryAgentName = row.agent?.name ?? row.discovery.agentId;
               const agentContent = row.sourceRows.length > 1 && !showDuplicateAgents
-                ? <Tooltip multiline label={<>Discovered by {row.sourceRows.length} agents:<br />{agentNames.join(" · ")}</>}><Text size="sm" style={{ cursor: "help" }}>{row.registered?.controlAgent?.id === row.discovery.agentId ? row.agent?.name : `Discovered by ${row.sourceRows.length} agents`}</Text></Tooltip>
-                : <Text size="sm">{row.agent?.name ?? row.discovery.agentId}</Text>;
+                ? <Tooltip multiline label={<>Discovered by {row.sourceRows.length} agents:<br />{agentNames.join(" · ")}</>}><Text size="sm" style={{ cursor: "help" }}>{primaryAgentName} ({row.sourceRows.length - 1} other{row.sourceRows.length > 2 ? "s" : ""})</Text></Tooltip>
+                : <Text size="sm">{primaryAgentName}</Text>;
               const statusBadge = <Badge size="sm" variant="light" color={statusColor(row.status)}>{statusLabel(row.status)}</Badge>;
               return <Table.Tr key={rowKey}>
                 <Table.Td><Badge variant="light" color={providerColor(provider)}>{provider === "ESPHOME" ? "ESPHome" : "Yeelight"}</Badge></Table.Td>
@@ -397,7 +434,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                 <Table.Td><Text size="xs" c="dimmed">{details}</Text></Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">
                   {row.status === "CAN_ADD" && row.agent && <Tooltip label="Import into Device Registry"><ActionIcon size="sm" variant="light" color="green" onClick={() => onImportDiscoveredDevice(request)}>+</ActionIcon></Tooltip>}
-                  {row.status === "UPDATE" && row.registered && row.agent && <Tooltip label="Update registered device from discovery"><ActionIcon size="sm" variant="light" color="orange" loading={updateKey === rowKey} onClick={() => updateMutation.mutate({ request, registered: row.registered!, key: rowKey })}>↻</ActionIcon></Tooltip>}
+                  {row.status === "UPDATE" && row.registered && row.agent && <Tooltip label="Update registered device from discovery"><ActionIcon size="sm" variant="light" color="orange" loading={updateKey === rowKey} onClick={() => beginUpdate(row, rowKey)}>↻</ActionIcon></Tooltip>}
                   {row.registered && <EditActionIcon onClick={() => onOpenRegisteredDevice(row.registered!)} />}
                   {!row.discarded
                     ? <Tooltip label="Discard this discovered device"><ActionIcon size="sm" variant="light" color="gray" loading={discardMutation.isPending} onClick={() => discardMutation.mutate({ provider, identityKey: row.logicalKey, label: textValue(row.device, "name"), discarded: true })}>×</ActionIcon></Tooltip>
@@ -410,7 +447,30 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
         </Table>
       </div>
     </Card>
+
+    <Modal opened={Boolean(agentChoice)} onClose={() => { setAgentChoice(null); setSelectedAgentId(null); }} title="Select Device Agent" centered>
+      <Stack gap="sm">
+        <Text size="sm" c="dimmed">This device was discovered by multiple agents and is not currently assigned to one of them. Choose the agent that should own the device.</Text>
+        <Select
+          label="Device Agent"
+          data={(agentChoice?.row.sourceRows ?? []).filter(source => source.agent).map(source => ({ value: source.discovery.agentId, label: source.agent?.name ?? source.discovery.agentId }))}
+          value={selectedAgentId}
+          onChange={setSelectedAgentId}
+          searchable
+        />
+        <Group justify="flex-end">
+          <Button variant="default" onClick={() => { setAgentChoice(null); setSelectedAgentId(null); }}>Cancel</Button>
+          <Button disabled={!selectedAgentId} loading={updateMutation.isPending} onClick={confirmAgentChoice}>Update device</Button>
+        </Group>
+      </Stack>
+    </Modal>
   </Stack>;
+}
+
+function FilterCardAction({ active, color, label, onClick }: { active: boolean; color: string; label: string; onClick: () => void }) {
+  return <Tooltip label={label}><ActionIcon size="xs" variant={active ? "light" : "subtle"} color={color} aria-label={label} onClick={onClick}>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 5h16l-6 7v5l-4 2v-7Z"/></svg>
+  </ActionIcon></Tooltip>;
 }
 
 function sourceRowsForKey(groups: Map<string, RawDiscoveryRow[]>, provider: string, logicalKey: string): RawDiscoveryRow[] {

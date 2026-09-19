@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.53.0";
+export const MODULE_VERSION = "1.54.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.54.0": {
+    releasedAt: "2026-09-19T12:20:00+02:00",
+    patch: "PR-202-device-discovery-workflow-polish-v1.patch",
+    changes: [
+      { type: "fixed", description: "Discovery discarded rows can be shown alongside the active action filter and the final table row remains fully scrollable" },
+      { type: "changed", description: "Discovery defaults to Name ascending, shows multi-agent counts inline and prompts for agent ownership when updating an unassigned multi-agent device" },
+      { type: "added", description: "Discovery registry statistic cards expose compact filter actions" }
+    ]
+  },
+
   "1.53.0": {
     releasedAt: "2026-09-19T11:55:00+02:00",
     patch: "PR-201-device-discovery-dedup-discard-v1.patch",
