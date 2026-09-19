@@ -16,6 +16,7 @@ import {
   Select,
   SimpleGrid,
   Stack,
+  Tabs,
   Table,
   Text,
   Textarea,
@@ -305,6 +306,7 @@ export function MonitoringPanel({
   const [checkStatusFilter, setCheckStatusFilter] = usePersistentState<string | null>("device-registry.monitoring.checks.filter.status", null);
   const [checkSortKey, setCheckSortKey] = usePersistentState<CheckSortKey>("device-registry.monitoring.checks.sort.key", "device");
   const [checkSortDirection, setCheckSortDirection] = usePersistentState<SortDirection>("device-registry.monitoring.checks.sort.direction", "asc");
+  const [monitoringTab, setMonitoringTab] = usePersistentState<"checks" | "agents">("device-registry.monitoring.tab", "checks");
 
   const selectedDevice = (devicesQuery.data ?? []).find(device => device.id === checkForm.deviceId);
   const compatibleIdentities = React.useMemo(() => {
@@ -549,117 +551,128 @@ export function MonitoringPanel({
 
       {error && <Text c="red" size="sm">{error}</Text>}
 
-      <Card withBorder>
-        <Group justify="space-between" mb="sm">
-          <div><Title order={4}>Monitoring agents</Title><Text size="xs" c="dimmed">Independent pull agents authenticate with a SensorSphere-generated token.</Text></div>
-          <Button size="xs" onClick={openCreateAgent}>+ Add agent</Button>
-        </Group>
-        <Group gap="xs" mb="sm" wrap="wrap">
-          <ResetFiltersAction active={agentFiltersActive} onReset={() => { setAgentNameFilter(""); setAgentStatusFilter(null); setAgentHostFilter(""); setAgentLabelsFilter(""); }} />
-          <TextInput size="xs" placeholder="Filter name" value={agentNameFilter} onChange={event => setAgentNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentNameFilter.trim()))} w={180} />
-          <Select size="xs" clearable placeholder="Status" data={["ONLINE","OFFLINE","DISABLED"]} value={agentStatusFilter} onChange={setAgentStatusFilter} styles={activeFilterStyles(Boolean(agentStatusFilter))} w={140} />
-          <TextInput size="xs" placeholder="Host / IP" value={agentHostFilter} onChange={event => setAgentHostFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentHostFilter.trim()))} w={180} />
-          <TextInput size="xs" placeholder="Labels / agent labels" value={agentLabelsFilter} onChange={event => setAgentLabelsFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentLabelsFilter.trim()))} w={220} />
-          <Text size="xs" c="dimmed">{filteredAgents.length}/{agents.length}</Text>
-        </Group>
-        <div style={{ maxHeight: 320, overflow: "auto" }}>
-            <Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
-          <Table.Thead><Table.Tr>
-            <SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader>
-            <SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader>
-            <SortableTableHeader active={agentSortKey === "checks"} direction={agentSortDirection} onClick={() => toggleAgentSort("checks")}>Checks</SortableTableHeader>
-            <SortableTableHeader active={agentSortKey === "host"} direction={agentSortDirection} onClick={() => toggleAgentSort("host")}>Host</SortableTableHeader>
-            <Table.Th>Connection</Table.Th>
-            <SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>
-            <Table.Th>System</Table.Th>
-            <SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last seen</SortableTableHeader>
-            <SortableTableHeader active={agentSortKey === "labels"} direction={agentSortDirection} onClick={() => toggleAgentSort("labels")}>Labels</SortableTableHeader>
-            <SortableTableHeader active={agentSortKey === "agentLabels"} direction={agentSortDirection} onClick={() => toggleAgentSort("agentLabels")}>Agent labels</SortableTableHeader>
-            <Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th>
-          </Table.Tr></Table.Thead>
-          <Table.Tbody>
-            {filteredAgents.map(agent => (
-              <Table.Tr key={agent.id}>
-                <Table.Td><Text fw={600} size="sm">{agent.name}</Text></Table.Td>
-                <Table.Td><Badge size="sm" color={!agent.enabled ? "gray" : agent.online ? "green" : "red"}>{!agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE"}</Badge></Table.Td>
-                <Table.Td>{(() => { const count = checks.filter(check => check.assignments.some(item => item.agentId === agent.id)).length; return <Text size="sm" fw={700} c={count > 0 ? "green.6" : "dimmed"}>{count}</Text>; })()}</Table.Td>
-                <Table.Td><Text size="sm">{agent.hostname ?? "—"}</Text><Text size="xs" c="dimmed">{agent.lastIp ?? ""}</Text></Table.Td>
-                <Table.Td><Stack gap={0} style={{ minWidth: 210 }}>
-                  <Text size="xs"><Text span c="dimmed">Local:</Text> {agent.localIp ?? "—"}</Text>
-                  <Text size="xs"><Text span c="dimmed">Source:</Text> {agent.sourceIp ?? "—"}</Text>
-                  <Text size="xs" title={agent.xForwardedFor ?? undefined}><Text span c="dimmed">XFF:</Text> {agent.xForwardedFor ?? "—"}</Text>
-                  {agent.xRealIp && <Text size="xs"><Text span c="dimmed">X-Real-IP:</Text> {agent.xRealIp}</Text>}
-                </Stack></Table.Td>
-                <Table.Td>{agent.version ?? "—"}</Table.Td>
-                <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td>
-                <Table.Td>{relativeAge(agent.lastSeenAt)}</Table.Td>
-                <Table.Td><Text size="xs">{Object.entries(agent.labels).map(([k, v]) => `${k}=${v}`).join(", ") || "—"}</Text></Table.Td>
-                <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
-                <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => openEditAgent(agent)} /><Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} /></Group></Table.Td>
-              </Table.Tr>
-            ))}
-            {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={11}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
-          </Table.Tbody>
-            </Table>
-        </div>
-      </Card>
+      <Tabs value={monitoringTab} onChange={value => value && setMonitoringTab(value as "checks" | "agents")} keepMounted={false}>
+        <Tabs.List mb="sm">
+          <Tabs.Tab value="checks">Device Checks</Tabs.Tab>
+          <Tabs.Tab value="agents">Monitoring Agents</Tabs.Tab>
+        </Tabs.List>
 
+        <Tabs.Panel value="checks">
       <Card withBorder>
-        <Group justify="space-between" mb="sm">
-          <div><Title order={4}>Device checks</Title><Text size="xs" c="dimmed">PING is the first executable check. TCP/HTTP/HTTPS are already represented by the generic contract for future agents.</Text></div>
-          <Button size="xs" onClick={openCreateCheck} disabled={agents.length === 0}>+ Add check</Button>
-        </Group>
-        <Group gap="xs" mb="sm" wrap="wrap">
-          <ResetFiltersAction active={checkFiltersActive} onReset={() => { setCheckDeviceFilter(""); setCheckClassFilter(null); setCheckTypeFilter(null); setCheckTechnologyFilter(null); setCheckNameFilter(""); setCheckAgentFilter(""); setCheckStatusFilter(null); }} />
-          <TextInput size="xs" placeholder="Device name" value={checkDeviceFilter} onChange={event => setCheckDeviceFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkDeviceFilter.trim()))} w={170} />
-          <Select size="xs" clearable searchable placeholder="Class" data={[...new Map(devices.map(device => [device.deviceClass, { value: device.deviceClass, label: device.deviceClassInfo.label }])).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkClassFilter} onChange={setCheckClassFilter} styles={activeFilterStyles(Boolean(checkClassFilter))} w={150} />
-          <Select size="xs" clearable searchable placeholder="Type" data={[...new Map(devices.map(device => [device.deviceType, { value: device.deviceType, label: device.deviceTypeInfo.label }])).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkTypeFilter} onChange={setCheckTypeFilter} styles={activeFilterStyles(Boolean(checkTypeFilter))} w={160} />
-          <Select size="xs" clearable searchable placeholder="Technology" data={[...new Map(devices.flatMap(device => device.technologies.map(item => [item.code, { value:item.code, label:item.label }] as const))).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkTechnologyFilter} onChange={setCheckTechnologyFilter} styles={activeFilterStyles(Boolean(checkTechnologyFilter))} w={170} />
-          <TextInput size="xs" placeholder="Check / type" value={checkNameFilter} onChange={event => setCheckNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkNameFilter.trim()))} w={160} />
-          <TextInput size="xs" placeholder="Agent" value={checkAgentFilter} onChange={event => setCheckAgentFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkAgentFilter.trim()))} w={150} />
-          <Select size="xs" clearable placeholder="Status" data={["UP","DOWN","UNKNOWN"]} value={checkStatusFilter} onChange={setCheckStatusFilter} styles={activeFilterStyles(Boolean(checkStatusFilter))} w={135} />
-          <Text size="xs" c="dimmed">{filteredChecks.length}/{checks.length}</Text>
-        </Group>
-        <div style={{ maxHeight: 440, overflow: "auto" }}>
-            <Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
-          <Table.Thead><Table.Tr>
-            <SortableTableHeader active={checkSortKey === "device"} direction={checkSortDirection} onClick={() => toggleCheckSort("device")}>Device</SortableTableHeader>
-            <SortableTableHeader active={checkSortKey === "class"} direction={checkSortDirection} onClick={() => toggleCheckSort("class")}>Class</SortableTableHeader>
-            <SortableTableHeader active={checkSortKey === "type"} direction={checkSortDirection} onClick={() => toggleCheckSort("type")}>Type</SortableTableHeader>
-            <SortableTableHeader active={checkSortKey === "technology"} direction={checkSortDirection} onClick={() => toggleCheckSort("technology")}>Technology</SortableTableHeader>
-            <SortableTableHeader active={checkSortKey === "check"} direction={checkSortDirection} onClick={() => toggleCheckSort("check")}>Check</SortableTableHeader>
-            <SortableTableHeader active={checkSortKey === "target"} direction={checkSortDirection} onClick={() => toggleCheckSort("target")}>Target</SortableTableHeader>
-            <SortableTableHeader active={checkSortKey === "agents"} direction={checkSortDirection} onClick={() => toggleCheckSort("agents")}>Agents</SortableTableHeader>
-            <SortableTableHeader active={checkSortKey === "mode"} direction={checkSortDirection} onClick={() => toggleCheckSort("mode")}>Mode</SortableTableHeader>
-            <SortableTableHeader active={checkSortKey === "status"} direction={checkSortDirection} onClick={() => toggleCheckSort("status")}>Status</SortableTableHeader>
-            <Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th>
-          </Table.Tr></Table.Thead>
-          <Table.Tbody>
-            {filteredChecks.map(check => {
-              const status = overallCheckStatus(check);
-              const target = check.targetMode === "CUSTOM" ? check.targetValue : check.targetMode.replaceAll("_", " ");
-              const device = deviceById.get(check.deviceId);
-              return <Table.Tr key={check.id}>
-                <Table.Td><Text fw={600} size="sm">{check.deviceName}</Text></Table.Td>
-                <Table.Td>{device ? <Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceClassInfo.icon} color={device.deviceClassInfo.color} /><Text size="sm">{device.deviceClassInfo.label}</Text></Group> : "—"}</Table.Td>
-                <Table.Td>{device ? <Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceTypeInfo.icon} color={device.deviceTypeInfo.color} /><Text size="sm">{device.deviceTypeInfo.label}</Text></Group> : "—"}</Table.Td>
-                <Table.Td>{device && device.technologies.length > 0 ? <Group gap={6} wrap="wrap">{device.technologies.map(item => <Group key={item.code} gap={4} wrap="nowrap"><DeviceGlyph icon={item.icon} color={item.color} /><Text size="xs">{item.label}</Text></Group>)}</Group> : "—"}</Table.Td>
-                <Table.Td><Text size="sm">{check.name}</Text><Text size="xs" c="dimmed">{check.checkType} · {check.intervalSeconds}s</Text></Table.Td>
-                <Table.Td>{(() => {
-                  const resolvedTarget = resolveCheckTarget(check, device);
-                  return <Stack gap={2}><Code>{target ?? "—"}{check.port ? `:${check.port}` : ""}</Code>{resolvedTarget && <Text size="xs" c="dimmed">→ {resolvedTarget}{check.port ? `:${check.port}` : ""}</Text>}</Stack>;
-                })()}</Table.Td>
-                <Table.Td><Text size="xs">{check.assignments.map(item => item.agentName ?? item.agentId).join(" → ")}</Text></Table.Td>
-                <Table.Td><Badge size="sm" variant="light">{check.executionMode}</Badge></Table.Td>
-                <Table.Td><Badge size="sm" color={STATUS_COLORS[status]}>{status}</Badge></Table.Td>
-                <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => openEditCheck(check)} /><Tooltip label="Copy monitoring check"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring check" onClick={() => openCopyCheck(check)}>⧉</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setCheckDeleteTarget(check)} /></Group></Table.Td>
-              </Table.Tr>;
-            })}
-            {filteredChecks.length === 0 && <Table.Tr><Table.Td colSpan={11}><Text ta="center" c="dimmed" py="xl">{checks.length === 0 ? "No monitoring checks yet." : "No monitoring checks match the active filters."}</Text></Table.Td></Table.Tr>}
-          </Table.Tbody>
-            </Table>
-        </div>
-      </Card>
+                  <Group justify="space-between" mb="sm">
+                    <div><Title order={4}>Device checks</Title><Text size="xs" c="dimmed">PING is the first executable check. TCP/HTTP/HTTPS are already represented by the generic contract for future agents.</Text></div>
+                    <Button size="xs" onClick={openCreateCheck} disabled={agents.length === 0}>+ Add check</Button>
+                  </Group>
+                  <Group gap="xs" mb="sm" wrap="wrap">
+                    <ResetFiltersAction active={checkFiltersActive} onReset={() => { setCheckDeviceFilter(""); setCheckClassFilter(null); setCheckTypeFilter(null); setCheckTechnologyFilter(null); setCheckNameFilter(""); setCheckAgentFilter(""); setCheckStatusFilter(null); }} />
+                    <TextInput size="xs" placeholder="Device name" value={checkDeviceFilter} onChange={event => setCheckDeviceFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkDeviceFilter.trim()))} w={170} />
+                    <Select size="xs" clearable searchable placeholder="Class" data={[...new Map(devices.map(device => [device.deviceClass, { value: device.deviceClass, label: device.deviceClassInfo.label }])).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkClassFilter} onChange={setCheckClassFilter} styles={activeFilterStyles(Boolean(checkClassFilter))} w={150} />
+                    <Select size="xs" clearable searchable placeholder="Type" data={[...new Map(devices.map(device => [device.deviceType, { value: device.deviceType, label: device.deviceTypeInfo.label }])).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkTypeFilter} onChange={setCheckTypeFilter} styles={activeFilterStyles(Boolean(checkTypeFilter))} w={160} />
+                    <Select size="xs" clearable searchable placeholder="Technology" data={[...new Map(devices.flatMap(device => device.technologies.map(item => [item.code, { value:item.code, label:item.label }] as const))).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkTechnologyFilter} onChange={setCheckTechnologyFilter} styles={activeFilterStyles(Boolean(checkTechnologyFilter))} w={170} />
+                    <TextInput size="xs" placeholder="Check / type" value={checkNameFilter} onChange={event => setCheckNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkNameFilter.trim()))} w={160} />
+                    <TextInput size="xs" placeholder="Agent" value={checkAgentFilter} onChange={event => setCheckAgentFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkAgentFilter.trim()))} w={150} />
+                    <Select size="xs" clearable placeholder="Status" data={["UP","DOWN","UNKNOWN"]} value={checkStatusFilter} onChange={setCheckStatusFilter} styles={activeFilterStyles(Boolean(checkStatusFilter))} w={135} />
+                    <Text size="xs" c="dimmed">{filteredChecks.length}/{checks.length}</Text>
+                  </Group>
+                  <div style={{ maxHeight: 440, overflow: "auto" }}>
+                      <Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
+                    <Table.Thead><Table.Tr>
+                      <SortableTableHeader active={checkSortKey === "device"} direction={checkSortDirection} onClick={() => toggleCheckSort("device")}>Device</SortableTableHeader>
+                      <SortableTableHeader active={checkSortKey === "class"} direction={checkSortDirection} onClick={() => toggleCheckSort("class")}>Class</SortableTableHeader>
+                      <SortableTableHeader active={checkSortKey === "type"} direction={checkSortDirection} onClick={() => toggleCheckSort("type")}>Type</SortableTableHeader>
+                      <SortableTableHeader active={checkSortKey === "technology"} direction={checkSortDirection} onClick={() => toggleCheckSort("technology")}>Technology</SortableTableHeader>
+                      <SortableTableHeader active={checkSortKey === "check"} direction={checkSortDirection} onClick={() => toggleCheckSort("check")}>Check</SortableTableHeader>
+                      <SortableTableHeader active={checkSortKey === "target"} direction={checkSortDirection} onClick={() => toggleCheckSort("target")}>Target</SortableTableHeader>
+                      <SortableTableHeader active={checkSortKey === "agents"} direction={checkSortDirection} onClick={() => toggleCheckSort("agents")}>Agents</SortableTableHeader>
+                      <SortableTableHeader active={checkSortKey === "mode"} direction={checkSortDirection} onClick={() => toggleCheckSort("mode")}>Mode</SortableTableHeader>
+                      <SortableTableHeader active={checkSortKey === "status"} direction={checkSortDirection} onClick={() => toggleCheckSort("status")}>Status</SortableTableHeader>
+                      <Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th>
+                    </Table.Tr></Table.Thead>
+                    <Table.Tbody>
+                      {filteredChecks.map(check => {
+                        const status = overallCheckStatus(check);
+                        const target = check.targetMode === "CUSTOM" ? check.targetValue : check.targetMode.replaceAll("_", " ");
+                        const device = deviceById.get(check.deviceId);
+                        return <Table.Tr key={check.id}>
+                          <Table.Td><Text fw={600} size="sm">{check.deviceName}</Text></Table.Td>
+                          <Table.Td>{device ? <Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceClassInfo.icon} color={device.deviceClassInfo.color} /><Text size="sm">{device.deviceClassInfo.label}</Text></Group> : "—"}</Table.Td>
+                          <Table.Td>{device ? <Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceTypeInfo.icon} color={device.deviceTypeInfo.color} /><Text size="sm">{device.deviceTypeInfo.label}</Text></Group> : "—"}</Table.Td>
+                          <Table.Td>{device && device.technologies.length > 0 ? <Group gap={6} wrap="wrap">{device.technologies.map(item => <Group key={item.code} gap={4} wrap="nowrap"><DeviceGlyph icon={item.icon} color={item.color} /><Text size="xs">{item.label}</Text></Group>)}</Group> : "—"}</Table.Td>
+                          <Table.Td><Text size="sm">{check.name}</Text><Text size="xs" c="dimmed">{check.checkType} · {check.intervalSeconds}s</Text></Table.Td>
+                          <Table.Td>{(() => {
+                            const resolvedTarget = resolveCheckTarget(check, device);
+                            return <Stack gap={2}><Code>{target ?? "—"}{check.port ? `:${check.port}` : ""}</Code>{resolvedTarget && <Text size="xs" c="dimmed">→ {resolvedTarget}{check.port ? `:${check.port}` : ""}</Text>}</Stack>;
+                          })()}</Table.Td>
+                          <Table.Td><Text size="xs">{check.assignments.map(item => item.agentName ?? item.agentId).join(" → ")}</Text></Table.Td>
+                          <Table.Td><Badge size="sm" variant="light">{check.executionMode}</Badge></Table.Td>
+                          <Table.Td><Badge size="sm" color={STATUS_COLORS[status]}>{status}</Badge></Table.Td>
+                          <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => openEditCheck(check)} /><Tooltip label="Copy monitoring check"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring check" onClick={() => openCopyCheck(check)}>⧉</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setCheckDeleteTarget(check)} /></Group></Table.Td>
+                        </Table.Tr>;
+                      })}
+                      {filteredChecks.length === 0 && <Table.Tr><Table.Td colSpan={11}><Text ta="center" c="dimmed" py="xl">{checks.length === 0 ? "No monitoring checks yet." : "No monitoring checks match the active filters."}</Text></Table.Td></Table.Tr>}
+                    </Table.Tbody>
+                      </Table>
+                  </div>
+                </Card>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="agents">
+      <Card withBorder>
+                  <Group justify="space-between" mb="sm">
+                    <div><Title order={4}>Monitoring agents</Title><Text size="xs" c="dimmed">Independent pull agents authenticate with a SensorSphere-generated token.</Text></div>
+                    <Button size="xs" onClick={openCreateAgent}>+ Add agent</Button>
+                  </Group>
+                  <Group gap="xs" mb="sm" wrap="wrap">
+                    <ResetFiltersAction active={agentFiltersActive} onReset={() => { setAgentNameFilter(""); setAgentStatusFilter(null); setAgentHostFilter(""); setAgentLabelsFilter(""); }} />
+                    <TextInput size="xs" placeholder="Filter name" value={agentNameFilter} onChange={event => setAgentNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentNameFilter.trim()))} w={180} />
+                    <Select size="xs" clearable placeholder="Status" data={["ONLINE","OFFLINE","DISABLED"]} value={agentStatusFilter} onChange={setAgentStatusFilter} styles={activeFilterStyles(Boolean(agentStatusFilter))} w={140} />
+                    <TextInput size="xs" placeholder="Host / IP" value={agentHostFilter} onChange={event => setAgentHostFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentHostFilter.trim()))} w={180} />
+                    <TextInput size="xs" placeholder="Labels / agent labels" value={agentLabelsFilter} onChange={event => setAgentLabelsFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentLabelsFilter.trim()))} w={220} />
+                    <Text size="xs" c="dimmed">{filteredAgents.length}/{agents.length}</Text>
+                  </Group>
+                  <div style={{ maxHeight: 320, overflow: "auto" }}>
+                      <Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
+                    <Table.Thead><Table.Tr>
+                      <SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader>
+                      <SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader>
+                      <SortableTableHeader active={agentSortKey === "checks"} direction={agentSortDirection} onClick={() => toggleAgentSort("checks")}>Checks</SortableTableHeader>
+                      <SortableTableHeader active={agentSortKey === "host"} direction={agentSortDirection} onClick={() => toggleAgentSort("host")}>Host</SortableTableHeader>
+                      <Table.Th>Connection</Table.Th>
+                      <SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>
+                      <Table.Th>System</Table.Th>
+                      <SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last seen</SortableTableHeader>
+                      <SortableTableHeader active={agentSortKey === "labels"} direction={agentSortDirection} onClick={() => toggleAgentSort("labels")}>Labels</SortableTableHeader>
+                      <SortableTableHeader active={agentSortKey === "agentLabels"} direction={agentSortDirection} onClick={() => toggleAgentSort("agentLabels")}>Agent labels</SortableTableHeader>
+                      <Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th>
+                    </Table.Tr></Table.Thead>
+                    <Table.Tbody>
+                      {filteredAgents.map(agent => (
+                        <Table.Tr key={agent.id}>
+                          <Table.Td><Text fw={600} size="sm">{agent.name}</Text></Table.Td>
+                          <Table.Td><Badge size="sm" color={!agent.enabled ? "gray" : agent.online ? "green" : "red"}>{!agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE"}</Badge></Table.Td>
+                          <Table.Td>{(() => { const count = checks.filter(check => check.assignments.some(item => item.agentId === agent.id)).length; return <Text size="sm" fw={700} c={count > 0 ? "green.6" : "dimmed"}>{count}</Text>; })()}</Table.Td>
+                          <Table.Td><Text size="sm">{agent.hostname ?? "—"}</Text><Text size="xs" c="dimmed">{agent.lastIp ?? ""}</Text></Table.Td>
+                          <Table.Td><Stack gap={0} style={{ minWidth: 210 }}>
+                            <Text size="xs"><Text span c="dimmed">Local:</Text> {agent.localIp ?? "—"}</Text>
+                            <Text size="xs"><Text span c="dimmed">Source:</Text> {agent.sourceIp ?? "—"}</Text>
+                            <Text size="xs" title={agent.xForwardedFor ?? undefined}><Text span c="dimmed">XFF:</Text> {agent.xForwardedFor ?? "—"}</Text>
+                            {agent.xRealIp && <Text size="xs"><Text span c="dimmed">X-Real-IP:</Text> {agent.xRealIp}</Text>}
+                          </Stack></Table.Td>
+                          <Table.Td>{agent.version ?? "—"}</Table.Td>
+                          <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td>
+                          <Table.Td>{relativeAge(agent.lastSeenAt)}</Table.Td>
+                          <Table.Td><Text size="xs">{Object.entries(agent.labels).map(([k, v]) => `${k}=${v}`).join(", ") || "—"}</Text></Table.Td>
+                          <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
+                          <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => openEditAgent(agent)} /><Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} /></Group></Table.Td>
+                        </Table.Tr>
+                      ))}
+                      {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={11}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
+                    </Table.Tbody>
+                      </Table>
+                  </div>
+                </Card>
+        </Tabs.Panel>
+      </Tabs>
 
       <Modal opened={agentModalOpen} onClose={() => setAgentModalOpen(false)} title={editingAgent ? "Edit monitoring agent" : "Add monitoring agent"}>
         <Stack>

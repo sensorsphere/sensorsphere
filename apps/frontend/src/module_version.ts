@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.49.0";
+export const MODULE_VERSION = "1.49.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.49.1": {
+    releasedAt: "2026-09-19T05:45:00+02:00",
+    patch: "PR-150-monitoring-foundation-v6b.patch",
+    changes: [
+      { type: "changed", description: "Device Registry Monitoring is split into persistent Device Checks and Monitoring Agents tabs, with Device Checks first" }
+    ]
+  },
+
   "1.49.0": {
     releasedAt: "2026-09-16T01:10:00+02:00",
     patch: "PR-194-agent-system-dashboard-editor-v1.patch",
