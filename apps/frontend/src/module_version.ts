@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.59.0";
+export const MODULE_VERSION = "1.59.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.59.1": {
+    releasedAt: "2026-09-20T01:55:00+02:00",
+    patch: "PR-222-proxmox-contextual-discovery-columns-v1.patch",
+    changes: [
+      { type: "changed", description: "Per-agent Proxmox discovery uses contextual Type / OS, Status / MAC, Node and VMID column labels while keeping the existing sortable columns" }
+    ]
+  },
+
   "1.59.0": {
     releasedAt: "2026-09-20T01:30:00+02:00",
     patch: "PR-221b-proxmox-enrichment-ui-v1.patch",
