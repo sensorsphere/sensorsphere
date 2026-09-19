@@ -1,6 +1,8 @@
 #!/bin/bash
-script_dir=$(dirname "$0")
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "$0")" && pwd -P)"
 
 export AGENT_NAME="device-agent"
 
-"$script_dir/common-agent-update.sh" $@
+exec "$script_dir/common-agent-update.sh" "$@"
