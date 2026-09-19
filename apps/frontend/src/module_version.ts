@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.50.2";
+export const MODULE_VERSION = "1.51.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.51.0": {
+    releasedAt: "2026-09-19T10:30:00+02:00",
+    patch: "PR-199-dashboard-latency-card-move-v1.patch",
+    changes: [
+      { type: "fixed", description: "Application startup and Dashboard navigation no longer block on the latest-observations request" },
+      { type: "fixed", description: "New dashboards remain selected after creation instead of falling back to the first dashboard" },
+      { type: "added", description: "Metric and realtime dashboard cards can be moved to another section or editable dashboard from a dedicated Move action" }
+    ]
+  },
+
   "1.50.2": {
     releasedAt: "2026-09-19T10:15:00+02:00",
     patch: "PR-197-yeelight-state-diagnostics-spinner-v1.patch",

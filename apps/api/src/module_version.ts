@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.23.2";
+export const MODULE_VERSION = "1.24.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.24.0": {
+    releasedAt: "2026-09-19T10:30:00+02:00",
+    patch: "PR-199-dashboard-latency-card-move-v1.patch",
+    changes: [
+      { type: "fixed", description: "Latest observation lookup uses the metric/time index per metric instead of sorting the full observations set" },
+      { type: "added", description: "Simple Dashboard card update APIs support moving metric and realtime cards across editable dashboards and sections" }
+    ]
+  },
+
   "1.23.2": {
     releasedAt: "2026-09-19T11:00:00+02:00",
     patch: "PR-198-yeelight-device-state-normalization-v1.patch",

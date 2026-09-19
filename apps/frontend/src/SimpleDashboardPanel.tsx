@@ -158,6 +158,16 @@ function TrashIcon() {
   );
 }
 
+function MoveIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2.5 8h11" />
+      <path d="m10.5 5 3 3-3 3" />
+      <path d="M5.5 3.5h-2a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" />
+    </svg>
+  );
+}
+
 interface ResolvedMetricCard {
   card: SimpleDashboardCard;
   asset: Asset;
@@ -240,6 +250,13 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
   const [entityEditorWidgetType, setEntityEditorWidgetType] = React.useState<"auto" | "switch" | "value" | "status">("auto");
   const [entityEditorSectionId, setEntityEditorSectionId] = React.useState<string | null>(null);
   const [entityEditorSize, setEntityEditorSize] = React.useState<"small" | "medium" | "large">("medium");
+  const [moveTarget, setMoveTarget] = React.useState<
+    | { kind: "metric"; card: SimpleDashboardCard }
+    | { kind: "entity"; card: SimpleDashboardEntityCard }
+    | null
+  >(null);
+  const [moveDashboardId, setMoveDashboardId] = React.useState<string | null>(null);
+  const [moveSectionId, setMoveSectionId] = React.useState<string | null>(null);
 
   const [deleteTarget, setDeleteTarget] = React.useState<
     | { type: "dashboard"; id: string; name: string }
@@ -256,10 +273,10 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
   const createDashboardMutation = useMutation({
     mutationFn: (name: string) => createSimpleDashboard(name),
     onSuccess: async dashboard => {
-      setSelectedDashboardId(dashboard.id);
       setDashboardModalMode(null);
       setDashboardName("");
       await invalidate();
+      setSelectedDashboardId(dashboard.id);
     }
   });
   const renameDashboardMutation = useMutation({
@@ -390,6 +407,32 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
       size: entityEditorSize
     }),
     onSuccess: async () => { setEntityEditorCard(null); await invalidate(); }
+  });
+  const moveCardMutation = useMutation({
+    mutationFn: async ({ target, dashboardId, sectionId }: { target: NonNullable<typeof moveTarget>; dashboardId: string; sectionId: string | null }) => {
+      if (target.kind === "metric") {
+        return updateSimpleDashboardCard(
+          target.card.dashboardId,
+          target.card.id,
+          target.card.assetMetricId,
+          sectionId,
+          dashboardId
+        );
+      }
+      return updateSimpleDashboardEntityCard(target.card.dashboardId, target.card.id, {
+        widgetType: target.card.widgetType,
+        sectionId,
+        title: target.card.title,
+        size: target.card.size,
+        targetDashboardId: dashboardId
+      });
+    },
+    onSuccess: async () => {
+      setMoveTarget(null);
+      setMoveDashboardId(null);
+      setMoveSectionId(null);
+      await invalidate();
+    }
   });
   const [pendingEntityPower, setPendingEntityPower] = React.useState<Record<string, { desired: boolean; previous: boolean }>>({});
   const entityCommandMutation = useMutation({
@@ -573,10 +616,10 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
     updateCardMutation
   ]);
 
-  if (dashboardsQuery.isLoading || assetsQuery.isLoading || observationsQuery.isLoading) {
+  if (dashboardsQuery.isLoading || assetsQuery.isLoading) {
     return <Loader />;
   }
-  if (dashboardsQuery.isError || assetsQuery.isError || observationsQuery.isError) {
+  if (dashboardsQuery.isError || assetsQuery.isError) {
     return <Alert color="red" title="Unable to load dashboards">Dashboard data could not be loaded.</Alert>;
   }
 
@@ -870,6 +913,12 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
     } else if (editingSectionId) {
       renameSectionMutation.mutate({ dashboardId: activeDashboard.id, sectionId: editingSectionId, name: sectionName.trim() });
     }
+  };
+
+  const openMoveCard = (target: NonNullable<typeof moveTarget>) => {
+    setMoveTarget(target);
+    setMoveDashboardId(target.card.dashboardId);
+    setMoveSectionId(target.card.sectionId);
   };
 
   const saveCardEditor = () => {
@@ -1215,6 +1264,7 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                               {!activeDashboardIsTemplateInstance && (
                                 <Group gap={4} wrap="nowrap">
                                   <ActionIcon size="sm" variant="light" color="blue" aria-label="Edit card" title="Edit card" onClick={() => openEditCardEditor({ card, asset, metric, observation })}>✎</ActionIcon>
+                                  <ActionIcon size="sm" variant="light" color="green" aria-label="Move card" title="Move card" onClick={() => openMoveCard({ kind: "metric", card })}><MoveIcon /></ActionIcon>
                                   <ActionIcon size="sm" variant="light" color="red" aria-label="Remove card" title="Remove card" onClick={() => setDeleteTarget({ type: "card", dashboardId: activeDashboard.id, cardId: card.id, label: `${asset.sensor?.name ?? asset.externalId} · ${metric.displayName}` })}>×</ActionIcon>
                                 </Group>
                               )}
@@ -1269,7 +1319,8 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                               </div>
                               {!activeDashboardIsTemplateInstance && (
                                 <Group gap={4} wrap="nowrap">
-                                  <ActionIcon size="sm" variant="light" title="Edit realtime widget" onClick={() => { setEntityEditorCard(card); setEntityEditorTitle(card.title ?? ""); setEntityEditorWidgetType(card.widgetType); setEntityEditorSectionId(card.sectionId); setEntityEditorSize(card.size ?? "medium"); }}>✎</ActionIcon>
+                                  <ActionIcon size="sm" variant="light" color="blue" title="Edit realtime widget" onClick={() => { setEntityEditorCard(card); setEntityEditorTitle(card.title ?? ""); setEntityEditorWidgetType(card.widgetType); setEntityEditorSectionId(card.sectionId); setEntityEditorSize(card.size ?? "medium"); }}>✎</ActionIcon>
+                                  <ActionIcon size="sm" variant="light" color="green" title="Move realtime widget" aria-label="Move realtime widget" onClick={() => openMoveCard({ kind: "entity", card })}><MoveIcon /></ActionIcon>
                                   <ActionIcon size="sm" variant="light" color="red" title="Remove realtime widget" onClick={() => setDeleteTarget({ type: "entity-card", dashboardId: activeDashboard.id, cardId: card.id, label: `${entity?.deviceName ?? card.deviceId} · ${entity?.entityName ?? card.entityValue}` })}>×</ActionIcon>
                                 </Group>
                               )}
@@ -1325,6 +1376,47 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
           })}
         </Stack>
       )}
+
+      <Modal
+        opened={moveTarget !== null}
+        onClose={() => { setMoveTarget(null); setMoveDashboardId(null); setMoveSectionId(null); }}
+        title="Move card"
+        centered
+      >
+        <Stack gap="sm">
+          <Select
+            label="Dashboard"
+            value={moveDashboardId}
+            data={dashboards.filter(item => !item.templateId).map(item => ({ value: item.id, label: item.name }))}
+            allowDeselect={false}
+            onChange={value => {
+              if (!value) return;
+              setMoveDashboardId(value);
+              const targetSections = sections.filter(item => item.dashboardId === value);
+              setMoveSectionId(targetSections[0]?.id ?? null);
+            }}
+          />
+          <Select
+            label="Section"
+            value={moveSectionId}
+            data={sections.filter(item => item.dashboardId === moveDashboardId).map(item => ({ value: item.id, label: item.name }))}
+            clearable
+            placeholder="Dashboard default"
+            onChange={setMoveSectionId}
+          />
+          <Group justify="flex-end">
+            <Button variant="light" color="gray" onClick={() => { setMoveTarget(null); setMoveDashboardId(null); setMoveSectionId(null); }}>Cancel</Button>
+            <Button
+              color="green"
+              loading={moveCardMutation.isPending}
+              disabled={!moveTarget || !moveDashboardId}
+              onClick={() => moveTarget && moveDashboardId && moveCardMutation.mutate({ target: moveTarget, dashboardId: moveDashboardId, sectionId: moveSectionId })}
+            >
+              Move
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal opened={entityEditorCard !== null} onClose={() => setEntityEditorCard(null)} title="Edit realtime widget" centered>
         <Stack>

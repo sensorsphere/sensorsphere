@@ -1225,7 +1225,6 @@ function Dashboard() {
   if (
     assetsQuery.isLoading ||
     gatewaysQuery.isLoading ||
-    observationsQuery.isLoading ||
     sensorsQuery.isLoading
   ) {
     return (
@@ -1238,7 +1237,6 @@ function Dashboard() {
   if (
     assetsQuery.isError ||
     gatewaysQuery.isError ||
-    observationsQuery.isError ||
     sensorsQuery.isError
   ) {
     return (

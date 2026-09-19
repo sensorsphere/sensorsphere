@@ -20,6 +20,9 @@ const createCardSchema = z.object({
   assetMetricId: uuid,
   sectionId: uuid.nullable().optional()
 }).strict();
+const updateCardSchema = createCardSchema.extend({
+  targetDashboardId: uuid.optional()
+}).strict();
 const createEntityCardSchema = z.object({
   deviceId: uuid,
   entityValue: z.string().trim().min(1).max(300),
@@ -30,7 +33,8 @@ const updateEntityCardSchema = z.object({
   widgetType: z.enum(["auto", "switch", "value", "status"]),
   sectionId: uuid.nullable(),
   title: z.string().trim().max(120).nullable(),
-  size: z.enum(["small", "medium", "large"])
+  size: z.enum(["small", "medium", "large"]),
+  targetDashboardId: uuid.optional()
 }).strict();
 const reorderCardsSchema = z.object({
   cardIds: z.array(uuid).max(500)
@@ -270,11 +274,17 @@ export class SimpleDashboardController {
   ) => {
     const parsedId = uuid.safeParse(request.params.id);
     const parsedCardId = uuid.safeParse(request.params.cardId);
-    const parsed = createCardSchema.safeParse(request.body);
+    const parsed = updateCardSchema.safeParse(request.body);
     if (!parsedId.success || !parsedCardId.success || !parsed.success) {
       return reply.code(400).send({ error: "Invalid dashboard card" });
     }
-    if (!(await this.repository.dashboardIsEditable(parsedId.data))) return reply.code(409).send({ error: "Template instances are read-only" });
+    const targetDashboardId = parsed.data.targetDashboardId ?? parsedId.data;
+    if (!(await this.repository.dashboardIsEditable(parsedId.data)) || !(await this.repository.dashboardIsEditable(targetDashboardId))) {
+      return reply.code(409).send({ error: "Template instances are read-only" });
+    }
+    if (parsed.data.sectionId && !(await this.repository.sectionBelongsToDashboard(targetDashboardId, parsed.data.sectionId))) {
+      return reply.code(400).send({ error: "Dashboard section does not belong to target dashboard" });
+    }
     if (!(await this.repository.metricExists(parsed.data.assetMetricId))) {
       return reply.code(400).send({ error: "Asset metric not found" });
     }
@@ -283,7 +293,8 @@ export class SimpleDashboardController {
         parsedId.data,
         parsedCardId.data,
         parsed.data.assetMetricId,
-        parsed.data.sectionId ?? null
+        parsed.data.sectionId ?? null,
+        targetDashboardId
       );
       if (!card) return reply.code(404).send({ error: "Dashboard card not found" });
       return reply.send(mapCard(card));
@@ -319,8 +330,14 @@ export class SimpleDashboardController {
     const parsedCardId = uuid.safeParse(request.params.cardId);
     const parsed = updateEntityCardSchema.safeParse(request.body);
     if (!parsedId.success || !parsedCardId.success || !parsed.success) return reply.code(400).send({ error: "Invalid realtime entity card" });
-    if (!(await this.repository.dashboardIsEditable(parsedId.data))) return reply.code(409).send({ error: "Template instances are read-only" });
-    const card = await this.repository.updateEntityCard(parsedId.data, parsedCardId.data, parsed.data.widgetType, parsed.data.sectionId, parsed.data.title, parsed.data.size);
+    const targetDashboardId = parsed.data.targetDashboardId ?? parsedId.data;
+    if (!(await this.repository.dashboardIsEditable(parsedId.data)) || !(await this.repository.dashboardIsEditable(targetDashboardId))) {
+      return reply.code(409).send({ error: "Template instances are read-only" });
+    }
+    if (parsed.data.sectionId && !(await this.repository.sectionBelongsToDashboard(targetDashboardId, parsed.data.sectionId))) {
+      return reply.code(400).send({ error: "Dashboard section does not belong to target dashboard" });
+    }
+    const card = await this.repository.updateEntityCard(parsedId.data, parsedCardId.data, parsed.data.widgetType, parsed.data.sectionId, parsed.data.title, parsed.data.size, targetDashboardId);
     if (!card) return reply.code(404).send({ error: "Realtime entity card not found" });
     return reply.send(mapEntityCard(card));
   };

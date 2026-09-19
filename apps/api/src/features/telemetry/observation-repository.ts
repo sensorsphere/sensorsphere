@@ -87,18 +87,31 @@ implements ObservationRepository {
           o.source_ref,
           o.quality,
           COALESCE(am.quality_config, gp.quality_config, metric_quality_default(am.metric_key)) AS metric_quality_config
-        FROM observations o
-        JOIN asset_metrics am
-          ON am.id = o.asset_metric_id
-        LEFT JOIN metric_quality_policies gp
-          ON gp.metric_key = am.metric_key
+        FROM asset_metrics am
         JOIN assets a
           ON a.id = am.asset_id
+        LEFT JOIN metric_quality_policies gp
+          ON gp.metric_key = am.metric_key
         LEFT JOIN sensors s
           ON s.sensor_uid = a.source_sensor_uid
+        JOIN LATERAL (
+          SELECT
+            o.time,
+            o.value_double,
+            o.value_text,
+            o.value_boolean,
+            o.value_json,
+            o.source,
+            o.source_ref,
+            o.quality
+          FROM observations o
+          WHERE o.asset_metric_id = am.id
+          ORDER BY o.time DESC
+          LIMIT 1
+        ) o ON TRUE
         WHERE ($1::uuid IS NULL OR a.id = $1)
           AND am.enabled = TRUE
-        ORDER BY am.id, o.time DESC
+        ORDER BY am.id
         `,
         [assetId ?? null]
       );

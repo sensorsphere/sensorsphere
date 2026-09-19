@@ -1353,7 +1353,7 @@ export async function addSimpleDashboardEntityCard(
 export async function updateSimpleDashboardEntityCard(
   dashboardId: string,
   cardId: string,
-  input: { widgetType: "auto" | "switch" | "value" | "status"; sectionId: string | null; title: string | null; size: "small" | "medium" | "large" }
+  input: { widgetType: "auto" | "switch" | "value" | "status"; sectionId: string | null; title: string | null; size: "small" | "medium" | "large"; targetDashboardId?: string }
 ): Promise<SimpleDashboardEntityCard> {
   return readJson<SimpleDashboardEntityCard>(await fetch(
     `/api/v1/simple-dashboards/${encodeURIComponent(dashboardId)}/entity-cards/${encodeURIComponent(cardId)}`,
@@ -1376,7 +1376,8 @@ export async function updateSimpleDashboardCard(
   dashboardId: string,
   cardId: string,
   assetMetricId: string,
-  sectionId: string | null = null
+  sectionId: string | null = null,
+  targetDashboardId?: string
 ): Promise<SimpleDashboardCard> {
   return readJson<SimpleDashboardCard>(
     await fetch(
@@ -1384,7 +1385,7 @@ export async function updateSimpleDashboardCard(
       {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assetMetricId, sectionId })
+        body: JSON.stringify({ assetMetricId, sectionId, targetDashboardId })
       }
     )
   );

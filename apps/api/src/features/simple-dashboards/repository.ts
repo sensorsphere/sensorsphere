@@ -133,14 +133,31 @@ export class PostgresSimpleDashboardRepository {
     widgetType: string,
     sectionId: string | null,
     title: string | null,
-    size: string
+    size: string,
+    targetDashboardId: string = dashboardId
   ): Promise<SimpleDashboardEntityCardRecord | null> {
     const result = await this.pool.query<SimpleDashboardEntityCardRecord>(`
       UPDATE simple_dashboard_entity_cards
-      SET widget_type=$3, section_id=$4, title=$5, size=$6, updated_at=NOW()
+      SET widget_type=$3,
+          dashboard_id=$7,
+          section_id=$4,
+          title=$5,
+          size=$6,
+          sort_order = CASE
+            WHEN dashboard_id <> $7 OR section_id IS DISTINCT FROM $4 THEN
+              COALESCE((
+                SELECT MAX(other.sort_order) + 1
+                FROM simple_dashboard_entity_cards other
+                WHERE other.dashboard_id = $7
+                  AND other.section_id IS NOT DISTINCT FROM $4
+                  AND other.id <> $1
+              ), 0)
+            ELSE sort_order
+          END,
+          updated_at=NOW()
       WHERE id=$1 AND dashboard_id=$2
       RETURNING id, dashboard_id, section_id, device_id, entity_value, widget_type, title, size, sort_order, created_at, updated_at
-    `, [cardId, dashboardId, widgetType, sectionId, title, size]);
+    `, [cardId, dashboardId, widgetType, sectionId, title, size, targetDashboardId]);
     return result.rows[0] ?? null;
   }
 
@@ -387,6 +404,14 @@ export class PostgresSimpleDashboardRepository {
     return (result.rowCount ?? 0) > 0;
   }
 
+  async sectionBelongsToDashboard(dashboardId: string, sectionId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      "SELECT 1 FROM simple_dashboard_sections WHERE id = $1 AND dashboard_id = $2",
+      [sectionId, dashboardId]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
   async dashboardIsEditable(id: string): Promise<boolean> {
     const result = await this.pool.query(
       "SELECT 1 FROM simple_dashboards WHERE id = $1 AND template_id IS NULL",
@@ -426,14 +451,29 @@ export class PostgresSimpleDashboardRepository {
     dashboardId: string,
     cardId: string,
     assetMetricId: string,
-    sectionId: string | null
+    sectionId: string | null,
+    targetDashboardId: string = dashboardId
   ): Promise<SimpleDashboardCardRecord | null> {
     const result = await this.pool.query<SimpleDashboardCardRecord>(`
       UPDATE simple_dashboard_cards
-      SET asset_metric_id = $3, section_id = $4, updated_at = NOW()
+      SET asset_metric_id = $3,
+          dashboard_id = $5,
+          section_id = $4,
+          sort_order = CASE
+            WHEN dashboard_id <> $5 OR section_id IS DISTINCT FROM $4 THEN
+              COALESCE((
+                SELECT MAX(other.sort_order) + 1
+                FROM simple_dashboard_cards other
+                WHERE other.dashboard_id = $5
+                  AND other.section_id IS NOT DISTINCT FROM $4
+                  AND other.id <> $1
+              ), 0)
+            ELSE sort_order
+          END,
+          updated_at = NOW()
       WHERE id = $1 AND dashboard_id = $2
       RETURNING id, dashboard_id, section_id, asset_metric_id, sort_order, created_at, updated_at
-    `, [cardId, dashboardId, assetMetricId, sectionId]);
+    `, [cardId, dashboardId, assetMetricId, sectionId, targetDashboardId]);
     return result.rows[0] ?? null;
   }
 
