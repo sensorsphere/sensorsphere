@@ -900,8 +900,9 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         ? typeCandidates.find(type => /(controller|microcontroller|iot|esp)/.test(`${type.code} ${type.label}`.toLowerCase())) ?? null
         : null;
 
-    const proxmoxDeviceClass = proxmoxKind === "PVE_NODE" ? "COMPUTE" : "VIRTUAL";
+    const proxmoxDeviceClass = proxmoxKind === "PVE_NODE" || proxmoxKind === "PBS_SERVER" ? "COMPUTE" : "VIRTUAL";
     const proxmoxDeviceType = proxmoxKind === "PVE_NODE" ? "hypervisor"
+      : proxmoxKind === "PBS_SERVER" ? "backup_server"
       : proxmoxKind === "PVE_VM" ? "virtual_machine"
       : proxmoxKind === "PVE_LXC" ? "lxc_container"
       : "";
@@ -929,6 +930,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       status ? `Status: ${status}` : "",
       os ? `OS: ${os}${osType && osType.toLowerCase() !== os.toLowerCase() ? ` (${osType})` : ""}` : (osType ? `OS type: ${osType}` : ""),
       guestAgent ? `Guest agent: ${guestAgent === "true" ? "enabled" : "disabled"}` : "",
+      value("version") ? `Version: ${value("version")}` : "",
       ip ? `IP: ${ip}` : "",
       mac ? `MAC: ${mac}` : ""
     ].filter(Boolean).join(" · ");
@@ -1002,8 +1004,9 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     form.identities = identities;
     form.manufacturer = providerName === "YEELIGHT" ? "Yeelight" : providerName === "PROXMOX" ? "Proxmox" : "ESPHome";
     if (providerName === "PROXMOX") {
-      form.deviceClass = proxmoxKind === "PVE_NODE" ? "COMPUTE" : "VIRTUAL";
+      form.deviceClass = proxmoxKind === "PVE_NODE" || proxmoxKind === "PBS_SERVER" ? "COMPUTE" : "VIRTUAL";
       if (proxmoxKind === "PVE_NODE") form.deviceType = "hypervisor";
+      else if (proxmoxKind === "PBS_SERVER") form.deviceType = "backup_server";
       else if (proxmoxKind === "PVE_VM") form.deviceType = "virtual_machine";
       else if (proxmoxKind === "PVE_LXC") form.deviceType = "lxc_container";
       form.model = proxmoxKind;
@@ -1026,6 +1029,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         status ? `Status: ${status}` : "",
         os ? `OS: ${os}${osType && osType.toLowerCase() !== os.toLowerCase() ? ` (${osType})` : ""}` : (osType ? `OS type: ${osType}` : ""),
         guestAgent ? `Guest agent: ${guestAgent === "true" ? "enabled" : "disabled"}` : "",
+        value("version") ? `Version: ${value("version")}` : "",
         ip ? `IP: ${ip}` : "",
         mac ? `MAC: ${mac}` : ""
       ].filter(Boolean).join(" · ");

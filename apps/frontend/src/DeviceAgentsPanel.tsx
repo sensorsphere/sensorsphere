@@ -181,8 +181,8 @@ function discoveryNeedsRegistryUpdate(
   } else if (providerName === "PROXMOX") {
     if (proxmoxId && !hasIdentity("PROXMOX_ID", value => value.trim().toLowerCase() === proxmoxId)) return true;
     if ((registered.manufacturer ?? "").trim().toLowerCase() !== "proxmox") return true;
-    const expectedClass = proxmoxKind === "PVE_NODE" ? "COMPUTE" : "VIRTUAL";
-    const expectedType = proxmoxKind === "PVE_NODE" ? "hypervisor" : proxmoxKind === "PVE_VM" ? "virtual_machine" : proxmoxKind === "PVE_LXC" ? "lxc_container" : "";
+    const expectedClass = proxmoxKind === "PVE_NODE" || proxmoxKind === "PBS_SERVER" ? "COMPUTE" : "VIRTUAL";
+    const expectedType = proxmoxKind === "PVE_NODE" ? "hypervisor" : proxmoxKind === "PBS_SERVER" ? "backup_server" : proxmoxKind === "PVE_VM" ? "virtual_machine" : proxmoxKind === "PVE_LXC" ? "lxc_container" : "";
     if (expectedType && (registered.deviceClass !== expectedClass || registered.deviceType !== expectedType)) return true;
   }
 
@@ -480,7 +480,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
       if (column === "model") return discoveryValue(device, provider === "PROXMOX" ? "kind" : "model").toLowerCase();
       if (column === "power") return discoveryValue(device, provider === "PROXMOX" ? "status" : "power").toLowerCase();
       if (column === "brightness") return discoveryValue(device, provider === "PROXMOX" ? "node" : "brightness").toLowerCase();
-      if (column === "entities") return discoveryValue(device, provider === "PROXMOX" ? "vmid" : "entities").toLowerCase();
+      if (column === "entities") return discoveryValue(device, provider === "PROXMOX" ? (device.kind === "PBS_SERVER" ? "version" : "vmid") : "entities").toLowerCase();
       return discoveryValue(device, provider === "PROXMOX" ? "providerId" : "id").toLowerCase();
     };
     const compare = (left: string | number, right: string | number) => {
@@ -554,7 +554,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
         {discoveredDevices.length ? (
           <div style={{ overflow: "auto", maxHeight: 420 }}>
             <Table striped highlightOnHover stickyHeader style={{ minWidth: 760 }}>
-              <Table.Thead><Table.Tr><Table.Th>Actions</Table.Th><DiscoveryModalSortHeader label="Registry" column="registry" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label="Name" column="name" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label="IP" column="ip" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label={discoveryProvider?.toUpperCase() === "PROXMOX" ? "Type / OS" : "Model"} column="model" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label={discoveryProvider?.toUpperCase() === "PROXMOX" ? "Status / MAC" : "Power"} column="power" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label={discoveryProvider?.toUpperCase() === "PROXMOX" ? "Node" : "Brightness"} column="brightness" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label={discoveryProvider?.toUpperCase() === "PROXMOX" ? "VMID" : "Entities"} column="entities" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label="ID" column="id" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /></Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th>Actions</Table.Th><DiscoveryModalSortHeader label="Registry" column="registry" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label="Name" column="name" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label="IP" column="ip" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label={discoveryProvider?.toUpperCase() === "PROXMOX" ? "Type / OS" : "Model"} column="model" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label={discoveryProvider?.toUpperCase() === "PROXMOX" ? "Status / MAC" : "Power"} column="power" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label={discoveryProvider?.toUpperCase() === "PROXMOX" ? "Node" : "Brightness"} column="brightness" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label={discoveryProvider?.toUpperCase() === "PROXMOX" ? "VMID / Version" : "Entities"} column="entities" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /><DiscoveryModalSortHeader label="ID" column="id" activeColumn={discoverySortKey} direction={discoverySortDirection} onSort={toggleDiscoverySort} /></Table.Tr></Table.Thead>
               <Table.Tbody>{sortedDiscoveredDevices.map((device, index) => {
                 const registeredDevice = registeredDeviceFor(device);
                 const isYeelight = discoveryProvider?.toUpperCase() === "YEELIGHT";
@@ -642,7 +642,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
                 <Table.Td>{isProxmox ? <><Text size="sm">{discoveryValue(device, "kind")}</Text><Text size="xs" c="dimmed">{discoveryValue(device, "os")}</Text></> : discoveryValue(device, "model")}</Table.Td>
                 <Table.Td>{isProxmox ? <><Text size="sm">{discoveryValue(device, "status")}</Text><Text size="xs" c="dimmed">{discoveryValue(device, "mac")}</Text></> : discoveryValue(device, "power")}</Table.Td>
                 <Table.Td>{isProxmox ? discoveryValue(device, "node") : discoveryValue(device, "brightness")}</Table.Td>
-                <Table.Td><Text size="xs">{isEspHome ? discoveryValue(device, "entities") : isProxmox ? discoveryValue(device, "vmid") : "—"}</Text></Table.Td>
+                <Table.Td><Text size="xs">{isEspHome ? discoveryValue(device, "entities") : isProxmox ? discoveryValue(device, device.kind === "PBS_SERVER" ? "version" : "vmid") : "—"}</Text></Table.Td>
                 <Table.Td><Text ff="monospace" size="xs">{isProxmox ? discoveryValue(device, "providerId") : discoveryValue(device, "id")}</Text></Table.Td>
               </Table.Tr>;
               })}</Table.Tbody>

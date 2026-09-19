@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.59.1";
+export const MODULE_VERSION = "1.60.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.60.0": {
+    releasedAt: "2026-09-20T02:20:00+02:00",
+    patch: "PR-223b-pbs-discovery-ui-v1.patch",
+    changes: [
+      { type: "added", description: "Proxmox discovery recognizes PBS_SERVER records and imports them as COMPUTE / Backup Server devices" },
+      { type: "changed", description: "Proxmox discovery details expose PBS version and reuse the stable PROXMOX_ID identity model" }
+    ]
+  },
+
   "1.59.1": {
     releasedAt: "2026-09-20T01:55:00+02:00",
     patch: "PR-222-proxmox-contextual-discovery-columns-v1.patch",
