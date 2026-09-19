@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.22.0";
+export const MODULE_VERSION = "1.23.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.23.0": {
+    releasedAt: "2026-09-19T09:15:00+02:00",
+    patch: "PR-195-yeelight-realtime-entities-v1.patch",
+    changes: [
+      { type: "added", description: "Device Control polls registered Yeelight devices through their assigned Device Agent and publishes normalized realtime entities" },
+      { type: "changed", description: "Successful Yeelight GET_STATE results are persisted in the provider-neutral Device Control state model for Entity Browser and dashboards" }
+    ]
+  },
+
   "1.22.0": {
     releasedAt: "2026-09-16T01:10:00+02:00",
     patch: "PR-194-agent-system-dashboard-editor-v1.patch",

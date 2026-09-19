@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.49.2";
+export const MODULE_VERSION = "1.50.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.50.0": {
+    releasedAt: "2026-09-19T09:15:00+02:00",
+    patch: "PR-195-yeelight-realtime-entities-v1.patch",
+    changes: [
+      { type: "added", description: "Realtime Entity Browser displays normalized Yeelight power, brightness, color and device properties supplied by Device Control" }
+    ]
+  },
+
   "1.49.2": {
     releasedAt: "2026-09-19T05:45:00+02:00",
     patch: "PR-150-monitoring-foundation-v7.patch",

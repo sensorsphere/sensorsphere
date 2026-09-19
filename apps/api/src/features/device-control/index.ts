@@ -144,6 +144,73 @@ function generateToken(): string {
   return `ssda_${randomBytes(32).toString("base64url")}`;
 }
 
+function readNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function readPower(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["on", "true", "1"].includes(normalized)) return true;
+    if (["off", "false", "0"].includes(normalized)) return false;
+  }
+  if (typeof value === "number") return value !== 0;
+  return null;
+}
+
+function normalizeYeelightState(result: Record<string, unknown>): Record<string, unknown> {
+  const source = result.state && typeof result.state === "object" && !Array.isArray(result.state)
+    ? result.state as Record<string, unknown>
+    : result;
+  const observedAt = new Date().toISOString();
+  const power = readPower(source.power);
+  const brightness = readNumber(source.brightness ?? source.bright);
+  const colorTemperature = readNumber(source.colorTemperature ?? source.ct);
+  const rgb = readNumber(source.rgb);
+  const hue = readNumber(source.hue);
+  const saturation = readNumber(source.saturation ?? source.sat);
+  const colorMode = source.colorMode ?? source.color_mode ?? null;
+  const name = typeof source.name === "string" ? source.name : null;
+  const firmwareVersion = source.firmwareVersion ?? source.fw_ver ?? null;
+  const host = typeof source.host === "string" ? source.host : typeof result.host === "string" ? result.host : null;
+
+  const entities: Array<Record<string, unknown>> = [
+    { id: "power", value: "power", name: "Power", type: "light", currentValue: power, power, unit: null, controllable: true, observedAt },
+    { id: "brightness", value: "brightness", name: "Brightness", type: "number", currentValue: brightness, unit: "%", controllable: false, observedAt },
+    { id: "color_temperature", value: "color_temperature", name: "Color temperature", type: "number", currentValue: colorTemperature, unit: "K", controllable: false, observedAt },
+    { id: "rgb", value: "rgb", name: "RGB", type: "number", currentValue: rgb, unit: null, controllable: false, observedAt },
+    { id: "hue", value: "hue", name: "Hue", type: "number", currentValue: hue, unit: "°", controllable: false, observedAt },
+    { id: "saturation", value: "saturation", name: "Saturation", type: "number", currentValue: saturation, unit: "%", controllable: false, observedAt },
+    { id: "color_mode", value: "color_mode", name: "Color mode", type: "sensor", currentValue: colorMode as string | number | boolean | null, unit: null, controllable: false, observedAt },
+    { id: "name", value: "name", name: "Name", type: "text_sensor", currentValue: name, unit: null, controllable: false, observedAt },
+    { id: "firmware_version", value: "firmware_version", name: "Firmware version", type: "text_sensor", currentValue: firmwareVersion as string | number | boolean | null, unit: null, controllable: false, observedAt }
+  ];
+
+  return {
+    ...source,
+    provider: "YEELIGHT",
+    realtime: true,
+    connected: true,
+    host,
+    power,
+    brightness,
+    colorTemperature,
+    rgb,
+    hue,
+    saturation,
+    colorMode,
+    name,
+    firmwareVersion,
+    entities
+  };
+}
+
 function agentDto(row: AgentRow, connected: boolean) {
   const timeoutMs = row.heartbeat_timeout_seconds * 1000;
   const recent = row.last_seen_at != null && Date.now() - row.last_seen_at.getTime() <= timeoutMs;
@@ -429,10 +496,28 @@ export async function registerDeviceControlFeature(
           return;
         }
         if (message.type === "COMMAND_RESULT") {
-          await pool.query(`
+          const updated = await pool.query<{ device_id: string; provider: string; action: string }>(`
             UPDATE device_control_commands SET status=$3, result=$4::jsonb, error=$5, finished_at=NOW(), updated_at=NOW()
             WHERE id=$1 AND agent_id=$2
+            RETURNING device_id, provider, action
           `, [message.commandId, agent.id, message.status, JSON.stringify(message.result ?? {}), message.error ?? null]);
+          const command = updated.rows[0];
+          if (
+            command
+            && message.status === "SUCCESS"
+            && command.provider.toUpperCase() === "YEELIGHT"
+            && command.action.toUpperCase() === "GET_STATE"
+            && message.result
+          ) {
+            const state = normalizeYeelightState(message.result);
+            await pool.query(`
+              INSERT INTO device_control_states (device_id, agent_id, provider, state, observed_at, updated_at)
+              VALUES ($1,$2,'YEELIGHT',$3::jsonb,NOW(),NOW())
+              ON CONFLICT (device_id) DO UPDATE SET
+                agent_id=EXCLUDED.agent_id, provider=EXCLUDED.provider, state=EXCLUDED.state,
+                observed_at=EXCLUDED.observed_at, updated_at=NOW()
+            `, [command.device_id, agent.id, JSON.stringify(state)]);
+          }
           return;
         }
         if (message.type === "DEVICE_STATE") {
@@ -502,7 +587,69 @@ export async function registerDeviceControlFeature(
     });
   });
 
+  let yeelightPollRunning = false;
+  const pollYeelightStates = async () => {
+    if (yeelightPollRunning) return;
+    yeelightPollRunning = true;
+    try {
+      await pool.query(`
+        DELETE FROM device_control_commands
+        WHERE provider = 'YEELIGHT'
+          AND action = 'GET_STATE'
+          AND parameters->>'source' = 'realtime-entity-poll'
+          AND created_at < NOW() - INTERVAL '1 hour'
+      `);
+      const devices = await pool.query<{ device_id: string; agent_id: string }>(`
+        SELECT d.id AS device_id, d.control_agent_id AS agent_id
+        FROM device_registry_devices d
+        JOIN device_agents a ON a.id = d.control_agent_id AND a.enabled = TRUE
+        WHERE d.enabled = TRUE
+          AND UPPER(COALESCE(d.control_provider, '')) = 'YEELIGHT'
+          AND d.control_agent_id IS NOT NULL
+          AND EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements(COALESCE(a.capabilities, '[]'::jsonb)) capability
+            WHERE UPPER(COALESCE(capability->>'provider', '')) = 'YEELIGHT'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM device_control_commands c
+            WHERE c.device_id = d.id
+              AND c.provider = 'YEELIGHT'
+              AND c.action = 'GET_STATE'
+              AND c.status IN ('PENDING', 'SENT')
+              AND c.expires_at > NOW()
+          )
+        ORDER BY d.control_agent_id, d.id
+      `);
+      const touchedAgents = new Set<string>();
+      for (const device of devices.rows) {
+        const socket = sockets.get(device.agent_id);
+        if (!socket || socket.readyState !== WebSocket.OPEN) continue;
+        const commandId = randomUUID();
+        const expiresAt = new Date(Date.now() + 15_000);
+        await pool.query(`
+          INSERT INTO device_control_commands (id, device_id, agent_id, provider, action, parameters, status, expires_at)
+          VALUES ($1,$2,$3,'YEELIGHT','GET_STATE',$4::jsonb,'PENDING',$5)
+        `, [commandId, device.device_id, device.agent_id, JSON.stringify({ source: "realtime-entity-poll" }), expiresAt]);
+        touchedAgents.add(device.agent_id);
+      }
+      for (const agentId of touchedAgents) {
+        const socket = sockets.get(agentId);
+        if (socket?.readyState === WebSocket.OPEN) await sendPendingCommands(agentId, socket);
+      }
+    } catch (error) {
+      app.log.error({ err: error }, "Yeelight realtime entity polling failed");
+    } finally {
+      yeelightPollRunning = false;
+    }
+  };
+
+  const yeelightPollTimer = setInterval(() => { void pollYeelightStates(); }, 15_000);
+  yeelightPollTimer.unref();
+  setTimeout(() => { void pollYeelightStates(); }, 2_000).unref();
+
   app.addHook("onClose", async () => {
+    clearInterval(yeelightPollTimer);
     for (const socket of sockets.values()) socket.close(1001, "Server shutting down");
     wss.close();
   });
