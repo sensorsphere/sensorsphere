@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.27.1";
+export const MODULE_VERSION = "1.28.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.28.0": {
+    releasedAt: "2026-09-19T21:40:00+02:00",
+    patch: "PR-213-supervisor-update-orchestration-v1.patch",
+    changes: [
+      { type: "added", description: "Device Control persists Supervisor Agent version, runtime state, self-update capability and update lifecycle" },
+      { type: "added", description: "Supervisor Agent self-updates can be requested through the connected Device Agent and tracked to completion" }
+    ]
+  },
+
   "1.27.1": {
     releasedAt: "2026-09-19T17:30:00+02:00",
     patch: "PR-209-device-agent-update-orchestration-v1.patch",

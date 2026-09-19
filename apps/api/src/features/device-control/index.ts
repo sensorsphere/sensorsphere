@@ -57,6 +57,10 @@ const agentUpdateRequestSchema = z.object({
   version: z.string().trim().min(1).max(100).regex(/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/, "Invalid Device Agent version")
 }).strict();
 
+const supervisorUpdateRequestSchema = z.object({
+  version: z.string().trim().min(1).max(100).regex(/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/, "Invalid Supervisor Agent version")
+}).strict();
+
 const helloMessageSchema = z.object({
   type: z.literal("HELLO"),
   agentName: z.string().trim().min(1).max(200).optional(),
@@ -75,6 +79,16 @@ const helloMessageSchema = z.object({
   }).strict()).max(100).optional(),
   agentUpdate: z.object({
     supported: z.boolean()
+  }).strict().optional(),
+  supervisor: z.object({
+    available: z.boolean(),
+    version: z.string().trim().max(100).nullable().optional(),
+    configuredVersion: z.string().trim().max(100).nullable().optional(),
+    containerState: z.string().trim().max(100).nullable().optional(),
+    selfUpdateSupported: z.boolean().optional(),
+    updateStatus: z.string().trim().max(100).nullable().optional(),
+    updateTargetVersion: z.string().trim().max(100).nullable().optional(),
+    updateError: z.string().max(5000).nullable().optional()
   }).strict().optional()
 }).strict();
 
@@ -124,6 +138,16 @@ const agentUpdateResultMessageSchema = z.object({
   error: z.string().max(5000).nullable().optional()
 }).strict();
 
+const supervisorUpdateResultMessageSchema = z.object({
+  type: z.literal("SUPERVISOR_UPDATE_RESULT"),
+  commandId: z.string().uuid(),
+  status: z.enum(["ACCEPTED", "SUCCESS", "FAILED", "REJECTED"]),
+  currentVersion: z.string().trim().max(100).optional(),
+  targetVersion: z.string().trim().max(100).optional(),
+  result: z.unknown().optional(),
+  error: z.string().max(5000).nullable().optional()
+}).strict();
+
 const agentMessageSchema = z.discriminatedUnion("type", [
   helloMessageSchema,
   heartbeatMessageSchema,
@@ -131,7 +155,8 @@ const agentMessageSchema = z.discriminatedUnion("type", [
   deviceStateMessageSchema,
   discoverResultMessageSchema,
   discoveredDeviceActionResultMessageSchema,
-  agentUpdateResultMessageSchema
+  agentUpdateResultMessageSchema,
+  supervisorUpdateResultMessageSchema
 ]);
 
 interface AgentRow {
@@ -148,6 +173,18 @@ interface AgentRow {
   architecture: string | null;
   capabilities: Array<{ provider: string; actions: string[]; discovery?: boolean }>;
   supervisor_available: boolean;
+  supervisor_version: string | null;
+  supervisor_configured_version: string | null;
+  supervisor_container_state: string | null;
+  supervisor_self_update_supported: boolean;
+  supervisor_desired_version: string | null;
+  supervisor_previous_version: string | null;
+  supervisor_update_status: string;
+  supervisor_update_command_id: string | null;
+  supervisor_update_requested_at: Date | null;
+  supervisor_update_started_at: Date | null;
+  supervisor_update_finished_at: Date | null;
+  supervisor_update_error: string | null;
   desired_version: string | null;
   previous_version: string | null;
   update_status: string;
@@ -274,6 +311,17 @@ function agentDto(row: AgentRow, connected: boolean) {
     architecture: row.architecture,
     capabilities: Array.isArray(row.capabilities) ? row.capabilities : [],
     supervisorAvailable: row.supervisor_available ?? false,
+    supervisorVersion: row.supervisor_version,
+    supervisorConfiguredVersion: row.supervisor_configured_version,
+    supervisorContainerState: row.supervisor_container_state,
+    supervisorSelfUpdateSupported: row.supervisor_self_update_supported ?? false,
+    supervisorDesiredVersion: row.supervisor_desired_version,
+    supervisorPreviousVersion: row.supervisor_previous_version,
+    supervisorUpdateStatus: row.supervisor_update_status ?? "IDLE",
+    supervisorUpdateRequestedAt: row.supervisor_update_requested_at?.toISOString() ?? null,
+    supervisorUpdateStartedAt: row.supervisor_update_started_at?.toISOString() ?? null,
+    supervisorUpdateFinishedAt: row.supervisor_update_finished_at?.toISOString() ?? null,
+    supervisorUpdateError: row.supervisor_update_error,
     desiredVersion: row.desired_version,
     previousVersion: row.previous_version,
     updateStatus: row.update_status ?? "IDLE",
@@ -535,6 +583,21 @@ export async function registerDeviceControlFeature(
               agent_labels=$5::jsonb, capabilities=$6::jsonb,
               os_name=COALESCE($7,os_name), os_version=COALESCE($8,os_version), architecture=COALESCE($9,architecture),
               supervisor_available=$10,
+              supervisor_version=$11, supervisor_configured_version=$12, supervisor_container_state=$13,
+              supervisor_self_update_supported=$14,
+              supervisor_update_status=CASE
+                WHEN supervisor_desired_version IS NOT NULL AND $11 = supervisor_desired_version AND supervisor_update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN 'UPDATED'
+                ELSE COALESCE(NULLIF($15,''), supervisor_update_status)
+              END,
+              supervisor_update_finished_at=CASE
+                WHEN supervisor_desired_version IS NOT NULL AND $11 = supervisor_desired_version AND supervisor_update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NOW()
+                ELSE supervisor_update_finished_at
+              END,
+              supervisor_update_error=CASE
+                WHEN supervisor_desired_version IS NOT NULL AND $11 = supervisor_desired_version AND supervisor_update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NULL
+                WHEN $16 IS NOT NULL THEN $16
+                ELSE supervisor_update_error
+              END,
               update_status=CASE
                 WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN 'UPDATED'
                 ELSE update_status
@@ -550,7 +613,9 @@ export async function registerDeviceControlFeature(
               last_seen_at=NOW(), updated_at=NOW()
             WHERE id=$1
           `, [agent.id, message.agentName ?? null, message.version ?? null, message.hostname ?? null, JSON.stringify(labels), JSON.stringify(message.capabilities ?? []),
-              message.systemInfo?.os ?? null, message.systemInfo?.osVersion ?? null, message.systemInfo?.architecture ?? null, message.agentUpdate?.supported ?? false]);
+              message.systemInfo?.os ?? null, message.systemInfo?.osVersion ?? null, message.systemInfo?.architecture ?? null, message.supervisor?.available ?? message.agentUpdate?.supported ?? false,
+              message.supervisor?.version ?? null, message.supervisor?.configuredVersion ?? null, message.supervisor?.containerState ?? null, message.supervisor?.selfUpdateSupported ?? false,
+              message.supervisor?.updateStatus ?? null, message.supervisor?.updateError ?? null]);
           socket.send(JSON.stringify({ type: "HELLO_ACK", agentId: agent.id, serverTime: new Date().toISOString() }));
           await sendPendingCommands(agent.id, socket);
           await sendRealtimeDeviceSync(agent.id, socket);
@@ -578,6 +643,26 @@ export async function registerDeviceControlFeature(
               updated_at=NOW()
             WHERE id=$1 AND update_command_id=$2
           `, [agent.id, message.commandId, nextStatus, message.error ?? null, message.currentVersion ?? null]);
+          return;
+        }
+
+        if (message.type === "SUPERVISOR_UPDATE_RESULT") {
+          const nextStatus = message.status === "ACCEPTED"
+            ? "VERIFYING"
+            : message.status === "SUCCESS"
+              ? "UPDATED"
+              : "FAILED";
+          await pool.query(`
+            UPDATE device_agents SET
+              supervisor_update_status=$3,
+              supervisor_update_started_at=CASE WHEN $3 IN ('VERIFYING','UPDATED') THEN COALESCE(supervisor_update_started_at,NOW()) ELSE supervisor_update_started_at END,
+              supervisor_update_finished_at=CASE WHEN $3 IN ('UPDATED','FAILED') THEN NOW() ELSE supervisor_update_finished_at END,
+              supervisor_update_error=CASE WHEN $3='FAILED' THEN COALESCE($4,'Supervisor Agent update failed') ELSE NULL END,
+              supervisor_previous_version=COALESCE(supervisor_previous_version,$5),
+              supervisor_version=CASE WHEN $3='UPDATED' THEN COALESCE($6,supervisor_version) ELSE supervisor_version END,
+              updated_at=NOW()
+            WHERE id=$1 AND supervisor_update_command_id=$2
+          `, [agent.id, message.commandId, nextStatus, message.error ?? null, message.currentVersion ?? null, message.targetVersion ?? null]);
           return;
         }
 
@@ -855,6 +940,41 @@ export async function registerDeviceControlFeature(
 
     socket.send(JSON.stringify({
       type: "AGENT_UPDATE_REQUEST",
+      commandId,
+      version: parsed.data.version,
+      expiresAt: expiresAt.toISOString()
+    }));
+
+    return reply.code(202).send(agentDto(updated.rows[0]!, true));
+  });
+
+  app.post("/api/v1/device-control/agents/:id/supervisor/update", async (request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply) => {
+    const parsed = supervisorUpdateRequestSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid Supervisor Agent update request" });
+
+    const result = await pool.query<AgentRow>("SELECT * FROM device_agents WHERE id=$1", [request.params.id]);
+    const agent = result.rows[0];
+    if (!agent) return reply.code(404).send({ error: "Device Agent not found" });
+    if (!agent.enabled) return reply.code(409).send({ error: "Device Agent is disabled" });
+    const socket = sockets.get(agent.id);
+    if (socket?.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Device Agent is offline" });
+    if (!agent.supervisor_available) return reply.code(409).send({ error: "Supervisor Agent is unavailable" });
+    if (!agent.supervisor_self_update_supported) return reply.code(409).send({ error: "Supervisor Agent does not support self-update" });
+    if (["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisor_update_status)) {
+      return reply.code(409).send({ error: "A Supervisor Agent update is already in progress" });
+    }
+
+    const commandId = randomUUID();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    const updated = await pool.query<AgentRow>(`
+      UPDATE device_agents SET
+        supervisor_previous_version=supervisor_version, supervisor_desired_version=$2, supervisor_update_status='UPDATING', supervisor_update_command_id=$3,
+        supervisor_update_requested_at=NOW(), supervisor_update_started_at=NOW(), supervisor_update_finished_at=NULL, supervisor_update_error=NULL, updated_at=NOW()
+      WHERE id=$1 RETURNING *
+    `, [agent.id, parsed.data.version, commandId]);
+
+    socket.send(JSON.stringify({
+      type: "SUPERVISOR_UPDATE_REQUEST",
       commandId,
       version: parsed.data.version,
       expiresAt: expiresAt.toISOString()

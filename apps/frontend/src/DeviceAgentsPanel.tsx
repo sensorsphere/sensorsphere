@@ -1,7 +1,7 @@
 import React from "react";
 import { ActionIcon, Badge, Button, Card, Checkbox, Code, Group, Modal, Notification, NumberInput, Select, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createDeviceAgent, deleteDeviceAgent, getDeviceAgents, getDeviceDiscovery, getDiscoveredDeviceAction, regenerateDeviceAgentToken, requestDeviceAgentUpdate, startDeviceDiscovery, startDiscoveredDeviceAction, updateDeviceAgent } from "./api";
+import { createDeviceAgent, deleteDeviceAgent, getDeviceAgents, getDeviceDiscovery, getDiscoveredDeviceAction, regenerateDeviceAgentToken, requestDeviceAgentUpdate, requestSupervisorAgentUpdate, startDeviceDiscovery, startDiscoveredDeviceAction, updateDeviceAgent } from "./api";
 import type { DeviceAgent, DeviceDiscovery, DeviceRegistryDevice, DiscoveredDeviceAction } from "./types";
 import { DeleteActionIcon, EditActionIcon } from "./TableActionIcons";
 
@@ -212,6 +212,8 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
   const [discoveredDevices, setDiscoveredDevices] = React.useState<Array<Record<string, unknown>>>([]);
   const [updateTarget, setUpdateTarget] = React.useState<DeviceAgent | null>(null);
   const [updateVersion, setUpdateVersion] = React.useState("");
+  const [supervisorUpdateTarget, setSupervisorUpdateTarget] = React.useState<DeviceAgent | null>(null);
+  const [supervisorUpdateVersion, setSupervisorUpdateVersion] = React.useState("");
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["device-control", "agents"] });
   const save = useMutation({
@@ -228,6 +230,10 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
   const agentUpdateMutation = useMutation({
     mutationFn: ({ agentId, version }: { agentId: string; version: string }) => requestDeviceAgentUpdate(agentId, version),
     onSuccess: async () => { setUpdateTarget(null); setUpdateVersion(""); await refresh(); }
+  });
+  const supervisorUpdateMutation = useMutation({
+    mutationFn: ({ agentId, version }: { agentId: string; version: string }) => requestSupervisorAgentUpdate(agentId, version),
+    onSuccess: async () => { setSupervisorUpdateTarget(null); setSupervisorUpdateVersion(""); await refresh(); }
   });
   const discoveryMutation = useMutation({
     mutationFn: ({ agentId, provider }: { agentId: string; provider: string }) => startDeviceDiscovery(agentId, provider),
@@ -306,6 +312,11 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
     setUpdateVersion(agent.desiredVersion ?? agent.version ?? "");
     agentUpdateMutation.reset();
   };
+  const openSupervisorUpdate = (agent: DeviceAgent) => {
+    setSupervisorUpdateTarget(agent);
+    setSupervisorUpdateVersion(agent.supervisorDesiredVersion ?? agent.supervisorVersion ?? "");
+    supervisorUpdateMutation.reset();
+  };
   const openDiscovery = (agent: DeviceAgent) => {
     const providers = agent.capabilities.filter(capability => capability.discovery).map(capability => capability.provider);
     const savedProvider = typeof window === "undefined"
@@ -373,20 +384,21 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
   return <Stack gap="md">
     <Group justify="space-between"><div><Text fw={600}>Device Agents</Text><Text size="xs" c="dimmed">Outbound WebSocket agents used for discovery and interactive device control.</Text></div><Button onClick={openCreate}>Add Device Agent</Button></Group>
     <Card withBorder padding={0}>
-      <div style={{ overflow: "auto", maxHeight: 420 }}><Table striped highlightOnHover stickyHeader style={{ minWidth: 980 }}>
-        <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Status</Table.Th><Table.Th>Reported</Table.Th><Table.Th>Version</Table.Th><Table.Th>Update</Table.Th><Table.Th>System</Table.Th><Table.Th style={{ width: 110 }}>Last seen</Table.Th><Table.Th>Capabilities</Table.Th><Table.Th>Labels</Table.Th><Table.Th style={{ width: 176, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
+      <div style={{ overflow: "auto", maxHeight: 420 }}><Table striped highlightOnHover stickyHeader style={{ minWidth: 1120 }}>
+        <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Status</Table.Th><Table.Th>Reported</Table.Th><Table.Th>Version</Table.Th><Table.Th>Update</Table.Th><Table.Th>Supervisor</Table.Th><Table.Th>System</Table.Th><Table.Th style={{ width: 110 }}>Last seen</Table.Th><Table.Th>Capabilities</Table.Th><Table.Th>Labels</Table.Th><Table.Th style={{ width: 202, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
         <Table.Tbody>{(agentsQuery.data ?? []).map(agent => <Table.Tr key={agent.id}>
           <Table.Td><Text size="sm" fw={600}>{agent.name}</Text><Text size="xs" c="dimmed">{agent.hostname ?? "—"}</Text></Table.Td>
           <Table.Td><Badge color={agent.online ? "green" : agent.enabled ? "gray" : "red"} variant="light">{agent.online ? "ONLINE" : agent.enabled ? "OFFLINE" : "DISABLED"}</Badge></Table.Td>
           <Table.Td><Text size="sm">{agent.reportedName ?? "—"}</Text></Table.Td>
           <Table.Td><Text size="sm">{agent.version ?? "—"}</Text>{agent.desiredVersion && agent.desiredVersion !== agent.version && <Text size="xs" c="dimmed">Target {agent.desiredVersion}</Text>}</Table.Td>
           <Table.Td><Tooltip label={agent.updateError ?? (agent.supervisorAvailable ? "Supervisor Agent available" : "Supervisor Agent unavailable")}><Badge size="sm" variant="light" color={agent.updateStatus === "FAILED" ? "red" : agent.updateStatus === "UPDATED" ? "green" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? "blue" : agent.supervisorAvailable ? "teal" : "gray"}>{agent.updateStatus === "IDLE" ? (agent.supervisorAvailable ? "READY" : "NO SUPERVISOR") : agent.updateStatus}</Badge></Tooltip></Table.Td>
+          <Table.Td><Text size="sm">{agent.supervisorVersion ?? "—"}</Text><Tooltip label={agent.supervisorUpdateError ?? (agent.supervisorAvailable ? `Supervisor ${agent.supervisorContainerState ?? "available"}` : "Supervisor Agent unavailable")}><Badge size="xs" variant="light" color={!agent.supervisorAvailable ? "gray" : agent.supervisorUpdateStatus === "FAILED" ? "red" : agent.supervisorUpdateStatus === "UPDATED" ? "green" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus) ? "blue" : agent.supervisorSelfUpdateSupported ? "teal" : "gray"}>{agent.supervisorUpdateStatus === "IDLE" ? (agent.supervisorSelfUpdateSupported ? "READY" : agent.supervisorAvailable ? "NO SELF-UPDATE" : "OFFLINE") : agent.supervisorUpdateStatus}</Badge></Tooltip>{agent.supervisorDesiredVersion && agent.supervisorDesiredVersion !== agent.supervisorVersion && <Text size="xs" c="dimmed">Target {agent.supervisorDesiredVersion}</Text>}</Table.Td>
           <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td>
           <Table.Td title={agent.lastSeenAt ?? undefined}><Text size="sm">{compactDate(agent.lastSeenAt)}</Text></Table.Td>
           <Table.Td><Group gap={4}>{agent.capabilities.length ? agent.capabilities.map(item => <Tooltip key={item.provider} label={`${item.actions.join(", ") || "No actions reported"}${item.discovery ? " · discovery" : ""}`}><Badge variant="outline">{item.provider}</Badge></Tooltip>) : <Text size="sm" c="dimmed">—</Text>}</Group></Table.Td>
           <Table.Td><Text size="xs">{[...agent.agentLabels, ...Object.entries(agent.labels).map(([key,value]) => value === "true" ? key : `${key}=${value}`)].join(", ") || "—"}</Text></Table.Td>
-          <Table.Td><Group gap={10} wrap="nowrap" justify="flex-end"><Tooltip label={agent.online ? "Discover devices" : "Device Agent must be online to discover"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Discover devices" disabled={!agent.online || !agent.capabilities.some(capability => capability.discovery)} onClick={() => openDiscovery(agent)}><RadarIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online to update" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? "An update is already in progress" : "Update Device Agent"}><ActionIcon size="sm" variant="light" color="violet" aria-label="Update Device Agent" disabled={!agent.online || !agent.supervisorAvailable || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => openAgentUpdate(agent)}>↑</ActionIcon></Tooltip><Group gap={4} wrap="nowrap"><EditActionIcon onClick={() => openEdit(agent)} /><Tooltip label="Copy device agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy device agent" onClick={() => openCopy(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerate.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Group></Table.Td>
-        </Table.Tr>)}{(agentsQuery.data ?? []).length === 0 && <Table.Tr><Table.Td colSpan={10}><Text ta="center" c="dimmed" py="xl">No Device Agents yet.</Text></Table.Td></Table.Tr>}</Table.Tbody>
+          <Table.Td><Group gap={10} wrap="nowrap" justify="flex-end"><Tooltip label={agent.online ? "Discover devices" : "Device Agent must be online to discover"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Discover devices" disabled={!agent.online || !agent.capabilities.some(capability => capability.discovery)} onClick={() => openDiscovery(agent)}><RadarIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online to update" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? "An update is already in progress" : "Update Device Agent"}><ActionIcon size="sm" variant="light" color="violet" aria-label="Update Device Agent" disabled={!agent.online || !agent.supervisorAvailable || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => openAgentUpdate(agent)}>↑</ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : !agent.supervisorSelfUpdateSupported ? "Supervisor Agent does not support self-update" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus) ? "Supervisor update already in progress" : "Update Supervisor Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.supervisorAvailable || !agent.supervisorSelfUpdateSupported || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus)} onClick={() => openSupervisorUpdate(agent)}>S↑</ActionIcon></Tooltip><Group gap={4} wrap="nowrap"><EditActionIcon onClick={() => openEdit(agent)} /><Tooltip label="Copy device agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy device agent" onClick={() => openCopy(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerate.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Group></Table.Td>
+        </Table.Tr>)}{(agentsQuery.data ?? []).length === 0 && <Table.Tr><Table.Td colSpan={11}><Text ta="center" c="dimmed" py="xl">No Device Agents yet.</Text></Table.Td></Table.Tr>}</Table.Tbody>
       </Table></div>
     </Card>
 
@@ -566,6 +578,15 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
         <TextInput label="Target version" placeholder="1.2.1" value={updateVersion} onChange={event => setUpdateVersion(event.currentTarget.value)} autoFocus />
         {agentUpdateMutation.isError && <Text c="red" size="sm">{agentUpdateMutation.error instanceof Error ? agentUpdateMutation.error.message : "Unable to request Device Agent update"}</Text>}
         <Group justify="flex-end"><Button variant="default" onClick={() => { setUpdateTarget(null); setUpdateVersion(""); agentUpdateMutation.reset(); }}>Cancel</Button><Button color="violet" loading={agentUpdateMutation.isPending} disabled={!/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(updateVersion.trim())} onClick={() => updateTarget && agentUpdateMutation.mutate({ agentId: updateTarget.id, version: updateVersion.trim() })}>Update</Button></Group>
+      </Stack>
+    </Modal>
+
+    <Modal opened={supervisorUpdateTarget != null} onClose={() => { setSupervisorUpdateTarget(null); setSupervisorUpdateVersion(""); supervisorUpdateMutation.reset(); }} title="Update Supervisor Agent" centered>
+      <Stack>
+        <Text size="sm">Update the Supervisor Agent for <strong>{supervisorUpdateTarget?.name}</strong>{supervisorUpdateTarget?.supervisorVersion ? ` from ${supervisorUpdateTarget.supervisorVersion}` : ""} to the requested version.</Text>
+        <TextInput label="Target version" placeholder="0.3.1" value={supervisorUpdateVersion} onChange={event => setSupervisorUpdateVersion(event.currentTarget.value)} autoFocus />
+        {supervisorUpdateMutation.isError && <Text c="red" size="sm">{supervisorUpdateMutation.error instanceof Error ? supervisorUpdateMutation.error.message : "Unable to request Supervisor Agent update"}</Text>}
+        <Group justify="flex-end"><Button variant="default" onClick={() => { setSupervisorUpdateTarget(null); setSupervisorUpdateVersion(""); supervisorUpdateMutation.reset(); }}>Cancel</Button><Button color="teal" loading={supervisorUpdateMutation.isPending} disabled={!/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(supervisorUpdateVersion.trim())} onClick={() => supervisorUpdateTarget && supervisorUpdateMutation.mutate({ agentId: supervisorUpdateTarget.id, version: supervisorUpdateVersion.trim() })}>Update</Button></Group>
       </Stack>
     </Modal>
 

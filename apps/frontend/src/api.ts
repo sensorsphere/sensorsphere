@@ -1728,6 +1728,14 @@ export async function requestDeviceAgentUpdate(id: string, version: string): Pro
   }));
 }
 
+export async function requestSupervisorAgentUpdate(id: string, version: string): Promise<DeviceAgent> {
+  return readJson<DeviceAgent>(await fetch(`/api/v1/device-control/agents/${id}/supervisor/update`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version })
+  }));
+}
+
 export async function deleteDeviceAgent(id: string): Promise<void> {
   const response = await fetch(`/api/v1/device-control/agents/${id}`, { method: "DELETE" });
   if (!response.ok) await readJson<unknown>(response);

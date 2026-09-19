@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.55.0";
+export const MODULE_VERSION = "1.56.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.56.0": {
+    releasedAt: "2026-09-19T21:40:00+02:00",
+    patch: "PR-213-supervisor-update-orchestration-v1.patch",
+    changes: [
+      { type: "added", description: "Device Agents display their local Supervisor Agent version and self-update status" },
+      { type: "added", description: "Supervisor Agent versions can be updated directly from the Device Agents table" }
+    ]
+  },
+
   "1.55.0": {
     releasedAt: "2026-09-19T17:30:00+02:00",
     patch: "PR-209-device-agent-update-orchestration-v1.patch",

@@ -1094,6 +1094,17 @@ export interface DeviceAgent {
   architecture: string | null;
   capabilities: DeviceAgentCapability[];
   supervisorAvailable: boolean;
+  supervisorVersion: string | null;
+  supervisorConfiguredVersion: string | null;
+  supervisorContainerState: string | null;
+  supervisorSelfUpdateSupported: boolean;
+  supervisorDesiredVersion: string | null;
+  supervisorPreviousVersion: string | null;
+  supervisorUpdateStatus: "IDLE" | "UPDATE_REQUESTED" | "UPDATING" | "VERIFYING" | "UPDATED" | "FAILED" | "ROLLED_BACK";
+  supervisorUpdateRequestedAt: string | null;
+  supervisorUpdateStartedAt: string | null;
+  supervisorUpdateFinishedAt: string | null;
+  supervisorUpdateError: string | null;
   desiredVersion: string | null;
   previousVersion: string | null;
   updateStatus: "IDLE" | "UPDATE_REQUESTED" | "UPDATING" | "VERIFYING" | "UPDATED" | "FAILED" | "ROLLED_BACK";
