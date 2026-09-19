@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.58.2";
+export const MODULE_VERSION = "1.59.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.59.0": {
+    releasedAt: "2026-09-20T01:30:00+02:00",
+    patch: "PR-221b-proxmox-enrichment-ui-v1.patch",
+    changes: [
+      { type: "added", description: "Proxmox discovery displays guest IP, MAC, OS and guest-agent details when reported by Device Agents" },
+      { type: "changed", description: "Proxmox Device Registry imports persist discovered IP, MAC and hostname identities and enriched descriptions" }
+    ]
+  },
+
   "1.58.2": {
     releasedAt: "2026-09-20T00:55:00+02:00",
     patch: "PR-220-proxmox-discovery-ux-v2.patch",

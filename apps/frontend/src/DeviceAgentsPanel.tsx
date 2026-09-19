@@ -639,8 +639,8 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
                 <Table.Td>{registeredDevice ? <Badge size="sm" variant="light" color={needsUpdate ? "orange" : "green"}>{needsUpdate ? "Needs update" : "Registered"}</Badge> : <Badge size="sm" variant="light" color="gray">New</Badge>}</Table.Td>
                 <Table.Td>{discoveryValue(device, "name")}</Table.Td>
                 <Table.Td><Text ff="monospace" size="sm">{discoveryValue(device, "ip")}</Text></Table.Td>
-                <Table.Td>{isProxmox ? discoveryValue(device, "kind") : discoveryValue(device, "model")}</Table.Td>
-                <Table.Td>{isProxmox ? discoveryValue(device, "status") : discoveryValue(device, "power")}</Table.Td>
+                <Table.Td>{isProxmox ? <><Text size="sm">{discoveryValue(device, "kind")}</Text><Text size="xs" c="dimmed">{discoveryValue(device, "os")}</Text></> : discoveryValue(device, "model")}</Table.Td>
+                <Table.Td>{isProxmox ? <><Text size="sm">{discoveryValue(device, "status")}</Text><Text size="xs" c="dimmed">{discoveryValue(device, "mac")}</Text></> : discoveryValue(device, "power")}</Table.Td>
                 <Table.Td>{isProxmox ? discoveryValue(device, "node") : discoveryValue(device, "brightness")}</Table.Td>
                 <Table.Td><Text size="xs">{isEspHome ? discoveryValue(device, "entities") : isProxmox ? discoveryValue(device, "vmid") : "—"}</Text></Table.Td>
                 <Table.Td><Text ff="monospace" size="xs">{isProxmox ? discoveryValue(device, "providerId") : discoveryValue(device, "id")}</Text></Table.Td>

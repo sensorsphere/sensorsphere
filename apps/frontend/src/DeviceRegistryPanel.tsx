@@ -886,6 +886,9 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     const node = value("node");
     const vmid = value("vmid");
     const status = value("status");
+    const os = value("os");
+    const osType = value("osType");
+    const guestAgent = value("guestAgent");
     const entities = Array.isArray(device.entities) ? device.entities.map(item => String(item).trim()).filter(Boolean) : [];
     const typeCandidates = (deviceTypesQuery.data ?? []).filter(type => type.deviceClass === "IOT" || type.deviceClass === "OTHER");
     const normalizedModel = model.toLowerCase();
@@ -913,6 +916,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       ...(ip ? [{ identityType: "IP", value: ip, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 0 }] : []),
       ...(mac ? [{ identityType: "MAC", value: mac, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 10 }] : []),
       ...(providerName === "ESPHOME" && hostname ? [{ identityType: "FQDN", value: hostname, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 20 }] : []),
+      ...(providerName === "PROXMOX" && hostname ? [{ identityType: "HOSTNAME", value: hostname, source: "discovery", labelCode: "PROXMOX", label: "Proxmox", isPrimary: false, sortOrder: 30 }] : []),
       ...(providerName === "ESPHOME" && entities.length === 1 ? [{ identityType: "ESPHOME_ENTITY", value: entities[0]!, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 30 }] : []),
       ...(providerName === "YEELIGHT" && id ? [{ identityType: "YEELIGHT_ID", value: id, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 20 }] : []),
       ...(providerName === "PROXMOX" && proxmoxId ? [{ identityType: "PROXMOX_ID", value: proxmoxId, source: "discovery", labelCode: "PROXMOX", label: "Proxmox", isPrimary: true, sortOrder: 20 }] : [])
@@ -922,7 +926,11 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       endpointId ? `Endpoint: ${endpointId}` : "",
       node ? `Node: ${node}` : "",
       vmid ? `VMID: ${vmid}` : "",
-      status ? `Status: ${status}` : ""
+      status ? `Status: ${status}` : "",
+      os ? `OS: ${os}${osType && osType.toLowerCase() !== os.toLowerCase() ? ` (${osType})` : ""}` : (osType ? `OS type: ${osType}` : ""),
+      guestAgent ? `Guest agent: ${guestAgent === "true" ? "enabled" : "disabled"}` : "",
+      ip ? `IP: ${ip}` : "",
+      mac ? `MAC: ${mac}` : ""
     ].filter(Boolean).join(" · ");
 
     setEditingDevice(null);
@@ -971,6 +979,10 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     const proxmoxKind = value("kind").toUpperCase();
     const proxmoxId = value("providerId");
     const proxmoxParentId = value("parentProviderId");
+    const os = value("os");
+    const osType = value("osType");
+    const status = value("status");
+    const guestAgent = value("guestAgent");
     const entities = Array.isArray(device.entities) ? device.entities.map(item => String(item).trim()).filter(Boolean) : [];
 
     let identities = registered.identities.map(identity => ({ ...identity }));
@@ -983,6 +995,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       identities = upsertDiscoveredIdentity(identities, "YEELIGHT_ID", id, 20);
     } else if (providerName === "PROXMOX") {
       identities = upsertDiscoveredIdentity(identities, "PROXMOX_ID", proxmoxId, 20);
+      identities = upsertDiscoveredIdentity(identities, "HOSTNAME", hostname, 30);
     }
 
     const form = deviceToForm(registered);
@@ -1005,6 +1018,18 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       form.model = model;
     }
     if (firmwareVersion) form.firmwareVersion = firmwareVersion;
+    if (providerName === "PROXMOX") {
+      form.description = [
+        value("endpointId") ? `Endpoint: ${value("endpointId")}` : "",
+        value("node") ? `Node: ${value("node")}` : "",
+        value("vmid") ? `VMID: ${value("vmid")}` : "",
+        status ? `Status: ${status}` : "",
+        os ? `OS: ${os}${osType && osType.toLowerCase() !== os.toLowerCase() ? ` (${osType})` : ""}` : (osType ? `OS type: ${osType}` : ""),
+        guestAgent ? `Guest agent: ${guestAgent === "true" ? "enabled" : "disabled"}` : "",
+        ip ? `IP: ${ip}` : "",
+        mac ? `MAC: ${mac}` : ""
+      ].filter(Boolean).join(" · ");
+    }
     form.controlAgentId = agent.id;
     if (!form.technologies.some(item => item.toLowerCase() === provider.toLowerCase())) {
       form.technologies = [...form.technologies, provider.toLowerCase()];
