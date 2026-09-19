@@ -595,7 +595,7 @@ export async function registerDeviceControlFeature(
               END,
               supervisor_update_error=CASE
                 WHEN supervisor_desired_version IS NOT NULL AND $11 = supervisor_desired_version AND supervisor_update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NULL
-                WHEN $16 IS NOT NULL THEN $16
+                WHEN $16::text IS NOT NULL THEN $16::text
                 ELSE supervisor_update_error
               END,
               update_status=CASE

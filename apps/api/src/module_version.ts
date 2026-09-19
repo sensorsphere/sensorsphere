@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.28.0";
+export const MODULE_VERSION = "1.28.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.28.1": {
+    releasedAt: "2026-09-19T23:20:00+02:00",
+    patch: "PR-213-supervisor-update-orchestration-v2.patch",
+    changes: [
+      { type: "fixed", description: "Device Agent HELLO persistence explicitly types the optional Supervisor update error parameter for PostgreSQL" }
+    ]
+  },
+
   "1.28.0": {
     releasedAt: "2026-09-19T21:40:00+02:00",
     patch: "PR-213-supervisor-update-orchestration-v1.patch",
