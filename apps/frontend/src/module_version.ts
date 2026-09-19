@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.50.0";
+export const MODULE_VERSION = "1.50.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.50.1": {
+    releasedAt: "2026-09-19T09:30:00+02:00",
+    patch: "PR-196-realtime-entity-switch-toggle-v1.patch",
+    changes: [
+      { type: "changed", description: "Realtime dashboard switch widgets use a single Power toggle with explicit ON/OFF state instead of separate On and Off buttons" },
+      { type: "fixed", description: "Realtime dashboard switch widgets preserve the last confirmed power state while a control command is awaiting provider confirmation instead of flashing UNKNOWN" }
+    ]
+  },
+
   "1.50.0": {
     releasedAt: "2026-09-19T09:15:00+02:00",
     patch: "PR-195-yeelight-realtime-entities-v1.patch",

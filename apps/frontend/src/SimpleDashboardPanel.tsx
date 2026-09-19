@@ -11,6 +11,7 @@ import {
   Modal,
   Select,
   SimpleGrid,
+  Switch,
   Stack,
   Tabs,
   Text,
@@ -390,9 +391,18 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
     }),
     onSuccess: async () => { setEntityEditorCard(null); await invalidate(); }
   });
+  const [pendingEntityPower, setPendingEntityPower] = React.useState<Record<string, { desired: boolean; previous: boolean }>>({});
   const entityCommandMutation = useMutation({
     mutationFn: ({ deviceId, entityValue, action }: { deviceId: string; entityValue: string; action: "POWER_ON" | "POWER_OFF" }) =>
-      createDeviceControlCommand(deviceId, action, { entity: entityValue }, 30)
+      createDeviceControlCommand(deviceId, action, { entity: entityValue }, 30),
+    onError: (_error, variables) => {
+      const key = `${variables.deviceId}:${variables.entityValue}`;
+      setPendingEntityPower(current => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+    }
   });
   const dashboards = dashboardsQuery.data?.dashboards ?? [];
   const assets = assetsQuery.data ?? [];
@@ -402,6 +412,21 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
   const entityCards = dashboardsQuery.data?.entityCards ?? [];
   const realtimeEntities = realtimeEntitiesQuery.data ?? [];
   const realtimeEntityByKey = new Map(realtimeEntities.map(entity => [`${entity.deviceId}:${entity.entityValue}`, entity]));
+
+  React.useEffect(() => {
+    setPendingEntityPower(current => {
+      let changed = false;
+      const next = { ...current };
+      for (const [key, pending] of Object.entries(current)) {
+        const entity = realtimeEntityByKey.get(key);
+        if (typeof entity?.currentValue === "boolean" && entity.currentValue === pending.desired) {
+          delete next[key];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [realtimeEntities]);
 
   const activeDashboard =
     dashboards.find(item => item.id === selectedDashboardId) ?? dashboards[0] ?? null;
@@ -1228,7 +1253,12 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                       const widgetType = card.widgetType === "auto"
                         ? (entity?.controllable ? "switch" : entity?.entityType === "binary_sensor" ? "status" : "value")
                         : card.widgetType;
-                      const isBoolean = typeof entity?.currentValue === "boolean";
+                      const entityKey = `${card.deviceId}:${card.entityValue}`;
+                      const pendingPower = pendingEntityPower[entityKey];
+                      const confirmedPower = typeof entity?.currentValue === "boolean" ? entity.currentValue : undefined;
+                      const displayedPower = pendingPower?.previous ?? confirmedPower;
+                      const isBoolean = typeof displayedPower === "boolean";
+                      const powerPending = Boolean(pendingPower);
                       return (
                         <Card key={card.id} withBorder radius="md" p="sm" style={{ borderLeft: "4px solid var(--mantine-color-blue-6)", minHeight: card.size === "small" ? 120 : card.size === "large" ? 190 : 150, gridColumn: card.size === "large" ? "span 2" : undefined }}>
                           <Stack gap={6}>
@@ -1245,13 +1275,37 @@ export function SimpleDashboardPanel({ onOpenTemplateInHistory }: SimpleDashboar
                               )}
                             </Group>
                             <Group justify="space-between" align="center" wrap="nowrap">
-                              <Badge variant="light" color={realtimeEntityColor(entity)}>{realtimeEntityState(entity)}</Badge>
+                              <Badge variant="light" color={powerPending && isBoolean ? (displayedPower ? "green" : "gray") : realtimeEntityColor(entity)}>
+                                {powerPending && isBoolean ? (displayedPower ? "ON" : "OFF") : realtimeEntityState(entity)}
+                              </Badge>
                               <Badge variant="outline" size="xs">{(entity?.entityType ?? "entity").replaceAll("_", " ").toUpperCase()}</Badge>
                             </Group>
                             {widgetType === "switch" && entity?.controllable && isBoolean && (
-                              <Group grow gap="xs">
-                                <Button size="compact-xs" color="green" variant={entity.currentValue === true ? "filled" : "light"} loading={entityCommandMutation.isPending} onClick={() => entityCommandMutation.mutate({ deviceId: card.deviceId, entityValue: card.entityValue, action: "POWER_ON" })}>On</Button>
-                                <Button size="compact-xs" color="gray" variant={entity.currentValue === false ? "filled" : "light"} loading={entityCommandMutation.isPending} onClick={() => entityCommandMutation.mutate({ deviceId: card.deviceId, entityValue: card.entityValue, action: "POWER_OFF" })}>Off</Button>
+                              <Group justify="space-between" align="center" wrap="nowrap">
+                                <Text size="xs" fw={600}>Power</Text>
+                                <Group gap="xs" wrap="nowrap">
+                                  <Switch
+                                    size="sm"
+                                    checked={displayedPower}
+                                    disabled={powerPending || !entity.connected}
+                                    onChange={event => {
+                                      const desired = event.currentTarget.checked;
+                                      setPendingEntityPower(current => ({
+                                        ...current,
+                                        [entityKey]: { desired, previous: displayedPower }
+                                      }));
+                                      entityCommandMutation.mutate({
+                                        deviceId: card.deviceId,
+                                        entityValue: card.entityValue,
+                                        action: desired ? "POWER_ON" : "POWER_OFF"
+                                      });
+                                    }}
+                                  />
+                                  <Text size="xs" fw={700} c={displayedPower ? "green" : "red"}>
+                                    {displayedPower ? "ON" : "OFF"}
+                                  </Text>
+                                  {powerPending && <Text size="xs" c="dimmed">Pending…</Text>}
+                                </Group>
                               </Group>
                             )}
                             <Group justify="space-between" gap="xs">
