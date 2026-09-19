@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.56.1";
+export const MODULE_VERSION = "1.56.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.56.2": {
+    releasedAt: "2026-09-19T23:55:00+02:00",
+    patch: "PR-217-device-agent-version-status-column-v1.patch",
+    changes: [
+      { type: "changed", description: "Device Agent version and update status now share one compact column, matching the Supervisor Agent layout" }
+    ]
+  },
+
   "1.56.1": {
     releasedAt: "2026-09-19T23:35:00+02:00",
     patch: "PR-214-agent-update-target-cleanup-v1.patch",
