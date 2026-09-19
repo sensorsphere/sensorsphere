@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.54.0";
+export const MODULE_VERSION = "1.54.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.54.1": {
+    releasedAt: "2026-09-19T13:00:00+02:00",
+    patch: "PR-203-device-discovery-filter-layout-v1.patch",
+    changes: [
+      { type: "changed", description: "Discovery statistic filter icons toggle their active Registry filter off when clicked again" },
+      { type: "changed", description: "Discovery filters are ordered Provider, Agent, search and Registry for consistency with table columns" },
+      { type: "fixed", description: "Discovery table reserves more bottom scroll space so the final row remains fully visible" }
+    ]
+  },
+
   "1.54.0": {
     releasedAt: "2026-09-19T12:20:00+02:00",
     patch: "PR-202-device-discovery-workflow-polish-v1.patch",

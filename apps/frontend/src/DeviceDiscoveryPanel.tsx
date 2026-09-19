@@ -373,10 +373,10 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     </Group>
 
     <SimpleGrid cols={{ base: 2, sm: 5 }} spacing="sm">
-      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-blue-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "CAN_ADD"} color="blue" label="Filter Can be added" onClick={() => setActionFilter("CAN_ADD")} /><Text size="xs" c="dimmed">Can be added</Text></Group><Text fw={700} size="xl">{canAddCount}</Text></Card>
-      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-orange-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "UPDATE"} color="orange" label="Filter To be updated" onClick={() => setActionFilter("UPDATE")} /><Text size="xs" c="dimmed">To be updated</Text></Group><Text fw={700} size="xl">{updateCount}</Text></Card>
-      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-green-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "REGISTERED"} color="green" label="Filter Registered" onClick={() => setActionFilter("REGISTERED")} /><Text size="xs" c="dimmed">Registered</Text></Group><Text fw={700} size="xl">{registeredCount}</Text></Card>
-      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-gray-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "DISCARDED"} color="gray" label="Filter Discarded" onClick={() => { setShowDiscarded(true); setActionFilter("DISCARDED"); }} /><Text size="xs" c="dimmed">Discarded</Text></Group><Text fw={700} size="xl">{discardedCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-blue-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "CAN_ADD"} color="blue" label="Filter Can be added" onClick={() => setActionFilter(current => current === "CAN_ADD" ? "ALL" : "CAN_ADD")} /><Text size="xs" c="dimmed">Can be added</Text></Group><Text fw={700} size="xl">{canAddCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-orange-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "UPDATE"} color="orange" label="Filter To be updated" onClick={() => setActionFilter(current => current === "UPDATE" ? "ALL" : "UPDATE")} /><Text size="xs" c="dimmed">To be updated</Text></Group><Text fw={700} size="xl">{updateCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-green-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "REGISTERED"} color="green" label="Filter Registered" onClick={() => setActionFilter(current => current === "REGISTERED" ? "ALL" : "REGISTERED")} /><Text size="xs" c="dimmed">Registered</Text></Group><Text fw={700} size="xl">{registeredCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-gray-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "DISCARDED"} color="gray" label="Filter Discarded" onClick={() => { setShowDiscarded(true); setActionFilter(current => current === "DISCARDED" ? "ALL" : "DISCARDED"); }} /><Text size="xs" c="dimmed">Discarded</Text></Group><Text fw={700} size="xl">{discardedCount}</Text></Card>
       <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-cyan-6)" }}><Text size="xs" c="dimmed">Scans running</Text><Text fw={700} size="xl">{runningCount}</Text></Card>
     </SimpleGrid>
 
@@ -385,14 +385,14 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
 
     <Group gap="sm" wrap="nowrap">
       <ResetFiltersAction active={activeFilters} onReset={() => { setProviderFilter(null); setAgentFilter(null); setTextFilter(""); setActionFilter("CAN_ADD"); setShowDuplicateAgents(false); setShowDiscarded(false); }} />
+      <Select size="xs" placeholder="All providers" clearable value={providerFilter} onChange={setProviderFilter} styles={activeFilterStyles(Boolean(providerFilter))} data={DISCOVERY_PROVIDERS.map(provider => ({ value: provider, label: provider === "ESPHOME" ? "ESPHome" : "Yeelight" }))} w={140} />
+      <Select size="xs" placeholder="All agents" clearable searchable value={agentFilter} onChange={setAgentFilter} styles={activeFilterStyles(Boolean(agentFilter))} data={discoveryAgents.map(agent => ({ value: agent.id, label: agent.name }))} w={180} />
       <TextInput size="xs" placeholder="Name / IP / MAC / ID" value={textFilter} onChange={event => setTextFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(textFilter.trim()))} style={{ flex: 1 }} />
+      <Switch size="xs" label="Show duplicate agent discoveries" checked={showDuplicateAgents} onChange={event => setShowDuplicateAgents(event.currentTarget.checked)} />
+      <Switch size="xs" label="Show discarded" checked={showDiscarded} onChange={event => setShowDiscarded(event.currentTarget.checked)} />
       <Select size="xs" value={actionFilter} onChange={value => setActionFilter((value as DiscoveryActionFilter | null) ?? "CAN_ADD")} data={[
         { value: "ALL", label: "All" }, { value: "CAN_ADD", label: "Can be added" }, { value: "UPDATE", label: "To be updated" }, { value: "REGISTERED", label: "Registered" }, { value: "DISCARDED", label: "Discarded" }
       ]} styles={activeFilterStyles(actionFilter !== "CAN_ADD")} w={155} />
-      <Select size="xs" placeholder="All providers" clearable value={providerFilter} onChange={setProviderFilter} styles={activeFilterStyles(Boolean(providerFilter))} data={DISCOVERY_PROVIDERS.map(provider => ({ value: provider, label: provider === "ESPHOME" ? "ESPHome" : "Yeelight" }))} w={140} />
-      <Select size="xs" placeholder="All agents" clearable searchable value={agentFilter} onChange={setAgentFilter} styles={activeFilterStyles(Boolean(agentFilter))} data={discoveryAgents.map(agent => ({ value: agent.id, label: agent.name }))} w={180} />
-      <Switch size="xs" label="Show duplicate agent discoveries" checked={showDuplicateAgents} onChange={event => setShowDuplicateAgents(event.currentTarget.checked)} />
-      <Switch size="xs" label="Show discarded" checked={showDiscarded} onChange={event => setShowDiscarded(event.currentTarget.checked)} />
       <Text size="xs" c="dimmed">{sortedRows.length}</Text>
     </Group>
 
