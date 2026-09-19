@@ -10,7 +10,7 @@ import { activeFilterStyles } from "./ActiveFilterStyles";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import { usePersistentState } from "./preferences/usePersistentState";
 
-const DISCOVERY_PROVIDERS = ["YEELIGHT", "ESPHOME"] as const;
+const DISCOVERY_PROVIDERS = ["YEELIGHT", "ESPHOME", "PROXMOX"] as const;
 type DiscoveryProvider = typeof DISCOVERY_PROVIDERS[number];
 type DiscoveryActionFilter = "ALL" | "CAN_ADD" | "UPDATE" | "REGISTERED" | "DISCARDED";
 type DiscoveryRowStatus = "CAN_ADD" | "UPDATE" | "REGISTERED" | "DISCARDED";
@@ -65,6 +65,10 @@ function discoveryIdentityKey(provider: string, discovered: Record<string, unkno
     const id = normalizeYeelightId(discovered.id);
     if (id) return `YEELIGHT_ID:${id}`;
   }
+  if (normalizedProvider === "PROXMOX") {
+    const providerId = normalizeText(discovered.providerId);
+    if (providerId) return `PROXMOX_ID:${providerId}`;
+  }
   const mac = normalizeMac(discovered.mac);
   if (mac) return `MAC:${mac}`;
   const hostname = normalizeText(discovered.hostname);
@@ -80,11 +84,18 @@ function registeredDeviceFor(provider: string, discovered: Record<string, unknow
   const mac = normalizeMac(discovered.mac);
   const yeelightId = normalizeYeelightId(discovered.id);
   const hostname = normalizeText(discovered.hostname);
+  const proxmoxId = normalizeText(discovered.providerId);
 
   return devices.find(existing => {
     const macMatch = Boolean(mac) && existing.identities.some(identity =>
       identity.identityType.toUpperCase() === "MAC" && normalizeMac(identity.value) === mac
     );
+    if (normalizedProvider === "PROXMOX") {
+      return Boolean(proxmoxId && existing.identities.some(identity =>
+        identity.identityType.toUpperCase() === "PROXMOX_ID"
+        && identity.value.trim().toLowerCase() === proxmoxId
+      ));
+    }
     if (normalizedProvider === "ESPHOME") {
       const hostnameMatch = Boolean(hostname) && existing.identities.some(identity =>
         ["FQDN", "HOSTNAME"].includes(identity.identityType.toUpperCase())
@@ -127,6 +138,15 @@ function registryUpdateReasons(
       && identity.value.trim().toLowerCase() === hostname
     )) reasons.push(`Hostname: add ${textValue(discovered, "hostname")}`);
     if ((registered.manufacturer ?? "").trim().toLowerCase() !== "esphome") reasons.push(`Manufacturer: ${registered.manufacturer ?? "—"} → ESPHome`);
+  } else if (providerName === "PROXMOX") {
+    const providerId = normalizeText(discovered.providerId);
+    if (providerId && !hasIdentity("PROXMOX_ID", value => value.trim().toLowerCase() === providerId)) reasons.push(`Proxmox ID: add ${textValue(discovered, "providerId")}`);
+    if ((registered.manufacturer ?? "").trim().toLowerCase() !== "proxmox") reasons.push(`Manufacturer: ${registered.manufacturer ?? "—"} → Proxmox`);
+    const kind = normalizeText(discovered.kind).toUpperCase();
+    const expectedClass = kind === "PVE_NODE" ? "COMPUTE" : "VIRTUAL";
+    const expectedType = kind === "PVE_NODE" ? "hypervisor" : kind === "PVE_LXC" ? "lxc_container" : kind === "PVE_VM" ? "virtual_machine" : "";
+    if (expectedType && registered.deviceClass !== expectedClass) reasons.push(`Class: ${registered.deviceClass} → ${expectedClass}`);
+    if (expectedType && registered.deviceType !== expectedType) reasons.push(`Type: ${registered.deviceType} → ${expectedType}`);
   }
 
   if (mac && !hasIdentity("MAC", value => normalizeMac(value) === mac)) reasons.push(`MAC: add ${textValue(discovered, "mac")}`);
@@ -172,7 +192,17 @@ async function copyTextToClipboard(text: string): Promise<void> {
 }
 
 function providerColor(provider: string): string {
-  return provider.toUpperCase() === "YEELIGHT" ? "yellow" : "green";
+  const normalized = provider.toUpperCase();
+  if (normalized === "YEELIGHT") return "yellow";
+  if (normalized === "PROXMOX") return "indigo";
+  return "green";
+}
+
+function providerLabel(provider: string): string {
+  const normalized = provider.toUpperCase();
+  if (normalized === "ESPHOME") return "ESPHome";
+  if (normalized === "PROXMOX") return "Proxmox";
+  return "Yeelight";
 }
 
 function statusLabel(status: DiscoveryRowStatus): string {
@@ -227,7 +257,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
           if (capability) requests.push(startDeviceDiscovery(agent.id, currentProvider));
         }
       }
-      if (!requests.length) throw new Error(`No online Device Agent can discover ${provider === "ALL" ? "Yeelight or ESPHome devices" : provider}`);
+      if (!requests.length) throw new Error(`No online Device Agent can discover ${provider === "ALL" ? "Yeelight, ESPHome or Proxmox devices" : provider}`);
       const settled = await Promise.allSettled(requests);
       const failed = settled.filter(item => item.status === "rejected");
       if (failed.length === settled.length) throw new Error("Unable to start discovery on the available Device Agents");
@@ -307,7 +337,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     .filter(row => {
       const needle = textFilter.trim().toLowerCase();
       if (!needle) return true;
-      return ["name", "hostname", "ip", "mac", "model", "id"].some(key => textValue(row.device, key).toLowerCase().includes(needle));
+      return ["name", "hostname", "ip", "mac", "model", "id", "providerId", "node", "vmid", "kind", "endpointId"].some(key => textValue(row.device, key).toLowerCase().includes(needle));
     });
 
   const sortedRows = [...filteredRows].sort((left, right) => {
@@ -386,7 +416,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     <Group justify="space-between" align="flex-end" wrap="wrap">
       <div>
         <Text fw={600}>Device discovery</Text>
-        <Text size="xs" c="dimmed">Consolidated Yeelight and ESPHome discovery reported by Device Agents.</Text>
+        <Text size="xs" c="dimmed">Consolidated Yeelight, ESPHome and Proxmox discovery reported by Device Agents.</Text>
       </div>
       <Group gap="sm" align="center">
         <Text size="xs" c="dimmed">Agents: <Text component="span" c="green" fw={600}>{onlineAgents} online</Text> · <Text component="span" c={offlineAgents ? "red" : "dimmed"} fw={600}>{offlineAgents} offline</Text></Text>
@@ -411,9 +441,9 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
 
     <Group gap="sm" wrap="nowrap">
       <ResetFiltersAction active={activeFilters} onReset={() => { setProviderFilter(null); setAgentFilter(null); setTextFilter(""); setActionFilter("CAN_ADD"); setShowDuplicateAgents(false); setShowDiscarded(false); }} />
-      <Select size="xs" placeholder="All providers" clearable value={providerFilter} onChange={setProviderFilter} styles={activeFilterStyles(Boolean(providerFilter))} data={DISCOVERY_PROVIDERS.map(provider => ({ value: provider, label: provider === "ESPHOME" ? "ESPHome" : "Yeelight" }))} w={140} />
+      <Select size="xs" placeholder="All providers" clearable value={providerFilter} onChange={setProviderFilter} styles={activeFilterStyles(Boolean(providerFilter))} data={DISCOVERY_PROVIDERS.map(provider => ({ value: provider, label: providerLabel(provider) }))} w={140} />
       <Select size="xs" placeholder="All agents" clearable searchable value={agentFilter} onChange={setAgentFilter} styles={activeFilterStyles(Boolean(agentFilter))} data={discoveryAgents.map(agent => ({ value: agent.id, label: agent.name }))} w={180} />
-      <TextInput size="xs" placeholder="Name / IP / MAC / ID" value={textFilter} onChange={event => setTextFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(textFilter.trim()))} style={{ flex: 1 }} />
+      <TextInput size="xs" placeholder="Name / IP / MAC / ID / VMID" value={textFilter} onChange={event => setTextFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(textFilter.trim()))} style={{ flex: 1 }} />
       <Switch size="xs" label="Show duplicate agent discoveries" checked={showDuplicateAgents} onChange={event => setShowDuplicateAgents(event.currentTarget.checked)} />
       <Switch size="xs" label="Show discarded" checked={showDiscarded} onChange={event => setShowDiscarded(event.currentTarget.checked)} />
       <Select size="xs" clearable placeholder="All" value={actionFilter === "ALL" ? null : actionFilter} onChange={value => setActionFilter((value as DiscoveryActionFilter | null) ?? "ALL")} data={[
@@ -430,7 +460,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
             <SortableTableHeader active={sortKey === "agent"} direction={sortDirection} onClick={() => toggleSort("agent")}>Agent</SortableTableHeader>
             <SortableTableHeader active={sortKey === "name"} direction={sortDirection} onClick={() => toggleSort("name")}>Name</SortableTableHeader>
             <SortableTableHeader active={sortKey === "ip"} direction={sortDirection} onClick={() => toggleSort("ip")}>IP</SortableTableHeader>
-            <SortableTableHeader active={sortKey === "identity"} direction={sortDirection} onClick={() => toggleSort("identity")}>MAC / ID</SortableTableHeader>
+            <SortableTableHeader active={sortKey === "identity"} direction={sortDirection} onClick={() => toggleSort("identity")}>Identity</SortableTableHeader>
             <SortableTableHeader active={sortKey === "model"} direction={sortDirection} onClick={() => toggleSort("model")}>Model</SortableTableHeader>
             <Table.Th>Details</Table.Th>
             <SortableTableHeader active={sortKey === "status"} direction={sortDirection} onClick={() => toggleSort("status")}>Registry</SortableTableHeader>
@@ -443,7 +473,9 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
               const rowKey = `${row.discovery.commandId}:${row.index}:${row.discovery.agentId}`;
               const details = provider === "ESPHOME"
                 ? `${Array.isArray(row.device.entities) ? row.device.entities.length : 0} entities`
-                : `Power ${textValue(row.device, "power")} · ${textValue(row.device, "brightness")}%`;
+                : provider === "PROXMOX"
+                  ? `${textValue(row.device, "kind")} · node ${textValue(row.device, "node")} · status ${textValue(row.device, "status")}`
+                  : `Power ${textValue(row.device, "power")} · ${textValue(row.device, "brightness")}%`;
               const agentNames = row.sourceRows.map(source => source.agent?.name ?? source.discovery.agentId);
               const primaryAgentName = row.agent?.name ?? row.discovery.agentId;
               const agentContent = row.sourceRows.length > 1 && !showDuplicateAgents
@@ -451,13 +483,13 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                 : <Text size="sm">{primaryAgentName}</Text>;
               const statusBadge = <Badge size="sm" variant="light" color={statusColor(row.status)}>{statusLabel(row.status)}</Badge>;
               return <Table.Tr key={rowKey}>
-                <Table.Td><Badge variant="light" color={providerColor(provider)}>{provider === "ESPHOME" ? "ESPHome" : "Yeelight"}</Badge></Table.Td>
+                <Table.Td><Badge variant="light" color={providerColor(provider)}>{providerLabel(provider)}</Badge></Table.Td>
                 <Table.Td>{agentContent}</Table.Td>
                 <Table.Td><CopyableDiscoveryValue value={textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")} fw={600} /></Table.Td>
                 <Table.Td><CopyableDiscoveryValue value={textValue(row.device, "ip")} monospace /></Table.Td>
-                <Table.Td><CopyableDiscoveryValue value={provider === "YEELIGHT" ? textValue(row.device, "id") : textValue(row.device, "mac")} monospace compact /></Table.Td>
-                <Table.Td><Text size="sm">{textValue(row.device, "model")}</Text></Table.Td>
-                <Table.Td><Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Discovery details</Text><Text size="xs">Name: {textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")}</Text><Text size="xs">IP: {textValue(row.device, "ip")}</Text><Text size="xs">MAC / ID: {provider === "YEELIGHT" ? textValue(row.device, "id") : textValue(row.device, "mac")}</Text><Text size="xs">Model: {textValue(row.device, "model")}</Text><Text size="xs">{details}</Text></Stack>}><Text size="xs" c="dimmed" style={{ cursor: "help" }}>{details}</Text></Tooltip></Table.Td>
+                <Table.Td><CopyableDiscoveryValue value={provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")} monospace compact /></Table.Td>
+                <Table.Td><Text size="sm">{provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text></Table.Td>
+                <Table.Td><Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Discovery details</Text><Text size="xs">Name: {textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")}</Text><Text size="xs">IP: {textValue(row.device, "ip")}</Text><Text size="xs">Identity: {provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")}</Text><Text size="xs">Model / kind: {provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text>{provider === "PROXMOX" && <><Text size="xs">Endpoint: {textValue(row.device, "endpointId")}</Text><Text size="xs">Node: {textValue(row.device, "node")}</Text><Text size="xs">VMID: {textValue(row.device, "vmid")}</Text><Text size="xs">Parent: {textValue(row.device, "parentProviderId")}</Text></>}<Text size="xs">{details}</Text></Stack>}><Text size="xs" c="dimmed" style={{ cursor: "help" }}>{details}</Text></Tooltip></Table.Td>
                 <Table.Td>{row.status === "UPDATE" ? <Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Expected updates</Text>{row.updateReasons.map(reason => <Text key={reason} size="xs">• {reason}</Text>)}</Stack>}>{statusBadge}</Tooltip> : statusBadge}</Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">
                   {row.status === "CAN_ADD" && row.agent && <Tooltip label="Import into Device Registry"><ActionIcon size="sm" variant="light" color="green" onClick={() => onImportDiscoveredDevice(request)}>+</ActionIcon></Tooltip>}

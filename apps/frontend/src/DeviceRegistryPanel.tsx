@@ -879,6 +879,13 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     const discoveredName = value("name");
     const model = value("model");
     const firmwareVersion = value("firmwareVersion");
+    const proxmoxKind = value("kind").toUpperCase();
+    const proxmoxId = value("providerId");
+    const proxmoxParentId = value("parentProviderId");
+    const endpointId = value("endpointId");
+    const node = value("node");
+    const vmid = value("vmid");
+    const status = value("status");
     const entities = Array.isArray(device.entities) ? device.entities.map(item => String(item).trim()).filter(Boolean) : [];
     const typeCandidates = (deviceTypesQuery.data ?? []).filter(type => type.deviceClass === "IOT" || type.deviceClass === "OTHER");
     const normalizedModel = model.toLowerCase();
@@ -886,30 +893,59 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       ? typeCandidates.find(type => normalizedModel.includes("strip")
         ? /strip/.test(`${type.code} ${type.label}`.toLowerCase())
         : /(bulb|light|lamp)/.test(`${type.code} ${type.label}`.toLowerCase())) ?? null
-      : typeCandidates.find(type => /(controller|microcontroller|iot|esp)/.test(`${type.code} ${type.label}`.toLowerCase())) ?? null;
+      : providerName === "ESPHOME"
+        ? typeCandidates.find(type => /(controller|microcontroller|iot|esp)/.test(`${type.code} ${type.label}`.toLowerCase())) ?? null
+        : null;
+
+    const proxmoxDeviceClass = proxmoxKind === "PVE_NODE" ? "COMPUTE" : "VIRTUAL";
+    const proxmoxDeviceType = proxmoxKind === "PVE_NODE" ? "hypervisor"
+      : proxmoxKind === "PVE_VM" ? "virtual_machine"
+      : proxmoxKind === "PVE_LXC" ? "lxc_container"
+      : "";
+    const proxmoxParent = proxmoxParentId
+      ? devices.find(existing => existing.identities.some(identity =>
+        identity.identityType.toUpperCase() === "PROXMOX_ID"
+        && identity.value.trim().toLowerCase() === proxmoxParentId.toLowerCase()
+      )) ?? null
+      : null;
 
     const identities: DeviceIdentity[] = [
       ...(ip ? [{ identityType: "IP", value: ip, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 0 }] : []),
       ...(mac ? [{ identityType: "MAC", value: mac, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 10 }] : []),
       ...(providerName === "ESPHOME" && hostname ? [{ identityType: "FQDN", value: hostname, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 20 }] : []),
       ...(providerName === "ESPHOME" && entities.length === 1 ? [{ identityType: "ESPHOME_ENTITY", value: entities[0]!, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 30 }] : []),
-      ...(providerName === "YEELIGHT" && id ? [{ identityType: "YEELIGHT_ID", value: id, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 20 }] : [])
+      ...(providerName === "YEELIGHT" && id ? [{ identityType: "YEELIGHT_ID", value: id, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 20 }] : []),
+      ...(providerName === "PROXMOX" && proxmoxId ? [{ identityType: "PROXMOX_ID", value: proxmoxId, source: "discovery", labelCode: "PROXMOX", label: "Proxmox", isPrimary: true, sortOrder: 20 }] : [])
     ];
+
+    const proxmoxDescription = [
+      endpointId ? `Endpoint: ${endpointId}` : "",
+      node ? `Node: ${node}` : "",
+      vmid ? `VMID: ${vmid}` : "",
+      status ? `Status: ${status}` : ""
+    ].filter(Boolean).join(" · ");
 
     setEditingDevice(null);
     setDeviceForm({
       ...emptyDeviceForm(),
-      name: providerName === "YEELIGHT" ? discoveredYeelightDeviceName(mac, id) : (discoveredName || hostname || "ESPHome"),
-      deviceClass: "IOT",
-      deviceType: preferredType?.code ?? "",
+      name: providerName === "YEELIGHT"
+        ? discoveredYeelightDeviceName(mac, id)
+        : providerName === "PROXMOX"
+          ? (discoveredName || (vmid ? `${proxmoxKind}-${vmid}` : node) || "Proxmox")
+          : (discoveredName || hostname || "ESPHome"),
+      deviceClass: providerName === "PROXMOX" ? proxmoxDeviceClass : "IOT",
+      deviceType: providerName === "PROXMOX" ? proxmoxDeviceType : preferredType?.code ?? "",
       technologies: [provider.toLowerCase()],
       identities,
-      manufacturer: providerName === "YEELIGHT" ? "Yeelight" : "ESPHome",
-      model,
+      manufacturer: providerName === "YEELIGHT" ? "Yeelight" : providerName === "PROXMOX" ? "Proxmox" : "ESPHome",
+      model: providerName === "PROXMOX" ? proxmoxKind : model,
       firmwareVersion,
       description: providerName === "YEELIGHT"
         ? (id ? `Discovered Yeelight ID: ${id}` : "")
-        : (entities.length ? `Discovered ESPHome entities: ${entities.join(", ")}` : "Discovered through ESPHome mDNS"),
+        : providerName === "PROXMOX"
+          ? proxmoxDescription
+          : (entities.length ? `Discovered ESPHome entities: ${entities.join(", ")}` : "Discovered through ESPHome mDNS"),
+      parentDeviceId: providerName === "PROXMOX" ? proxmoxParent?.id ?? null : null,
       controlAgentId: agent.id
     });
     setError(null);
@@ -932,6 +968,9 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     const id = value("id");
     const model = value("model");
     const firmwareVersion = value("firmwareVersion");
+    const proxmoxKind = value("kind").toUpperCase();
+    const proxmoxId = value("providerId");
+    const proxmoxParentId = value("parentProviderId");
     const entities = Array.isArray(device.entities) ? device.entities.map(item => String(item).trim()).filter(Boolean) : [];
 
     let identities = registered.identities.map(identity => ({ ...identity }));
@@ -942,12 +981,29 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       if (entities.length === 1) identities = upsertDiscoveredIdentity(identities, "ESPHOME_ENTITY", entities[0]!, 30);
     } else if (providerName === "YEELIGHT") {
       identities = upsertDiscoveredIdentity(identities, "YEELIGHT_ID", id, 20);
+    } else if (providerName === "PROXMOX") {
+      identities = upsertDiscoveredIdentity(identities, "PROXMOX_ID", proxmoxId, 20);
     }
 
     const form = deviceToForm(registered);
     form.identities = identities;
-    form.manufacturer = providerName === "YEELIGHT" ? "Yeelight" : "ESPHome";
-    if (model) form.model = model;
+    form.manufacturer = providerName === "YEELIGHT" ? "Yeelight" : providerName === "PROXMOX" ? "Proxmox" : "ESPHome";
+    if (providerName === "PROXMOX") {
+      form.deviceClass = proxmoxKind === "PVE_NODE" ? "COMPUTE" : "VIRTUAL";
+      if (proxmoxKind === "PVE_NODE") form.deviceType = "hypervisor";
+      else if (proxmoxKind === "PVE_VM") form.deviceType = "virtual_machine";
+      else if (proxmoxKind === "PVE_LXC") form.deviceType = "lxc_container";
+      form.model = proxmoxKind;
+      if (proxmoxParentId) {
+        const parent = devices.find(existing => existing.id !== registered.id && existing.identities.some(identity =>
+          identity.identityType.toUpperCase() === "PROXMOX_ID"
+          && identity.value.trim().toLowerCase() === proxmoxParentId.toLowerCase()
+        ));
+        if (parent) form.parentDeviceId = parent.id;
+      }
+    } else if (model) {
+      form.model = model;
+    }
     if (firmwareVersion) form.firmwareVersion = firmwareVersion;
     form.controlAgentId = agent.id;
     if (!form.technologies.some(item => item.toLowerCase() === provider.toLowerCase())) {

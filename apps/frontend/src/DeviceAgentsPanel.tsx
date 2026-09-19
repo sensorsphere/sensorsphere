@@ -113,6 +113,7 @@ function normalizeYeelightId(value: unknown): string {
 function discoveredDeviceKey(device: Record<string, unknown>): string {
   return normalizeMac(device.mac)
     || normalizeYeelightId(device.id)
+    || (typeof device.providerId === "string" ? device.providerId.trim().toLowerCase() : "")
     || (typeof device.hostname === "string" ? device.hostname.trim().toLowerCase() : "")
     || (typeof device.ip === "string" ? device.ip.trim() : "");
 }
@@ -139,6 +140,8 @@ function discoveryNeedsRegistryUpdate(
   const hostname = typeof discovered.hostname === "string" ? discovered.hostname.trim().toLowerCase() : "";
   const model = typeof discovered.model === "string" ? discovered.model.trim() : "";
   const firmwareVersion = typeof discovered.firmwareVersion === "string" ? discovered.firmwareVersion.trim() : "";
+  const proxmoxId = typeof discovered.providerId === "string" ? discovered.providerId.trim().toLowerCase() : "";
+  const proxmoxKind = typeof discovered.kind === "string" ? discovered.kind.trim().toUpperCase() : "";
 
   const hasIdentity = (type: string, predicate: (value: string) => boolean) =>
     registered.identities.some(identity => identity.identityType.toUpperCase() === type && predicate(identity.value));
@@ -153,6 +156,12 @@ function discoveryNeedsRegistryUpdate(
       && identity.value.trim().toLowerCase() === hostname
     )) return true;
     if ((registered.manufacturer ?? "").trim().toLowerCase() !== "esphome") return true;
+  } else if (providerName === "PROXMOX") {
+    if (proxmoxId && !hasIdentity("PROXMOX_ID", value => value.trim().toLowerCase() === proxmoxId)) return true;
+    if ((registered.manufacturer ?? "").trim().toLowerCase() !== "proxmox") return true;
+    const expectedClass = proxmoxKind === "PVE_NODE" ? "COMPUTE" : "VIRTUAL";
+    const expectedType = proxmoxKind === "PVE_NODE" ? "hypervisor" : proxmoxKind === "PVE_VM" ? "virtual_machine" : proxmoxKind === "PVE_LXC" ? "lxc_container" : "";
+    if (expectedType && (registered.deviceClass !== expectedClass || registered.deviceType !== expectedType)) return true;
   }
 
   if (mac && !hasIdentity("MAC", value => normalizeMac(value) === mac)) return true;
@@ -393,12 +402,19 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
     const mac = normalizeMac(device.mac);
     const yeelightId = normalizeYeelightId(device.id);
     const hostname = typeof device.hostname === "string" ? device.hostname.trim().toLowerCase() : "";
+    const proxmoxId = typeof device.providerId === "string" ? device.providerId.trim().toLowerCase() : "";
 
     return devices.find(existing => {
       const macMatch = mac && existing.identities.some(identity =>
         identity.identityType.toUpperCase() === "MAC"
         && normalizeMac(identity.value) === mac
       );
+      if (provider === "PROXMOX") {
+        return Boolean(proxmoxId && existing.identities.some(identity =>
+          identity.identityType.toUpperCase() === "PROXMOX_ID"
+          && identity.value.trim().toLowerCase() === proxmoxId
+        ));
+      }
       if (provider === "ESPHOME") {
         const hostnameMatch = hostname && existing.identities.some(identity =>
           ["FQDN", "HOSTNAME"].includes(identity.identityType.toUpperCase())
@@ -482,6 +498,7 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
                 const registeredDevice = registeredDeviceFor(device);
                 const isYeelight = discoveryProvider?.toUpperCase() === "YEELIGHT";
                 const isEspHome = discoveryProvider?.toUpperCase() === "ESPHOME";
+                const isProxmox = discoveryProvider?.toUpperCase() === "PROXMOX";
                 const power = device.power === true;
                 const needsUpdate = registeredDevice ? discoveryNeedsRegistryUpdate(device, registeredDevice, discoveryAgent, discoveryProvider) : false;
                 const updatingThisDevice = updateRegisteredMutation.isPending && updateRegisteredMutation.variables?.registered.id === registeredDevice?.id;
@@ -561,11 +578,11 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
                 <Table.Td>{registeredDevice ? <Badge size="sm" variant="light" color={needsUpdate ? "orange" : "green"}>{needsUpdate ? "Needs update" : "Registered"}</Badge> : <Badge size="sm" variant="light" color="gray">New</Badge>}</Table.Td>
                 <Table.Td>{discoveryValue(device, "name")}</Table.Td>
                 <Table.Td><Text ff="monospace" size="sm">{discoveryValue(device, "ip")}</Text></Table.Td>
-                <Table.Td>{discoveryValue(device, "model")}</Table.Td>
-                <Table.Td>{discoveryValue(device, "power")}</Table.Td>
-                <Table.Td>{discoveryValue(device, "brightness")}</Table.Td>
-                <Table.Td><Text size="xs">{isEspHome ? discoveryValue(device, "entities") : "—"}</Text></Table.Td>
-                <Table.Td><Text ff="monospace" size="xs">{discoveryValue(device, "id")}</Text></Table.Td>
+                <Table.Td>{isProxmox ? discoveryValue(device, "kind") : discoveryValue(device, "model")}</Table.Td>
+                <Table.Td>{isProxmox ? discoveryValue(device, "status") : discoveryValue(device, "power")}</Table.Td>
+                <Table.Td>{isProxmox ? discoveryValue(device, "node") : discoveryValue(device, "brightness")}</Table.Td>
+                <Table.Td><Text size="xs">{isEspHome ? discoveryValue(device, "entities") : isProxmox ? discoveryValue(device, "vmid") : "—"}</Text></Table.Td>
+                <Table.Td><Text ff="monospace" size="xs">{isProxmox ? discoveryValue(device, "providerId") : discoveryValue(device, "id")}</Text></Table.Td>
               </Table.Tr>;
               })}</Table.Tbody>
             </Table>

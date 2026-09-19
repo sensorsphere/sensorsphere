@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.57.0";
+export const MODULE_VERSION = "1.58.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.58.0": {
+    releasedAt: "2026-09-20T00:45:00+02:00",
+    patch: "PR-219-proxmox-discovery-ui-import-v1.patch",
+    changes: [
+      { type: "added", description: "Device Discovery includes Proxmox PVE nodes, virtual machines and LXC containers reported by Device Agents" },
+      { type: "added", description: "Proxmox discoveries import into Device Registry with Proxmox identity, virtualization type and parent-node relationship" }
+    ]
+  },
+
   "1.57.0": {
     releasedAt: "2026-09-20T00:20:00+02:00",
     patch: "PR-218c-managed-agents-sensorsphere-v1.patch",
