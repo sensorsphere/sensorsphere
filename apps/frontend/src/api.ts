@@ -1720,6 +1720,14 @@ export async function regenerateDeviceAgentToken(id: string): Promise<DeviceAgen
   return readJson<DeviceAgentTokenResponse>(await fetch(`/api/v1/device-control/agents/${id}/regenerate-token`, { method: "POST" }));
 }
 
+export async function requestDeviceAgentUpdate(id: string, version: string): Promise<DeviceAgent> {
+  return readJson<DeviceAgent>(await fetch(`/api/v1/device-control/agents/${id}/update`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version })
+  }));
+}
+
 export async function deleteDeviceAgent(id: string): Promise<void> {
   const response = await fetch(`/api/v1/device-control/agents/${id}`, { method: "DELETE" });
   if (!response.ok) await readJson<unknown>(response);

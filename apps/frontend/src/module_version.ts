@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.54.2";
+export const MODULE_VERSION = "1.55.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.55.0": {
+    releasedAt: "2026-09-19T17:30:00+02:00",
+    patch: "PR-209-device-agent-update-orchestration-v1.patch",
+    changes: [
+      { type: "added", description: "Device Agents show Supervisor readiness and update lifecycle status" },
+      { type: "added", description: "Online Device Agents with an available Supervisor can be updated to a requested version directly from SensorSphere" }
+    ]
+  },
+
   "1.54.2": {
     releasedAt: "2026-09-19T14:00:00+02:00",
     patch: "PR-204-device-discovery-copy-details-registry-layout-v1.patch",

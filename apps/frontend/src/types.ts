@@ -1093,6 +1093,14 @@ export interface DeviceAgent {
   osVersion: string | null;
   architecture: string | null;
   capabilities: DeviceAgentCapability[];
+  supervisorAvailable: boolean;
+  desiredVersion: string | null;
+  previousVersion: string | null;
+  updateStatus: "IDLE" | "UPDATE_REQUESTED" | "UPDATING" | "VERIFYING" | "UPDATED" | "FAILED" | "ROLLED_BACK";
+  updateRequestedAt: string | null;
+  updateStartedAt: string | null;
+  updateFinishedAt: string | null;
+  updateError: string | null;
   lastSeenAt: string | null;
   heartbeatTimeoutSeconds: number;
   online: boolean;

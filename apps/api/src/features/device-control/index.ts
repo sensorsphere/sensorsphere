@@ -53,6 +53,10 @@ const commandCreateSchema = z.object({
   ttlSeconds: z.number().int().min(1).max(300).optional()
 }).strict();
 
+const agentUpdateRequestSchema = z.object({
+  version: z.string().trim().min(1).max(100).regex(/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/, "Invalid Device Agent version")
+}).strict();
+
 const helloMessageSchema = z.object({
   type: z.literal("HELLO"),
   agentName: z.string().trim().min(1).max(200).optional(),
@@ -68,7 +72,10 @@ const helloMessageSchema = z.object({
     provider: providerSchema,
     actions: z.array(actionSchema).max(200),
     discovery: z.boolean().optional()
-  }).strict()).max(100).optional()
+  }).strict()).max(100).optional(),
+  agentUpdate: z.object({
+    supported: z.boolean()
+  }).strict().optional()
 }).strict();
 
 const heartbeatMessageSchema = z.object({ type: z.literal("HEARTBEAT") }).strict();
@@ -107,13 +114,24 @@ const discoveredDeviceActionResultMessageSchema = z.object({
   error: z.string().max(5000).nullable().optional()
 }).strict();
 
+const agentUpdateResultMessageSchema = z.object({
+  type: z.literal("AGENT_UPDATE_RESULT"),
+  commandId: z.string().uuid(),
+  status: z.enum(["ACCEPTED", "SUCCESS", "FAILED", "REJECTED"]),
+  currentVersion: z.string().trim().max(100).optional(),
+  targetVersion: z.string().trim().max(100).optional(),
+  result: z.unknown().optional(),
+  error: z.string().max(5000).nullable().optional()
+}).strict();
+
 const agentMessageSchema = z.discriminatedUnion("type", [
   helloMessageSchema,
   heartbeatMessageSchema,
   commandResultMessageSchema,
   deviceStateMessageSchema,
   discoverResultMessageSchema,
-  discoveredDeviceActionResultMessageSchema
+  discoveredDeviceActionResultMessageSchema,
+  agentUpdateResultMessageSchema
 ]);
 
 interface AgentRow {
@@ -129,6 +147,15 @@ interface AgentRow {
   os_version: string | null;
   architecture: string | null;
   capabilities: Array<{ provider: string; actions: string[]; discovery?: boolean }>;
+  supervisor_available: boolean;
+  desired_version: string | null;
+  previous_version: string | null;
+  update_status: string;
+  update_command_id: string | null;
+  update_requested_at: Date | null;
+  update_started_at: Date | null;
+  update_finished_at: Date | null;
+  update_error: string | null;
   last_seen_at: Date | null;
   heartbeat_timeout_seconds: number;
   created_at: Date;
@@ -246,6 +273,14 @@ function agentDto(row: AgentRow, connected: boolean) {
     osVersion: row.os_version,
     architecture: row.architecture,
     capabilities: Array.isArray(row.capabilities) ? row.capabilities : [],
+    supervisorAvailable: row.supervisor_available ?? false,
+    desiredVersion: row.desired_version,
+    previousVersion: row.previous_version,
+    updateStatus: row.update_status ?? "IDLE",
+    updateRequestedAt: row.update_requested_at?.toISOString() ?? null,
+    updateStartedAt: row.update_started_at?.toISOString() ?? null,
+    updateFinishedAt: row.update_finished_at?.toISOString() ?? null,
+    updateError: row.update_error,
     lastSeenAt: row.last_seen_at?.toISOString() ?? null,
     heartbeatTimeoutSeconds: row.heartbeat_timeout_seconds,
     online: row.enabled && connected && recent,
@@ -499,10 +534,23 @@ export async function registerDeviceControlFeature(
               reported_name=COALESCE($2,reported_name), version=COALESCE($3,version), hostname=COALESCE($4,hostname),
               agent_labels=$5::jsonb, capabilities=$6::jsonb,
               os_name=COALESCE($7,os_name), os_version=COALESCE($8,os_version), architecture=COALESCE($9,architecture),
+              supervisor_available=$10,
+              update_status=CASE
+                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN 'UPDATED'
+                ELSE update_status
+              END,
+              update_finished_at=CASE
+                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NOW()
+                ELSE update_finished_at
+              END,
+              update_error=CASE
+                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NULL
+                ELSE update_error
+              END,
               last_seen_at=NOW(), updated_at=NOW()
             WHERE id=$1
           `, [agent.id, message.agentName ?? null, message.version ?? null, message.hostname ?? null, JSON.stringify(labels), JSON.stringify(message.capabilities ?? []),
-              message.systemInfo?.os ?? null, message.systemInfo?.osVersion ?? null, message.systemInfo?.architecture ?? null]);
+              message.systemInfo?.os ?? null, message.systemInfo?.osVersion ?? null, message.systemInfo?.architecture ?? null, message.agentUpdate?.supported ?? false]);
           socket.send(JSON.stringify({ type: "HELLO_ACK", agentId: agent.id, serverTime: new Date().toISOString() }));
           await sendPendingCommands(agent.id, socket);
           await sendRealtimeDeviceSync(agent.id, socket);
@@ -514,6 +562,21 @@ export async function registerDeviceControlFeature(
           await sendRealtimeDeviceSync(agent.id, socket);
           return;
         }
+        if (message.type === "AGENT_UPDATE_RESULT") {
+          const nextStatus = message.status === "ACCEPTED" || message.status === "SUCCESS" ? "VERIFYING" : "FAILED";
+          await pool.query(`
+            UPDATE device_agents SET
+              update_status=$3,
+              update_started_at=CASE WHEN $3='VERIFYING' THEN COALESCE(update_started_at,NOW()) ELSE update_started_at END,
+              update_finished_at=CASE WHEN $3='FAILED' THEN NOW() ELSE update_finished_at END,
+              update_error=CASE WHEN $3='FAILED' THEN COALESCE($4,'Device Agent update failed') ELSE NULL END,
+              previous_version=COALESCE(previous_version,$5),
+              updated_at=NOW()
+            WHERE id=$1 AND update_command_id=$2
+          `, [agent.id, message.commandId, nextStatus, message.error ?? null, message.currentVersion ?? null]);
+          return;
+        }
+
         if (message.type === "COMMAND_RESULT") {
           const updated = await pool.query<{ device_id: string; provider: string; action: string }>(`
             UPDATE device_control_commands SET status=$3, result=$4::jsonb, error=$5, finished_at=NOW(), updated_at=NOW()
@@ -760,6 +823,40 @@ export async function registerDeviceControlFeature(
     if (!result.rows[0]) return reply.code(404).send({ error: "Device agent not found" });
     if (input.enabled === false) sockets.get(request.params.id)?.close(4003, "Agent disabled");
     return reply.send(agentDto(result.rows[0], sockets.has(request.params.id)));
+  });
+
+  app.post("/api/v1/device-control/agents/:id/update", async (request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply) => {
+    const parsed = agentUpdateRequestSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid Device Agent update request" });
+
+    const result = await pool.query<AgentRow>("SELECT * FROM device_agents WHERE id=$1", [request.params.id]);
+    const agent = result.rows[0];
+    if (!agent) return reply.code(404).send({ error: "Device Agent not found" });
+    if (!agent.enabled) return reply.code(409).send({ error: "Device Agent is disabled" });
+    const socket = sockets.get(agent.id);
+    if (socket?.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Device Agent is offline" });
+    if (!agent.supervisor_available) return reply.code(409).send({ error: "Supervisor Agent is unavailable for this Device Agent" });
+    if (["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.update_status)) {
+      return reply.code(409).send({ error: "A Device Agent update is already in progress" });
+    }
+
+    const commandId = randomUUID();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    const updated = await pool.query<AgentRow>(`
+      UPDATE device_agents SET
+        previous_version=version, desired_version=$2, update_status='UPDATING', update_command_id=$3,
+        update_requested_at=NOW(), update_started_at=NOW(), update_finished_at=NULL, update_error=NULL, updated_at=NOW()
+      WHERE id=$1 RETURNING *
+    `, [agent.id, parsed.data.version, commandId]);
+
+    socket.send(JSON.stringify({
+      type: "AGENT_UPDATE_REQUEST",
+      commandId,
+      version: parsed.data.version,
+      expiresAt: expiresAt.toISOString()
+    }));
+
+    return reply.code(202).send(agentDto(updated.rows[0]!, true));
   });
 
   app.post("/api/v1/device-control/agents/:id/regenerate-token", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {

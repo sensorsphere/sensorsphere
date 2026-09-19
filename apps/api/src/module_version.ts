@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.26.0";
+export const MODULE_VERSION = "1.27.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.27.0": {
+    releasedAt: "2026-09-19T17:30:00+02:00",
+    patch: "PR-209-device-agent-update-orchestration-v1.patch",
+    changes: [
+      { type: "added", description: "Device Control orchestrates typed Device Agent updates through the local Supervisor Agent and verifies completion from the reconnecting agent version" },
+      { type: "added", description: "Device Agents persist desired version, update lifecycle timestamps, Supervisor availability and update errors" }
+    ]
+  },
+
   "1.26.0": {
     releasedAt: "2026-09-19T11:55:00+02:00",
     patch: "PR-201-device-discovery-dedup-discard-v1.patch",
