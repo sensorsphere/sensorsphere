@@ -563,12 +563,16 @@ export async function registerDeviceControlFeature(
           return;
         }
         if (message.type === "AGENT_UPDATE_RESULT") {
-          const nextStatus = message.status === "ACCEPTED" || message.status === "SUCCESS" ? "VERIFYING" : "FAILED";
+          const nextStatus = message.status === "ACCEPTED"
+            ? "VERIFYING"
+            : message.status === "SUCCESS"
+              ? "UPDATED"
+              : "FAILED";
           await pool.query(`
             UPDATE device_agents SET
               update_status=$3,
-              update_started_at=CASE WHEN $3='VERIFYING' THEN COALESCE(update_started_at,NOW()) ELSE update_started_at END,
-              update_finished_at=CASE WHEN $3='FAILED' THEN NOW() ELSE update_finished_at END,
+              update_started_at=CASE WHEN $3 IN ('VERIFYING','UPDATED') THEN COALESCE(update_started_at,NOW()) ELSE update_started_at END,
+              update_finished_at=CASE WHEN $3 IN ('UPDATED','FAILED') THEN NOW() ELSE update_finished_at END,
               update_error=CASE WHEN $3='FAILED' THEN COALESCE($4,'Device Agent update failed') ELSE NULL END,
               previous_version=COALESCE(previous_version,$5),
               updated_at=NOW()
