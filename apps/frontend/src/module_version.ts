@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.56.0";
+export const MODULE_VERSION = "1.56.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.56.1": {
+    releasedAt: "2026-09-19T23:35:00+02:00",
+    patch: "PR-214-agent-update-target-cleanup-v1.patch",
+    changes: [
+      { type: "fixed", description: "Completed Device Agent and Supervisor updates no longer display stale target versions" }
+    ]
+  },
+
   "1.56.0": {
     releasedAt: "2026-09-19T21:40:00+02:00",
     patch: "PR-213-supervisor-update-orchestration-v1.patch",

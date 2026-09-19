@@ -589,6 +589,10 @@ export async function registerDeviceControlFeature(
                 WHEN supervisor_desired_version IS NOT NULL AND $11 = supervisor_desired_version AND supervisor_update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN 'UPDATED'
                 ELSE COALESCE(NULLIF($15,''), supervisor_update_status)
               END,
+              supervisor_desired_version=CASE
+                WHEN supervisor_desired_version IS NOT NULL AND $11 = supervisor_desired_version AND supervisor_update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NULL
+                ELSE supervisor_desired_version
+              END,
               supervisor_update_finished_at=CASE
                 WHEN supervisor_desired_version IS NOT NULL AND $11 = supervisor_desired_version AND supervisor_update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NOW()
                 ELSE supervisor_update_finished_at
@@ -601,6 +605,10 @@ export async function registerDeviceControlFeature(
               update_status=CASE
                 WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN 'UPDATED'
                 ELSE update_status
+              END,
+              desired_version=CASE
+                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NULL
+                ELSE desired_version
               END,
               update_finished_at=CASE
                 WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NOW()
@@ -639,6 +647,7 @@ export async function registerDeviceControlFeature(
               update_started_at=CASE WHEN $3 IN ('VERIFYING','UPDATED') THEN COALESCE(update_started_at,NOW()) ELSE update_started_at END,
               update_finished_at=CASE WHEN $3 IN ('UPDATED','FAILED') THEN NOW() ELSE update_finished_at END,
               update_error=CASE WHEN $3='FAILED' THEN COALESCE($4,'Device Agent update failed') ELSE NULL END,
+              desired_version=CASE WHEN $3='UPDATED' THEN NULL ELSE desired_version END,
               previous_version=COALESCE(previous_version,$5),
               updated_at=NOW()
             WHERE id=$1 AND update_command_id=$2
@@ -658,6 +667,7 @@ export async function registerDeviceControlFeature(
               supervisor_update_started_at=CASE WHEN $3 IN ('VERIFYING','UPDATED') THEN COALESCE(supervisor_update_started_at,NOW()) ELSE supervisor_update_started_at END,
               supervisor_update_finished_at=CASE WHEN $3 IN ('UPDATED','FAILED') THEN NOW() ELSE supervisor_update_finished_at END,
               supervisor_update_error=CASE WHEN $3='FAILED' THEN COALESCE($4,'Supervisor Agent update failed') ELSE NULL END,
+              supervisor_desired_version=CASE WHEN $3='UPDATED' THEN NULL ELSE supervisor_desired_version END,
               supervisor_previous_version=COALESCE(supervisor_previous_version,$5),
               supervisor_version=CASE WHEN $3='UPDATED' THEN COALESCE($6,supervisor_version) ELSE supervisor_version END,
               updated_at=NOW()
