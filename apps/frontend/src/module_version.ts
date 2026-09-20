@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.63.4";
+export const MODULE_VERSION = "1.64.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.64.0": {
+    releasedAt: "2026-09-20T15:35:00+02:00",
+    patch: "PR-229-agents-workspace-v1.patch",
+    changes: [
+      { type: "changed", description: "Device Registry moves Discovery immediately after Devices and consolidates agent administration under a dedicated Agents tab before Taxonomy" },
+      { type: "added", description: "Agents workspace provides Device Agents, Monitoring Agents and Supervisor Agents sub-tabs" },
+      { type: "added", description: "Supervisor Agents are grouped per host and centralize Supervisor self-update and managed-agent lifecycle actions" },
+      { type: "changed", description: "Monitoring remains focused on Device Checks while Monitoring Agent administration moves to the Agents workspace" }
+    ]
+  },
   "1.63.4": {
     releasedAt: "2026-09-20T16:20:00+02:00",
     patch: "PR-228-discovery-reconciliation-v5.patch",

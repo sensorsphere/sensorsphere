@@ -260,10 +260,12 @@ export interface MonitoringQuickCheckRequest {
 
 export function MonitoringPanel({
   quickCheckRequest,
-  onQuickCheckFinished
+  onQuickCheckFinished,
+  view = "all"
 }: {
   quickCheckRequest?: MonitoringQuickCheckRequest | null;
   onQuickCheckFinished?: () => void;
+  view?: "all" | "checks" | "agents";
 } = {}) {
   const [copyNotice, setCopyNotice] = React.useState<string | null>(null);
 
@@ -552,11 +554,11 @@ export function MonitoringPanel({
 
       {error && <Text c="red" size="sm">{error}</Text>}
 
-      <Tabs value={monitoringTab} onChange={value => value && setMonitoringTab(value as "checks" | "agents")} keepMounted={false} className="monitoring-tabs">
-        <Tabs.List mb="sm">
+      <Tabs value={view === "all" ? monitoringTab : view} onChange={value => view === "all" && value && setMonitoringTab(value as "checks" | "agents")} keepMounted={false} className="monitoring-tabs">
+        {view === "all" && <Tabs.List mb="sm">
           <Tabs.Tab value="checks">Device Checks</Tabs.Tab>
           <Tabs.Tab value="agents">Monitoring Agents</Tabs.Tab>
-        </Tabs.List>
+        </Tabs.List>}
 
         <Tabs.Panel value="checks" className="monitoring-tab-panel">
       <Card withBorder className="monitoring-table-card">

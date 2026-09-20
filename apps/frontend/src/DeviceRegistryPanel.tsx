@@ -79,7 +79,8 @@ import { ResetFiltersAction } from "./ResetFiltersAction";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { MonitoringPanel, type MonitoringQuickCheckRequest } from "./MonitoringPanel";
 import { FilterClearAction } from "./FilterClearAction";
-import { DeviceAgentsPanel, type DiscoveredDeviceImportRequest } from "./DeviceAgentsPanel";
+import type { DiscoveredDeviceImportRequest } from "./DeviceAgentsPanel";
+import { AgentsPanel } from "./AgentsPanel";
 import { RealtimeEntityBrowser } from "./RealtimeEntityBrowser";
 import { DeviceDiscoveryPanel } from "./DeviceDiscoveryPanel";
 
@@ -472,6 +473,7 @@ function upsertDiscoveredIdentities(
 export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOpened, onDeviceSaved }: { openDeviceId?: string | null; openAccessLinkId?: string | null; onDeviceOpened?: () => void; onDeviceSaved?: () => void } = {}) {
   const queryClient = useQueryClient();
   const [tab, setTab] = usePersistentState<string | null>("device-registry.tab", "devices");
+  React.useEffect(() => { if (tab === "device-agents") setTab("agents"); }, [tab, setTab]);
   const [nameFilter, setNameFilter] = usePersistentState("device-registry.filter.name", "");
   const [addressFilter, setAddressFilter] = usePersistentState("device-registry.filter.address", "");
   const [sortKey, setSortKey] = usePersistentState<DeviceSortKey>("device-registry.sort.key", "name");
@@ -1188,11 +1190,11 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       <Tabs value={tab} onChange={setTab} className="device-registry-tabs">
         <Tabs.List>
           <Tabs.Tab value="devices">Devices</Tabs.Tab>
-          <Tabs.Tab value="device-agents">Device Agents</Tabs.Tab>
+          <Tabs.Tab value="discovery">Discovery</Tabs.Tab>
           <Tabs.Tab value="entities">Entities</Tabs.Tab>
           <Tabs.Tab value="monitoring">Monitoring</Tabs.Tab>
-          <Tabs.Tab value="discovery">Discovery</Tabs.Tab>
           <Tabs.Tab value="health-profiles">Health Profiles</Tabs.Tab>
+          <Tabs.Tab value="agents">Agents</Tabs.Tab>
           <Tabs.Tab value="taxonomy">Taxonomy</Tabs.Tab>
         </Tabs.List>
 
@@ -1361,11 +1363,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         </Tabs.Panel>
 
         <Tabs.Panel value="monitoring" pt="md" className="device-registry-monitoring-panel">
-          <MonitoringPanel quickCheckRequest={quickCheckRequest} onQuickCheckFinished={returnFromQuickCheck} />
-        </Tabs.Panel>
-
-        <Tabs.Panel value="device-agents" pt="md">
-          <DeviceAgentsPanel devices={devices} onImportDiscoveredDevice={openDiscoveredDeviceImport} onUpdateDiscoveredDevice={updateRegisteredDeviceFromDiscovery} onOpenRegisteredDevice={openEditDevice} />
+          <MonitoringPanel quickCheckRequest={quickCheckRequest} onQuickCheckFinished={returnFromQuickCheck} view="checks" />
         </Tabs.Panel>
 
         <Tabs.Panel value="discovery" pt="md">
@@ -1421,6 +1419,10 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
               </Table>
             </Card>
           </Stack>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="agents" pt="md">
+          <AgentsPanel devices={devices} onImportDiscoveredDevice={openDiscoveredDeviceImport} onUpdateDiscoveredDevice={updateRegisteredDeviceFromDiscovery} onOpenRegisteredDevice={openEditDevice} />
         </Tabs.Panel>
 
         <Tabs.Panel value="taxonomy" pt="md" className="device-registry-devices-panel">
