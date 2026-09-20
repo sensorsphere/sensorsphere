@@ -1421,7 +1421,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           </Stack>
         </Tabs.Panel>
 
-        <Tabs.Panel value="agents" pt="md">
+        <Tabs.Panel value="agents" pt="md" className="device-registry-monitoring-panel">
           <AgentsPanel devices={devices} onImportDiscoveredDevice={openDiscoveredDeviceImport} onUpdateDiscoveredDevice={updateRegisteredDeviceFromDiscovery} onOpenRegisteredDevice={openEditDevice} />
         </Tabs.Panel>
 

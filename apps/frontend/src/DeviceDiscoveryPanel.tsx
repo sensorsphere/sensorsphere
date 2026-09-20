@@ -740,12 +740,12 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
           <Table.Thead><Table.Tr>
             <Table.Th aria-label="Icon" style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }} />
             <SortableTableHeader active={sortKey === "provider"} direction={sortDirection} onClick={() => toggleSort("provider")}>Provider</SortableTableHeader>
-            <SortableTableHeader active={sortKey === "agent"} direction={sortDirection} onClick={() => toggleSort("agent")}>Agent</SortableTableHeader>
             <SortableTableHeader active={sortKey === "name"} direction={sortDirection} onClick={() => toggleSort("name")}>Name</SortableTableHeader>
             <SortableTableHeader active={sortKey === "ip"} direction={sortDirection} onClick={() => toggleSort("ip")}>IP</SortableTableHeader>
             <SortableTableHeader active={sortKey === "identity"} direction={sortDirection} onClick={() => toggleSort("identity")}>Identity</SortableTableHeader>
             <SortableTableHeader active={sortKey === "model"} direction={sortDirection} onClick={() => toggleSort("model")}>Model</SortableTableHeader>
             <Table.Th>Details</Table.Th>
+            <SortableTableHeader active={sortKey === "agent"} direction={sortDirection} onClick={() => toggleSort("agent")}>Agent</SortableTableHeader>
             <SortableTableHeader active={sortKey === "status"} direction={sortDirection} onClick={() => toggleSort("status")}>Registry</SortableTableHeader>
             <Table.Th style={{ width: 150, textAlign: "right" }}>Actions</Table.Th>
           </Table.Tr></Table.Thead>
@@ -778,12 +778,12 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
               return <Table.Tr key={rowKey}>
                 <Table.Td style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }}><ResolvedIconGlyph resolved={resolveDiscoveryIcon(provider, row.device)} size={20} /></Table.Td>
                 <Table.Td><Badge variant="light" color={providerColor(provider)}>{providerLabel(provider)}</Badge></Table.Td>
-                <Table.Td>{agentContent}</Table.Td>
                 <Table.Td><CopyableDiscoveryValue value={textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")} fw={600} /></Table.Td>
                 <Table.Td><CopyableDiscoveryValue value={textValue(row.device, "ip")} monospace /></Table.Td>
                 <Table.Td><CopyableDiscoveryValue value={provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")} monospace compact /></Table.Td>
                 <Table.Td><Text size="sm">{provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text></Table.Td>
                 <Table.Td><Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Discovery details</Text><Text size="xs">Name: {textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")}</Text><Text size="xs">IP: {textValue(row.device, "ipAddresses") !== "—" ? textValue(row.device, "ipAddresses") : textValue(row.device, "ip")}</Text><Text size="xs">MAC: {textValue(row.device, "macAddresses") !== "—" ? textValue(row.device, "macAddresses") : textValue(row.device, "mac")}</Text><Text size="xs">Identity: {provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")}</Text><Text size="xs">Model / kind: {provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text>{entitySummaries.length > 0 && <><Text size="xs" fw={600}>Entities ({entitySummaries.length})</Text>{entitySummaries.map((entity, entityIndex) => <Text key={`${entity.type}:${entity.name}:${entityIndex}`} size="xs">• {entity.type}: {entity.name}</Text>)}</>}{provider === "PROXMOX" && <><Text size="xs">Endpoint: {textValue(row.device, "endpointId")}</Text><Text size="xs">Node: {textValue(row.device, "node")}</Text><Text size="xs">VMID: {textValue(row.device, "vmid")}</Text>{proxmoxGuest && <Group gap={5} wrap="nowrap"><Text component="span" size="xs">Status:</Text><ProxmoxRuntimeStatus status={proxmoxStatus} /></Group>}<Text size="xs">Version: {textValue(row.device, "version")}</Text><Text size="xs">OS: {textValue(row.device, "os")} / {textValue(row.device, "osType")}</Text><Text size="xs">Guest agent: {textValue(row.device, "guestAgent")}</Text><Text size="xs">Parent: {textValue(row.device, "parentProviderId")}</Text></>} {!proxmoxGuest && <Text size="xs">{details}</Text>}</Stack>}><span style={{ cursor: "help" }}>{detailsContent}</span></Tooltip></Table.Td>
+                <Table.Td>{agentContent}</Table.Td>
                 <Table.Td style={{ minWidth: 138 }}>{row.status === "UPDATE"
                   ? <Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Expected updates</Text>{row.updateReasons.map(reason => <Text key={reason} size="xs">• {reason}</Text>)}</Stack>}>{statusBadge}</Tooltip>
                   : ["POSSIBLE", "AMBIGUOUS"].includes(row.status)
@@ -817,6 +817,28 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
           onChange={setSelectedRegistryDeviceId}
           searchable
         />
+        {selectedRegistryDeviceId && reconcileChoice && (() => {
+          const candidate = reconcileChoice.row.matchCandidates.find(item => item.device.id === selectedRegistryDeviceId);
+          if (!candidate) return null;
+          const selectedSource = reconcileChoice.row.sourceRows.find(source => source.agent?.online && source.agent.enabled) ?? reconcileChoice.row;
+          const merged = mergedDiscoveryDevice(reconcileChoice.row.sourceRows, selectedSource);
+          const changes = registryUpdateReasons(
+            selectedSource.discovery.provider.toUpperCase(),
+            merged,
+            candidate.device,
+            selectedSource.agent,
+            agentById
+          );
+          return <Card withBorder padding="sm">
+            <Stack gap={4}>
+              <Text size="xs" fw={600}>Reconciliation preview</Text>
+              <Text size="xs" c="dimmed">Matching evidence: {candidate.reasons.join(" · ") || "—"}</Text>
+              {changes.length > 0
+                ? <><Text size="xs" fw={600}>Changes to be applied</Text>{changes.map(change => <Text key={change} size="xs">• {change}</Text>)}</>
+                : <Text size="xs" c="dimmed">No Registry attributes need to be changed. The discovered device will be linked to this Registry device.</Text>}
+            </Stack>
+          </Card>;
+        })()}
         <Group justify="flex-end">
           <Button variant="default" onClick={() => { setReconcileChoice(null); setSelectedRegistryDeviceId(null); }}>Cancel</Button>
           <Button color="orange" disabled={!selectedRegistryDeviceId} loading={updateMutation.isPending} onClick={confirmReconcile}>Link and update</Button>

@@ -17,13 +17,13 @@ export function AgentsPanel({ devices, onImportDiscoveredDevice, onUpdateDiscove
   const [tab, setTab] = usePersistentState<"device" | "monitoring" | "supervisor">("device-registry.agents.tab", "device");
 
   return (
-    <Tabs value={tab} onChange={value => value && setTab(value as "device" | "monitoring" | "supervisor")} keepMounted={false}>
+    <Tabs value={tab} onChange={value => value && setTab(value as "device" | "monitoring" | "supervisor")} keepMounted={false} className="agents-workspace-tabs">
       <Tabs.List mb="sm">
         <Tabs.Tab value="device">Device Agents</Tabs.Tab>
         <Tabs.Tab value="monitoring">Monitoring Agents</Tabs.Tab>
         <Tabs.Tab value="supervisor">Supervisor Agents</Tabs.Tab>
       </Tabs.List>
-      <Tabs.Panel value="device">
+      <Tabs.Panel value="device" className="agents-workspace-scroll-panel">
         <DeviceAgentsPanel
           devices={devices}
           onImportDiscoveredDevice={onImportDiscoveredDevice}
@@ -31,10 +31,10 @@ export function AgentsPanel({ devices, onImportDiscoveredDevice, onUpdateDiscove
           onOpenRegisteredDevice={onOpenRegisteredDevice}
         />
       </Tabs.Panel>
-      <Tabs.Panel value="monitoring">
+      <Tabs.Panel value="monitoring" className="agents-workspace-monitoring-panel">
         <MonitoringPanel view="agents" />
       </Tabs.Panel>
-      <Tabs.Panel value="supervisor">
+      <Tabs.Panel value="supervisor" className="agents-workspace-scroll-panel">
         <SupervisorAgentsPanel />
       </Tabs.Panel>
     </Tabs>

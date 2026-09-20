@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.64.0";
+export const MODULE_VERSION = "1.64.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.64.1": {
+    releasedAt: "2026-09-20T15:50:00+02:00",
+    patch: "PR-228-discovery-reconciliation-v5.patch",
+    changes: [
+      { type: "added", description: "Possible/Ambiguous reconciliation shows the exact Registry changes that Link and update will apply" },
+      { type: "fixed", description: "Monitoring Agents nested workspace keeps its table viewport visible inside the new Agents tab" },
+      { type: "changed", description: "Discovery moves the Agent column next to Registry so ownership and Registry action status are adjacent" }
+    ]
+  },
   "1.64.0": {
     releasedAt: "2026-09-20T15:35:00+02:00",
     patch: "PR-229-agents-workspace-v1.patch",
