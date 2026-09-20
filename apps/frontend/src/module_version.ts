@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.61.1";
+export const MODULE_VERSION = "1.61.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.61.2": {
+    releasedAt: "2026-09-20T08:35:00+02:00",
+    patch: "PR-225-device-icons-taxonomy-scroll-v3.patch",
+    changes: [
+      { type: "changed", description: "Proxmox discovery and Device Registry distinguish PVE nodes, virtual machines, LXC containers and PBS servers with dedicated icons" },
+      { type: "changed", description: "Device icon rules recognize NanoKVM and Headscale brand icons while realtime Entities keep functional glyphs" },
+      { type: "changed", description: "Edit device shows a live 32x32 icon preview in the dialog title" },
+      { type: "fixed", description: "Device Registry taxonomy tabs reuse the same constrained table scrolling pattern as Service Registry" }
+    ]
+  },
   "1.61.1": {
     releasedAt: "2026-09-20T08:05:00+02:00",
     patch: "PR-225-device-icons-taxonomy-scroll-v2.patch",

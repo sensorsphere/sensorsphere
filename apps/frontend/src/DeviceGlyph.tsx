@@ -6,7 +6,16 @@ const BRAND_ICON_URLS: Record<string, string> = {
   proxmox: "https://www.proxmox.com/favicon.svg",
   esphome: "https://esphome.io/favicon.ico",
   yeelight: "https://page.yeelight.com/static/appDownloadPage/favicon.ico",
-  "raspberry-pi": "https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/raspberry-pi-icon.svg"
+  "raspberry-pi": "https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/raspberry-pi-icon.svg",
+  nanokvm: "https://wiki.sipeed.com/favicon.ico",
+  headscale: "https://headscale.net/stable/assets/favicon.png"
+};
+
+const COMPOSITE_BRAND_ICONS: Record<string, { base: string; overlay: string; overlayColor: string }> = {
+  "proxmox-node": { base: "proxmox", overlay: "server", overlayColor: "orange" },
+  "proxmox-vm": { base: "proxmox", overlay: "virtual", overlayColor: "indigo" },
+  "proxmox-lxc": { base: "proxmox", overlay: "container", overlayColor: "teal" },
+  "proxmox-pbs": { base: "proxmox", overlay: "storage", overlayColor: "violet" }
 };
 
 export function deviceColor(color: string): string {
@@ -16,8 +25,8 @@ export function deviceColor(color: string): string {
 const DEVICE_ICON_NAMES = [
   "activity", "antenna", "battery", "bluetooth", "bulb", "button", "camera", "chip", "cloud", "cloud-network", "code",
   "contact", "container", "controller", "copy", "device", "display", "droplet", "ethernet",
-  "gateway", "globe", "globe-lock", "infrastructure", "key", "link", "mail", "message", "motion", "network",
-  "plug", "printer", "proxmox", "esphome", "yeelight", "raspberry-pi", "led-strip", "router", "sensor", "server", "server-stack", "shield", "storage", "switch",
+  "gateway", "globe", "globe-lock", "headscale", "infrastructure", "key", "link", "mail", "message", "motion", "nanokvm", "network",
+  "plug", "printer", "proxmox", "proxmox-lxc", "proxmox-node", "proxmox-pbs", "proxmox-vm", "esphome", "yeelight", "raspberry-pi", "led-strip", "router", "sensor", "server", "server-stack", "shield", "storage", "switch",
   "switch-toggle", "terminal", "thermometer", "thermostat", "virtual", "wifi"
 ];
 
@@ -29,14 +38,7 @@ export const DEVICE_ICON_OPTIONS = DEVICE_ICON_NAMES
   .map(value => ({ value, label: iconLabel(value) }))
   .sort((left, right) => left.label.localeCompare(right.label));
 
-export function DeviceGlyph({ icon, color = "gray", size = 18 }: { icon: string; color?: string; size?: number }) {
-  const [brandFailed, setBrandFailed] = React.useState(false);
-  React.useEffect(() => setBrandFailed(false), [icon]);
-  const brandUrl = BRAND_ICON_URLS[icon];
-  if (brandUrl && !brandFailed) {
-    return <img src={brandUrl} alt="" aria-hidden="true" width={size} height={size} onError={() => setBrandFailed(true)} style={{ width: size, height: size, objectFit: "contain", display: "block" }} />;
-  }
-
+function GlyphSvg({ icon, color = "gray", size = 18 }: { icon: string; color?: string; size?: number }) {
   const common = {
     width: size, height: size, viewBox: "0 0 24 24", fill: "none",
     stroke: deviceColor(color), strokeWidth: 2, strokeLinecap: "round" as const,
@@ -111,7 +113,52 @@ export function DeviceGlyph({ icon, color = "gray", size = 18 }: { icon: string;
       return <svg {...common}><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></svg>;
     case "copy":
       return <svg {...common}><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>;
+    case "contact":
+      return <svg {...common}><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>;
+    case "sensor":
+      return <svg {...common}><circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>;
+    case "button":
+      return <svg {...common}><rect x="4" y="6" width="16" height="12" rx="3"/><circle cx="12" cy="12" r="2.5"/></svg>;
+    case "motion":
+      return <svg {...common}><path d="M5 12a7 7 0 0 1 14 0"/><path d="M8 12a4 4 0 0 1 8 0"/><circle cx="12" cy="12" r="1"/></svg>;
+    case "controller":
+      return <svg {...common}><rect x="5" y="7" width="14" height="10" rx="2"/><circle cx="9" cy="12" r="1.5"/><path d="M14 10h3M15.5 8.5v3M14 14h3"/></svg>;
     default:
       return <svg {...common}><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 13h5"/></svg>;
   }
+}
+
+export function DeviceGlyph({ icon, color = "gray", size = 18 }: { icon: string; color?: string; size?: number }) {
+  const [brandFailed, setBrandFailed] = React.useState(false);
+  React.useEffect(() => setBrandFailed(false), [icon]);
+
+  const composite = COMPOSITE_BRAND_ICONS[icon];
+  const brandKey = composite?.base ?? icon;
+  const brandUrl = BRAND_ICON_URLS[brandKey];
+
+  if (brandUrl && !brandFailed && composite) {
+    const overlaySize = Math.max(10, Math.round(size * 0.56));
+    return (
+      <span style={{ position: "relative", width: size, height: size, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+        <img
+          src={brandUrl}
+          alt=""
+          aria-hidden="true"
+          width={size}
+          height={size}
+          onError={() => setBrandFailed(true)}
+          style={{ width: size, height: size, objectFit: "contain", display: "block" }}
+        />
+        <span style={{ position: "absolute", right: -2, bottom: -2, width: overlaySize, height: overlaySize, borderRadius: 999, background: "var(--mantine-color-body)", display: "inline-flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 0 1px var(--mantine-color-default-border)" }}>
+          <GlyphSvg icon={composite.overlay} color={composite.overlayColor} size={Math.max(8, overlaySize - 3)} />
+        </span>
+      </span>
+    );
+  }
+
+  if (brandUrl && !brandFailed) {
+    return <img src={brandUrl} alt="" aria-hidden="true" width={size} height={size} onError={() => setBrandFailed(true)} style={{ width: size, height: size, objectFit: "contain", display: "block" }} />;
+  }
+
+  return <GlyphSvg icon={icon} color={color} size={size} />;
 }

@@ -470,7 +470,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       <div className="device-registry-discovery-scroll">
         <Table striped highlightOnHover stickyHeader style={{ minWidth: 1040 }}>
           <Table.Thead><Table.Tr>
-            <Table.Th aria-label="Icon" style={{ width: 32, minWidth: 32, maxWidth: 32, paddingInline: 6 }} />
+            <Table.Th aria-label="Icon" style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }} />
             <SortableTableHeader active={sortKey === "provider"} direction={sortDirection} onClick={() => toggleSort("provider")}>Provider</SortableTableHeader>
             <SortableTableHeader active={sortKey === "agent"} direction={sortDirection} onClick={() => toggleSort("agent")}>Agent</SortableTableHeader>
             <SortableTableHeader active={sortKey === "name"} direction={sortDirection} onClick={() => toggleSort("name")}>Name</SortableTableHeader>
@@ -498,7 +498,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                 : <Text size="sm">{primaryAgentName}</Text>;
               const statusBadge = <Badge size="sm" variant="light" color={statusColor(row.status)}>{statusLabel(row.status)}</Badge>;
               return <Table.Tr key={rowKey}>
-                <Table.Td style={{ width: 32, minWidth: 32, maxWidth: 32, paddingInline: 6 }}><ResolvedIconGlyph resolved={resolveDiscoveryIcon(provider, row.device)} size={20} /></Table.Td>
+                <Table.Td style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }}><ResolvedIconGlyph resolved={resolveDiscoveryIcon(provider, row.device)} size={20} /></Table.Td>
                 <Table.Td><Badge variant="light" color={providerColor(provider)}>{providerLabel(provider)}</Badge></Table.Td>
                 <Table.Td>{agentContent}</Table.Td>
                 <Table.Td><CopyableDiscoveryValue value={textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")} fw={600} /></Table.Td>

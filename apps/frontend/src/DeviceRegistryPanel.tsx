@@ -1122,6 +1122,18 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     setProfileModalOpen(true);
   };
 
+  const devicePreviewIcon = React.useMemo(() => {
+    if (deviceForm.iconOverride) {
+      return { icon: deviceForm.iconOverride, color: "blue" };
+    }
+    const selectedType = (deviceTypesQuery.data ?? []).find(item => item.code === deviceForm.deviceType);
+    if (selectedType) {
+      return { icon: selectedType.icon, color: selectedType.color };
+    }
+    const selectedClass = (deviceClassesQuery.data ?? []).find(item => item.code === deviceForm.deviceClass);
+    return { icon: selectedClass?.icon ?? "device", color: selectedClass?.color ?? "gray" };
+  }, [deviceForm.iconOverride, deviceForm.deviceType, deviceForm.deviceClass, deviceTypesQuery.data, deviceClassesQuery.data]);
+
   return (
     <Stack gap="md" className="device-registry-panel">
       <Group justify="space-between" align="flex-start">
@@ -1204,7 +1216,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                 <Table striped highlightOnHover stickyHeader>
                   <Table.Thead>
                     <Table.Tr>
-                      <Table.Th aria-label="Icon" style={{ width: 32, minWidth: 32, maxWidth: 32, paddingInline: 6 }} />
+                      <Table.Th aria-label="Icon" style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }} />
                       <SortableTableHeader active={sortKey === "name"} direction={sortDirection} onClick={() => toggleSort("name")}>Name</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "address"} direction={sortDirection} onClick={() => toggleSort("address")}>Address</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "class"} direction={sortDirection} onClick={() => toggleSort("class")}>Class</SortableTableHeader>
@@ -1223,7 +1235,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                   <Table.Tbody>
                     {filteredDevices.map(device => (
                       <Table.Tr key={device.id}>
-                        <Table.Td style={{ width: 32, minWidth: 32, maxWidth: 32, paddingInline: 6 }}><ResolvedIconGlyph resolved={resolveDeviceIcon(device)} size={20} /></Table.Td>
+                        <Table.Td style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }}><ResolvedIconGlyph resolved={resolveDeviceIcon(device)} size={20} /></Table.Td>
                         <Table.Td>
                           <Stack gap={0}>
                             <Text size="sm" fw={600}>{device.name}</Text>
@@ -1694,7 +1706,12 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         </Stack>
       </Modal>
 
-      <Modal opened={deviceModalOpen} onClose={() => setDeviceModalOpen(false)} title={editingDevice ? "Edit device" : "Add device"} size="xl">
+      <Modal
+        opened={deviceModalOpen}
+        onClose={() => setDeviceModalOpen(false)}
+        title={<Group gap="sm" wrap="nowrap"><DeviceGlyph icon={devicePreviewIcon.icon} color={devicePreviewIcon.color} size={32} /><Text fw={600}>{editingDevice ? "Edit device" : "Add device"}</Text></Group>}
+        size="xl"
+      >
         <Stack gap="md">
           {error && <Text c="red" size="sm">{error}</Text>}
           <SimpleGrid cols={{ base: 1, sm: 3 }}>

@@ -154,7 +154,7 @@ export function RealtimeEntityBrowser() {
           <Table striped highlightOnHover withTableBorder horizontalSpacing="sm" verticalSpacing="xs" style={{ minWidth: 1200 }}>
             <Table.Thead>
               <Table.Tr style={{ position: "sticky", top: 0, zIndex: 4, background: "var(--mantine-color-body)" }}>
-                <Table.Th aria-label="Icon" style={{ width: 32, minWidth: 32, maxWidth: 32, paddingInline: 6 }} />
+                <Table.Th aria-label="Icon" style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }} />
                 <SortableTableHeader active={sortKey === "device"} direction={sortDirection} onClick={() => toggleSort("device")}>Device</SortableTableHeader>
                 <SortableTableHeader active={sortKey === "entity"} direction={sortDirection} onClick={() => toggleSort("entity")}>Entity</SortableTableHeader>
                 <SortableTableHeader active={sortKey === "type"} direction={sortDirection} onClick={() => toggleSort("type")}>Type</SortableTableHeader>
@@ -181,7 +181,7 @@ export function RealtimeEntityBrowser() {
             <Table.Tbody>
               {filtered.map(entity => (
                 <Table.Tr key={`${entity.deviceId}:${entity.entityValue}`}>
-                  <Table.Td style={{ width: 32, minWidth: 32, maxWidth: 32, paddingInline: 6 }}><ResolvedIconGlyph resolved={resolveEntityIcon(entity)} size={20} /></Table.Td>
+                  <Table.Td style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }}><ResolvedIconGlyph resolved={resolveEntityIcon(entity)} size={20} /></Table.Td>
                   <Table.Td>
                     <Text size="sm" fw={600}>{entity.deviceName}</Text>
                     <Text size="xs" c="dimmed">{entity.host ?? entity.agentName ?? "—"}</Text>
