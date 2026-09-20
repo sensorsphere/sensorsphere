@@ -10,6 +10,7 @@ import { ResetFiltersAction } from "./ResetFiltersAction";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import { usePersistentState } from "./preferences/usePersistentState";
+import { FilterClearAction } from "./FilterClearAction";
 
 const DISCOVERY_PROVIDERS = ["YEELIGHT", "ESPHOME", "PROXMOX"] as const;
 type DiscoveryProvider = typeof DISCOVERY_PROVIDERS[number];
@@ -346,7 +347,15 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     .filter(row => {
       const needle = identityFilter.trim().toLowerCase();
       if (!needle) return true;
-      const identityText = [row.logicalKey, textValue(row.device, "id"), textValue(row.device, "providerId"), textValue(row.device, "mac"), textValue(row.device, "hostname")].join(" ").toLowerCase();
+      const identityText = [
+        row.logicalKey,
+        textValue(row.device, "id"),
+        textValue(row.device, "providerId"),
+        textValue(row.device, "mac"),
+        textValue(row.device, "hostname"),
+        ...(Array.isArray(row.device.macAddresses) ? row.device.macAddresses.map(value => String(value)) : []),
+        ...(Array.isArray(row.device.ipAddresses) ? row.device.ipAddresses.map(value => String(value)) : [])
+      ].join(" ").toLowerCase();
       return identityText.includes(needle);
     })
     .filter(row => {
@@ -483,9 +492,9 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
         w={155}
       />
       <Select size="xs" placeholder="All agents" clearable searchable value={agentFilter} onChange={setAgentFilter} styles={activeFilterStyles(Boolean(agentFilter))} data={discoveryAgents.map(agent => ({ value: agent.id, label: agent.name }))} w={180} />
-      <TextInput size="xs" placeholder="Name / IP / MAC / VMID" value={textFilter} onChange={event => setTextFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(textFilter.trim()))} style={{ flex: 1, minWidth: 180 }} />
-      <TextInput size="xs" placeholder="Identity" value={identityFilter} onChange={event => setIdentityFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(identityFilter.trim()))} w={165} />
-      <TextInput size="xs" placeholder="Model" value={modelFilter} onChange={event => setModelFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(modelFilter.trim()))} w={150} />
+      <TextInput size="xs" placeholder="Name / IP / MAC / VMID" value={textFilter} onChange={event => setTextFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(textFilter.trim()))} rightSection={<FilterClearAction active={Boolean(textFilter.trim())} onClear={() => setTextFilter("")} />} style={{ flex: 1, minWidth: 180 }} />
+      <TextInput size="xs" placeholder="Identity" value={identityFilter} onChange={event => setIdentityFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(identityFilter.trim()))} rightSection={<FilterClearAction active={Boolean(identityFilter.trim())} onClear={() => setIdentityFilter("")} />} w={165} />
+      <TextInput size="xs" placeholder="Model" value={modelFilter} onChange={event => setModelFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(modelFilter.trim()))} rightSection={<FilterClearAction active={Boolean(modelFilter.trim())} onClear={() => setModelFilter("")} />} w={150} />
       <Switch size="xs" label="Show duplicate agent discoveries" checked={showDuplicateAgents} onChange={event => setShowDuplicateAgents(event.currentTarget.checked)} />
       <Switch size="xs" label="Show discarded" checked={showDiscarded} onChange={event => setShowDiscarded(event.currentTarget.checked)} />
       <Select size="xs" clearable placeholder="All" value={actionFilter === "ALL" ? null : actionFilter} onChange={value => setActionFilter((value as DiscoveryActionFilter | null) ?? "ALL")} data={[

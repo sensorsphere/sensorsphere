@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.61.4";
+export const MODULE_VERSION = "1.62.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.62.0": {
+    releasedAt: "2026-09-20T11:35:00+02:00",
+    patch: "PR-227a-registry-filter-resets-proxmox-addresses-v1.patch",
+    changes: [
+      { type: "added", description: "Text filters across Device Registry and Service Registry expose individual clear actions while existing select clear actions remain unchanged" },
+      { type: "changed", description: "Proxmox discovery imports and updates preserve all discovered IP and MAC addresses as Device Registry identities" },
+      { type: "changed", description: "Discovery Identity filtering also searches discovered IP and MAC address arrays" }
+    ]
+  },
   "1.61.4": {
     releasedAt: "2026-09-20T10:25:00+02:00",
     patch: "PR-225-device-icons-taxonomy-scroll-v5.patch",

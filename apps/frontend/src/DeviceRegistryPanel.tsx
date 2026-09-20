@@ -78,6 +78,7 @@ import { usePersistentState } from "./preferences/usePersistentState";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { MonitoringPanel, type MonitoringQuickCheckRequest } from "./MonitoringPanel";
+import { FilterClearAction } from "./FilterClearAction";
 import { DeviceAgentsPanel, type DiscoveredDeviceImportRequest } from "./DeviceAgentsPanel";
 import { RealtimeEntityBrowser } from "./RealtimeEntityBrowser";
 import { DeviceDiscoveryPanel } from "./DeviceDiscoveryPanel";
@@ -428,6 +429,40 @@ function upsertDiscoveredIdentity(
   };
   if (index >= 0) next[index] = replacement;
   else next.push(replacement);
+  return next;
+}
+
+function discoveredValues(device: Record<string, unknown>, key: string, primary: string): string[] {
+  const values = Array.isArray(device[key])
+    ? device[key].map(item => String(item).trim()).filter(Boolean)
+    : [];
+  const ordered = [primary, ...values].filter(Boolean);
+  return [...new Set(ordered)];
+}
+
+function upsertDiscoveredIdentities(
+  identities: DeviceIdentity[],
+  identityType: "IP" | "MAC",
+  values: string[],
+  sortOrder: number
+): DeviceIdentity[] {
+  if (!values.length) return identities;
+  let next = identities.map(identity => ({ ...identity }));
+  next = upsertDiscoveredIdentity(next, identityType, values[0]!, sortOrder);
+  const normalized = (value: string) => identityType === "MAC" ? value.toUpperCase() : value;
+  for (let index = 1; index < values.length; index += 1) {
+    const value = values[index]!;
+    if (next.some(identity => identity.identityType.toUpperCase() === identityType && normalized(identity.value) === normalized(value))) continue;
+    next.push({
+      identityType,
+      value,
+      source: "discovery",
+      labelCode: "LAN",
+      label: "LAN",
+      isPrimary: false,
+      sortOrder: sortOrder + index
+    });
+  }
   return next;
 }
 
@@ -879,6 +914,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     const providerName = provider.toUpperCase();
     const ip = value("ip");
     const mac = value("mac");
+    const ipAddresses = discoveredValues(device, "ipAddresses", ip);
+    const macAddresses = discoveredValues(device, "macAddresses", mac);
     const hostname = value("hostname");
     const id = value("id");
     const discoveredName = value("name");
@@ -919,8 +956,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       : null;
 
     const identities: DeviceIdentity[] = [
-      ...(ip ? [{ identityType: "IP", value: ip, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 0 }] : []),
-      ...(mac ? [{ identityType: "MAC", value: mac, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 10 }] : []),
+      ...ipAddresses.map((address, index) => ({ identityType: "IP", value: address, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: index === 0, sortOrder: index })),
+      ...macAddresses.map((address, index) => ({ identityType: "MAC", value: address, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: index === 0, sortOrder: 10 + index })),
       ...(providerName === "ESPHOME" && hostname ? [{ identityType: "FQDN", value: hostname, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 20 }] : []),
       ...(providerName === "PROXMOX" && hostname ? [{ identityType: "HOSTNAME", value: hostname, source: "discovery", labelCode: "PROXMOX", label: "Proxmox", isPrimary: false, sortOrder: 30 }] : []),
       ...(providerName === "ESPHOME" && entities.length === 1 ? [{ identityType: "ESPHOME_ENTITY", value: entities[0]!, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 30 }] : []),
@@ -936,8 +973,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       os ? `OS: ${os}${osType && osType.toLowerCase() !== os.toLowerCase() ? ` (${osType})` : ""}` : (osType ? `OS type: ${osType}` : ""),
       guestAgent ? `Guest agent: ${guestAgent === "true" ? "enabled" : "disabled"}` : "",
       value("version") ? `Version: ${value("version")}` : "",
-      ip ? `IP: ${ip}` : "",
-      mac ? `MAC: ${mac}` : ""
+      ipAddresses.length ? `IP: ${ipAddresses.join(", ")}` : "",
+      macAddresses.length ? `MAC: ${macAddresses.join(", ")}` : ""
     ].filter(Boolean).join(" · ");
 
     setEditingDevice(null);
@@ -979,6 +1016,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     const providerName = provider.toUpperCase();
     const ip = value("ip");
     const mac = value("mac");
+    const ipAddresses = discoveredValues(device, "ipAddresses", ip);
+    const macAddresses = discoveredValues(device, "macAddresses", mac);
     const hostname = value("hostname");
     const id = value("id");
     const model = value("model");
@@ -993,8 +1032,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     const entities = Array.isArray(device.entities) ? device.entities.map(item => String(item).trim()).filter(Boolean) : [];
 
     let identities = registered.identities.map(identity => ({ ...identity }));
-    identities = upsertDiscoveredIdentity(identities, "IP", ip, 0);
-    identities = upsertDiscoveredIdentity(identities, "MAC", mac, 10);
+    identities = upsertDiscoveredIdentities(identities, "IP", ipAddresses, 0);
+    identities = upsertDiscoveredIdentities(identities, "MAC", macAddresses, 10);
     if (providerName === "ESPHOME") {
       identities = upsertDiscoveredIdentity(identities, "FQDN", hostname, 20);
       if (entities.length === 1) identities = upsertDiscoveredIdentity(identities, "ESPHOME_ENTITY", entities[0]!, 30);
@@ -1203,8 +1242,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                   setHealthFilter(null);
                 }}
               />
-              <TextInput placeholder="Name" value={nameFilter} onChange={event => setNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(nameFilter.trim()))} style={{ flex: 1, minWidth: 180 }} />
-              <TextInput placeholder="Address" value={addressFilter} onChange={event => setAddressFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(addressFilter.trim()))} style={{ flex: 1, minWidth: 180 }} />
+              <TextInput placeholder="Name" value={nameFilter} onChange={event => setNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(nameFilter.trim()))} rightSection={<FilterClearAction active={Boolean(nameFilter.trim())} onClear={() => setNameFilter("")} />} style={{ flex: 1, minWidth: 180 }} />
+              <TextInput placeholder="Address" value={addressFilter} onChange={event => setAddressFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(addressFilter.trim()))} rightSection={<FilterClearAction active={Boolean(addressFilter.trim())} onClear={() => setAddressFilter("")} />} style={{ flex: 1, minWidth: 180 }} />
               <Select placeholder="All classes" clearable value={classFilter} onChange={setClassFilter} styles={activeFilterStyles(Boolean(classFilter))} data={[...(deviceClassesQuery.data ?? [])].sort((a, b) => a.label.localeCompare(b.label)).map(item => ({ value: item.code, label: item.label }))} leftSection={classFilter ? <DeviceGlyph icon={(deviceClassesQuery.data ?? []).find(item => item.code === classFilter)?.icon ?? "device"} color={(deviceClassesQuery.data ?? []).find(item => item.code === classFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (deviceClassesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={180} />
               <Select placeholder="All types" searchable clearable value={typeFilter} onChange={setTypeFilter} styles={activeFilterStyles(Boolean(typeFilter))} data={[...(deviceTypesQuery.data ?? [])].sort((a, b) => a.label.localeCompare(b.label)).map(type => ({ value: type.code, label: type.label }))} leftSection={typeFilter ? <DeviceGlyph icon={(deviceTypesQuery.data ?? []).find(item => item.code === typeFilter)?.icon ?? "device"} color={(deviceTypesQuery.data ?? []).find(item => item.code === typeFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (deviceTypesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={190} />
               <Select placeholder="All technologies" searchable clearable value={technologyFilter} onChange={setTechnologyFilter} styles={activeFilterStyles(Boolean(technologyFilter))} data={[...(technologiesQuery.data ?? [])].sort((a, b) => a.label.localeCompare(b.label)).map(technology => ({ value: technology.code, label: technology.label }))} leftSection={technologyFilter ? <DeviceGlyph icon={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.icon ?? "link"} color={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (technologiesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={205} />
@@ -1340,7 +1379,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
             <Group justify="space-between" wrap="wrap">
               <Group gap="xs">
                 <ResetFiltersAction active={Boolean(profileFilter)} onReset={() => setProfileFilter("")} />
-                <TextInput size="xs" placeholder="Filter name / description" value={profileFilter} onChange={event => setProfileFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(profileFilter.trim()))} w={240} />
+                <TextInput size="xs" placeholder="Filter name / description" value={profileFilter} onChange={event => setProfileFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(profileFilter.trim()))} rightSection={<FilterClearAction active={Boolean(profileFilter.trim())} onClear={() => setProfileFilter("")} />} w={240} />
                 <Text size="xs" c="dimmed">{filteredProfiles.length}/{profiles.length}</Text>
               </Group>
               <Button size="compact-sm" onClick={openCreateProfile}>+ Add health profile</Button>
@@ -1453,7 +1492,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                           <SortableTableHeader active={controlEntitySortKey === "default"} direction={controlEntitySortDirection} onClick={() => toggleControlEntitySort("default")}>Default</SortableTableHeader>
                         </Table.Tr>
                         <Table.Tr style={{ position: "sticky", top: 39, zIndex: 3, background: "var(--mantine-color-body)" }}>
-                          <Table.Th><TextInput size="xs" placeholder="Filter entity" value={controlEntityNameFilter} onChange={event => setControlEntityNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityNameFilter.trim()))} /></Table.Th>
+                          <Table.Th><TextInput size="xs" placeholder="Filter entity" value={controlEntityNameFilter} onChange={event => setControlEntityNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityNameFilter.trim()))} rightSection={<FilterClearAction active={Boolean(controlEntityNameFilter.trim())} onClear={() => setControlEntityNameFilter("")} />} /></Table.Th>
                           <Table.Th>
                             <Select
                               size="xs"
@@ -1473,7 +1512,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                               styles={activeFilterStyles(Boolean(controlEntityTypeFilter))}
                             />
                           </Table.Th>
-                          <Table.Th><TextInput size="xs" placeholder="Filter state" value={controlEntityStateFilter} onChange={event => setControlEntityStateFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityStateFilter.trim()))} /></Table.Th>
+                          <Table.Th><TextInput size="xs" placeholder="Filter state" value={controlEntityStateFilter} onChange={event => setControlEntityStateFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityStateFilter.trim()))} rightSection={<FilterClearAction active={Boolean(controlEntityStateFilter.trim())} onClear={() => setControlEntityStateFilter("")} />} /></Table.Th>
                           <Table.Th>
                             <Select
                               size="xs"
@@ -1488,7 +1527,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                               styles={activeFilterStyles(Boolean(controlEntityActionsFilter))}
                             />
                           </Table.Th>
-                          <Table.Th><TextInput size="xs" placeholder="Filter default" value={controlEntityDefaultFilter} onChange={event => setControlEntityDefaultFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityDefaultFilter.trim()))} /></Table.Th>
+                          <Table.Th><TextInput size="xs" placeholder="Filter default" value={controlEntityDefaultFilter} onChange={event => setControlEntityDefaultFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(controlEntityDefaultFilter.trim()))} rightSection={<FilterClearAction active={Boolean(controlEntityDefaultFilter.trim())} onClear={() => setControlEntityDefaultFilter("")} />} /></Table.Th>
                         </Table.Tr>
                       </Table.Thead>
                       <Table.Tbody>
