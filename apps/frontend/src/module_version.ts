@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.63.1";
+export const MODULE_VERSION = "1.63.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.63.2": {
+    releasedAt: "2026-09-20T15:00:00+02:00",
+    patch: "PR-228-discovery-reconciliation-v3.patch",
+    changes: [
+      { type: "changed", description: "Discovery Registry filter supports multiple simultaneous statuses and defaults to the four action-required states" },
+      { type: "changed", description: "PVE VM and LXC discovery details display green running and red stopped runtime icons" }
+    ]
+  },
   "1.63.1": {
     releasedAt: "2026-09-20T14:35:00+02:00",
     patch: "PR-228-discovery-reconciliation-v2.patch",

@@ -1,5 +1,5 @@
 import React from "react";
-import { ActionIcon, Badge, Button, Card, Group, Modal, Select, SimpleGrid, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Button, Card, Group, Modal, MultiSelect, Select, SimpleGrid, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDeviceAgents, getDeviceDiscoveries, getDiscardedDeviceDiscoveries, setDeviceDiscoveryDiscarded, startDeviceDiscovery } from "./api";
 import type { DeviceAgent, DeviceRegistryDevice } from "./types";
@@ -14,8 +14,10 @@ import { FilterClearAction } from "./FilterClearAction";
 
 const DISCOVERY_PROVIDERS = ["YEELIGHT", "ESPHOME", "PROXMOX"] as const;
 type DiscoveryProvider = typeof DISCOVERY_PROVIDERS[number];
-type DiscoveryActionFilter = "ALL" | "CAN_ADD" | "POSSIBLE" | "AMBIGUOUS" | "UPDATE" | "REGISTERED" | "DISCARDED";
-type DiscoveryRowStatus = "CAN_ADD" | "POSSIBLE" | "AMBIGUOUS" | "UPDATE" | "REGISTERED" | "DISCARDED";
+type DiscoveryActionFilter = "CAN_ADD" | "POSSIBLE" | "AMBIGUOUS" | "UPDATE" | "REGISTERED" | "DISCARDED";
+type DiscoveryRowStatus = DiscoveryActionFilter;
+
+const ACTION_REQUIRED_STATUSES: DiscoveryActionFilter[] = ["CAN_ADD", "POSSIBLE", "AMBIGUOUS", "UPDATE"];
 type DiscoverySortKey = "status" | "provider" | "agent" | "name" | "ip" | "identity" | "model";
 
 interface DeviceDiscoveryPanelProps {
@@ -324,7 +326,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const [textFilter, setTextFilter] = usePersistentState("device-registry.discovery.filter.text", "");
   const [identityFilter, setIdentityFilter] = usePersistentState("device-registry.discovery.filter.identity", "");
   const [modelFilter, setModelFilter] = usePersistentState("device-registry.discovery.filter.model", "");
-  const [actionFilter, setActionFilter] = usePersistentState<DiscoveryActionFilter>("device-registry.discovery.filter.action", "CAN_ADD");
+  const [actionFilters, setActionFilters] = usePersistentState<DiscoveryActionFilter[]>("device-registry.discovery.filter.actions.v2", [...ACTION_REQUIRED_STATUSES]);
   const [showDuplicateAgents, setShowDuplicateAgents] = usePersistentState("device-registry.discovery.show-duplicate-agents", false);
   const [showDiscarded, setShowDiscarded] = usePersistentState("device-registry.discovery.show-discarded", false);
   const [sortKey, setSortKey] = usePersistentState<DiscoverySortKey>("device-registry.discovery.sort.key.v2", "name");
@@ -442,9 +444,9 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
 
   const filteredRows = displayRows
     .filter(row => {
-      if (row.discarded) return actionFilter === "DISCARDED" || showDiscarded;
-      if (actionFilter === "DISCARDED") return false;
-      return actionFilter === "ALL" || row.status === actionFilter;
+      if (row.discarded) return actionFilters.includes("DISCARDED") || showDiscarded;
+      if (!actionFilters.length) return true;
+      return actionFilters.includes(row.status);
     })
     .filter(row => !providerFilter || row.discovery.provider.toUpperCase() === providerFilter)
     .filter(row => !agentFilter || row.sourceRows.some(source => source.discovery.agentId === agentFilter))
@@ -530,7 +532,17 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const onlineAgents = discoveryAgents.filter(agent => agent.online && agent.enabled).length;
   const offlineAgents = discoveryAgents.length - onlineAgents;
   const scanBusy = scanMutation.isPending || runningCount > 0;
-  const activeFilters = Boolean(providerFilter || agentFilter || textFilter.trim() || identityFilter.trim() || modelFilter.trim() || actionFilter !== "CAN_ADD" || showDuplicateAgents || showDiscarded);
+  const actionFiltersAreDefault = actionFilters.length === ACTION_REQUIRED_STATUSES.length
+    && ACTION_REQUIRED_STATUSES.every(status => actionFilters.includes(status));
+  const activeFilters = Boolean(providerFilter || agentFilter || textFilter.trim() || identityFilter.trim() || modelFilter.trim() || !actionFiltersAreDefault || showDuplicateAgents || showDiscarded);
+
+  const actionFilterActive = (status: DiscoveryActionFilter) => !actionFilters.length || actionFilters.includes(status);
+  const toggleActionFilter = (status: DiscoveryActionFilter) => {
+    setActionFilters(current => {
+      if (!current.length) return [status];
+      return current.includes(status) ? current.filter(item => item !== status) : [...current, status];
+    });
+  };
 
   const toggleSort = (key: DiscoverySortKey) => {
     if (sortKey === key) setSortDirection(current => current === "asc" ? "desc" : "asc");
@@ -605,12 +617,12 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     </Group>
 
     <SimpleGrid cols={{ base: 2, sm: 7 }} spacing="sm">
-      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-blue-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "CAN_ADD"} color="blue" label="Filter Can be added" onClick={() => setActionFilter(current => current === "CAN_ADD" ? "ALL" : "CAN_ADD")} /><Text size="xs" c="dimmed">Can be added</Text></Group><Text fw={700} size="xl">{canAddCount}</Text></Card>
-      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-yellow-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "POSSIBLE"} color="yellow" label="Filter Possible match" onClick={() => setActionFilter(current => current === "POSSIBLE" ? "ALL" : "POSSIBLE")} /><Text size="xs" c="dimmed">Possible match</Text></Group><Text fw={700} size="xl">{possibleCount}</Text></Card>
-      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-red-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "AMBIGUOUS"} color="red" label="Filter Ambiguous" onClick={() => setActionFilter(current => current === "AMBIGUOUS" ? "ALL" : "AMBIGUOUS")} /><Text size="xs" c="dimmed">Ambiguous</Text></Group><Text fw={700} size="xl">{ambiguousCount}</Text></Card>
-      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-orange-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "UPDATE"} color="orange" label="Filter To be updated" onClick={() => setActionFilter(current => current === "UPDATE" ? "ALL" : "UPDATE")} /><Text size="xs" c="dimmed">To be updated</Text></Group><Text fw={700} size="xl">{updateCount}</Text></Card>
-      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-green-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "REGISTERED"} color="green" label="Filter Registered" onClick={() => setActionFilter(current => current === "REGISTERED" ? "ALL" : "REGISTERED")} /><Text size="xs" c="dimmed">Registered</Text></Group><Text fw={700} size="xl">{registeredCount}</Text></Card>
-      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-gray-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "DISCARDED"} color="gray" label="Filter Discarded" onClick={() => { setShowDiscarded(true); setActionFilter(current => current === "DISCARDED" ? "ALL" : "DISCARDED"); }} /><Text size="xs" c="dimmed">Discarded</Text></Group><Text fw={700} size="xl">{discardedCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-blue-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilterActive("CAN_ADD")} color="blue" label="Toggle Can be added" onClick={() => toggleActionFilter("CAN_ADD")} /><Text size="xs" c="dimmed">Can be added</Text></Group><Text fw={700} size="xl">{canAddCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-yellow-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilterActive("POSSIBLE")} color="yellow" label="Toggle Possible match" onClick={() => toggleActionFilter("POSSIBLE")} /><Text size="xs" c="dimmed">Possible match</Text></Group><Text fw={700} size="xl">{possibleCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-red-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilterActive("AMBIGUOUS")} color="red" label="Toggle Ambiguous" onClick={() => toggleActionFilter("AMBIGUOUS")} /><Text size="xs" c="dimmed">Ambiguous</Text></Group><Text fw={700} size="xl">{ambiguousCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-orange-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilterActive("UPDATE")} color="orange" label="Toggle To be updated" onClick={() => toggleActionFilter("UPDATE")} /><Text size="xs" c="dimmed">To be updated</Text></Group><Text fw={700} size="xl">{updateCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-green-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilterActive("REGISTERED")} color="green" label="Toggle Registered" onClick={() => toggleActionFilter("REGISTERED")} /><Text size="xs" c="dimmed">Registered</Text></Group><Text fw={700} size="xl">{registeredCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-gray-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilterActive("DISCARDED")} color="gray" label="Toggle Discarded" onClick={() => { setShowDiscarded(true); toggleActionFilter("DISCARDED"); }} /><Text size="xs" c="dimmed">Discarded</Text></Group><Text fw={700} size="xl">{discardedCount}</Text></Card>
       <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-cyan-6)" }}><Text size="xs" c="dimmed">Scans running</Text><Text fw={700} size="xl">{runningCount}</Text></Card>
     </SimpleGrid>
 
@@ -618,7 +630,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     {failedDiscoveries.map(item => <Text key={item.commandId} size="xs" c="red">{item.provider} discovery on {agentById.get(item.agentId)?.name ?? item.agentId}: {item.error ?? item.status}</Text>)}
 
     <Group gap="sm" wrap="nowrap">
-      <ResetFiltersAction active={activeFilters} onReset={() => { setProviderFilter(null); setAgentFilter(null); setTextFilter(""); setIdentityFilter(""); setModelFilter(""); setActionFilter("CAN_ADD"); setShowDuplicateAgents(false); setShowDiscarded(false); }} />
+      <ResetFiltersAction active={activeFilters} onReset={() => { setProviderFilter(null); setAgentFilter(null); setTextFilter(""); setIdentityFilter(""); setModelFilter(""); setActionFilters([...ACTION_REQUIRED_STATUSES]); setShowDuplicateAgents(false); setShowDiscarded(false); }} />
       <Select
         size="xs"
         placeholder="All providers"
@@ -637,9 +649,24 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       <TextInput size="xs" placeholder="Model" value={modelFilter} onChange={event => setModelFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(modelFilter.trim()))} rightSection={<FilterClearAction active={Boolean(modelFilter.trim())} onClear={() => setModelFilter("")} />} w={150} />
       <Switch size="xs" label="Show duplicate agent discoveries" checked={showDuplicateAgents} onChange={event => setShowDuplicateAgents(event.currentTarget.checked)} />
       <Switch size="xs" label="Show discarded" checked={showDiscarded} onChange={event => setShowDiscarded(event.currentTarget.checked)} />
-      <Select size="xs" clearable placeholder="All" value={actionFilter === "ALL" ? null : actionFilter} onChange={value => setActionFilter((value as DiscoveryActionFilter | null) ?? "ALL")} data={[
-        { value: "CAN_ADD", label: "Can be added" }, { value: "POSSIBLE", label: "Possible match" }, { value: "AMBIGUOUS", label: "Ambiguous" }, { value: "UPDATE", label: "To be updated" }, { value: "REGISTERED", label: "Registered" }, { value: "DISCARDED", label: "Discarded" }
-      ]} styles={activeFilterStyles(actionFilter !== "ALL")} w={155} />
+      <MultiSelect
+        size="xs"
+        clearable
+        searchable
+        placeholder="All Registry statuses"
+        value={actionFilters}
+        onChange={values => setActionFilters(values as DiscoveryActionFilter[])}
+        data={[
+          { value: "CAN_ADD", label: "Can be added" },
+          { value: "POSSIBLE", label: "Possible match" },
+          { value: "AMBIGUOUS", label: "Ambiguous" },
+          { value: "UPDATE", label: "To be updated" },
+          { value: "REGISTERED", label: "Registered" },
+          { value: "DISCARDED", label: "Discarded" }
+        ]}
+        styles={activeFilterStyles(Boolean(actionFilters.length))}
+        w={300}
+      />
       <Text size="xs" c="dimmed">{sortedRows.length}</Text>
     </Group>
 
@@ -663,11 +690,17 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
               const provider = row.discovery.provider.toUpperCase();
               const request: DiscoveredDeviceImportRequest = { agent: row.agent!, provider, device: row.device };
               const rowKey = `${row.discovery.commandId}:${row.index}:${row.discovery.agentId}`;
+              const proxmoxKind = provider === "PROXMOX" ? textValue(row.device, "kind") : "";
+              const proxmoxGuest = provider === "PROXMOX" && ["PVE_VM", "PVE_LXC"].includes(proxmoxKind);
+              const proxmoxStatus = textValue(row.device, "status");
               const details = provider === "ESPHOME"
                 ? `${Array.isArray(row.device.entities) ? row.device.entities.length : 0} entities`
                 : provider === "PROXMOX"
-                  ? `${textValue(row.device, "kind")} · node ${textValue(row.device, "node")} · status ${textValue(row.device, "status")}${textValue(row.device, "version") !== "—" ? ` · version ${textValue(row.device, "version")}` : ""}`
+                  ? `${proxmoxKind} · node ${textValue(row.device, "node")}${!proxmoxGuest ? ` · status ${proxmoxStatus}` : ""}${textValue(row.device, "version") !== "—" ? ` · version ${textValue(row.device, "version")}` : ""}`
                   : `Power ${textValue(row.device, "power")} · ${textValue(row.device, "brightness")}%`;
+              const detailsContent = proxmoxGuest
+                ? <Group gap={5} wrap="nowrap"><Text component="span" size="xs" c="dimmed">{proxmoxKind} · node {textValue(row.device, "node")} ·</Text><ProxmoxRuntimeStatus status={proxmoxStatus} />{textValue(row.device, "version") !== "—" && <Text component="span" size="xs" c="dimmed">· version {textValue(row.device, "version")}</Text>}</Group>
+                : <Text size="xs" c="dimmed">{details}</Text>;
               const agentNames = row.sourceRows.map(source => source.agent?.name ?? source.discovery.agentId);
               const primaryAgentName = row.agent?.name ?? row.discovery.agentId;
               const agentContent = row.sourceRows.length > 1 && !showDuplicateAgents
@@ -682,7 +715,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                 <Table.Td><CopyableDiscoveryValue value={textValue(row.device, "ip")} monospace /></Table.Td>
                 <Table.Td><CopyableDiscoveryValue value={provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")} monospace compact /></Table.Td>
                 <Table.Td><Text size="sm">{provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text></Table.Td>
-                <Table.Td><Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Discovery details</Text><Text size="xs">Name: {textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")}</Text><Text size="xs">IP: {textValue(row.device, "ipAddresses") !== "—" ? textValue(row.device, "ipAddresses") : textValue(row.device, "ip")}</Text><Text size="xs">MAC: {textValue(row.device, "macAddresses") !== "—" ? textValue(row.device, "macAddresses") : textValue(row.device, "mac")}</Text><Text size="xs">Identity: {provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")}</Text><Text size="xs">Model / kind: {provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text>{provider === "PROXMOX" && <><Text size="xs">Endpoint: {textValue(row.device, "endpointId")}</Text><Text size="xs">Node: {textValue(row.device, "node")}</Text><Text size="xs">VMID: {textValue(row.device, "vmid")}</Text><Text size="xs">Version: {textValue(row.device, "version")}</Text><Text size="xs">OS: {textValue(row.device, "os")} / {textValue(row.device, "osType")}</Text><Text size="xs">Guest agent: {textValue(row.device, "guestAgent")}</Text><Text size="xs">Parent: {textValue(row.device, "parentProviderId")}</Text></>}<Text size="xs">{details}</Text></Stack>}><Text size="xs" c="dimmed" style={{ cursor: "help" }}>{details}</Text></Tooltip></Table.Td>
+                <Table.Td><Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Discovery details</Text><Text size="xs">Name: {textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")}</Text><Text size="xs">IP: {textValue(row.device, "ipAddresses") !== "—" ? textValue(row.device, "ipAddresses") : textValue(row.device, "ip")}</Text><Text size="xs">MAC: {textValue(row.device, "macAddresses") !== "—" ? textValue(row.device, "macAddresses") : textValue(row.device, "mac")}</Text><Text size="xs">Identity: {provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")}</Text><Text size="xs">Model / kind: {provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text>{provider === "PROXMOX" && <><Text size="xs">Endpoint: {textValue(row.device, "endpointId")}</Text><Text size="xs">Node: {textValue(row.device, "node")}</Text><Text size="xs">VMID: {textValue(row.device, "vmid")}</Text>{proxmoxGuest && <Group gap={5} wrap="nowrap"><Text component="span" size="xs">Status:</Text><ProxmoxRuntimeStatus status={proxmoxStatus} /></Group>}<Text size="xs">Version: {textValue(row.device, "version")}</Text><Text size="xs">OS: {textValue(row.device, "os")} / {textValue(row.device, "osType")}</Text><Text size="xs">Guest agent: {textValue(row.device, "guestAgent")}</Text><Text size="xs">Parent: {textValue(row.device, "parentProviderId")}</Text></>} {!proxmoxGuest && <Text size="xs">{details}</Text>}</Stack>}><span style={{ cursor: "help" }}>{detailsContent}</span></Tooltip></Table.Td>
                 <Table.Td>{row.status === "UPDATE"
                   ? <Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Expected updates</Text>{row.updateReasons.map(reason => <Text key={reason} size="xs">• {reason}</Text>)}</Stack>}>{statusBadge}</Tooltip>
                   : ["POSSIBLE", "AMBIGUOUS"].includes(row.status)
@@ -740,6 +773,24 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       </Stack>
     </Modal>
   </Stack>;
+}
+
+function ProxmoxRuntimeStatus({ status }: { status: string }) {
+  const normalized = status.trim().toLowerCase();
+  if (normalized !== "running" && normalized !== "stopped") return <Text size="xs" c="dimmed">{status}</Text>;
+  const running = normalized === "running";
+  const color = running ? "green" : "red";
+  return <Group gap={4} wrap="nowrap" component="span">
+    <span style={{ display: "inline-flex", color: `var(--mantine-color-${color}-6)` }} aria-hidden="true">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+        {running
+          ? <path d="M6.4 4.8 11 8l-4.6 3.2Z" fill="currentColor" />
+          : <rect x="5.2" y="5.2" width="5.6" height="5.6" rx="0.8" fill="currentColor" />}
+      </svg>
+    </span>
+    <Text component="span" size="xs" c={color} fw={600}>{normalized}</Text>
+  </Group>;
 }
 
 function CopyableDiscoveryValue({ value, monospace = false, compact = false, fw }: { value: string; monospace?: boolean; compact?: boolean; fw?: number }) {
