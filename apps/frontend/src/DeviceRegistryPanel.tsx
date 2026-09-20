@@ -67,7 +67,8 @@ import type {
 } from "./types";
 
 import { EditActionIcon, DeleteActionIcon } from "./TableActionIcons";
-import { DeviceGlyph } from "./DeviceGlyph";
+import { DEVICE_ICON_OPTIONS, DeviceGlyph } from "./DeviceGlyph";
+import { ResolvedIconGlyph, resolveDeviceIcon } from "./ResolvedDeviceIcon";
 import { DeviceTaxonomyPanel } from "./DeviceTaxonomyPanel";
 import { DeviceAccessGlyph, DeviceAccessLinksEditor, openDeviceAccessUrl, resolveDeviceAccessUrl } from "./DeviceAccessLinksEditor";
 import { DeviceIdentitiesEditor, primaryIdentity } from "./DeviceIdentitiesEditor";
@@ -206,6 +207,7 @@ interface DeviceFormState {
   deviceClass: DeviceRegistryClass;
   deviceType: string;
   technologies: string[];
+  iconOverride: string;
   identities: DeviceIdentity[];
   manufacturer: string;
   model: string;
@@ -231,6 +233,7 @@ function emptyDeviceForm(): DeviceFormState {
     deviceClass: "IOT",
     deviceType: "",
     technologies: [],
+    iconOverride: "",
     identities: [],
     manufacturer: "",
     model: "",
@@ -257,6 +260,7 @@ function deviceToForm(device: DeviceRegistryDevice): DeviceFormState {
     deviceClass: device.deviceClass,
     deviceType: device.deviceType,
     technologies: device.technologies.map(item => item.code),
+    iconOverride: device.iconOverride ?? "",
     identities: device.identities,
     manufacturer: device.manufacturer ?? "",
     model: device.model ?? "",
@@ -283,6 +287,7 @@ function deviceFormPayload(form: DeviceFormState): CreateDeviceRegistryDeviceInp
     deviceClass: form.deviceClass,
     deviceType: form.deviceType.trim(),
     technology: form.technologies[0] ?? null,
+    iconOverride: form.iconOverride || null,
     technologies: form.technologies,
     macAddress: primaryIdentity(form.identities, "MAC")?.value ?? null,
     ipAddress: primaryIdentity(form.identities, "IP")?.value ?? null,
@@ -1199,6 +1204,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                 <Table striped highlightOnHover stickyHeader>
                   <Table.Thead>
                     <Table.Tr>
+                      <Table.Th style={{ width: 48 }}>Icon</Table.Th>
                       <SortableTableHeader active={sortKey === "name"} direction={sortDirection} onClick={() => toggleSort("name")}>Name</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "address"} direction={sortDirection} onClick={() => toggleSort("address")}>Address</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "class"} direction={sortDirection} onClick={() => toggleSort("class")}>Class</SortableTableHeader>
@@ -1217,6 +1223,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                   <Table.Tbody>
                     {filteredDevices.map(device => (
                       <Table.Tr key={device.id}>
+                        <Table.Td><ResolvedIconGlyph resolved={resolveDeviceIcon(device)} /></Table.Td>
                         <Table.Td>
                           <Stack gap={0}>
                             <Text size="sm" fw={600}>{device.name}</Text>
@@ -1690,6 +1697,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           {error && <Text c="red" size="sm">{error}</Text>}
           <SimpleGrid cols={{ base: 1, sm: 3 }}>
             <TextInput label="Name" required value={deviceForm.name} onChange={event => setDeviceForm(current => ({ ...current, name: event.currentTarget.value }))} autoFocus />
+            <Select label="Icon override" searchable clearable placeholder="Automatic" data={DEVICE_ICON_OPTIONS} value={deviceForm.iconOverride || null} onChange={value => setDeviceForm(current => ({ ...current, iconOverride: value ?? "" }))} leftSection={deviceForm.iconOverride ? <DeviceGlyph icon={deviceForm.iconOverride} color="blue" /> : undefined} />
             <Select label="Class" required data={[...(deviceClassesQuery.data ?? [])].sort((a, b) => a.label.localeCompare(b.label)).map(item => ({ value: item.code, label: item.label }))} value={deviceForm.deviceClass || null} onChange={value => value && setDeviceForm(current => ({ ...current, deviceClass: value, deviceType: "" }))} allowDeselect={false} leftSection={<DeviceGlyph icon={(deviceClassesQuery.data ?? []).find(item => item.code === deviceForm.deviceClass)?.icon ?? "device"} color={(deviceClassesQuery.data ?? []).find(item => item.code === deviceForm.deviceClass)?.color} />} renderOption={({ option }) => { const item = (deviceClassesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} />
             <Select
               label="Type" required searchable value={deviceForm.deviceType || null}

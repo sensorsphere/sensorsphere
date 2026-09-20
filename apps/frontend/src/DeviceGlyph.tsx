@@ -10,7 +10,7 @@ const DEVICE_ICON_NAMES = [
   "activity", "antenna", "battery", "bluetooth", "bulb", "button", "camera", "chip", "cloud", "cloud-network", "code",
   "contact", "container", "controller", "copy", "device", "display", "droplet", "ethernet",
   "gateway", "globe", "globe-lock", "infrastructure", "key", "link", "mail", "message", "motion", "network",
-  "plug", "printer", "raspberry-pi", "led-strip", "router", "sensor", "server", "server-stack", "shield", "storage", "switch",
+  "plug", "printer", "proxmox", "esphome", "yeelight", "raspberry-pi", "led-strip", "router", "sensor", "server", "server-stack", "shield", "storage", "switch",
   "switch-toggle", "terminal", "thermometer", "thermostat", "virtual", "wifi"
 ];
 
@@ -30,6 +30,12 @@ export function DeviceGlyph({ icon, color = "gray", size = 18 }: { icon: string;
   };
 
   switch (icon) {
+    case "proxmox":
+      return <svg {...common}><path d="M4 5h4l4 5 4-5h4l-6 7 6 7h-4l-4-5-4 5H4l6-7z"/></svg>;
+    case "esphome":
+      return <svg {...common}><path d="M3 11 12 4l9 7v9h-6v-6H9v6H3z"/><path d="M8 9h8M12 4v4"/></svg>;
+    case "yeelight":
+      return <svg {...common}><path d="M8 14a6 6 0 1 1 8 0c-1 1-1 2-1 4H9c0-2 0-3-1-4"/><path d="M9 18h6M10 21h4M4 12H2M22 12h-2M5.5 5.5 4 4M18.5 5.5 20 4"/></svg>;
     case "cloud":
       return <svg {...common}><path d="M7 18h10a4 4 0 0 0 .6-8A6 6 0 0 0 6.2 8.5 4.5 4.5 0 0 0 7 18Z"/></svg>;
     case "cloud-network":

@@ -796,6 +796,7 @@ export interface DeviceRegistryDevice {
   deviceType: string;
   deviceTypeInfo: Pick<DeviceTypeReference, "code" | "label" | "icon" | "color">;
   technology: string | null;
+  iconOverride: string | null;
   technologies: DeviceTechnologyReference[];
   macAddress: string | null;
   ipAddress: string | null;
@@ -830,6 +831,7 @@ export interface CreateDeviceRegistryDeviceInput {
   deviceClass: DeviceRegistryClass;
   deviceType: string;
   technology?: string | null;
+  iconOverride?: string | null;
   technologies?: string[];
   macAddress?: string | null;
   ipAddress?: string | null;

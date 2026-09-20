@@ -5,6 +5,7 @@ import { getDeviceAgents, getDeviceDiscoveries, getDiscardedDeviceDiscoveries, s
 import type { DeviceAgent, DeviceRegistryDevice } from "./types";
 import type { DiscoveredDeviceImportRequest } from "./DeviceAgentsPanel";
 import { EditActionIcon } from "./TableActionIcons";
+import { ResolvedIconGlyph, resolveDiscoveryIcon } from "./ResolvedDeviceIcon";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
@@ -469,6 +470,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       <div className="device-registry-discovery-scroll">
         <Table striped highlightOnHover stickyHeader style={{ minWidth: 1040 }}>
           <Table.Thead><Table.Tr>
+            <Table.Th style={{ width: 48 }}>Icon</Table.Th>
             <SortableTableHeader active={sortKey === "provider"} direction={sortDirection} onClick={() => toggleSort("provider")}>Provider</SortableTableHeader>
             <SortableTableHeader active={sortKey === "agent"} direction={sortDirection} onClick={() => toggleSort("agent")}>Agent</SortableTableHeader>
             <SortableTableHeader active={sortKey === "name"} direction={sortDirection} onClick={() => toggleSort("name")}>Name</SortableTableHeader>
@@ -496,6 +498,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                 : <Text size="sm">{primaryAgentName}</Text>;
               const statusBadge = <Badge size="sm" variant="light" color={statusColor(row.status)}>{statusLabel(row.status)}</Badge>;
               return <Table.Tr key={rowKey}>
+                <Table.Td><ResolvedIconGlyph resolved={resolveDiscoveryIcon(provider, row.device)} /></Table.Td>
                 <Table.Td><Badge variant="light" color={providerColor(provider)}>{providerLabel(provider)}</Badge></Table.Td>
                 <Table.Td>{agentContent}</Table.Td>
                 <Table.Td><CopyableDiscoveryValue value={textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")} fw={600} /></Table.Td>
@@ -514,7 +517,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                 </Group></Table.Td>
               </Table.Tr>;
             })}
-            {!sortedRows.length && <Table.Tr><Table.Td colSpan={9}><Text c="dimmed" ta="center" py="xl">No discovery matches the current filters.</Text></Table.Td></Table.Tr>}
+            {!sortedRows.length && <Table.Tr><Table.Td colSpan={10}><Text c="dimmed" ta="center" py="xl">No discovery matches the current filters.</Text></Table.Td></Table.Tr>}
           </Table.Tbody>
         </Table>
         <div className="device-registry-discovery-scroll-spacer" aria-hidden="true" />

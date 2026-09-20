@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.60.0";
+export const MODULE_VERSION = "1.61.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.61.0": {
+    releasedAt: "2026-09-20T07:15:00+02:00",
+    patch: "PR-225-device-icons-taxonomy-scroll-v1.patch",
+    changes: [
+      { type: "added", description: "Devices, realtime entities and discovery tables display resolved icons with automatic Proxmox, Yeelight and ESPHome rules" },
+      { type: "added", description: "Device Registry devices support an optional manual icon override" },
+      { type: "changed", description: "Taxonomy Classes, Types and Technologies tables use viewport-constrained vertical scrolling" }
+    ]
+  },
+
   "1.60.0": {
     releasedAt: "2026-09-20T02:20:00+02:00",
     patch: "PR-223b-pbs-discovery-ui-v1.patch",

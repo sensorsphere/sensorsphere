@@ -21,6 +21,7 @@ import type { RealtimeEntityRecord } from "./types";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import { usePersistentState } from "./preferences/usePersistentState";
+import { ResolvedIconGlyph, resolveEntityIcon } from "./ResolvedDeviceIcon";
 
 
 type EntitySortKey = "device" | "entity" | "type" | "state" | "unit" | "provider" | "controllable" | "updated";
@@ -153,6 +154,7 @@ export function RealtimeEntityBrowser() {
           <Table striped highlightOnHover withTableBorder horizontalSpacing="sm" verticalSpacing="xs" style={{ minWidth: 1200 }}>
             <Table.Thead>
               <Table.Tr style={{ position: "sticky", top: 0, zIndex: 4, background: "var(--mantine-color-body)" }}>
+                <Table.Th style={{ width: 48 }}>Icon</Table.Th>
                 <SortableTableHeader active={sortKey === "device"} direction={sortDirection} onClick={() => toggleSort("device")}>Device</SortableTableHeader>
                 <SortableTableHeader active={sortKey === "entity"} direction={sortDirection} onClick={() => toggleSort("entity")}>Entity</SortableTableHeader>
                 <SortableTableHeader active={sortKey === "type"} direction={sortDirection} onClick={() => toggleSort("type")}>Type</SortableTableHeader>
@@ -164,6 +166,7 @@ export function RealtimeEntityBrowser() {
                 <Table.Th>Dashboard</Table.Th>
               </Table.Tr>
               <Table.Tr style={{ position: "sticky", top: 39, zIndex: 3, background: "var(--mantine-color-body)" }}>
+                <Table.Th />
                 <Table.Th><TextInput size="xs" placeholder="Filter device" value={deviceFilter} onChange={event => setDeviceFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(deviceFilter.trim()))} /></Table.Th>
                 <Table.Th><TextInput size="xs" placeholder="Filter entity" value={entityFilter} onChange={event => setEntityFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(entityFilter.trim()))} /></Table.Th>
                 <Table.Th><Select size="xs" placeholder="All types" clearable value={typeFilter} onChange={setTypeFilter} data={typeOptions} styles={activeFilterStyles(Boolean(typeFilter))} /></Table.Th>
@@ -178,6 +181,7 @@ export function RealtimeEntityBrowser() {
             <Table.Tbody>
               {filtered.map(entity => (
                 <Table.Tr key={`${entity.deviceId}:${entity.entityValue}`}>
+                  <Table.Td><ResolvedIconGlyph resolved={resolveEntityIcon(entity)} /></Table.Td>
                   <Table.Td>
                     <Text size="sm" fw={600}>{entity.deviceName}</Text>
                     <Text size="xs" c="dimmed">{entity.host ?? entity.agentName ?? "—"}</Text>
@@ -213,7 +217,7 @@ export function RealtimeEntityBrowser() {
                 </Table.Tr>
               ))}
               {!entitiesQuery.isLoading && filtered.length === 0 && (
-                <Table.Tr><Table.Td colSpan={9}><Text c="dimmed" ta="center" py="xl">{entities.length === 0 ? "No realtime entities have been reported yet." : "No realtime entities match the active filters."}</Text></Table.Td></Table.Tr>
+                <Table.Tr><Table.Td colSpan={10}><Text c="dimmed" ta="center" py="xl">{entities.length === 0 ? "No realtime entities have been reported yet." : "No realtime entities match the active filters."}</Text></Table.Td></Table.Tr>
               )}
             </Table.Tbody>
           </Table>

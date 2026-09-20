@@ -81,6 +81,7 @@ const deviceCreateSchema = z.object({
   deviceClass: deviceClassSchema,
   deviceType: referenceCodeSchema,
   technology: z.string().trim().max(200).nullable().optional(),
+  iconOverride: z.string().trim().max(100).nullable().optional(),
   macAddress: z.string().trim().max(100).nullable().optional(),
   ipAddress: z.string().trim().max(200).nullable().optional(),
   ieeeAddress: z.string().trim().max(200).nullable().optional(),
@@ -177,6 +178,7 @@ interface DeviceRow {
   device_type_icon: string;
   device_type_color: string;
   technology: string | null;
+  icon_override: string | null;
   mac_address: string | null;
   ip_address: string | null;
   ieee_address: string | null;
@@ -345,6 +347,7 @@ async function listDeviceRows(pool: Pool): Promise<DeviceRow[]> {
       dtref.icon AS device_type_icon,
       dtref.color AS device_type_color,
       d.technology,
+      d.icon_override,
       d.mac_address,
       host(d.ip_address) AS ip_address,
       d.ieee_address,
@@ -436,6 +439,7 @@ function mapDevice(row: DeviceRow, identities: IdentityRow[], links: LinkRow[], 
     deviceType: row.device_type,
     deviceTypeInfo: { code: row.device_type, label: row.device_type_label, icon: row.device_type_icon, color: row.device_type_color },
     technology: row.technology,
+    iconOverride: row.icon_override,
     macAddress: row.mac_address,
     ipAddress: row.ip_address,
     ieeeAddress: row.ieee_address,
@@ -624,7 +628,7 @@ async function replaceChildren(
       await client.query(`
         INSERT INTO device_registry_identities (
           device_id, identity_type, value, normalized_value, source, label_code, label, is_primary, sort_order
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $11)
       `, [deviceId, identity.identityType, identity.value, identity.normalizedValue, identity.source ?? null, identity.labelCode, identity.label, identity.isPrimary, identity.sortOrder]);
     }
     await syncIdentitySummaries(client, deviceId);
@@ -644,7 +648,7 @@ async function replaceChildren(
       await client.query(`
         INSERT INTO device_access_links (
           device_id, name, link_type, url_template, username, port, parameters, icon, color, enabled, sort_order, publish_as_service, published_service_name, published_service_class, published_service_type, published_service_description
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$11,$12,$13,$14,$15,$16,$17,$18)
       `, [
         deviceId, accessLink.name, accessLink.linkType, accessLink.urlTemplate,
         accessLink.username ?? null, accessLink.port ?? null, JSON.stringify(accessLink.parameters ?? {}),
@@ -938,13 +942,13 @@ export async function registerDeviceRegistryFeature(
       await client.query("BEGIN");
       const result = await client.query<{ id: string }>(`
         INSERT INTO device_registry_devices (
-          name, device_class, device_type, technology, mac_address, ip_address, ieee_address, fqdn, manufacturer, model,
+          name, device_class, device_type, technology, icon_override, mac_address, ip_address, ieee_address, fqdn, manufacturer, model,
           firmware_version, description, location_id, parent_device_id,
           health_profile_id, control_agent_id, control_provider, enabled, last_seen_at, battery_percent, rssi
-        ) VALUES ($1,$2,$3,$4,$5,$6::inet,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7::inet,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
         RETURNING id
       `, [
-        input.name, input.deviceClass, input.deviceType, input.technology ?? null,
+        input.name, input.deviceClass, input.deviceType, input.technology ?? null, input.iconOverride ?? null,
         input.macAddress ?? null, input.ipAddress ?? null, input.ieeeAddress ?? null, input.fqdn ?? null,
         input.manufacturer ?? null, input.model ?? null, input.firmwareVersion ?? null,
         input.description ?? null, input.locationId ?? null, input.parentDeviceId ?? null,
@@ -995,23 +999,24 @@ export async function registerDeviceRegistryFeature(
           device_class = COALESCE($3, device_class),
           device_type = COALESCE($4, device_type),
           technology = CASE WHEN $5 THEN $6 ELSE technology END,
-          mac_address = CASE WHEN $7 THEN $8 ELSE mac_address END,
-          ip_address = CASE WHEN $9 THEN $10::inet ELSE ip_address END,
-          ieee_address = CASE WHEN $11 THEN $12 ELSE ieee_address END,
-          fqdn = CASE WHEN $13 THEN $14 ELSE fqdn END,
-          manufacturer = CASE WHEN $15 THEN $16 ELSE manufacturer END,
-          model = CASE WHEN $17 THEN $18 ELSE model END,
-          firmware_version = CASE WHEN $19 THEN $20 ELSE firmware_version END,
-          description = CASE WHEN $21 THEN $22 ELSE description END,
-          location_id = CASE WHEN $23 THEN $24::uuid ELSE location_id END,
-          parent_device_id = CASE WHEN $25 THEN $26::uuid ELSE parent_device_id END,
-          health_profile_id = CASE WHEN $27 THEN $28::uuid ELSE health_profile_id END,
-          control_agent_id = CASE WHEN $29 THEN $30::uuid ELSE control_agent_id END,
-          control_provider = CASE WHEN $31 THEN $32 ELSE control_provider END,
-          enabled = COALESCE($33, enabled),
-          last_seen_at = CASE WHEN $34 THEN $35::timestamptz ELSE last_seen_at END,
-          battery_percent = CASE WHEN $36 THEN $37::double precision ELSE battery_percent END,
-          rssi = CASE WHEN $38 THEN $39::double precision ELSE rssi END,
+          icon_override = CASE WHEN $7 THEN $8 ELSE icon_override END,
+          mac_address = CASE WHEN $9 THEN $10 ELSE mac_address END,
+          ip_address = CASE WHEN $11 THEN $12::inet ELSE ip_address END,
+          ieee_address = CASE WHEN $13 THEN $14 ELSE ieee_address END,
+          fqdn = CASE WHEN $15 THEN $16 ELSE fqdn END,
+          manufacturer = CASE WHEN $17 THEN $18 ELSE manufacturer END,
+          model = CASE WHEN $19 THEN $20 ELSE model END,
+          firmware_version = CASE WHEN $21 THEN $22 ELSE firmware_version END,
+          description = CASE WHEN $23 THEN $24 ELSE description END,
+          location_id = CASE WHEN $25 THEN $26::uuid ELSE location_id END,
+          parent_device_id = CASE WHEN $27 THEN $28::uuid ELSE parent_device_id END,
+          health_profile_id = CASE WHEN $29 THEN $30::uuid ELSE health_profile_id END,
+          control_agent_id = CASE WHEN $31 THEN $32::uuid ELSE control_agent_id END,
+          control_provider = CASE WHEN $33 THEN $34 ELSE control_provider END,
+          enabled = COALESCE($35, enabled),
+          last_seen_at = CASE WHEN $36 THEN $37::timestamptz ELSE last_seen_at END,
+          battery_percent = CASE WHEN $38 THEN $39::double precision ELSE battery_percent END,
+          rssi = CASE WHEN $40 THEN $41::double precision ELSE rssi END,
           updated_at = NOW()
         WHERE id = $1
       `, [
@@ -1020,6 +1025,7 @@ export async function registerDeviceRegistryFeature(
         input.deviceClass ?? null,
         input.deviceType ?? null,
         Object.prototype.hasOwnProperty.call(input, "technology"), input.technology ?? null,
+        Object.prototype.hasOwnProperty.call(input, "iconOverride"), input.iconOverride ?? null,
         Object.prototype.hasOwnProperty.call(input, "macAddress"), input.macAddress ?? null,
         Object.prototype.hasOwnProperty.call(input, "ipAddress"), input.ipAddress ?? null,
         Object.prototype.hasOwnProperty.call(input, "ieeeAddress"), input.ieeeAddress ?? null,
@@ -1099,7 +1105,7 @@ export async function registerDeviceRegistryFeature(
       INSERT INTO device_health_profiles (
         name, description, warning_after_seconds, offline_after_seconds,
         battery_warning_percent, battery_critical_percent, rssi_warning, rssi_critical, monitoring_policy
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$11)
       RETURNING
         id, name, description,
         warning_after_seconds AS "warningAfterSeconds",
@@ -1131,11 +1137,11 @@ export async function registerDeviceRegistryFeature(
         description = CASE WHEN $3 THEN $4 ELSE description END,
         warning_after_seconds = CASE WHEN $5 THEN $6::integer ELSE warning_after_seconds END,
         offline_after_seconds = CASE WHEN $7 THEN $8::integer ELSE offline_after_seconds END,
-        battery_warning_percent = CASE WHEN $9 THEN $10::double precision ELSE battery_warning_percent END,
-        battery_critical_percent = CASE WHEN $11 THEN $12::double precision ELSE battery_critical_percent END,
-        rssi_warning = CASE WHEN $13 THEN $14::double precision ELSE rssi_warning END,
-        rssi_critical = CASE WHEN $15 THEN $16::double precision ELSE rssi_critical END,
-        monitoring_policy = COALESCE($17, monitoring_policy),
+        battery_warning_percent = CASE WHEN $11 THEN $12::double precision ELSE battery_warning_percent END,
+        battery_critical_percent = CASE WHEN $13 THEN $14::double precision ELSE battery_critical_percent END,
+        rssi_warning = CASE WHEN $15 THEN $16::double precision ELSE rssi_warning END,
+        rssi_critical = CASE WHEN $17 THEN $18::double precision ELSE rssi_critical END,
+        monitoring_policy = COALESCE($19, monitoring_policy),
         updated_at = NOW()
       WHERE id = $1
       RETURNING
