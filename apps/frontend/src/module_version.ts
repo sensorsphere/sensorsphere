@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.62.0";
+export const MODULE_VERSION = "1.63.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.63.0": {
+    releasedAt: "2026-09-20T12:15:00+02:00",
+    patch: "PR-228-discovery-reconciliation-v1.patch",
+    changes: [
+      { type: "added", description: "Discovery reconciles records with Registry devices using stable provider IDs, MAC, hostname and IP evidence and exposes Possible match / Ambiguous states" },
+      { type: "added", description: "Possible and ambiguous discovery matches can be linked to an existing Registry device and updated from discovery" },
+      { type: "changed", description: "Discovery consolidates IP and MAC arrays reported by duplicate Device Agents before import or update and displays all reported addresses in details" },
+      { type: "changed", description: "Device Agent and Supervisor Agent update actions use dedicated update glyphs" }
+    ]
+  },
   "1.62.0": {
     releasedAt: "2026-09-20T11:35:00+02:00",
     patch: "PR-227a-registry-filter-resets-proxmox-addresses-v1.patch",

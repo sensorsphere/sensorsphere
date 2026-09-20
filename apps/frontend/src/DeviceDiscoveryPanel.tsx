@@ -14,8 +14,8 @@ import { FilterClearAction } from "./FilterClearAction";
 
 const DISCOVERY_PROVIDERS = ["YEELIGHT", "ESPHOME", "PROXMOX"] as const;
 type DiscoveryProvider = typeof DISCOVERY_PROVIDERS[number];
-type DiscoveryActionFilter = "ALL" | "CAN_ADD" | "UPDATE" | "REGISTERED" | "DISCARDED";
-type DiscoveryRowStatus = "CAN_ADD" | "UPDATE" | "REGISTERED" | "DISCARDED";
+type DiscoveryActionFilter = "ALL" | "CAN_ADD" | "POSSIBLE" | "AMBIGUOUS" | "UPDATE" | "REGISTERED" | "DISCARDED";
+type DiscoveryRowStatus = "CAN_ADD" | "POSSIBLE" | "AMBIGUOUS" | "UPDATE" | "REGISTERED" | "DISCARDED";
 type DiscoverySortKey = "status" | "provider" | "agent" | "name" | "ip" | "identity" | "model";
 
 interface DeviceDiscoveryPanelProps {
@@ -33,9 +33,17 @@ interface RawDiscoveryRow {
   logicalKey: string;
 }
 
+interface DiscoveryMatchCandidate {
+  device: DeviceRegistryDevice;
+  score: number;
+  reasons: string[];
+  exact: boolean;
+}
+
 interface DisplayDiscoveryRow extends RawDiscoveryRow {
   sourceRows: RawDiscoveryRow[];
   registered: DeviceRegistryDevice | null;
+  matchCandidates: DiscoveryMatchCandidate[];
   updateReasons: string[];
   status: DiscoveryRowStatus;
   discarded: boolean;
@@ -81,36 +89,111 @@ function discoveryIdentityKey(provider: string, discovered: Record<string, unkno
   return `NAME:${name || "unknown"}`;
 }
 
-function registeredDeviceFor(provider: string, discovered: Record<string, unknown>, devices: DeviceRegistryDevice[]): DeviceRegistryDevice | null {
-  const normalizedProvider = provider.toUpperCase();
-  const mac = normalizeMac(discovered.mac);
-  const yeelightId = normalizeYeelightId(discovered.id);
-  const hostname = normalizeText(discovered.hostname);
-  const proxmoxId = normalizeText(discovered.providerId);
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(item => String(item).trim()).filter(Boolean);
+}
 
-  return devices.find(existing => {
-    const macMatch = Boolean(mac) && existing.identities.some(identity =>
-      identity.identityType.toUpperCase() === "MAC" && normalizeMac(identity.value) === mac
-    );
-    if (normalizedProvider === "PROXMOX") {
-      return Boolean(proxmoxId && existing.identities.some(identity =>
-        identity.identityType.toUpperCase() === "PROXMOX_ID"
-        && identity.value.trim().toLowerCase() === proxmoxId
-      ));
+function discoveredIdentityValues(discovered: Record<string, unknown>, scalarKey: string, arrayKey: string): string[] {
+  const scalar = typeof discovered[scalarKey] === "string" ? String(discovered[scalarKey]).trim() : "";
+  return [...new Set([scalar, ...stringArray(discovered[arrayKey])].filter(Boolean))];
+}
+
+function discoveryMatchCandidates(provider: string, discovered: Record<string, unknown>, devices: DeviceRegistryDevice[]): DiscoveryMatchCandidate[] {
+  const normalizedProvider = provider.toUpperCase();
+  const proxmoxId = normalizeText(discovered.providerId);
+  const yeelightId = normalizeYeelightId(discovered.id);
+  const macs = discoveredIdentityValues(discovered, "mac", "macAddresses").map(normalizeMac).filter(Boolean);
+  const ips = discoveredIdentityValues(discovered, "ip", "ipAddresses").map(value => value.trim().toLowerCase());
+  const hostname = normalizeText(discovered.hostname);
+  const name = normalizeText(discovered.name);
+  const model = normalizeText(discovered.model || discovered.kind);
+
+  const matches: DiscoveryMatchCandidate[] = [];
+  for (const existing of devices) {
+    let score = 0;
+    let exact = false;
+    const reasons: string[] = [];
+    const identityValues = (type: string) => existing.identities
+      .filter(identity => identity.identityType.toUpperCase() === type)
+      .map(identity => identity.value.trim());
+
+    if (normalizedProvider === "PROXMOX" && proxmoxId && identityValues("PROXMOX_ID").some(value => value.toLowerCase() === proxmoxId)) {
+      score += 1000;
+      exact = true;
+      reasons.push(`PROXMOX_ID ${discovered.providerId}`);
     }
-    if (normalizedProvider === "ESPHOME") {
-      const hostnameMatch = Boolean(hostname) && existing.identities.some(identity =>
-        ["FQDN", "HOSTNAME"].includes(identity.identityType.toUpperCase())
-        && identity.value.trim().toLowerCase() === hostname
-      );
-      return Boolean(macMatch || hostnameMatch);
+    if (normalizedProvider === "YEELIGHT" && yeelightId && identityValues("YEELIGHT_ID").some(value => normalizeYeelightId(value) === yeelightId)) {
+      score += 1000;
+      exact = true;
+      reasons.push(`YEELIGHT_ID ${discovered.id}`);
     }
-    const idMatch = Boolean(yeelightId) && existing.identities.some(identity =>
-      identity.identityType.toUpperCase() === "YEELIGHT_ID"
-      && normalizeYeelightId(identity.value) === yeelightId
-    );
-    return Boolean(idMatch || macMatch);
-  }) ?? null;
+
+    const existingMacs = identityValues("MAC").map(normalizeMac).filter(Boolean);
+    const sharedMacs = macs.filter(mac => existingMacs.includes(mac));
+    if (sharedMacs.length) {
+      score += 300 + sharedMacs.length * 10;
+      exact = true;
+      reasons.push(`MAC ${sharedMacs.join(", ")}`);
+    }
+
+    const existingHostnames = existing.identities
+      .filter(identity => ["FQDN", "HOSTNAME"].includes(identity.identityType.toUpperCase()))
+      .map(identity => normalizeText(identity.value));
+    if (hostname && existingHostnames.includes(hostname)) {
+      score += 180;
+      reasons.push(`Hostname ${discovered.hostname}`);
+    }
+
+    const existingIps = identityValues("IP").map(value => value.toLowerCase());
+    const sharedIps = ips.filter(ip => existingIps.includes(ip));
+    if (sharedIps.length) {
+      score += 100 + sharedIps.length * 5;
+      reasons.push(`IP ${sharedIps.join(", ")}`);
+    }
+
+    const existingName = normalizeText(existing.name);
+    const existingModel = normalizeText(existing.model);
+    if (name && existingName === name) {
+      score += 35;
+      reasons.push(`Name ${existing.name}`);
+    }
+    if (model && existingModel && existingModel === model) {
+      score += 15;
+      reasons.push(`Model ${existing.model}`);
+    }
+
+    if (score > 0) matches.push({ device: existing, score, reasons, exact });
+  }
+  return matches.sort((left, right) => right.score - left.score || left.device.name.localeCompare(right.device.name));
+}
+
+function registeredDeviceFor(provider: string, discovered: Record<string, unknown>, devices: DeviceRegistryDevice[]): { registered: DeviceRegistryDevice | null; candidates: DiscoveryMatchCandidate[] } {
+  const candidates = discoveryMatchCandidates(provider, discovered, devices);
+  const exact = candidates.filter(candidate => candidate.exact);
+  if (exact.length === 1) return { registered: exact[0]!.device, candidates };
+  if (!exact.length && candidates.length === 1 && candidates[0]!.score >= 180) return { registered: candidates[0]!.device, candidates };
+  return { registered: null, candidates };
+}
+
+function mergedDiscoveryDevice(sourceRows: RawDiscoveryRow[], preferred: RawDiscoveryRow): Record<string, unknown> {
+  const merged = { ...preferred.device };
+  const mergeValues = (scalarKey: string, arrayKey: string) => {
+    const values: string[] = [];
+    for (const row of [preferred, ...sourceRows.filter(row => row !== preferred)]) {
+      const scalar = typeof row.device[scalarKey] === "string" ? String(row.device[scalarKey]).trim() : "";
+      if (scalar) values.push(scalar);
+      values.push(...stringArray(row.device[arrayKey]));
+    }
+    const unique = [...new Set(values)];
+    if (unique.length) {
+      merged[scalarKey] = unique[0];
+      merged[arrayKey] = unique;
+    }
+  };
+  mergeValues("ip", "ipAddresses");
+  mergeValues("mac", "macAddresses");
+  return merged;
 }
 
 function registryUpdateReasons(
@@ -122,8 +205,8 @@ function registryUpdateReasons(
 ): string[] {
   const reasons: string[] = [];
   const providerName = provider.toUpperCase();
-  const ip = typeof discovered.ip === "string" ? discovered.ip.trim() : "";
-  const mac = normalizeMac(discovered.mac);
+  const ips = discoveredIdentityValues(discovered, "ip", "ipAddresses");
+  const macs = discoveredIdentityValues(discovered, "mac", "macAddresses");
   const hostname = normalizeText(discovered.hostname);
   const model = typeof discovered.model === "string" ? discovered.model.trim() : "";
   const firmwareVersion = typeof discovered.firmwareVersion === "string" ? discovered.firmwareVersion.trim() : "";
@@ -151,8 +234,13 @@ function registryUpdateReasons(
     if (expectedType && registered.deviceType !== expectedType) reasons.push(`Type: ${registered.deviceType} → ${expectedType}`);
   }
 
-  if (mac && !hasIdentity("MAC", value => normalizeMac(value) === mac)) reasons.push(`MAC: add ${textValue(discovered, "mac")}`);
-  if (ip && !hasIdentity("IP", value => value.trim() === ip)) reasons.push(`IP: add ${ip}`);
+  for (const mac of macs) {
+    const normalizedMac = normalizeMac(mac);
+    if (normalizedMac && !hasIdentity("MAC", value => normalizeMac(value) === normalizedMac)) reasons.push(`MAC: add ${mac}`);
+  }
+  for (const ip of ips) {
+    if (!hasIdentity("IP", value => value.trim().toLowerCase() === ip.toLowerCase())) reasons.push(`IP: add ${ip}`);
+  }
   if (model && (registered.model ?? "").trim() !== model) reasons.push(`Model: ${registered.model ?? "—"} → ${model}`);
   if (firmwareVersion && (registered.firmwareVersion ?? "").trim() !== firmwareVersion) reasons.push(`Firmware: ${registered.firmwareVersion ?? "—"} → ${firmwareVersion}`);
   if (registered.controlProvider?.toUpperCase() !== providerName) reasons.push(`Provider: ${registered.controlProvider ?? "—"} → ${providerName}`);
@@ -209,6 +297,8 @@ function providerLabel(provider: string): string {
 
 function statusLabel(status: DiscoveryRowStatus): string {
   if (status === "CAN_ADD") return "Can be added";
+  if (status === "POSSIBLE") return "Possible match";
+  if (status === "AMBIGUOUS") return "Ambiguous";
   if (status === "UPDATE") return "To be updated";
   if (status === "DISCARDED") return "Discarded";
   return "Registered";
@@ -216,12 +306,14 @@ function statusLabel(status: DiscoveryRowStatus): string {
 
 function statusColor(status: DiscoveryRowStatus): string {
   if (status === "CAN_ADD") return "blue";
+  if (status === "POSSIBLE") return "yellow";
+  if (status === "AMBIGUOUS") return "red";
   if (status === "UPDATE") return "orange";
   if (status === "DISCARDED") return "gray";
   return "green";
 }
 
-const STATUS_ORDER: Record<DiscoveryRowStatus, number> = { CAN_ADD: 0, UPDATE: 1, REGISTERED: 2, DISCARDED: 3 };
+const STATUS_ORDER: Record<DiscoveryRowStatus, number> = { CAN_ADD: 0, POSSIBLE: 1, AMBIGUOUS: 2, UPDATE: 3, REGISTERED: 4, DISCARDED: 5 };
 
 export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpdateDiscoveredDevice, onOpenRegisteredDevice }: DeviceDiscoveryPanelProps) {
   const queryClient = useQueryClient();
@@ -239,6 +331,8 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const [scanProvider, setScanProvider] = React.useState<DiscoveryProvider | "ALL" | null>(null);
   const [agentChoice, setAgentChoice] = React.useState<{ row: DisplayDiscoveryRow; rowKey: string } | null>(null);
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
+  const [reconcileChoice, setReconcileChoice] = React.useState<{ row: DisplayDiscoveryRow; rowKey: string } | null>(null);
+  const [selectedRegistryDeviceId, setSelectedRegistryDeviceId] = React.useState<string | null>(null);
 
   const agentsQuery = useQuery({ queryKey: ["device-agents"], queryFn: getDeviceAgents, refetchInterval: 5000 });
   const discoveriesQuery = useQuery({
@@ -314,7 +408,11 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     sourceRows.sort((a, b) => (a.agent?.name ?? a.discovery.agentId).localeCompare(b.agent?.name ?? b.discovery.agentId));
     const first = sourceRows[0];
     const provider = first.discovery.provider.toUpperCase();
-    const registered = sourceRows.map(row => registeredDeviceFor(provider, row.device, devices)).find(Boolean) ?? null;
+    const matches = sourceRows.map(row => registeredDeviceFor(provider, row.device, devices));
+    const registered = matches.map(match => match.registered).find((device): device is DeviceRegistryDevice => Boolean(device)) ?? null;
+    const matchCandidates = matches.flatMap(match => match.candidates)
+      .filter((candidate, index, items) => items.findIndex(item => item.device.id === candidate.device.id) === index)
+      .sort((left, right) => right.score - left.score || left.device.name.localeCompare(right.device.name));
     const assignedAgentId = registered?.controlAgent?.id ?? null;
     const assignedAgent = assignedAgentId ? agentById.get(assignedAgentId) : null;
     const assignedOnline = Boolean(assignedAgent?.online && assignedAgent.enabled);
@@ -324,9 +422,19 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     const selectedRows = showDuplicateAgents ? sourceRows : [preferred];
     for (const selected of selectedRows) {
       const discarded = discardedKeys.has(`${provider}|${selected.logicalKey}`);
-      const updateReasons = registered ? registryUpdateReasons(provider, selected.device, registered, selected.agent, agentById) : [];
-      const status: DiscoveryRowStatus = discarded ? "DISCARDED" : !registered ? "CAN_ADD" : updateReasons.length ? "UPDATE" : "REGISTERED";
-      displayRows.push({ ...selected, sourceRows, registered, updateReasons, status, discarded });
+      const mergedDevice = mergedDiscoveryDevice(sourceRows, selected);
+      const updateReasons = registered ? registryUpdateReasons(provider, mergedDevice, registered, selected.agent, agentById) : [];
+      const exactCandidates = matchCandidates.filter(candidate => candidate.exact);
+      const status: DiscoveryRowStatus = discarded
+        ? "DISCARDED"
+        : registered
+          ? (updateReasons.length ? "UPDATE" : "REGISTERED")
+          : exactCandidates.length > 1 || matchCandidates.length > 1
+            ? "AMBIGUOUS"
+            : matchCandidates.length === 1
+              ? "POSSIBLE"
+              : "CAN_ADD";
+      displayRows.push({ ...selected, device: mergedDevice, sourceRows, registered, matchCandidates, updateReasons, status, discarded });
     }
   }
 
@@ -383,14 +491,23 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const logicalStatuses = allLogicalRows.map(row => {
     const provider = row.discovery.provider.toUpperCase();
     const discarded = discardedKeys.has(`${provider}|${row.logicalKey}`);
-    const registered = registeredDeviceFor(provider, row.device, devices);
+    const match = registeredDeviceFor(provider, row.device, devices);
     if (discarded) return "DISCARDED" as const;
-    if (!registered) return "CAN_ADD" as const;
+    if (!match.registered) {
+      const exactCandidates = match.candidates.filter(candidate => candidate.exact);
+      if (exactCandidates.length > 1 || match.candidates.length > 1) return "AMBIGUOUS" as const;
+      if (match.candidates.length === 1) return "POSSIBLE" as const;
+      return "CAN_ADD" as const;
+    }
+    const registered = match.registered;
     const assigned = registered.controlAgent?.id ? sourceRowsForKey(groups, provider, row.logicalKey).find(item => item.discovery.agentId === registered.controlAgent?.id) : undefined;
     const candidate = assigned ?? row;
-    return registryUpdateReasons(provider, candidate.device, registered, candidate.agent, agentById).length ? "UPDATE" as const : "REGISTERED" as const;
+    const merged = mergedDiscoveryDevice(sourceRowsForKey(groups, provider, row.logicalKey), candidate);
+    return registryUpdateReasons(provider, merged, registered, candidate.agent, agentById).length ? "UPDATE" as const : "REGISTERED" as const;
   });
   const canAddCount = logicalStatuses.filter(item => item === "CAN_ADD").length;
+  const possibleCount = logicalStatuses.filter(item => item === "POSSIBLE").length;
+  const ambiguousCount = logicalStatuses.filter(item => item === "AMBIGUOUS").length;
   const updateCount = logicalStatuses.filter(item => item === "UPDATE").length;
   const registeredCount = logicalStatuses.filter(item => item === "REGISTERED").length;
   const discardedCount = logicalStatuses.filter(item => item === "DISCARDED").length;
@@ -433,7 +550,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       ? candidates.find(source => source.discovery.agentId === assignedAgentId) ?? row
       : row;
     if (!selected.agent) return;
-    updateMutation.mutate({ request: { agent: selected.agent, provider: selected.discovery.provider.toUpperCase(), device: selected.device }, registered: row.registered, key: rowKey });
+    updateMutation.mutate({ request: { agent: selected.agent, provider: selected.discovery.provider.toUpperCase(), device: mergedDiscoveryDevice(row.sourceRows, selected) }, registered: row.registered, key: rowKey });
   };
 
   const confirmAgentChoice = () => {
@@ -441,12 +558,31 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     const selected = agentChoice.row.sourceRows.find(source => source.discovery.agentId === selectedAgentId);
     if (!selected?.agent) return;
     updateMutation.mutate({
-      request: { agent: selected.agent, provider: selected.discovery.provider.toUpperCase(), device: selected.device },
+      request: { agent: selected.agent, provider: selected.discovery.provider.toUpperCase(), device: mergedDiscoveryDevice(agentChoice.row.sourceRows, selected) },
       registered: agentChoice.row.registered,
       key: agentChoice.rowKey
     });
     setAgentChoice(null);
     setSelectedAgentId(null);
+  };
+
+  const openReconcile = (row: DisplayDiscoveryRow, rowKey: string) => {
+    setReconcileChoice({ row, rowKey });
+    setSelectedRegistryDeviceId(row.matchCandidates[0]?.device.id ?? null);
+  };
+
+  const confirmReconcile = () => {
+    if (!reconcileChoice || !selectedRegistryDeviceId) return;
+    const registered = reconcileChoice.row.matchCandidates.find(candidate => candidate.device.id === selectedRegistryDeviceId)?.device;
+    const selected = reconcileChoice.row.sourceRows.find(source => source.agent?.online && source.agent.enabled) ?? reconcileChoice.row;
+    if (!registered || !selected.agent) return;
+    updateMutation.mutate({
+      request: { agent: selected.agent, provider: selected.discovery.provider.toUpperCase(), device: mergedDiscoveryDevice(reconcileChoice.row.sourceRows, selected) },
+      registered,
+      key: reconcileChoice.rowKey
+    });
+    setReconcileChoice(null);
+    setSelectedRegistryDeviceId(null);
   };
 
   return <Stack gap="sm" className="device-registry-discovery-panel">
@@ -466,8 +602,10 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       </Group>
     </Group>
 
-    <SimpleGrid cols={{ base: 2, sm: 5 }} spacing="sm">
+    <SimpleGrid cols={{ base: 2, sm: 7 }} spacing="sm">
       <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-blue-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "CAN_ADD"} color="blue" label="Filter Can be added" onClick={() => setActionFilter(current => current === "CAN_ADD" ? "ALL" : "CAN_ADD")} /><Text size="xs" c="dimmed">Can be added</Text></Group><Text fw={700} size="xl">{canAddCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-yellow-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "POSSIBLE"} color="yellow" label="Filter Possible match" onClick={() => setActionFilter(current => current === "POSSIBLE" ? "ALL" : "POSSIBLE")} /><Text size="xs" c="dimmed">Possible match</Text></Group><Text fw={700} size="xl">{possibleCount}</Text></Card>
+      <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-red-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "AMBIGUOUS"} color="red" label="Filter Ambiguous" onClick={() => setActionFilter(current => current === "AMBIGUOUS" ? "ALL" : "AMBIGUOUS")} /><Text size="xs" c="dimmed">Ambiguous</Text></Group><Text fw={700} size="xl">{ambiguousCount}</Text></Card>
       <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-orange-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "UPDATE"} color="orange" label="Filter To be updated" onClick={() => setActionFilter(current => current === "UPDATE" ? "ALL" : "UPDATE")} /><Text size="xs" c="dimmed">To be updated</Text></Group><Text fw={700} size="xl">{updateCount}</Text></Card>
       <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-green-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "REGISTERED"} color="green" label="Filter Registered" onClick={() => setActionFilter(current => current === "REGISTERED" ? "ALL" : "REGISTERED")} /><Text size="xs" c="dimmed">Registered</Text></Group><Text fw={700} size="xl">{registeredCount}</Text></Card>
       <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-gray-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilter === "DISCARDED"} color="gray" label="Filter Discarded" onClick={() => { setShowDiscarded(true); setActionFilter(current => current === "DISCARDED" ? "ALL" : "DISCARDED"); }} /><Text size="xs" c="dimmed">Discarded</Text></Group><Text fw={700} size="xl">{discardedCount}</Text></Card>
@@ -498,7 +636,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       <Switch size="xs" label="Show duplicate agent discoveries" checked={showDuplicateAgents} onChange={event => setShowDuplicateAgents(event.currentTarget.checked)} />
       <Switch size="xs" label="Show discarded" checked={showDiscarded} onChange={event => setShowDiscarded(event.currentTarget.checked)} />
       <Select size="xs" clearable placeholder="All" value={actionFilter === "ALL" ? null : actionFilter} onChange={value => setActionFilter((value as DiscoveryActionFilter | null) ?? "ALL")} data={[
-        { value: "CAN_ADD", label: "Can be added" }, { value: "UPDATE", label: "To be updated" }, { value: "REGISTERED", label: "Registered" }, { value: "DISCARDED", label: "Discarded" }
+        { value: "CAN_ADD", label: "Can be added" }, { value: "POSSIBLE", label: "Possible match" }, { value: "AMBIGUOUS", label: "Ambiguous" }, { value: "UPDATE", label: "To be updated" }, { value: "REGISTERED", label: "Registered" }, { value: "DISCARDED", label: "Discarded" }
       ]} styles={activeFilterStyles(actionFilter !== "ALL")} w={155} />
       <Text size="xs" c="dimmed">{sortedRows.length}</Text>
     </Group>
@@ -542,10 +680,15 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                 <Table.Td><CopyableDiscoveryValue value={textValue(row.device, "ip")} monospace /></Table.Td>
                 <Table.Td><CopyableDiscoveryValue value={provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")} monospace compact /></Table.Td>
                 <Table.Td><Text size="sm">{provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text></Table.Td>
-                <Table.Td><Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Discovery details</Text><Text size="xs">Name: {textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")}</Text><Text size="xs">IP: {textValue(row.device, "ip")}</Text><Text size="xs">MAC: {textValue(row.device, "mac")}</Text><Text size="xs">Identity: {provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")}</Text><Text size="xs">Model / kind: {provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text>{provider === "PROXMOX" && <><Text size="xs">Endpoint: {textValue(row.device, "endpointId")}</Text><Text size="xs">Node: {textValue(row.device, "node")}</Text><Text size="xs">VMID: {textValue(row.device, "vmid")}</Text><Text size="xs">Version: {textValue(row.device, "version")}</Text><Text size="xs">OS: {textValue(row.device, "os")} / {textValue(row.device, "osType")}</Text><Text size="xs">Guest agent: {textValue(row.device, "guestAgent")}</Text><Text size="xs">Parent: {textValue(row.device, "parentProviderId")}</Text></>}<Text size="xs">{details}</Text></Stack>}><Text size="xs" c="dimmed" style={{ cursor: "help" }}>{details}</Text></Tooltip></Table.Td>
-                <Table.Td>{row.status === "UPDATE" ? <Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Expected updates</Text>{row.updateReasons.map(reason => <Text key={reason} size="xs">• {reason}</Text>)}</Stack>}>{statusBadge}</Tooltip> : statusBadge}</Table.Td>
+                <Table.Td><Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Discovery details</Text><Text size="xs">Name: {textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")}</Text><Text size="xs">IP: {textValue(row.device, "ipAddresses") !== "—" ? textValue(row.device, "ipAddresses") : textValue(row.device, "ip")}</Text><Text size="xs">MAC: {textValue(row.device, "macAddresses") !== "—" ? textValue(row.device, "macAddresses") : textValue(row.device, "mac")}</Text><Text size="xs">Identity: {provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")}</Text><Text size="xs">Model / kind: {provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text>{provider === "PROXMOX" && <><Text size="xs">Endpoint: {textValue(row.device, "endpointId")}</Text><Text size="xs">Node: {textValue(row.device, "node")}</Text><Text size="xs">VMID: {textValue(row.device, "vmid")}</Text><Text size="xs">Version: {textValue(row.device, "version")}</Text><Text size="xs">OS: {textValue(row.device, "os")} / {textValue(row.device, "osType")}</Text><Text size="xs">Guest agent: {textValue(row.device, "guestAgent")}</Text><Text size="xs">Parent: {textValue(row.device, "parentProviderId")}</Text></>}<Text size="xs">{details}</Text></Stack>}><Text size="xs" c="dimmed" style={{ cursor: "help" }}>{details}</Text></Tooltip></Table.Td>
+                <Table.Td>{row.status === "UPDATE"
+                  ? <Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Expected updates</Text>{row.updateReasons.map(reason => <Text key={reason} size="xs">• {reason}</Text>)}</Stack>}>{statusBadge}</Tooltip>
+                  : ["POSSIBLE", "AMBIGUOUS"].includes(row.status)
+                    ? <Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Registry match candidates</Text>{row.matchCandidates.map(candidate => <Text key={candidate.device.id} size="xs">• {candidate.device.name}: {candidate.reasons.join(" · ")}</Text>)}</Stack>}>{statusBadge}</Tooltip>
+                    : statusBadge}</Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">
                   {row.status === "CAN_ADD" && row.agent && <Tooltip label="Import into Device Registry"><ActionIcon size="sm" variant="light" color="green" onClick={() => onImportDiscoveredDevice(request)}>+</ActionIcon></Tooltip>}
+                  {["POSSIBLE", "AMBIGUOUS"].includes(row.status) && row.agent && <Tooltip label="Reconcile with an existing Registry device"><ActionIcon size="sm" variant="light" color={row.status === "AMBIGUOUS" ? "red" : "yellow"} loading={updateKey === rowKey} onClick={() => openReconcile(row, rowKey)}>⇄</ActionIcon></Tooltip>}
                   {row.status === "UPDATE" && row.registered && row.agent && <Tooltip label="Update registered device from discovery"><ActionIcon size="sm" variant="light" color="orange" loading={updateKey === rowKey} onClick={() => beginUpdate(row, rowKey)}>↻</ActionIcon></Tooltip>}
                   {row.registered && <EditActionIcon onClick={() => onOpenRegisteredDevice(row.registered!)} />}
                   {!row.discarded
@@ -560,6 +703,23 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
         <div className="device-registry-discovery-scroll-spacer" aria-hidden="true" />
       </div>
     </Card>
+
+    <Modal opened={Boolean(reconcileChoice)} onClose={() => { setReconcileChoice(null); setSelectedRegistryDeviceId(null); }} title="Reconcile discovered device" centered>
+      <Stack gap="sm">
+        <Text size="sm" c="dimmed">Select the existing Registry device that represents this discovered device. Matching evidence is shown for each candidate.</Text>
+        <Select
+          label="Registry device"
+          data={(reconcileChoice?.row.matchCandidates ?? []).map(candidate => ({ value: candidate.device.id, label: `${candidate.device.name} · ${candidate.reasons.join(" · ")}` }))}
+          value={selectedRegistryDeviceId}
+          onChange={setSelectedRegistryDeviceId}
+          searchable
+        />
+        <Group justify="flex-end">
+          <Button variant="default" onClick={() => { setReconcileChoice(null); setSelectedRegistryDeviceId(null); }}>Cancel</Button>
+          <Button color="orange" disabled={!selectedRegistryDeviceId} loading={updateMutation.isPending} onClick={confirmReconcile}>Link and update</Button>
+        </Group>
+      </Stack>
+    </Modal>
 
     <Modal opened={Boolean(agentChoice)} onClose={() => { setAgentChoice(null); setSelectedAgentId(null); }} title="Select Device Agent" centered>
       <Stack gap="sm">

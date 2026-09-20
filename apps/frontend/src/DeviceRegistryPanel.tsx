@@ -433,9 +433,12 @@ function upsertDiscoveredIdentity(
 }
 
 function discoveredValues(device: Record<string, unknown>, key: string, primary: string): string[] {
-  const values = Array.isArray(device[key])
-    ? device[key].map(item => String(item).trim()).filter(Boolean)
-    : [];
+  const raw = device[key];
+  const values = Array.isArray(raw)
+    ? raw.map(item => String(item).trim()).filter(Boolean)
+    : typeof raw === "string"
+      ? raw.split(/[,;\n]+/).map(item => item.trim()).filter(Boolean)
+      : [];
   const ordered = [primary, ...values].filter(Boolean);
   return [...new Set(ordered)];
 }
