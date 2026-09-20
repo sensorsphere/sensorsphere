@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.30.2";
+export const MODULE_VERSION = "1.31.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.31.0": {
+    releasedAt: "2026-09-20T23:40:00+02:00",
+    patch: "PR-232-agent-version-availability-v1.patch",
+    changes: [
+      { type: "added", description: "Device Control exposes cached latest stable GHCR versions for Device, Monitoring and Supervisor Agent images" },
+      { type: "changed", description: "GHCR version lookups are cached for five minutes and degrade to per-repository UNKNOWN status on registry errors" }
+    ]
+  },
   "1.30.2": { releasedAt: "2026-09-20T10:25:00+02:00", patch: "PR-225-device-icons-taxonomy-scroll-v5.patch", changes: [{ type: "fixed", description: "Device Registry identity and access-link inserts use contiguous PostgreSQL parameter numbers, fixing 42P18 errors during device saves" }] },
 
   "1.30.1": { releasedAt: "2026-09-20T09:00:00+02:00", patch: "PR-225-device-icons-taxonomy-scroll-v4.patch", changes: [{ type: "fixed", description: "Device Registry updates explicitly type optional-field presence flags so PostgreSQL can save icon and identity changes reliably" }] },

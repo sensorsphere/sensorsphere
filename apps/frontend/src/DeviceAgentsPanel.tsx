@@ -6,6 +6,7 @@ import { ResolvedIconGlyph, resolveProviderIcon } from "./ResolvedDeviceIcon";
 import { DeviceGlyph } from "./DeviceGlyph";
 import type { DeviceAgent, DeviceDiscovery, DeviceRegistryDevice, DiscoveredDeviceAction, ManagedAgentStatus } from "./types";
 import { DeleteActionIcon, EditActionIcon } from "./TableActionIcons";
+import { AgentVersionFreshnessBadge, getAgentVersionAvailability } from "./AgentVersionAvailability";
 
 
 
@@ -249,6 +250,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
   }, []);
   const queryClient = useQueryClient();
   const agentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
+  const versionsQuery = useQuery({ queryKey: ["agent-version-availability"], queryFn: getAgentVersionAvailability, refetchInterval: 300000 });
   const [opened, setOpened] = React.useState(false);
   const [editing, setEditing] = React.useState<DeviceAgent | null>(null);
   const [form, setForm] = React.useState<AgentFormState>(emptyForm());
@@ -391,12 +393,12 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
   const openCopy = (agent: DeviceAgent) => { setEditing(null); setForm({ name: `${agent.name} (copy)`, enabled: true, labelsText: labelsText(agent), heartbeatTimeoutSeconds: agent.heartbeatTimeoutSeconds }); setOpened(true); };
   const openAgentUpdate = (agent: DeviceAgent) => {
     setUpdateTarget(agent);
-    setUpdateVersion(agent.desiredVersion ?? agent.version ?? "");
+    setUpdateVersion(agent.desiredVersion ?? versionsQuery.data?.agents.deviceAgent.latestVersion ?? agent.version ?? "");
     agentUpdateMutation.reset();
   };
   const openSupervisorUpdate = (agent: DeviceAgent) => {
     setSupervisorUpdateTarget(agent);
-    setSupervisorUpdateVersion(agent.supervisorDesiredVersion ?? agent.supervisorVersion ?? "");
+    setSupervisorUpdateVersion(agent.supervisorDesiredVersion ?? versionsQuery.data?.agents.supervisorAgent.latestVersion ?? agent.supervisorVersion ?? "");
     supervisorUpdateMutation.reset();
   };
   const openDiscovery = (agent: DeviceAgent) => {
@@ -516,16 +518,16 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
     });
   }, [discoveredDevices, discoverySortKey, discoverySortDirection, discoveryProvider, discoveryAgent, devices]);
 
-  return <Stack gap="md">
-    <Group justify="space-between"><div><Text fw={600}>Device Agents</Text><Text size="xs" c="dimmed">Outbound WebSocket agents used for discovery and interactive device control.</Text></div><Button onClick={openCreate}>Add Device Agent</Button></Group>
-    <Card withBorder padding={0}>
-      <div style={{ overflow: "auto", maxHeight: 420 }}><Table striped highlightOnHover stickyHeader style={{ minWidth: 1060 }}>
+  return <Stack gap="md" className="agent-admin-panel">
+    <Card withBorder className="monitoring-table-card">
+      <Group justify="space-between" mb="sm"><div><Text fw={600}>Device Agents</Text><Text size="xs" c="dimmed">Outbound WebSocket agents used for discovery and interactive device control.</Text></div><Button size="xs" onClick={openCreate}>Add Device Agent</Button></Group>
+      <div className="monitoring-table-scroll"><Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
         <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Status</Table.Th><Table.Th>Reported</Table.Th><Table.Th>Version</Table.Th>{showSupervisorControls && <Table.Th>Supervisor</Table.Th>}<Table.Th>System</Table.Th><Table.Th style={{ width: 110 }}>Last seen</Table.Th><Table.Th>Capabilities</Table.Th><Table.Th>Labels</Table.Th><Table.Th style={{ width: showSupervisorControls ? 202 : 160, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
         <Table.Tbody>{(agentsQuery.data ?? []).map(agent => <Table.Tr key={agent.id}>
           <Table.Td><Text size="sm" fw={600}>{agent.name}</Text><Text size="xs" c="dimmed">{agent.hostname ?? "—"}</Text></Table.Td>
           <Table.Td><Badge color={agent.online ? "green" : agent.enabled ? "gray" : "red"} variant="light">{agent.online ? "ONLINE" : agent.enabled ? "OFFLINE" : "DISABLED"}</Badge></Table.Td>
           <Table.Td><Text size="sm">{agent.reportedName ?? "—"}</Text></Table.Td>
-          <Table.Td><Text size="sm">{agent.version ?? "—"}</Text><Tooltip label={agent.updateError ?? (agent.supervisorAvailable ? "Supervisor Agent available" : "Supervisor Agent unavailable")}><Badge size="xs" variant="light" color={agent.updateStatus === "FAILED" ? "red" : agent.updateStatus === "UPDATED" ? "green" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? "blue" : agent.supervisorAvailable ? "teal" : "gray"}>{agent.updateStatus === "IDLE" ? (agent.supervisorAvailable ? "READY" : "NO SUPERVISOR") : agent.updateStatus}</Badge></Tooltip>{agent.desiredVersion && agent.desiredVersion !== agent.version && agent.updateStatus !== "UPDATED" && <Text size="xs" c="dimmed">Target {agent.desiredVersion}</Text>}</Table.Td>
+          <Table.Td><Text size="sm">{agent.version ?? "—"}</Text><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.deviceAgent} /><Tooltip label={agent.updateError ?? (agent.supervisorAvailable ? "Supervisor Agent available" : "Supervisor Agent unavailable")}><Badge size="xs" variant="light" color={agent.updateStatus === "FAILED" ? "red" : agent.updateStatus === "UPDATED" ? "green" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? "blue" : agent.supervisorAvailable ? "teal" : "gray"}>{agent.updateStatus === "IDLE" ? (agent.supervisorAvailable ? "READY" : "NO SUPERVISOR") : agent.updateStatus}</Badge></Tooltip>{agent.desiredVersion && agent.desiredVersion !== agent.version && agent.updateStatus !== "UPDATED" && <Text size="xs" c="dimmed">Target {agent.desiredVersion}</Text>}</Table.Td>
           {showSupervisorControls && <Table.Td><Text size="sm">{agent.supervisorVersion ?? "—"}</Text><Tooltip label={agent.supervisorUpdateError ?? (agent.supervisorAvailable ? `Supervisor ${agent.supervisorContainerState ?? "available"}` : "Supervisor Agent unavailable")}><Badge size="xs" variant="light" color={!agent.supervisorAvailable ? "gray" : agent.supervisorUpdateStatus === "FAILED" ? "red" : agent.supervisorUpdateStatus === "UPDATED" ? "green" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus) ? "blue" : agent.supervisorSelfUpdateSupported ? "teal" : "gray"}>{agent.supervisorUpdateStatus === "IDLE" ? (agent.supervisorSelfUpdateSupported ? "READY" : agent.supervisorAvailable ? "NO SELF-UPDATE" : "OFFLINE") : agent.supervisorUpdateStatus}</Badge></Tooltip>{agent.supervisorDesiredVersion && agent.supervisorDesiredVersion !== agent.supervisorVersion && agent.supervisorUpdateStatus !== "UPDATED" && <Text size="xs" c="dimmed">Target {agent.supervisorDesiredVersion}</Text>}</Table.Td>}
           <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td>
           <Table.Td title={agent.lastSeenAt ?? undefined}><Text size="sm">{compactDate(agent.lastSeenAt)}</Text></Table.Td>

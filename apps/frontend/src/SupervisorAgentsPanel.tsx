@@ -6,6 +6,7 @@ import type { DeviceAgent, ManagedAgentStatus } from "./types";
 import { FilterClearAction } from "./FilterClearAction";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { ResetFiltersAction } from "./ResetFiltersAction";
+import { AgentVersionFreshnessBadge, getAgentVersionAvailability } from "./AgentVersionAvailability";
 
 function SupervisorUpdateIcon({ size = 16 }: { size?: number }) {
   return (
@@ -49,6 +50,7 @@ function supervisorStatus(agent: DeviceAgent): { label: string; color: string } 
 export function SupervisorAgentsPanel() {
   const queryClient = useQueryClient();
   const agentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
+  const versionsQuery = useQuery({ queryKey: ["agent-version-availability"], queryFn: getAgentVersionAvailability, refetchInterval: 300000 });
   const [nameFilter, setNameFilter] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<string | null>(null);
   const [updateTarget, setUpdateTarget] = React.useState<DeviceAgent | null>(null);
@@ -121,19 +123,19 @@ export function SupervisorAgentsPanel() {
 
   const filtersActive = Boolean(nameFilter.trim() || statusFilter);
 
-  return <Stack gap="md">
-    <Group justify="space-between">
-      <div><Text fw={600}>Supervisor Agents</Text><Text size="xs" c="dimmed">Host-level supervisors used to manage Device and Monitoring Agent lifecycle.</Text></div>
-      <Text size="xs" c="dimmed">{filtered.length}/{supervisors.length}</Text>
-    </Group>
-    <Group gap="xs" wrap="wrap">
-      <ResetFiltersAction active={filtersActive} onReset={() => { setNameFilter(""); setStatusFilter(null); }} />
-      <TextInput size="xs" placeholder="Host / name / version" value={nameFilter} onChange={event => setNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(nameFilter.trim()))} rightSection={<FilterClearAction active={Boolean(nameFilter.trim())} onClear={() => setNameFilter("")} />} w={210} />
-      <Select size="xs" clearable placeholder="Status" data={["ONLINE", "OFFLINE", "UPDATING", "VERIFYING", "UPDATED", "FAILED"]} value={statusFilter} onChange={setStatusFilter} styles={activeFilterStyles(Boolean(statusFilter))} w={150} />
-    </Group>
-    <Card withBorder padding={0}>
-      <div style={{ overflow: "auto", maxHeight: 430 }}>
-        <Table striped highlightOnHover stickyHeader style={{ minWidth: 980 }}>
+  return <Stack gap="md" className="agent-admin-panel">
+    <Card withBorder className="monitoring-table-card">
+      <Group justify="space-between" mb="sm">
+        <div><Text fw={600}>Supervisor Agents</Text><Text size="xs" c="dimmed">Host-level supervisors used to manage Device and Monitoring Agent lifecycle.</Text></div>
+        <Text size="xs" c="dimmed">{filtered.length}/{supervisors.length}</Text>
+      </Group>
+      <Group gap="xs" mb="sm" wrap="wrap">
+        <ResetFiltersAction active={filtersActive} onReset={() => { setNameFilter(""); setStatusFilter(null); }} />
+        <TextInput size="xs" placeholder="Host / name / version" value={nameFilter} onChange={event => setNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(nameFilter.trim()))} rightSection={<FilterClearAction active={Boolean(nameFilter.trim())} onClear={() => setNameFilter("")} />} w={210} />
+        <Select size="xs" clearable placeholder="Status" data={["ONLINE", "OFFLINE", "UPDATING", "VERIFYING", "UPDATED", "FAILED"]} value={statusFilter} onChange={setStatusFilter} styles={activeFilterStyles(Boolean(statusFilter))} w={150} />
+      </Group>
+      <div className="monitoring-table-scroll">
+        <Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
           <Table.Thead><Table.Tr><Table.Th>Host</Table.Th><Table.Th>Status</Table.Th><Table.Th>Version</Table.Th><Table.Th>Container</Table.Th><Table.Th>System</Table.Th><Table.Th>Last seen</Table.Th><Table.Th>Reported through</Table.Th><Table.Th style={{ width: 110, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
           <Table.Tbody>
             {filtered.map(agent => {
@@ -141,14 +143,14 @@ export function SupervisorAgentsPanel() {
               return <Table.Tr key={(agent.hostname ?? agent.name).toLowerCase()}>
                 <Table.Td><Text fw={600} size="sm">{agent.hostname ?? agent.name}</Text></Table.Td>
                 <Table.Td><Tooltip label={agent.supervisorUpdateError ?? undefined}><Badge size="sm" variant="light" color={status.color}>{status.label}</Badge></Tooltip></Table.Td>
-                <Table.Td><Text size="sm">{agent.supervisorVersion ?? "—"}</Text>{agent.supervisorDesiredVersion && agent.supervisorDesiredVersion !== agent.supervisorVersion && <Text size="xs" c="dimmed">Target {agent.supervisorDesiredVersion}</Text>}</Table.Td>
+                <Table.Td><Text size="sm">{agent.supervisorVersion ?? "—"}</Text><AgentVersionFreshnessBadge installedVersion={agent.supervisorVersion} release={versionsQuery.data?.agents.supervisorAgent} />{agent.supervisorDesiredVersion && agent.supervisorDesiredVersion !== agent.supervisorVersion && <Text size="xs" c="dimmed">Target {agent.supervisorDesiredVersion}</Text>}</Table.Td>
                 <Table.Td><Badge size="xs" variant="light" color={agent.supervisorContainerState === "running" ? "green" : "gray"}>{agent.supervisorContainerState ?? "—"}</Badge></Table.Td>
                 <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td>
                 <Table.Td title={agent.lastSeenAt ?? undefined}><Text size="sm">{relativeAge(agent.lastSeenAt)}</Text></Table.Td>
                 <Table.Td><Text size="sm">{agent.name}</Text></Table.Td>
                 <Table.Td><Group gap={6} wrap="nowrap" justify="flex-end">
                   <Tooltip label={!agent.online ? "Device Agent heartbeat route is offline" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : !agent.supervisorSelfUpdateSupported ? "Supervisor Agent does not support self-update" : "Update Supervisor Agent"}>
-                    <ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.supervisorAvailable || !agent.supervisorSelfUpdateSupported || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus)} onClick={() => { setUpdateTarget(agent); setUpdateVersion(agent.supervisorDesiredVersion ?? agent.supervisorVersion ?? ""); }}><SupervisorUpdateIcon /></ActionIcon>
+                    <ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.supervisorAvailable || !agent.supervisorSelfUpdateSupported || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus)} onClick={() => { setUpdateTarget(agent); setUpdateVersion(agent.supervisorDesiredVersion ?? versionsQuery.data?.agents.supervisorAgent.latestVersion ?? agent.supervisorVersion ?? ""); }}><SupervisorUpdateIcon /></ActionIcon>
                   </Tooltip>
                   <Tooltip label={agent.supervisorAvailable ? "Managed agents" : "Supervisor Agent is unavailable"}><ActionIcon size="sm" variant="light" color="indigo" aria-label="Managed agents" disabled={!agent.online || !agent.supervisorAvailable} onClick={() => void openManaged(agent)}><ManagedAgentsIcon /></ActionIcon></Tooltip>
                 </Group></Table.Td>

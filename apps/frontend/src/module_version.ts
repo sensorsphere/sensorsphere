@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.65.1";
+export const MODULE_VERSION = "1.66.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.66.0": {
+    releasedAt: "2026-09-20T23:40:00+02:00",
+    patch: "PR-232-agent-version-availability-v1.patch",
+    changes: [
+      { type: "added", description: "Agents workspace shows the latest stable GHCR release for Device, Monitoring and Supervisor Agents with five-minute cached availability checks" },
+      { type: "added", description: "Agent tables distinguish installed-version freshness with UP TO DATE, UPDATE AVAILABLE and UNKNOWN badges" },
+      { type: "changed", description: "Device and Supervisor Agent tables reuse Monitoring Agents table scrolling and presentation conventions" }
+    ]
+  },
   "1.65.1": {
     releasedAt: "2026-09-20T18:10:00+02:00",
     patch: "PR-230b-discovery-agent-update-status-v1.patch",

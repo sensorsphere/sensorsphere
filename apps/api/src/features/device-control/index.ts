@@ -370,12 +370,95 @@ async function authenticateAgent(pool: Pool, request: IncomingMessage): Promise<
   return result.rows[0] ?? null;
 }
 
+const AGENT_RELEASE_CACHE_TTL_MS = 5 * 60 * 1000;
+const AGENT_RELEASE_REPOSITORIES = {
+  deviceAgent: "sensorsphere/sensorsphere-device-agent",
+  monitorAgent: "sensorsphere/sensorsphere-monitor-agent",
+  supervisorAgent: "sensorsphere/sensorsphere-supervisor-agent"
+} as const;
+
+type AgentReleaseKind = keyof typeof AGENT_RELEASE_REPOSITORIES;
+interface AgentReleaseInfo {
+  repository: string;
+  latestVersion: string | null;
+  status: "OK" | "ERROR";
+  error: string | null;
+}
+interface AgentReleaseSnapshot {
+  checkedAt: string;
+  cacheTtlSeconds: number;
+  agents: Record<AgentReleaseKind, AgentReleaseInfo>;
+}
+
+function compareStableSemver(left: string, right: string): number {
+  const a = left.split(".").map(Number);
+  const b = right.split(".").map(Number);
+  for (let index = 0; index < 3; index += 1) {
+    if (a[index] !== b[index]) return (a[index] ?? 0) - (b[index] ?? 0);
+  }
+  return 0;
+}
+
+async function fetchGhcrLatestVersion(repository: string): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const scope = `repository:${repository}:pull`;
+    const tokenResponse = await fetch(`https://ghcr.io/token?scope=${encodeURIComponent(scope)}`, { signal: controller.signal });
+    if (!tokenResponse.ok) throw new Error(`GHCR token request returned ${tokenResponse.status}`);
+    const tokenPayload = await tokenResponse.json() as { token?: string };
+    if (!tokenPayload.token) throw new Error("GHCR token response did not contain a token");
+
+    const tagsResponse = await fetch(`https://ghcr.io/v2/${repository}/tags/list?n=1000`, {
+      headers: { Authorization: `Bearer ${tokenPayload.token}` },
+      signal: controller.signal
+    });
+    if (!tagsResponse.ok) throw new Error(`GHCR tags request returned ${tagsResponse.status}`);
+    const tagsPayload = await tagsResponse.json() as { tags?: string[] };
+    const versions = (tagsPayload.tags ?? []).filter(tag => /^\d+\.\d+\.\d+$/.test(tag)).sort(compareStableSemver);
+    const latest = versions.at(-1);
+    if (!latest) throw new Error("GHCR did not return a stable semantic-version tag");
+    return latest;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function registerDeviceControlFeature(
   app: FastifyInstance,
   { pool }: DeviceControlFeatureOptions
 ): Promise<void> {
   const sockets = new Map<string, WebSocket>();
   const wss = new WebSocketServer({ noServer: true });
+  let agentReleaseSnapshot: AgentReleaseSnapshot | null = null;
+  let agentReleaseRefresh: Promise<AgentReleaseSnapshot> | null = null;
+
+  const refreshAgentReleaseSnapshot = async (): Promise<AgentReleaseSnapshot> => {
+    const entries = await Promise.all(Object.entries(AGENT_RELEASE_REPOSITORIES).map(async ([kind, repository]) => {
+      try {
+        const latestVersion = await fetchGhcrLatestVersion(repository);
+        return [kind, { repository, latestVersion, status: "OK" as const, error: null }] as const;
+      } catch (error) {
+        app.log.warn({ err: error, repository }, "Unable to refresh GHCR agent version");
+        return [kind, { repository, latestVersion: null, status: "ERROR" as const, error: error instanceof Error ? error.message : "Unable to query GHCR" }] as const;
+      }
+    }));
+    agentReleaseSnapshot = {
+      checkedAt: new Date().toISOString(),
+      cacheTtlSeconds: AGENT_RELEASE_CACHE_TTL_MS / 1000,
+      agents: Object.fromEntries(entries) as Record<AgentReleaseKind, AgentReleaseInfo>
+    };
+    return agentReleaseSnapshot;
+  };
+
+  const getAgentReleaseSnapshot = async (): Promise<AgentReleaseSnapshot> => {
+    const checkedAt = agentReleaseSnapshot ? new Date(agentReleaseSnapshot.checkedAt).getTime() : 0;
+    if (agentReleaseSnapshot && Date.now() - checkedAt < AGENT_RELEASE_CACHE_TTL_MS) return agentReleaseSnapshot;
+    if (!agentReleaseRefresh) {
+      agentReleaseRefresh = refreshAgentReleaseSnapshot().finally(() => { agentReleaseRefresh = null; });
+    }
+    return agentReleaseRefresh!;
+  };
 
   type DiscoveryStatus = "SENT" | "SUCCESS" | "FAILED" | "TIMEOUT";
   interface DiscoveryRecord {
@@ -964,6 +1047,10 @@ export async function registerDeviceControlFeature(
     clearInterval(yeelightPollTimer);
     for (const socket of sockets.values()) socket.close(1001, "Server shutting down");
     wss.close();
+  });
+
+  app.get("/api/v1/device-control/agent-versions", async (_request, reply) => {
+    return reply.send(await getAgentReleaseSnapshot());
   });
 
   app.get("/api/v1/device-control/agents", async (_request, reply) => {
