@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.61.3";
+export const MODULE_VERSION = "1.61.4";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.61.4": {
+    releasedAt: "2026-09-20T10:25:00+02:00",
+    patch: "PR-225-device-icons-taxonomy-scroll-v5.patch",
+    changes: [
+      { type: "fixed", description: "Device Registry Taxonomy uses the same natural-height content inside a single outer scroll viewport as Service Registry" }
+    ]
+  },
   "1.61.3": {
     releasedAt: "2026-09-20T09:00:00+02:00",
     patch: "PR-225-device-icons-taxonomy-scroll-v4.patch",

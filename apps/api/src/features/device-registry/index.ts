@@ -628,7 +628,7 @@ async function replaceChildren(
       await client.query(`
         INSERT INTO device_registry_identities (
           device_id, identity_type, value, normalized_value, source, label_code, label, is_primary, sort_order
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $11)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       `, [deviceId, identity.identityType, identity.value, identity.normalizedValue, identity.source ?? null, identity.labelCode, identity.label, identity.isPrimary, identity.sortOrder]);
     }
     await syncIdentitySummaries(client, deviceId);
@@ -648,7 +648,7 @@ async function replaceChildren(
       await client.query(`
         INSERT INTO device_access_links (
           device_id, name, link_type, url_template, username, port, parameters, icon, color, enabled, sort_order, publish_as_service, published_service_name, published_service_class, published_service_type, published_service_description
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$11,$12,$13,$14,$15,$16,$17,$18)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       `, [
         deviceId, accessLink.name, accessLink.linkType, accessLink.urlTemplate,
         accessLink.username ?? null, accessLink.port ?? null, JSON.stringify(accessLink.parameters ?? {}),
