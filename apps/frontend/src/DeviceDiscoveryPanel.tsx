@@ -377,6 +377,8 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const [sortDirection, setSortDirection] = usePersistentState<SortDirection>("device-registry.discovery.sort.direction.v2", "asc");
   const [updateKey, setUpdateKey] = React.useState<string | null>(null);
   const [scanProvider, setScanProvider] = React.useState<DiscoveryProvider | "ALL" | null>(null);
+  const [clearBeforeScan, setClearBeforeScan] = usePersistentState("device-registry.discovery.clear-before-scan", false);
+  const [hiddenDiscoveryCommandIds, setHiddenDiscoveryCommandIds] = React.useState<Set<string>>(() => new Set());
   const [agentChoice, setAgentChoice] = React.useState<{ row: DisplayDiscoveryRow; rowKey: string } | null>(null);
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
   const [reconcileChoice, setReconcileChoice] = React.useState<{ row: DisplayDiscoveryRow; rowKey: string } | null>(null);
@@ -392,6 +394,12 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
 
   const scanMutation = useMutation({
     mutationFn: async (provider: DiscoveryProvider | "ALL") => {
+      if (clearBeforeScan) {
+        const existingCommandIds = (discoveriesQuery.data ?? []).map(item => item.commandId);
+        if (existingCommandIds.length) {
+          setHiddenDiscoveryCommandIds(previous => new Set([...previous, ...existingCommandIds]));
+        }
+      }
       setScanProvider(provider);
       const agents = agentsQuery.data ?? [];
       const providers = provider === "ALL" ? [...DISCOVERY_PROVIDERS] : [provider];
@@ -428,7 +436,10 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
 
   const agents = agentsQuery.data ?? [];
   const agentById = new Map(agents.map(agent => [agent.id, agent]));
-  const discoveries = discoveriesQuery.data ?? [];
+  const allDiscoveries = discoveriesQuery.data ?? [];
+  const discoveries = hiddenDiscoveryCommandIds.size
+    ? allDiscoveries.filter(item => !hiddenDiscoveryCommandIds.has(item.commandId))
+    : allDiscoveries;
   const discardedKeys = new Set((discardedQuery.data ?? []).map(item => `${item.provider.toUpperCase()}|${item.identityKey}`));
 
   // Keep only the newest result for a logical device from each agent. A later scan must replace older rows.
@@ -652,7 +663,14 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       </div>
       <Group gap="sm" align="center">
         <Text size="xs" c="dimmed">Agents: <Text component="span" c="green" fw={600}>{onlineAgents} online</Text> · <Text component="span" c={offlineAgents ? "red" : "dimmed"} fw={600}>{offlineAgents} offline</Text></Text>
-        <Group gap="xs">
+        <Group gap="xs" align="center">
+          <Switch
+            size="xs"
+            label="Clear before scan"
+            checked={clearBeforeScan}
+            onChange={event => setClearBeforeScan(event.currentTarget.checked)}
+            disabled={scanBusy}
+          />
           <Button size="compact-sm" variant="light" color="yellow" disabled={scanBusy} loading={scanMutation.isPending && scanProvider === "YEELIGHT"} onClick={() => scanMutation.mutate("YEELIGHT")}>Scan Yeelight</Button>
           <Button size="compact-sm" variant="light" color="green" disabled={scanBusy} loading={scanMutation.isPending && scanProvider === "ESPHOME"} onClick={() => scanMutation.mutate("ESPHOME")}>Scan ESPHome</Button>
           <Button size="compact-sm" variant="light" color="indigo" disabled={scanBusy} loading={scanMutation.isPending && scanProvider === "PROXMOX"} onClick={() => scanMutation.mutate("PROXMOX")}>Scan Proxmox</Button>

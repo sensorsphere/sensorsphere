@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.63.3";
+export const MODULE_VERSION = "1.63.4";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.63.4": {
+    releasedAt: "2026-09-20T16:20:00+02:00",
+    patch: "PR-228-discovery-reconciliation-v5.patch",
+    changes: [
+      { type: "added", description: "Discovery scan controls add a persistent Clear before scan switch that clears existing rows from the current table before starting a new scan" }
+    ]
+  },
   "1.63.3": {
     releasedAt: "2026-09-20T15:30:00+02:00",
     patch: "PR-228-discovery-reconciliation-v4.patch",
