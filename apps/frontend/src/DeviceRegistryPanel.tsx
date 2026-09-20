@@ -1382,7 +1382,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         </Tabs.Panel>
 
         <Tabs.Panel value="taxonomy" pt="md" className="device-registry-devices-panel">
-          <div style={{ overflow: "auto", width: "100%" }}>
+          <div className="device-registry-taxonomy-scroll">
             <DeviceTaxonomyPanel />
           </div>
         </Tabs.Panel>

@@ -21,7 +21,7 @@ import type { RealtimeEntityRecord } from "./types";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import { usePersistentState } from "./preferences/usePersistentState";
-import { ResolvedIconGlyph, resolveEntityIcon } from "./ResolvedDeviceIcon";
+import { ResolvedIconGlyph, resolveEntityIcon, resolveProviderIcon } from "./ResolvedDeviceIcon";
 
 
 type EntitySortKey = "device" | "entity" | "type" | "state" | "unit" | "provider" | "controllable" | "updated";
@@ -172,7 +172,7 @@ export function RealtimeEntityBrowser() {
                 <Table.Th><Select size="xs" placeholder="All types" clearable value={typeFilter} onChange={setTypeFilter} data={typeOptions} styles={activeFilterStyles(Boolean(typeFilter))} /></Table.Th>
                 <Table.Th><TextInput size="xs" placeholder="Filter state" value={stateFilter} onChange={event => setStateFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(stateFilter.trim()))} /></Table.Th>
                 <Table.Th><TextInput size="xs" placeholder="Filter unit" value={unitFilter} onChange={event => setUnitFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(unitFilter.trim()))} /></Table.Th>
-                <Table.Th><Select size="xs" placeholder="All providers" clearable value={providerFilter} onChange={setProviderFilter} data={providerOptions} styles={activeFilterStyles(Boolean(providerFilter))} /></Table.Th>
+                <Table.Th><Select size="xs" placeholder="All providers" clearable value={providerFilter} onChange={setProviderFilter} data={providerOptions} styles={activeFilterStyles(Boolean(providerFilter))} leftSection={providerFilter ? <ResolvedIconGlyph resolved={resolveProviderIcon(providerFilter)} size={16} /> : undefined} renderOption={({ option }) => <Group gap={6} wrap="nowrap"><ResolvedIconGlyph resolved={resolveProviderIcon(option.value)} size={16} /><Text size="sm">{option.label}</Text></Group>} /></Table.Th>
                 <Table.Th><Select size="xs" placeholder="All actions" clearable value={controllableFilter} onChange={setControllableFilter} data={[{ value: "actionable", label: "Actionable" }, { value: "readonly", label: "Read-only" }]} styles={activeFilterStyles(Boolean(controllableFilter))} /></Table.Th>
                 <Table.Th />
                 <Table.Th />

@@ -18,10 +18,12 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.30.0";
+export const MODULE_VERSION = "1.30.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.30.1": { releasedAt: "2026-09-20T09:00:00+02:00", patch: "PR-225-device-icons-taxonomy-scroll-v4.patch", changes: [{ type: "fixed", description: "Device Registry updates explicitly type optional-field presence flags so PostgreSQL can save icon and identity changes reliably" }] },
+
   "1.30.0": { releasedAt: "2026-09-20T07:15:00+02:00", patch: "PR-225-device-icons-taxonomy-scroll-v1.patch", changes: [{ type: "added", description: "Device Registry persists optional per-device icon overrides" }] },
 
   "1.29.0": {

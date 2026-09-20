@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.61.2";
+export const MODULE_VERSION = "1.61.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.61.3": {
+    releasedAt: "2026-09-20T09:00:00+02:00",
+    patch: "PR-225-device-icons-taxonomy-scroll-v4.patch",
+    changes: [
+      { type: "changed", description: "Known provider filters display 16x16 provider icons in Discovery, realtime Entities and per-agent discovery" },
+      { type: "added", description: "Discovery adds dedicated Identity and Model filters" },
+      { type: "fixed", description: "Device Registry taxonomy restores Service Registry-style outer scrolling and keeps bottom rows fully reachable" }
+    ]
+  },
   "1.61.2": {
     releasedAt: "2026-09-20T08:35:00+02:00",
     patch: "PR-225-device-icons-taxonomy-scroll-v3.patch",

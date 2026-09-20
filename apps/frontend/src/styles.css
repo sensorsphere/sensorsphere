@@ -506,6 +506,18 @@ body { background: var(--ss-page-bg); }
   min-width: max-content;
 }
 
+.device-registry-taxonomy-scroll {
+  flex: 1 1 0;
+  height: 0;
+  min-height: 0;
+  width: 100%;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  padding-bottom: var(--mantine-spacing-md);
+}
+
 .device-registry-monitoring-panel {
   flex: 1 1 0;
   height: 0;

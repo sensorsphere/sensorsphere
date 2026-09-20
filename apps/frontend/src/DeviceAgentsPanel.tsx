@@ -2,7 +2,7 @@ import React from "react";
 import { ActionIcon, Badge, Button, Card, Checkbox, Code, Group, Modal, Notification, NumberInput, Select, Stack, Table, Text, Textarea, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createDeviceAgent, deleteDeviceAgent, getDeviceAgents, getDeviceDiscovery, getDiscoveredDeviceAction, regenerateDeviceAgentToken, requestDeviceAgentUpdate, requestSupervisorAgentUpdate, runManagedAgentOperation, startDeviceDiscovery, startDiscoveredDeviceAction, updateDeviceAgent } from "./api";
-import { resolveProviderIcon } from "./ResolvedDeviceIcon";
+import { ResolvedIconGlyph, resolveProviderIcon } from "./ResolvedDeviceIcon";
 import { DeviceGlyph } from "./DeviceGlyph";
 import type { DeviceAgent, DeviceDiscovery, DeviceRegistryDevice, DiscoveredDeviceAction, ManagedAgentStatus } from "./types";
 import { DeleteActionIcon, EditActionIcon } from "./TableActionIcons";
@@ -538,6 +538,8 @@ export function DeviceAgentsPanel({ devices = [], onImportDiscoveredDevice, onUp
               }
             }}
             data={(discoveryAgent?.capabilities ?? []).filter(capability => capability.discovery).map(capability => ({ value: capability.provider, label: capability.provider }))}
+            leftSection={discoveryProvider ? <ResolvedIconGlyph resolved={resolveProviderIcon(discoveryProvider)} size={16} /> : undefined}
+            renderOption={({ option }) => <Group gap={6} wrap="nowrap"><ResolvedIconGlyph resolved={resolveProviderIcon(option.value)} size={16} /><Text size="sm">{option.label}</Text></Group>}
             style={{ flex: 1 }}
           />
           <Button

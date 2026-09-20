@@ -5,7 +5,7 @@ import { getDeviceAgents, getDeviceDiscoveries, getDiscardedDeviceDiscoveries, s
 import type { DeviceAgent, DeviceRegistryDevice } from "./types";
 import type { DiscoveredDeviceImportRequest } from "./DeviceAgentsPanel";
 import { EditActionIcon } from "./TableActionIcons";
-import { ResolvedIconGlyph, resolveDiscoveryIcon } from "./ResolvedDeviceIcon";
+import { ResolvedIconGlyph, resolveDiscoveryIcon, resolveProviderIcon } from "./ResolvedDeviceIcon";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
@@ -227,6 +227,8 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const [providerFilter, setProviderFilter] = usePersistentState<string | null>("device-registry.discovery.filter.provider", null);
   const [agentFilter, setAgentFilter] = usePersistentState<string | null>("device-registry.discovery.filter.agent", null);
   const [textFilter, setTextFilter] = usePersistentState("device-registry.discovery.filter.text", "");
+  const [identityFilter, setIdentityFilter] = usePersistentState("device-registry.discovery.filter.identity", "");
+  const [modelFilter, setModelFilter] = usePersistentState("device-registry.discovery.filter.model", "");
   const [actionFilter, setActionFilter] = usePersistentState<DiscoveryActionFilter>("device-registry.discovery.filter.action", "CAN_ADD");
   const [showDuplicateAgents, setShowDuplicateAgents] = usePersistentState("device-registry.discovery.show-duplicate-agents", false);
   const [showDiscarded, setShowDiscarded] = usePersistentState("device-registry.discovery.show-discarded", false);
@@ -340,6 +342,19 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       if (!needle) return true;
       return ["name", "hostname", "ip", "mac", "model", "id", "providerId", "node", "vmid", "kind", "endpointId", "os", "osType"].some(key => textValue(row.device, key).toLowerCase().includes(needle))
         || ["ipAddresses", "macAddresses"].some(key => Array.isArray(row.device[key]) && (row.device[key] as unknown[]).some(value => String(value).toLowerCase().includes(needle)));
+    })
+    .filter(row => {
+      const needle = identityFilter.trim().toLowerCase();
+      if (!needle) return true;
+      const identityText = [row.logicalKey, textValue(row.device, "id"), textValue(row.device, "providerId"), textValue(row.device, "mac"), textValue(row.device, "hostname")].join(" ").toLowerCase();
+      return identityText.includes(needle);
+    })
+    .filter(row => {
+      const needle = modelFilter.trim().toLowerCase();
+      if (!needle) return true;
+      const provider = row.discovery.provider.toUpperCase();
+      const modelText = provider === "PROXMOX" ? `${textValue(row.device, "kind")} ${textValue(row.device, "model")}` : textValue(row.device, "model");
+      return modelText.toLowerCase().includes(needle);
     });
 
   const sortedRows = [...filteredRows].sort((left, right) => {
@@ -387,7 +402,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const onlineAgents = discoveryAgents.filter(agent => agent.online && agent.enabled).length;
   const offlineAgents = discoveryAgents.length - onlineAgents;
   const scanBusy = scanMutation.isPending || runningCount > 0;
-  const activeFilters = Boolean(providerFilter || agentFilter || textFilter.trim() || actionFilter !== "CAN_ADD" || showDuplicateAgents || showDiscarded);
+  const activeFilters = Boolean(providerFilter || agentFilter || textFilter.trim() || identityFilter.trim() || modelFilter.trim() || actionFilter !== "CAN_ADD" || showDuplicateAgents || showDiscarded);
 
   const toggleSort = (key: DiscoverySortKey) => {
     if (sortKey === key) setSortDirection(current => current === "asc" ? "desc" : "asc");
@@ -454,10 +469,23 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     {failedDiscoveries.map(item => <Text key={item.commandId} size="xs" c="red">{item.provider} discovery on {agentById.get(item.agentId)?.name ?? item.agentId}: {item.error ?? item.status}</Text>)}
 
     <Group gap="sm" wrap="nowrap">
-      <ResetFiltersAction active={activeFilters} onReset={() => { setProviderFilter(null); setAgentFilter(null); setTextFilter(""); setActionFilter("CAN_ADD"); setShowDuplicateAgents(false); setShowDiscarded(false); }} />
-      <Select size="xs" placeholder="All providers" clearable value={providerFilter} onChange={setProviderFilter} styles={activeFilterStyles(Boolean(providerFilter))} data={DISCOVERY_PROVIDERS.map(provider => ({ value: provider, label: providerLabel(provider) }))} w={140} />
+      <ResetFiltersAction active={activeFilters} onReset={() => { setProviderFilter(null); setAgentFilter(null); setTextFilter(""); setIdentityFilter(""); setModelFilter(""); setActionFilter("CAN_ADD"); setShowDuplicateAgents(false); setShowDiscarded(false); }} />
+      <Select
+        size="xs"
+        placeholder="All providers"
+        clearable
+        value={providerFilter}
+        onChange={setProviderFilter}
+        styles={activeFilterStyles(Boolean(providerFilter))}
+        data={DISCOVERY_PROVIDERS.map(provider => ({ value: provider, label: providerLabel(provider) }))}
+        leftSection={providerFilter ? <ResolvedIconGlyph resolved={resolveProviderIcon(providerFilter)} size={16} /> : undefined}
+        renderOption={({ option }) => <Group gap={6} wrap="nowrap"><ResolvedIconGlyph resolved={resolveProviderIcon(option.value)} size={16} /><Text size="sm">{option.label}</Text></Group>}
+        w={155}
+      />
       <Select size="xs" placeholder="All agents" clearable searchable value={agentFilter} onChange={setAgentFilter} styles={activeFilterStyles(Boolean(agentFilter))} data={discoveryAgents.map(agent => ({ value: agent.id, label: agent.name }))} w={180} />
-      <TextInput size="xs" placeholder="Name / IP / MAC / ID / VMID" value={textFilter} onChange={event => setTextFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(textFilter.trim()))} style={{ flex: 1 }} />
+      <TextInput size="xs" placeholder="Name / IP / MAC / VMID" value={textFilter} onChange={event => setTextFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(textFilter.trim()))} style={{ flex: 1, minWidth: 180 }} />
+      <TextInput size="xs" placeholder="Identity" value={identityFilter} onChange={event => setIdentityFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(identityFilter.trim()))} w={165} />
+      <TextInput size="xs" placeholder="Model" value={modelFilter} onChange={event => setModelFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(modelFilter.trim()))} w={150} />
       <Switch size="xs" label="Show duplicate agent discoveries" checked={showDuplicateAgents} onChange={event => setShowDuplicateAgents(event.currentTarget.checked)} />
       <Switch size="xs" label="Show discarded" checked={showDiscarded} onChange={event => setShowDiscarded(event.currentTarget.checked)} />
       <Select size="xs" clearable placeholder="All" value={actionFilter === "ALL" ? null : actionFilter} onChange={value => setActionFilter((value as DiscoveryActionFilter | null) ?? "ALL")} data={[
