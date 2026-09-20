@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.65.0";
+export const MODULE_VERSION = "1.65.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.65.1": {
+    releasedAt: "2026-09-20T18:10:00+02:00",
+    patch: "PR-230b-discovery-agent-update-status-v1.patch",
+    changes: [
+      { type: "added", description: "Discovery Agent column shows the reporting Device Agent update lifecycle status below its version" }
+    ]
+  },
   "1.65.0": {
     releasedAt: "2026-09-20T16:55:00+02:00",
     patch: "PR-230-agents-stats-discovery-version-v1.patch",

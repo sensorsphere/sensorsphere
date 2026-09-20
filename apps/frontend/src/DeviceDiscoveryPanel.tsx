@@ -772,7 +772,20 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
               const agentNames = row.sourceRows.map(source => source.agent?.name ?? source.discovery.agentId);
               const primaryAgentName = row.agent?.name ?? row.discovery.agentId;
               const primaryAgentVersion = row.agent?.version ?? null;
-              const agentLabel = <Stack gap={0}><Text size="sm">{primaryAgentName}{row.sourceRows.length > 1 && !showDuplicateAgents ? ` (${row.sourceRows.length - 1} other${row.sourceRows.length > 2 ? "s" : ""})` : ""}</Text><Text size="xs" c="dimmed">{primaryAgentVersion ?? "—"}</Text></Stack>;
+              const agentUpdateStatus = row.agent?.updateStatus ?? "IDLE";
+              const agentUpdateLabel = agentUpdateStatus === "IDLE"
+                ? (row.agent?.supervisorAvailable ? "READY" : "NO SUPERVISOR")
+                : agentUpdateStatus;
+              const agentUpdateColor = agentUpdateStatus === "FAILED"
+                ? "red"
+                : agentUpdateStatus === "UPDATED"
+                  ? "green"
+                  : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agentUpdateStatus)
+                    ? "blue"
+                    : row.agent?.supervisorAvailable
+                      ? "teal"
+                      : "gray";
+              const agentLabel = <Stack gap={2}><Text size="sm">{primaryAgentName}{row.sourceRows.length > 1 && !showDuplicateAgents ? ` (${row.sourceRows.length - 1} other${row.sourceRows.length > 2 ? "s" : ""})` : ""}</Text><Text size="xs" c="dimmed">{primaryAgentVersion ?? "—"}</Text><Badge size="xs" variant="light" color={agentUpdateColor}>{agentUpdateLabel}</Badge></Stack>;
               const agentContent = row.sourceRows.length > 1 && !showDuplicateAgents
                 ? <Tooltip multiline label={<>Discovered by {row.sourceRows.length} agents:<br />{agentNames.join(" · ")}</>}><span style={{ cursor: "help" }}>{agentLabel}</span></Tooltip>
                 : agentLabel;
