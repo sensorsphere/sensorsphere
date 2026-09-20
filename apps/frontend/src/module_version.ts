@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.61.0";
+export const MODULE_VERSION = "1.61.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.61.1": {
+    releasedAt: "2026-09-20T08:05:00+02:00",
+    patch: "PR-225-device-icons-taxonomy-scroll-v2.patch",
+    changes: [
+      { type: "changed", description: "Device, entity and discovery icon columns are headerless and compact" },
+      { type: "changed", description: "Known Proxmox, Yeelight, ESPHome and Raspberry Pi identities use their real brand icons" },
+      { type: "changed", description: "Device Agent capabilities use provider icons instead of text badges" },
+      { type: "fixed", description: "Device Registry Taxonomy uses the same scroll containment pattern as Service Registry so the last row remains fully visible" }
+    ]
+  },
   "1.61.0": {
     releasedAt: "2026-09-20T07:15:00+02:00",
     patch: "PR-225-device-icons-taxonomy-scroll-v1.patch",

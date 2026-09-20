@@ -2,6 +2,13 @@ import React from "react";
 
 const MANTINE_COLORS = new Set(["dark", "gray", "red", "pink", "grape", "violet", "indigo", "blue", "cyan", "teal", "green", "lime", "yellow", "orange"]);
 
+const BRAND_ICON_URLS: Record<string, string> = {
+  proxmox: "https://www.proxmox.com/favicon.svg",
+  esphome: "https://esphome.io/favicon.ico",
+  yeelight: "https://page.yeelight.com/static/appDownloadPage/favicon.ico",
+  "raspberry-pi": "https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/raspberry-pi-icon.svg"
+};
+
 export function deviceColor(color: string): string {
   return MANTINE_COLORS.has(color) ? `var(--mantine-color-${color}-6)` : color || "currentColor";
 }
@@ -23,6 +30,13 @@ export const DEVICE_ICON_OPTIONS = DEVICE_ICON_NAMES
   .sort((left, right) => left.label.localeCompare(right.label));
 
 export function DeviceGlyph({ icon, color = "gray", size = 18 }: { icon: string; color?: string; size?: number }) {
+  const [brandFailed, setBrandFailed] = React.useState(false);
+  React.useEffect(() => setBrandFailed(false), [icon]);
+  const brandUrl = BRAND_ICON_URLS[icon];
+  if (brandUrl && !brandFailed) {
+    return <img src={brandUrl} alt="" aria-hidden="true" width={size} height={size} onError={() => setBrandFailed(true)} style={{ width: size, height: size, objectFit: "contain", display: "block" }} />;
+  }
+
   const common = {
     width: size, height: size, viewBox: "0 0 24 24", fill: "none",
     stroke: deviceColor(color), strokeWidth: 2, strokeLinecap: "round" as const,
@@ -30,12 +44,6 @@ export function DeviceGlyph({ icon, color = "gray", size = 18 }: { icon: string;
   };
 
   switch (icon) {
-    case "proxmox":
-      return <svg {...common}><path d="M4 5h4l4 5 4-5h4l-6 7 6 7h-4l-4-5-4 5H4l6-7z"/></svg>;
-    case "esphome":
-      return <svg {...common}><path d="M3 11 12 4l9 7v9h-6v-6H9v6H3z"/><path d="M8 9h8M12 4v4"/></svg>;
-    case "yeelight":
-      return <svg {...common}><path d="M8 14a6 6 0 1 1 8 0c-1 1-1 2-1 4H9c0-2 0-3-1-4"/><path d="M9 18h6M10 21h4M4 12H2M22 12h-2M5.5 5.5 4 4M18.5 5.5 20 4"/></svg>;
     case "cloud":
       return <svg {...common}><path d="M7 18h10a4 4 0 0 0 .6-8A6 6 0 0 0 6.2 8.5 4.5 4.5 0 0 0 7 18Z"/></svg>;
     case "cloud-network":
@@ -56,8 +64,6 @@ export function DeviceGlyph({ icon, color = "gray", size = 18 }: { icon: string;
     case "server":
     case "server-stack":
       return <svg {...common}><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><path d="M8 7h.01M8 17h.01M12 7h5M12 17h5"/></svg>;
-    case "raspberry-pi":
-      return <svg {...common}><path d="M12 7c-1.8-2.7-4.7-3.2-6.2-1.5 1.4.1 2.5.7 3.2 1.7-2.7-.2-4.8 1.4-4.8 3.6 1.1-.7 2.4-.9 3.6-.5-2.3 1.2-3.3 3.6-2.2 5.5.7-1 1.7-1.7 2.9-2-1 2.4.1 5 2.3 5.7.1-1.2.5-2.2 1.2-3 .7.8 1.1 1.8 1.2 3 2.2-.7 3.3-3.3 2.3-5.7 1.2.3 2.2 1 2.9 2 1.1-1.9.1-4.3-2.2-5.5 1.2-.4 2.5-.2 3.6.5 0-2.2-2.1-3.8-4.8-3.6.7-1 1.8-1.6 3.2-1.7C16.7 3.8 13.8 4.3 12 7Z"/><path d="M10 4c.2-1.2 1-2 2-2M14 4c-.2-1.2-1-2-2-2"/></svg>;
     case "virtual":
       return <svg {...common}><rect x="3" y="4" width="14" height="12" rx="2"/><rect x="7" y="8" width="14" height="12" rx="2"/></svg>;
     case "container":

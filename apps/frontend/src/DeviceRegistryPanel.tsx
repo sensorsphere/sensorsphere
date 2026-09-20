@@ -1204,7 +1204,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                 <Table striped highlightOnHover stickyHeader>
                   <Table.Thead>
                     <Table.Tr>
-                      <Table.Th style={{ width: 48 }}>Icon</Table.Th>
+                      <Table.Th aria-label="Icon" style={{ width: 32, minWidth: 32, maxWidth: 32, paddingInline: 6 }} />
                       <SortableTableHeader active={sortKey === "name"} direction={sortDirection} onClick={() => toggleSort("name")}>Name</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "address"} direction={sortDirection} onClick={() => toggleSort("address")}>Address</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "class"} direction={sortDirection} onClick={() => toggleSort("class")}>Class</SortableTableHeader>
@@ -1223,7 +1223,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                   <Table.Tbody>
                     {filteredDevices.map(device => (
                       <Table.Tr key={device.id}>
-                        <Table.Td><ResolvedIconGlyph resolved={resolveDeviceIcon(device)} /></Table.Td>
+                        <Table.Td style={{ width: 32, minWidth: 32, maxWidth: 32, paddingInline: 6 }}><ResolvedIconGlyph resolved={resolveDeviceIcon(device)} size={20} /></Table.Td>
                         <Table.Td>
                           <Stack gap={0}>
                             <Text size="sm" fw={600}>{device.name}</Text>
@@ -1369,8 +1369,10 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           </Stack>
         </Tabs.Panel>
 
-        <Tabs.Panel value="taxonomy" pt="md">
-          <DeviceTaxonomyPanel />
+        <Tabs.Panel value="taxonomy" pt="md" className="device-registry-devices-panel">
+          <div style={{ overflow: "auto", width: "100%" }}>
+            <DeviceTaxonomyPanel />
+          </div>
         </Tabs.Panel>
       </Tabs>
 
