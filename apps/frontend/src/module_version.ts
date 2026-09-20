@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.63.0";
+export const MODULE_VERSION = "1.63.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.63.1": {
+    releasedAt: "2026-09-20T14:35:00+02:00",
+    patch: "PR-228-discovery-reconciliation-v2.patch",
+    changes: [
+      { type: "fixed", description: "Discovery reconciliation no longer treats a shared generic model such as PVE_NODE as sufficient evidence for a Registry match" }
+    ]
+  },
   "1.63.0": {
     releasedAt: "2026-09-20T12:15:00+02:00",
     patch: "PR-228-discovery-reconciliation-v1.patch",

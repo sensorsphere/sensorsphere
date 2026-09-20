@@ -163,7 +163,9 @@ function discoveryMatchCandidates(provider: string, discovered: Record<string, u
       reasons.push(`Model ${existing.model}`);
     }
 
-    if (score > 0) matches.push({ device: existing, score, reasons, exact });
+    // A model-only match is not meaningful (for example every Proxmox node has model PVE_NODE).
+    // Keep weak name evidence, but require at least the name-level score before exposing a Registry candidate.
+    if (score >= 35) matches.push({ device: existing, score, reasons, exact });
   }
   return matches.sort((left, right) => right.score - left.score || left.device.name.localeCompare(right.device.name));
 }
