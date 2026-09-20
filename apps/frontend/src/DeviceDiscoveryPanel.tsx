@@ -15,9 +15,11 @@ import { FilterClearAction } from "./FilterClearAction";
 const DISCOVERY_PROVIDERS = ["YEELIGHT", "ESPHOME", "PROXMOX"] as const;
 type DiscoveryProvider = typeof DISCOVERY_PROVIDERS[number];
 type DiscoveryActionFilter = "CAN_ADD" | "POSSIBLE" | "AMBIGUOUS" | "UPDATE" | "REGISTERED" | "DISCARDED";
+type RegistryFilterValue = DiscoveryActionFilter | "ACTION_REQUIRED";
 type DiscoveryRowStatus = DiscoveryActionFilter;
 
 const ACTION_REQUIRED_STATUSES: DiscoveryActionFilter[] = ["CAN_ADD", "POSSIBLE", "AMBIGUOUS", "UPDATE"];
+const DEFAULT_REGISTRY_FILTERS: RegistryFilterValue[] = ["ACTION_REQUIRED"];
 type DiscoverySortKey = "status" | "provider" | "agent" | "name" | "ip" | "identity" | "model";
 
 interface DeviceDiscoveryPanelProps {
@@ -69,6 +71,48 @@ function textValue(device: Record<string, unknown>, key: string): string {
   if (Array.isArray(value)) return value.join(", ");
   if (typeof value === "boolean") return value ? "ON" : "OFF";
   return String(value);
+}
+
+interface DiscoveryEntitySummary {
+  name: string;
+  type: string;
+}
+
+function discoveryEntitySummaries(device: Record<string, unknown>): DiscoveryEntitySummary[] {
+  const raw = device.entities;
+  if (!Array.isArray(raw)) return [];
+
+  return raw.map((entity, index) => {
+    if (typeof entity === "string") {
+      const value = entity.trim();
+      const separator = value.indexOf(":");
+      if (separator > 0 && separator < value.length - 1) {
+        return { type: value.slice(0, separator).trim() || "unknown", name: value.slice(separator + 1).trim() || value };
+      }
+      return { type: "unknown", name: value || `entity ${index + 1}` };
+    }
+
+    if (entity && typeof entity === "object") {
+      const item = entity as Record<string, unknown>;
+      const type = [item.type, item.entityType, item.domain, item.platform, item.kind]
+        .find(value => typeof value === "string" && value.trim()) as string | undefined;
+      const name = [item.name, item.entityId, item.id, item.objectId, item.key]
+        .find(value => typeof value === "string" && value.trim()) as string | undefined;
+      return { type: type?.trim() || "unknown", name: name?.trim() || `entity ${index + 1}` };
+    }
+
+    return { type: "unknown", name: String(entity ?? `entity ${index + 1}`) };
+  });
+}
+
+function registryFiltersExpanded(values: RegistryFilterValue[]): DiscoveryActionFilter[] {
+  if (!values.length) return [];
+  const expanded = new Set<DiscoveryActionFilter>();
+  for (const value of values) {
+    if (value === "ACTION_REQUIRED") ACTION_REQUIRED_STATUSES.forEach(status => expanded.add(status));
+    else expanded.add(value);
+  }
+  return [...expanded];
 }
 
 function discoveryIdentityKey(provider: string, discovered: Record<string, unknown>): string {
@@ -326,7 +370,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const [textFilter, setTextFilter] = usePersistentState("device-registry.discovery.filter.text", "");
   const [identityFilter, setIdentityFilter] = usePersistentState("device-registry.discovery.filter.identity", "");
   const [modelFilter, setModelFilter] = usePersistentState("device-registry.discovery.filter.model", "");
-  const [actionFilters, setActionFilters] = usePersistentState<DiscoveryActionFilter[]>("device-registry.discovery.filter.actions.v2", [...ACTION_REQUIRED_STATUSES]);
+  const [actionFilters, setActionFilters] = usePersistentState<RegistryFilterValue[]>("device-registry.discovery.filter.actions.v3", [...DEFAULT_REGISTRY_FILTERS]);
   const [showDuplicateAgents, setShowDuplicateAgents] = usePersistentState("device-registry.discovery.show-duplicate-agents", false);
   const [showDiscarded, setShowDiscarded] = usePersistentState("device-registry.discovery.show-discarded", false);
   const [sortKey, setSortKey] = usePersistentState<DiscoverySortKey>("device-registry.discovery.sort.key.v2", "name");
@@ -442,11 +486,12 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     }
   }
 
+  const expandedActionFilters = registryFiltersExpanded(actionFilters);
   const filteredRows = displayRows
     .filter(row => {
-      if (row.discarded) return actionFilters.includes("DISCARDED") || showDiscarded;
-      if (!actionFilters.length) return true;
-      return actionFilters.includes(row.status);
+      if (row.discarded) return expandedActionFilters.includes("DISCARDED") || showDiscarded;
+      if (!expandedActionFilters.length) return true;
+      return expandedActionFilters.includes(row.status);
     })
     .filter(row => !providerFilter || row.discovery.provider.toUpperCase() === providerFilter)
     .filter(row => !agentFilter || row.sourceRows.some(source => source.discovery.agentId === agentFilter))
@@ -532,15 +577,15 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const onlineAgents = discoveryAgents.filter(agent => agent.online && agent.enabled).length;
   const offlineAgents = discoveryAgents.length - onlineAgents;
   const scanBusy = scanMutation.isPending || runningCount > 0;
-  const actionFiltersAreDefault = actionFilters.length === ACTION_REQUIRED_STATUSES.length
-    && ACTION_REQUIRED_STATUSES.every(status => actionFilters.includes(status));
+  const actionFiltersAreDefault = actionFilters.length === 1 && actionFilters[0] === "ACTION_REQUIRED";
   const activeFilters = Boolean(providerFilter || agentFilter || textFilter.trim() || identityFilter.trim() || modelFilter.trim() || !actionFiltersAreDefault || showDuplicateAgents || showDiscarded);
 
-  const actionFilterActive = (status: DiscoveryActionFilter) => !actionFilters.length || actionFilters.includes(status);
+  const actionFilterActive = (status: DiscoveryActionFilter) => !expandedActionFilters.length || expandedActionFilters.includes(status);
   const toggleActionFilter = (status: DiscoveryActionFilter) => {
     setActionFilters(current => {
-      if (!current.length) return [status];
-      return current.includes(status) ? current.filter(item => item !== status) : [...current, status];
+      const expanded = registryFiltersExpanded(current);
+      if (!expanded.length) return [status];
+      return expanded.includes(status) ? expanded.filter(item => item !== status) : [...expanded, status];
     });
   };
 
@@ -630,7 +675,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     {failedDiscoveries.map(item => <Text key={item.commandId} size="xs" c="red">{item.provider} discovery on {agentById.get(item.agentId)?.name ?? item.agentId}: {item.error ?? item.status}</Text>)}
 
     <Group gap="sm" wrap="nowrap">
-      <ResetFiltersAction active={activeFilters} onReset={() => { setProviderFilter(null); setAgentFilter(null); setTextFilter(""); setIdentityFilter(""); setModelFilter(""); setActionFilters([...ACTION_REQUIRED_STATUSES]); setShowDuplicateAgents(false); setShowDiscarded(false); }} />
+      <ResetFiltersAction active={activeFilters} onReset={() => { setProviderFilter(null); setAgentFilter(null); setTextFilter(""); setIdentityFilter(""); setModelFilter(""); setActionFilters([...DEFAULT_REGISTRY_FILTERS]); setShowDuplicateAgents(false); setShowDiscarded(false); }} />
       <Select
         size="xs"
         placeholder="All providers"
@@ -655,8 +700,9 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
         searchable
         placeholder="All Registry statuses"
         value={actionFilters}
-        onChange={values => setActionFilters(values as DiscoveryActionFilter[])}
+        onChange={values => setActionFilters(values as RegistryFilterValue[])}
         data={[
+          { value: "ACTION_REQUIRED", label: "Action required" },
           { value: "CAN_ADD", label: "Can be added" },
           { value: "POSSIBLE", label: "Possible match" },
           { value: "AMBIGUOUS", label: "Ambiguous" },
@@ -665,7 +711,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
           { value: "DISCARDED", label: "Discarded" }
         ]}
         styles={activeFilterStyles(Boolean(actionFilters.length))}
-        w={300}
+        w={315}
       />
       <Text size="xs" c="dimmed">{sortedRows.length}</Text>
     </Group>
@@ -693,20 +739,24 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
               const proxmoxKind = provider === "PROXMOX" ? textValue(row.device, "kind") : "";
               const proxmoxGuest = provider === "PROXMOX" && ["PVE_VM", "PVE_LXC"].includes(proxmoxKind);
               const proxmoxStatus = textValue(row.device, "status");
-              const details = provider === "ESPHOME"
-                ? `${Array.isArray(row.device.entities) ? row.device.entities.length : 0} entities`
+              const entitySummaries = ["ESPHOME", "YEELIGHT"].includes(provider) ? discoveryEntitySummaries(row.device) : [];
+              const entityTypes = [...new Set(entitySummaries.map(entity => entity.type))];
+              const details = provider === "ESPHOME" || (provider === "YEELIGHT" && entitySummaries.length > 0)
+                ? `${entitySummaries.length} entities`
                 : provider === "PROXMOX"
                   ? `${proxmoxKind} · node ${textValue(row.device, "node")}${!proxmoxGuest ? ` · status ${proxmoxStatus}` : ""}${textValue(row.device, "version") !== "—" ? ` · version ${textValue(row.device, "version")}` : ""}`
                   : `Power ${textValue(row.device, "power")} · ${textValue(row.device, "brightness")}%`;
               const detailsContent = proxmoxGuest
-                ? <Group gap={5} wrap="nowrap"><Text component="span" size="xs" c="dimmed">{proxmoxKind} · node {textValue(row.device, "node")} ·</Text><ProxmoxRuntimeStatus status={proxmoxStatus} />{textValue(row.device, "version") !== "—" && <Text component="span" size="xs" c="dimmed">· version {textValue(row.device, "version")}</Text>}</Group>
-                : <Text size="xs" c="dimmed">{details}</Text>;
+                ? <Stack gap={1}><Text size="xs" c="dimmed">{proxmoxKind} · node {textValue(row.device, "node")}{textValue(row.device, "version") !== "—" ? ` · version ${textValue(row.device, "version")}` : ""}</Text><ProxmoxRuntimeStatus status={proxmoxStatus} /></Stack>
+                : entitySummaries.length > 0
+                  ? <Stack gap={1}><Text size="xs" c="dimmed">{entitySummaries.length} entities</Text><Text size="xs" c="dimmed">{entityTypes.join(" · ")}</Text></Stack>
+                  : <Text size="xs" c="dimmed">{details}</Text>;
               const agentNames = row.sourceRows.map(source => source.agent?.name ?? source.discovery.agentId);
               const primaryAgentName = row.agent?.name ?? row.discovery.agentId;
               const agentContent = row.sourceRows.length > 1 && !showDuplicateAgents
                 ? <Tooltip multiline label={<>Discovered by {row.sourceRows.length} agents:<br />{agentNames.join(" · ")}</>}><Text size="sm" style={{ cursor: "help" }}>{primaryAgentName} ({row.sourceRows.length - 1} other{row.sourceRows.length > 2 ? "s" : ""})</Text></Tooltip>
                 : <Text size="sm">{primaryAgentName}</Text>;
-              const statusBadge = <Badge size="sm" variant="light" color={statusColor(row.status)}>{statusLabel(row.status)}</Badge>;
+              const statusBadge = <Badge size="sm" variant="light" color={statusColor(row.status)} style={{ maxWidth: "none", whiteSpace: "nowrap", overflow: "visible", textOverflow: "clip" }}>{statusLabel(row.status)}</Badge>;
               return <Table.Tr key={rowKey}>
                 <Table.Td style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }}><ResolvedIconGlyph resolved={resolveDiscoveryIcon(provider, row.device)} size={20} /></Table.Td>
                 <Table.Td><Badge variant="light" color={providerColor(provider)}>{providerLabel(provider)}</Badge></Table.Td>
@@ -715,8 +765,8 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                 <Table.Td><CopyableDiscoveryValue value={textValue(row.device, "ip")} monospace /></Table.Td>
                 <Table.Td><CopyableDiscoveryValue value={provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")} monospace compact /></Table.Td>
                 <Table.Td><Text size="sm">{provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text></Table.Td>
-                <Table.Td><Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Discovery details</Text><Text size="xs">Name: {textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")}</Text><Text size="xs">IP: {textValue(row.device, "ipAddresses") !== "—" ? textValue(row.device, "ipAddresses") : textValue(row.device, "ip")}</Text><Text size="xs">MAC: {textValue(row.device, "macAddresses") !== "—" ? textValue(row.device, "macAddresses") : textValue(row.device, "mac")}</Text><Text size="xs">Identity: {provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")}</Text><Text size="xs">Model / kind: {provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text>{provider === "PROXMOX" && <><Text size="xs">Endpoint: {textValue(row.device, "endpointId")}</Text><Text size="xs">Node: {textValue(row.device, "node")}</Text><Text size="xs">VMID: {textValue(row.device, "vmid")}</Text>{proxmoxGuest && <Group gap={5} wrap="nowrap"><Text component="span" size="xs">Status:</Text><ProxmoxRuntimeStatus status={proxmoxStatus} /></Group>}<Text size="xs">Version: {textValue(row.device, "version")}</Text><Text size="xs">OS: {textValue(row.device, "os")} / {textValue(row.device, "osType")}</Text><Text size="xs">Guest agent: {textValue(row.device, "guestAgent")}</Text><Text size="xs">Parent: {textValue(row.device, "parentProviderId")}</Text></>} {!proxmoxGuest && <Text size="xs">{details}</Text>}</Stack>}><span style={{ cursor: "help" }}>{detailsContent}</span></Tooltip></Table.Td>
-                <Table.Td>{row.status === "UPDATE"
+                <Table.Td><Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Discovery details</Text><Text size="xs">Name: {textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")}</Text><Text size="xs">IP: {textValue(row.device, "ipAddresses") !== "—" ? textValue(row.device, "ipAddresses") : textValue(row.device, "ip")}</Text><Text size="xs">MAC: {textValue(row.device, "macAddresses") !== "—" ? textValue(row.device, "macAddresses") : textValue(row.device, "mac")}</Text><Text size="xs">Identity: {provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")}</Text><Text size="xs">Model / kind: {provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text>{entitySummaries.length > 0 && <><Text size="xs" fw={600}>Entities ({entitySummaries.length})</Text>{entitySummaries.map((entity, entityIndex) => <Text key={`${entity.type}:${entity.name}:${entityIndex}`} size="xs">• {entity.type}: {entity.name}</Text>)}</>}{provider === "PROXMOX" && <><Text size="xs">Endpoint: {textValue(row.device, "endpointId")}</Text><Text size="xs">Node: {textValue(row.device, "node")}</Text><Text size="xs">VMID: {textValue(row.device, "vmid")}</Text>{proxmoxGuest && <Group gap={5} wrap="nowrap"><Text component="span" size="xs">Status:</Text><ProxmoxRuntimeStatus status={proxmoxStatus} /></Group>}<Text size="xs">Version: {textValue(row.device, "version")}</Text><Text size="xs">OS: {textValue(row.device, "os")} / {textValue(row.device, "osType")}</Text><Text size="xs">Guest agent: {textValue(row.device, "guestAgent")}</Text><Text size="xs">Parent: {textValue(row.device, "parentProviderId")}</Text></>} {!proxmoxGuest && <Text size="xs">{details}</Text>}</Stack>}><span style={{ cursor: "help" }}>{detailsContent}</span></Tooltip></Table.Td>
+                <Table.Td style={{ minWidth: 138 }}>{row.status === "UPDATE"
                   ? <Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Expected updates</Text>{row.updateReasons.map(reason => <Text key={reason} size="xs">• {reason}</Text>)}</Stack>}>{statusBadge}</Tooltip>
                   : ["POSSIBLE", "AMBIGUOUS"].includes(row.status)
                     ? <Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Registry match candidates</Text>{row.matchCandidates.map(candidate => <Text key={candidate.device.id} size="xs">• {candidate.device.name}: {candidate.reasons.join(" · ")}</Text>)}</Stack>}>{statusBadge}</Tooltip>

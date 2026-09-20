@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.63.2";
+export const MODULE_VERSION = "1.63.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.63.3": {
+    releasedAt: "2026-09-20T15:30:00+02:00",
+    patch: "PR-228-discovery-reconciliation-v4.patch",
+    changes: [
+      { type: "added", description: "Discovery Registry filter adds an Action required preset covering Can be added, Possible match, Ambiguous and To be updated" },
+      { type: "fixed", description: "Discovery Registry status badges reserve enough space to display their complete labels" },
+      { type: "changed", description: "PVE VM and LXC runtime state is displayed on a dedicated second details line" },
+      { type: "changed", description: "ESPHome and Yeelight discovery details list reported entities with their entity type when available" }
+    ]
+  },
   "1.63.2": {
     releasedAt: "2026-09-20T15:00:00+02:00",
     patch: "PR-228-discovery-reconciliation-v3.patch",
