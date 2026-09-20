@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.64.1";
+export const MODULE_VERSION = "1.65.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.65.0": {
+    releasedAt: "2026-09-20T16:55:00+02:00",
+    patch: "PR-230-agents-stats-discovery-version-v1.patch",
+    changes: [
+      { type: "changed", description: "Agents workspace shows Device, Monitoring and Supervisor Agent online/total statistics above the agent-type tabs" },
+      { type: "changed", description: "Monitoring Agents no longer duplicates monitoring/check statistics inside the Agents workspace" },
+      { type: "added", description: "Discovery Agent column shows the reporting Device Agent version on a second line" }
+    ]
+  },
   "1.64.1": {
     releasedAt: "2026-09-20T15:50:00+02:00",
     patch: "PR-228-discovery-reconciliation-v5.patch",

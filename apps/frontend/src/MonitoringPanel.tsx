@@ -536,7 +536,7 @@ export function MonitoringPanel({
 
   return (
     <Stack gap="md" className="monitoring-panel">
-      <SimpleGrid cols={{ base: 2, sm: 3, lg: 6 }}>
+      {view !== "agents" && <SimpleGrid cols={{ base: 2, sm: 3, lg: 6 }}>
         {[
           ["Agents", agents.length, "blue"],
           ["Agents online", onlineAgents, "green"],
@@ -550,7 +550,7 @@ export function MonitoringPanel({
             <Text fw={700} size="xl" c={String(color)}>{value}</Text>
           </Card>
         ))}
-      </SimpleGrid>
+      </SimpleGrid>}
 
       {error && <Text c="red" size="sm">{error}</Text>}
 

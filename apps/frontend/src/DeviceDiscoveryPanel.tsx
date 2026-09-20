@@ -771,9 +771,11 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                   : <Text size="xs" c="dimmed">{details}</Text>;
               const agentNames = row.sourceRows.map(source => source.agent?.name ?? source.discovery.agentId);
               const primaryAgentName = row.agent?.name ?? row.discovery.agentId;
+              const primaryAgentVersion = row.agent?.version ?? null;
+              const agentLabel = <Stack gap={0}><Text size="sm">{primaryAgentName}{row.sourceRows.length > 1 && !showDuplicateAgents ? ` (${row.sourceRows.length - 1} other${row.sourceRows.length > 2 ? "s" : ""})` : ""}</Text><Text size="xs" c="dimmed">{primaryAgentVersion ?? "—"}</Text></Stack>;
               const agentContent = row.sourceRows.length > 1 && !showDuplicateAgents
-                ? <Tooltip multiline label={<>Discovered by {row.sourceRows.length} agents:<br />{agentNames.join(" · ")}</>}><Text size="sm" style={{ cursor: "help" }}>{primaryAgentName} ({row.sourceRows.length - 1} other{row.sourceRows.length > 2 ? "s" : ""})</Text></Tooltip>
-                : <Text size="sm">{primaryAgentName}</Text>;
+                ? <Tooltip multiline label={<>Discovered by {row.sourceRows.length} agents:<br />{agentNames.join(" · ")}</>}><span style={{ cursor: "help" }}>{agentLabel}</span></Tooltip>
+                : agentLabel;
               const statusBadge = <Badge size="sm" variant="light" color={statusColor(row.status)} style={{ maxWidth: "none", whiteSpace: "nowrap", overflow: "visible", textOverflow: "clip" }}>{statusLabel(row.status)}</Badge>;
               return <Table.Tr key={rowKey}>
                 <Table.Td style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }}><ResolvedIconGlyph resolved={resolveDiscoveryIcon(provider, row.device)} size={20} /></Table.Td>

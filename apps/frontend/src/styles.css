@@ -588,10 +588,24 @@ body { background: var(--ss-page-bg); }
 }
 
 
-/* Agents workspace: nested agent tabs must inherit the constrained Device Registry viewport. */
-.agents-workspace-tabs {
+/* Agents workspace: shared statistics stay above the nested agent tabs while the active table owns the remaining viewport. */
+.agents-workspace {
   flex: 1 1 0;
   height: 100%;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.agents-workspace > :not(.agents-workspace-tabs) {
+  flex: 0 0 auto;
+}
+
+.agents-workspace-tabs {
+  flex: 1 1 0;
+  height: 0;
   min-height: 0;
   width: 100%;
   display: flex;
