@@ -49,6 +49,25 @@ async function deleteAutonomousSupervisor(id: string): Promise<void> {
   if (!response.ok) throw new Error(`Unable to delete Supervisor Agent (${response.status})`);
 }
 
+async function copyText(value: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
+function CopyIcon({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="9" y="9" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.7"/><path d="M15 9V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>;
+}
+
 function SupervisorUpdateIcon({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -98,6 +117,8 @@ export function SupervisorAgentsPanel() {
   const [createName, setCreateName] = React.useState("");
   const [createdToken, setCreatedToken] = React.useState<string | null>(null);
   const [tokenTitle, setTokenTitle] = React.useState("Supervisor Agent token");
+  const [tokenSupervisorName, setTokenSupervisorName] = React.useState("");
+  const [copiedField, setCopiedField] = React.useState<"token" | "command" | null>(null);
   const [editTarget, setEditTarget] = React.useState<AutonomousSupervisorAgent | null>(null);
   const [editName, setEditName] = React.useState("");
   const [editEnabled, setEditEnabled] = React.useState(true);
@@ -115,7 +136,7 @@ export function SupervisorAgentsPanel() {
 
   const createMutation = useMutation({
     mutationFn: (name: string) => createAutonomousSupervisor(name),
-    onSuccess: async result => { setTokenTitle("New Supervisor Agent token"); setCreatedToken(result.token); await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] }); }
+    onSuccess: async result => { setTokenTitle("New Supervisor Agent token"); setCreatedToken(result.token); setTokenSupervisorName(result.supervisor.name); setCopiedField(null); await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] }); }
   });
   const editMutation = useMutation({
     mutationFn: () => editTarget ? updateAutonomousSupervisor(editTarget.id, { name: editName.trim(), enabled: editEnabled, heartbeatTimeoutSeconds: editHeartbeatTimeout }) : Promise.reject(new Error("No Supervisor Agent selected")),
@@ -123,11 +144,11 @@ export function SupervisorAgentsPanel() {
   });
   const copyMutation = useMutation({
     mutationFn: (agent: AutonomousSupervisorAgent) => createAutonomousSupervisor(`${agent.name} (copy)`),
-    onSuccess: async result => { setTokenTitle("Copied Supervisor Agent token"); setCreatedToken(result.token); await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] }); }
+    onSuccess: async result => { setTokenTitle("Copied Supervisor Agent token"); setCreatedToken(result.token); setTokenSupervisorName(result.supervisor.name); setCopiedField(null); await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] }); }
   });
   const regenerateMutation = useMutation({
     mutationFn: (agent: AutonomousSupervisorAgent) => regenerateAutonomousSupervisorToken(agent.id),
-    onSuccess: async result => { setTokenTitle("Regenerated Supervisor Agent token"); setCreatedToken(result.token); await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] }); }
+    onSuccess: async result => { setTokenTitle("Regenerated Supervisor Agent token"); setCreatedToken(result.token); setTokenSupervisorName(result.supervisor.name); setCopiedField(null); await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] }); }
   });
   const deleteMutation = useMutation({
     mutationFn: (agent: AutonomousSupervisorAgent) => deleteAutonomousSupervisor(agent.id),
@@ -197,10 +218,21 @@ export function SupervisorAgentsPanel() {
   };
 
   const filtersActive = Boolean(nameFilter.trim() || statusFilter);
+  const latestSupervisorVersion = versionsQuery.data?.agents.supervisorAgent.latestVersion ?? "latest";
+  const supervisorInstallCommand = createdToken && tokenSupervisorName ? ` SENSORSPHERE_URL=${window.location.origin} \
+SENSORSPHERE_AGENT_TOKEN='${createdToken}' \
+SUPERVISOR_NAME='${tokenSupervisorName}' \
+VERSION=${latestSupervisorVersion} \
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere-supervisor-agent/master/scripts/install.sh)"` : "";
+  const copyAndMark = async (kind: "token" | "command", value: string) => {
+    await copyText(value);
+    setCopiedField(kind);
+    window.setTimeout(() => setCopiedField(current => current === kind ? null : current), 1500);
+  };
 
   return <Stack gap="md" className="agent-admin-panel">
     <Card withBorder>
-      <Group justify="space-between" mb="sm"><div><Text fw={600}>Autonomous Supervisor Agents</Text><Text size="xs" c="dimmed">Direct outbound Supervisor → SensorSphere connections. No Device Agent relay required.</Text></div><Button size="xs" onClick={() => { setCreateOpened(true); setCreatedToken(null); setCreateName(""); }}>Add Supervisor Agent</Button></Group>
+      <Group justify="space-between" mb="sm"><div><Text fw={600}>Autonomous Supervisor Agents</Text><Text size="xs" c="dimmed">Direct outbound Supervisor → SensorSphere connections. No Device Agent relay required.</Text></div><Button size="xs" onClick={() => { setCreateOpened(true); setCreatedToken(null); setTokenSupervisorName(""); setCopiedField(null); setCreateName(""); }}>Add Supervisor Agent</Button></Group>
       <Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Host</Table.Th><Table.Th>Status</Table.Th><Table.Th>Version</Table.Th><Table.Th>System</Table.Th><Table.Th>Managed agents</Table.Th><Table.Th>Last seen</Table.Th><Table.Th style={{ width: 140, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
       <Table.Tbody>{autonomous.map(agent => <Table.Tr key={agent.id}><Table.Td><Text fw={600} size="sm">{agent.hostname ?? agent.reportedName ?? agent.name}</Text><Text size="xs" c="dimmed">{agent.name}</Text></Table.Td><Table.Td><Badge size="sm" variant="light" color={agent.online ? "green" : "gray"}>{agent.online ? "ONLINE" : "OFFLINE"}</Badge></Table.Td><Table.Td><Text size="sm">{agent.version ?? "—"}</Text><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.supervisorAgent} /></Table.Td><Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td><Table.Td><Badge size="xs" variant="light">{agent.managedAgents.length}</Badge></Table.Td><Table.Td><Text size="sm">{relativeAge(agent.lastSeenAt)}</Text></Table.Td><Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => { setEditTarget(agent); setEditName(agent.name); setEditEnabled(agent.enabled); setEditHeartbeatTimeout(agent.heartbeatTimeoutSeconds); editMutation.reset(); }} /><Tooltip label="Copy supervisor agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy supervisor agent" onClick={() => copyMutation.mutate(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate supervisor token" onClick={() => regenerateMutation.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Table.Td></Table.Tr>)}{autonomous.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text ta="center" c="dimmed" py="xl">No autonomous Supervisor Agents registered yet.</Text></Table.Td></Table.Tr>}</Table.Tbody></Table>
     </Card>
@@ -252,8 +284,20 @@ export function SupervisorAgentsPanel() {
       <Stack><Text size="sm">Delete Supervisor Agent <strong>{deleteTarget?.name}</strong>? The running host will lose its SensorSphere identity until configured with another token.</Text>{deleteMutation.isError && <Text c="red" size="sm">{deleteMutation.error instanceof Error ? deleteMutation.error.message : "Unable to delete Supervisor Agent"}</Text>}<Group justify="flex-end"><Button variant="default" onClick={() => setDeleteTarget(null)}>Cancel</Button><Button color="red" loading={deleteMutation.isPending} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>Delete</Button></Group></Stack>
     </Modal>
 
-    <Modal opened={createdToken != null && !createOpened} onClose={() => setCreatedToken(null)} title={tokenTitle} centered>
-      <Stack><Text size="sm">Token shown once. Update the Supervisor `.env` and restart the container.</Text><Code block>{createdToken}</Code><Group justify="flex-end"><Button onClick={() => setCreatedToken(null)}>Close</Button></Group></Stack>
+    <Modal opened={createdToken != null && !createOpened} onClose={() => { setCreatedToken(null); setTokenSupervisorName(""); setCopiedField(null); }} title={tokenTitle} size="lg" centered>
+      <Stack>
+        <Text size="sm">Token shown once. Copy the token alone for an existing installation, or copy the complete reinstall command.</Text>
+        <div>
+          <Text size="xs" fw={600} mb={4}>Token</Text>
+          <Group gap="xs" align="flex-start" wrap="nowrap"><Code block style={{ flex: 1 }}>{createdToken}</Code><Tooltip label={copiedField === "token" ? "Copied" : "Copy token"}><ActionIcon aria-label="Copy Supervisor Agent token" variant="light" color="blue" onClick={() => createdToken && void copyAndMark("token", createdToken)}><CopyIcon /></ActionIcon></Tooltip></Group>
+        </div>
+        <div>
+          <Text size="xs" fw={600} mb={4}>Complete install / reinstall command</Text>
+          <Group gap="xs" align="flex-start" wrap="nowrap"><Code block style={{ flex: 1, whiteSpace: "pre-wrap" }}>{supervisorInstallCommand}</Code><Tooltip label={copiedField === "command" ? "Copied" : "Copy command"}><ActionIcon aria-label="Copy Supervisor Agent install command" variant="light" color="green" onClick={() => void copyAndMark("command", supervisorInstallCommand)}><CopyIcon /></ActionIcon></Tooltip></Group>
+          <Text size="xs" c="dimmed" mt={4}>The leading space is intentional so shells configured with HISTCONTROL=ignorespace do not save the command containing the token in history.</Text>
+        </div>
+        <Group justify="flex-end"><Button onClick={() => { setCreatedToken(null); setTokenSupervisorName(""); setCopiedField(null); }}>Close</Button></Group>
+      </Stack>
     </Modal>
 
     <Modal opened={createOpened} onClose={() => { setCreateOpened(false); setCreatedToken(null); createMutation.reset(); }} title="Add autonomous Supervisor Agent" centered>
@@ -264,10 +308,10 @@ export function SupervisorAgentsPanel() {
           {createMutation.isError && <Text c="red" size="sm">{createMutation.error instanceof Error ? createMutation.error.message : "Unable to create Supervisor Agent"}</Text>}
           <Group justify="flex-end"><Button variant="default" onClick={() => setCreateOpened(false)}>Cancel</Button><Button loading={createMutation.isPending} disabled={!createName.trim()} onClick={() => createMutation.mutate(createName.trim())}>Create</Button></Group>
         </> : <>
-          <Text size="sm">Token shown once. Add it to the Supervisor `.env` as `SENSORSPHERE_AGENT_TOKEN`.</Text>
-          <Code block>{createdToken}</Code>
-          <Text size="xs" c="dimmed">Also configure `SENSORSPHERE_URL` and restart the Supervisor container.</Text>
-          <Group justify="flex-end"><Button onClick={() => setCreateOpened(false)}>Close</Button></Group>
+          <Text size="sm">The Supervisor identity is ready. Copy this complete command and paste it on the target host.</Text>
+          <Group gap="xs" align="flex-start" wrap="nowrap"><Code block style={{ flex: 1, whiteSpace: "pre-wrap" }}>{supervisorInstallCommand}</Code><Tooltip label={copiedField === "command" ? "Copied" : "Copy command"}><ActionIcon aria-label="Copy Supervisor Agent install command" variant="light" color="green" onClick={() => void copyAndMark("command", supervisorInstallCommand)}><CopyIcon /></ActionIcon></Tooltip></Group>
+          <Text size="xs" c="dimmed">The command starts with a space intentionally so shells configured with HISTCONTROL=ignorespace do not retain the token in history. Latest Supervisor version: {latestSupervisorVersion}.</Text>
+          <Group justify="flex-end"><Button onClick={() => { setCreateOpened(false); setCreatedToken(null); setTokenSupervisorName(""); setCopiedField(null); }}>Close</Button></Group>
         </>}
       </Stack>
     </Modal>

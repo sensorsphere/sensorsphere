@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.67.1";
+export const MODULE_VERSION = "1.67.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.67.2": {
+    releasedAt: "2026-09-21T05:05:00+02:00",
+    patch: "PR-233a-autonomous-supervisor-v3-bootstrap-command.patch",
+    changes: [
+      { type: "added", description: "Supervisor creation shows a one-click copyable bootstrap command containing browser SensorSphere URL, one-time token, agent name and latest available Supervisor version" },
+      { type: "added", description: "Regenerated Supervisor credentials offer both token-only copy and a complete reinstall command" },
+      { type: "security", description: "Generated Supervisor bootstrap commands intentionally begin with a leading space for shells using HISTCONTROL=ignorespace" }
+    ]
+  },
   "1.67.1": {
     releasedAt: "2026-09-21T04:45:00+02:00",
     patch: "PR-233a-autonomous-supervisor-v2-hotfix.patch",
