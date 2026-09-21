@@ -424,12 +424,75 @@ async function fetchGhcrLatestVersion(repository: string): Promise<string> {
   }
 }
 
+
+const supervisorCreateSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  heartbeatTimeoutSeconds: z.number().int().min(15).max(3600).optional()
+}).strict();
+
+const supervisorHelloSchema = z.object({
+  type: z.literal("HELLO"),
+  supervisorName: z.string().trim().min(1).max(200).optional(),
+  version: z.string().trim().max(100).nullable().optional(),
+  hostname: z.string().trim().max(500).nullable().optional(),
+  systemInfo: z.object({
+    os: z.string().trim().min(1).max(200),
+    osVersion: z.string().trim().min(1).max(300),
+    architecture: z.string().trim().min(1).max(100)
+  }).strict().optional(),
+  selfUpdateSupported: z.boolean().optional(),
+  managedAgents: z.array(z.record(z.string(), z.unknown())).max(500).optional(),
+  selfStatus: z.record(z.string(), z.unknown()).optional()
+}).strict();
+
+const supervisorHeartbeatSchema = z.object({
+  type: z.literal("HEARTBEAT"),
+  managedAgents: z.array(z.record(z.string(), z.unknown())).max(500).optional(),
+  selfStatus: z.record(z.string(), z.unknown()).optional()
+}).strict();
+
+const supervisorRemoteMessageSchema = z.discriminatedUnion("type", [supervisorHelloSchema, supervisorHeartbeatSchema]);
+
+interface SupervisorAgentRow {
+  id: string; name: string; enabled: boolean; reported_name: string | null; version: string | null; hostname: string | null;
+  os_name: string | null; os_version: string | null; architecture: string | null; managed_agents: Array<Record<string, unknown>>;
+  configured_version: string | null; container_state: string | null; self_update_supported: boolean; update_status: string;
+  update_error: string | null; last_seen_at: Date | null; heartbeat_timeout_seconds: number; created_at: Date; updated_at: Date;
+}
+
+function generateSupervisorToken(): string {
+  return `sssa_${randomBytes(32).toString("base64url")}`;
+}
+
+function supervisorAgentDto(row: SupervisorAgentRow, connected: boolean) {
+  const recent = row.last_seen_at != null && Date.now() - row.last_seen_at.getTime() <= row.heartbeat_timeout_seconds * 1000;
+  return {
+    id: row.id, name: row.name, enabled: row.enabled, reportedName: row.reported_name, version: row.version, hostname: row.hostname,
+    os: row.os_name, osVersion: row.os_version, architecture: row.architecture, managedAgents: row.managed_agents ?? [],
+    configuredVersion: row.configured_version, containerState: row.container_state, selfUpdateSupported: row.self_update_supported ?? false,
+    updateStatus: row.update_status ?? "IDLE", updateError: row.update_error, lastSeenAt: row.last_seen_at?.toISOString() ?? null,
+    heartbeatTimeoutSeconds: row.heartbeat_timeout_seconds, online: row.enabled && connected && recent,
+    createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString()
+  };
+}
+
+async function authenticateSupervisor(pool: Pool, request: IncomingMessage): Promise<SupervisorAgentRow | null> {
+  const authorization = request.headers.authorization;
+  if (!authorization?.startsWith("Bearer ")) return null;
+  const token = authorization.slice(7).trim();
+  if (!token.startsWith("sssa_")) return null;
+  const result = await pool.query<SupervisorAgentRow>("SELECT * FROM supervisor_agents WHERE token_hash=$1 AND enabled=TRUE", [hashToken(token)]);
+  return result.rows[0] ?? null;
+}
+
 export async function registerDeviceControlFeature(
   app: FastifyInstance,
   { pool }: DeviceControlFeatureOptions
 ): Promise<void> {
   const sockets = new Map<string, WebSocket>();
   const wss = new WebSocketServer({ noServer: true });
+  const supervisorSockets = new Map<string, WebSocket>();
+  const supervisorWss = new WebSocketServer({ noServer: true });
   let agentReleaseSnapshot: AgentReleaseSnapshot | null = null;
   let agentReleaseRefresh: Promise<AgentReleaseSnapshot> | null = null;
 
@@ -963,8 +1026,49 @@ export async function registerDeviceControlFeature(
     });
   };
 
+  const handleSupervisorConnection = (socket: WebSocket, supervisor: SupervisorAgentRow) => {
+    const previous = supervisorSockets.get(supervisor.id);
+    if (previous && previous !== socket) previous.close(4001, "Replaced by a newer connection");
+    supervisorSockets.set(supervisor.id, socket);
+    void pool.query("UPDATE supervisor_agents SET last_seen_at=NOW(),updated_at=NOW() WHERE id=$1", [supervisor.id]);
+    socket.on("message", data => {
+      void (async () => {
+        let raw: unknown;
+        try { raw = JSON.parse(data.toString()); } catch { socket.send(JSON.stringify({ type: "ERROR", error: "Invalid JSON" })); return; }
+        const parsed = supervisorRemoteMessageSchema.safeParse(raw);
+        if (!parsed.success) { socket.send(JSON.stringify({ type: "ERROR", error: parsed.error.issues[0]?.message ?? "Invalid message" })); return; }
+        const message = parsed.data;
+        if (message.type === "HELLO") {
+          const selfStatus = message.selfStatus ?? {};
+          await pool.query(`UPDATE supervisor_agents SET
+            reported_name=COALESCE($2,reported_name),version=COALESCE($3,version),hostname=COALESCE($4,hostname),
+            os_name=COALESCE($5,os_name),os_version=COALESCE($6,os_version),architecture=COALESCE($7,architecture),
+            managed_agents=$8::jsonb,configured_version=COALESCE($9,configured_version),container_state=COALESCE($10,container_state),
+            self_update_supported=$11,last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
+            [supervisor.id,message.supervisorName ?? null,message.version ?? null,message.hostname ?? null,message.systemInfo?.os ?? null,
+             message.systemInfo?.osVersion ?? null,message.systemInfo?.architecture ?? null,JSON.stringify(message.managedAgents ?? []),
+             typeof selfStatus.configured_version === "string" ? selfStatus.configured_version : null,
+             typeof selfStatus.container_state === "string" ? selfStatus.container_state : null,message.selfUpdateSupported ?? true]);
+          socket.send(JSON.stringify({ type: "HELLO_ACK", supervisorId: supervisor.id, serverTime: new Date().toISOString() }));
+          return;
+        }
+        await pool.query("UPDATE supervisor_agents SET managed_agents=$2::jsonb,last_seen_at=NOW(),updated_at=NOW() WHERE id=$1", [supervisor.id, JSON.stringify(message.managedAgents ?? [])]);
+        socket.send(JSON.stringify({ type: "HEARTBEAT_ACK", serverTime: new Date().toISOString() }));
+      })().catch(error => app.log.error({ err: error, supervisorId: supervisor.id }, "Supervisor Agent WebSocket message failed"));
+    });
+    socket.on("close", () => { if (supervisorSockets.get(supervisor.id) === socket) supervisorSockets.delete(supervisor.id); });
+  };
+
   app.server.on("upgrade", (request: IncomingMessage, socket: Duplex, head: Buffer) => {
     const url = new URL(request.url ?? "/", "http://localhost");
+    if (url.pathname === "/api/v1/device-control/supervisor/ws") {
+      void (async () => {
+        const supervisor = await authenticateSupervisor(pool, request);
+        if (!supervisor) { socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n"); socket.destroy(); return; }
+        supervisorWss.handleUpgrade(request, socket, head, ws => handleSupervisorConnection(ws, supervisor));
+      })().catch(error => { app.log.error({ err: error }, "Supervisor Agent WebSocket upgrade failed"); socket.destroy(); });
+      return;
+    }
     if (url.pathname !== "/api/v1/device-control/agent/ws") return;
     void (async () => {
       const agent = await authenticateAgent(pool, request);
@@ -1046,7 +1150,38 @@ export async function registerDeviceControlFeature(
   app.addHook("onClose", async () => {
     clearInterval(yeelightPollTimer);
     for (const socket of sockets.values()) socket.close(1001, "Server shutting down");
+    for (const socket of supervisorSockets.values()) socket.close(1001, "Server shutting down");
     wss.close();
+    supervisorWss.close();
+  });
+
+  app.get("/api/v1/device-control/supervisors", async (_request, reply) => {
+    const result = await pool.query<SupervisorAgentRow>("SELECT * FROM supervisor_agents ORDER BY LOWER(name),id");
+    return reply.send(result.rows.map(row => supervisorAgentDto(row, supervisorSockets.has(row.id))));
+  });
+
+  app.post("/api/v1/device-control/supervisors", async (request: FastifyRequest<{ Body: unknown }>, reply) => {
+    const parsed = supervisorCreateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid Supervisor Agent" });
+    const token = generateSupervisorToken();
+    const result = await pool.query<SupervisorAgentRow>(`INSERT INTO supervisor_agents(name,token_hash,heartbeat_timeout_seconds) VALUES($1,$2,$3) RETURNING *`,
+      [parsed.data.name,hashToken(token),parsed.data.heartbeatTimeoutSeconds ?? 60]);
+    return reply.code(201).send({ supervisor: supervisorAgentDto(result.rows[0]!, false), token });
+  });
+
+  app.post("/api/v1/device-control/supervisors/:id/regenerate-token", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    const token = generateSupervisorToken();
+    const result = await pool.query<SupervisorAgentRow>("UPDATE supervisor_agents SET token_hash=$2,updated_at=NOW() WHERE id=$1 RETURNING *", [request.params.id,hashToken(token)]);
+    if (!result.rows[0]) return reply.code(404).send({ error: "Supervisor Agent not found" });
+    supervisorSockets.get(request.params.id)?.close(4002,"Token regenerated");
+    return reply.send({ supervisor: supervisorAgentDto(result.rows[0], false), token });
+  });
+
+  app.delete("/api/v1/device-control/supervisors/:id", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    supervisorSockets.get(request.params.id)?.close(4004,"Supervisor deleted");
+    const result = await pool.query("DELETE FROM supervisor_agents WHERE id=$1", [request.params.id]);
+    if ((result.rowCount ?? 0) === 0) return reply.code(404).send({ error: "Supervisor Agent not found" });
+    return reply.code(204).send();
   });
 
   app.get("/api/v1/device-control/agent-versions", async (_request, reply) => {

@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.66.0";
+export const MODULE_VERSION = "1.67.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.67.0": {
+    releasedAt: "2026-09-21T04:10:00+02:00",
+    patch: "PR-233a-autonomous-supervisor-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Supervisor Agents workspace registers autonomous Supervisors and displays their direct SensorSphere connection state" },
+      { type: "added", description: "Supervisor bootstrap tokens are shown once when a direct Supervisor identity is created" },
+      { type: "changed", description: "Legacy Device-Agent-relayed Supervisor rows remain visible only when no direct Supervisor is connected for that host" }
+    ]
+  },
   "1.66.0": {
     releasedAt: "2026-09-20T23:40:00+02:00",
     patch: "PR-232-agent-version-availability-v1.patch",

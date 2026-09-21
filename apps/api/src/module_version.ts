@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.31.0";
+export const MODULE_VERSION = "1.32.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.32.0": {
+    releasedAt: "2026-09-21T04:10:00+02:00",
+    patch: "PR-233a-autonomous-supervisor-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Device Control accepts independently authenticated outbound Supervisor Agent WebSocket connections" },
+      { type: "added", description: "Supervisor Agent identities use dedicated one-time sssa_ bearer tokens and persist autonomous heartbeat inventory" },
+      { type: "changed", description: "Legacy Supervisor state relayed through Device Agents remains available during migration" }
+    ]
+  },
   "1.31.0": {
     releasedAt: "2026-09-20T23:40:00+02:00",
     patch: "PR-232-agent-version-availability-v1.patch",

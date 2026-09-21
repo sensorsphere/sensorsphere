@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { DeviceRegistryDevice } from "./types";
 import { DeviceAgentsPanel, type DiscoveredDeviceImportRequest } from "./DeviceAgentsPanel";
 import { MonitoringPanel } from "./MonitoringPanel";
-import { SupervisorAgentsPanel } from "./SupervisorAgentsPanel";
+import { getAutonomousSupervisors, SupervisorAgentsPanel } from "./SupervisorAgentsPanel";
 import { usePersistentState } from "./preferences/usePersistentState";
 import { getDeviceAgents, getMonitoringAgents } from "./api";
 import { getAgentVersionAvailability, type AgentReleaseKind } from "./AgentVersionAvailability";
@@ -21,22 +21,26 @@ export function AgentsPanel({ devices, onImportDiscoveredDevice, onUpdateDiscove
   const deviceAgentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
   const monitoringAgentsQuery = useQuery({ queryKey: ["monitoring", "agents"], queryFn: getMonitoringAgents, refetchInterval: 15000 });
   const versionsQuery = useQuery({ queryKey: ["agent-version-availability"], queryFn: getAgentVersionAvailability, refetchInterval: 300000 });
+  const autonomousSupervisorsQuery = useQuery({ queryKey: ["device-control", "supervisors"], queryFn: getAutonomousSupervisors, refetchInterval: 10000 });
   const deviceAgents = deviceAgentsQuery.data ?? [];
   const monitoringAgents = monitoringAgentsQuery.data ?? [];
+  const autonomousSupervisors = autonomousSupervisorsQuery.data ?? [];
   const supervisors = React.useMemo(() => {
     const byHost = new Map<string, (typeof deviceAgents)[number]>();
+    const directHosts = new Set(autonomousSupervisors.map(agent => (agent.hostname ?? agent.name).trim().toLowerCase()));
     for (const agent of deviceAgents) {
       const key = (agent.hostname ?? agent.name).trim().toLowerCase();
+      if (directHosts.has(key)) continue;
       const current = byHost.get(key);
       if (!current || (!current.online && agent.online) || (!current.supervisorAvailable && agent.supervisorAvailable)) byHost.set(key, agent);
     }
     return [...byHost.values()];
-  }, [deviceAgents]);
+  }, [deviceAgents, autonomousSupervisors]);
 
   const stats: Array<[string, number, number, string, AgentReleaseKind]> = [
     ["Device Agents", deviceAgents.length, deviceAgents.filter(agent => agent.online && agent.enabled).length, "blue", "deviceAgent"],
     ["Monitoring Agents", monitoringAgents.length, monitoringAgents.filter(agent => agent.online && agent.enabled).length, "violet", "monitorAgent"],
-    ["Supervisor Agents", supervisors.length, supervisors.filter(agent => agent.online && agent.supervisorAvailable).length, "teal", "supervisorAgent"]
+    ["Supervisor Agents", autonomousSupervisors.length + supervisors.length, autonomousSupervisors.filter(agent => agent.online).length + supervisors.filter(agent => agent.online && agent.supervisorAvailable).length, "teal", "supervisorAgent"]
   ];
 
   return (

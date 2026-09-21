@@ -1,5 +1,5 @@
 import React from "react";
-import { ActionIcon, Badge, Button, Card, Group, Modal, Select, Stack, Table, Text, Textarea, TextInput, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Button, Card, Code, Group, Modal, Select, Stack, Table, Text, Textarea, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDeviceAgents, requestSupervisorAgentUpdate, runManagedAgentOperation } from "./api";
 import type { DeviceAgent, ManagedAgentStatus } from "./types";
@@ -7,6 +7,27 @@ import { FilterClearAction } from "./FilterClearAction";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 import { AgentVersionFreshnessBadge, getAgentVersionAvailability } from "./AgentVersionAvailability";
+
+
+export interface AutonomousSupervisorAgent {
+  id: string; name: string; enabled: boolean; reportedName: string | null; version: string | null; hostname: string | null;
+  os: string | null; osVersion: string | null; architecture: string | null; managedAgents: Array<Record<string, unknown>>;
+  configuredVersion: string | null; containerState: string | null; selfUpdateSupported: boolean; updateStatus: string; updateError: string | null;
+  lastSeenAt: string | null; heartbeatTimeoutSeconds: number; online: boolean; createdAt: string; updatedAt: string;
+}
+
+export async function getAutonomousSupervisors(): Promise<AutonomousSupervisorAgent[]> {
+  const response = await fetch("/api/v1/device-control/supervisors");
+  if (!response.ok) throw new Error(`Unable to load Supervisor Agents (${response.status})`);
+  return response.json();
+}
+
+async function createAutonomousSupervisor(name: string): Promise<{ supervisor: AutonomousSupervisorAgent; token: string }> {
+  const response = await fetch("/api/v1/device-control/supervisors", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error ?? `Unable to create Supervisor Agent (${response.status})`);
+  return payload;
+}
 
 function SupervisorUpdateIcon({ size = 16 }: { size?: number }) {
   return (
@@ -50,8 +71,12 @@ function supervisorStatus(agent: DeviceAgent): { label: string; color: string } 
 export function SupervisorAgentsPanel() {
   const queryClient = useQueryClient();
   const agentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
+  const autonomousQuery = useQuery({ queryKey: ["device-control", "supervisors"], queryFn: getAutonomousSupervisors, refetchInterval: 10000 });
   const versionsQuery = useQuery({ queryKey: ["agent-version-availability"], queryFn: getAgentVersionAvailability, refetchInterval: 300000 });
   const [nameFilter, setNameFilter] = React.useState("");
+  const [createOpened, setCreateOpened] = React.useState(false);
+  const [createName, setCreateName] = React.useState("");
+  const [createdToken, setCreatedToken] = React.useState<string | null>(null);
   const [statusFilter, setStatusFilter] = React.useState<string | null>(null);
   const [updateTarget, setUpdateTarget] = React.useState<DeviceAgent | null>(null);
   const [updateVersion, setUpdateVersion] = React.useState("");
@@ -61,6 +86,11 @@ export function SupervisorAgentsPanel() {
   const [managedInstance, setManagedInstance] = React.useState("main");
   const [managedVersion, setManagedVersion] = React.useState("");
   const [managedEnvironment, setManagedEnvironment] = React.useState("{}");
+
+  const createMutation = useMutation({
+    mutationFn: (name: string) => createAutonomousSupervisor(name),
+    onSuccess: async result => { setCreatedToken(result.token); await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] }); }
+  });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["device-control", "agents"] });
 
@@ -91,17 +121,20 @@ export function SupervisorAgentsPanel() {
   });
 
   const allAgents = agentsQuery.data ?? [];
-  // A Supervisor is currently reported through Device Agent heartbeat data. Group by host so
+  const autonomous = autonomousQuery.data ?? [];
+  const autonomousHosts = React.useMemo(() => new Set(autonomous.map(agent => (agent.hostname ?? agent.name).trim().toLowerCase())), [autonomous]);
+  // Legacy Supervisors are still reported through Device Agent heartbeat data during the migration. Group by host so
   // multiple Device Agent instances on the same host do not create duplicate Supervisor rows.
   const supervisors = React.useMemo(() => {
     const byHost = new Map<string, DeviceAgent>();
     for (const agent of allAgents) {
       const key = (agent.hostname ?? agent.name).trim().toLowerCase();
+      if (autonomousHosts.has(key)) continue;
       const current = byHost.get(key);
       if (!current || (!current.online && agent.online) || (!current.supervisorAvailable && agent.supervisorAvailable)) byHost.set(key, agent);
     }
     return [...byHost.values()].sort((a, b) => (a.hostname ?? a.name).localeCompare(b.hostname ?? b.name, undefined, { numeric: true, sensitivity: "base" }));
-  }, [allAgents]);
+  }, [allAgents, autonomousHosts]);
 
   const filtered = supervisors.filter(agent => {
     const status = supervisorStatus(agent).label;
@@ -124,9 +157,15 @@ export function SupervisorAgentsPanel() {
   const filtersActive = Boolean(nameFilter.trim() || statusFilter);
 
   return <Stack gap="md" className="agent-admin-panel">
+    <Card withBorder>
+      <Group justify="space-between" mb="sm"><div><Text fw={600}>Autonomous Supervisor Agents</Text><Text size="xs" c="dimmed">Direct outbound Supervisor → SensorSphere connections. No Device Agent relay required.</Text></div><Button size="xs" onClick={() => { setCreateOpened(true); setCreatedToken(null); setCreateName(""); }}>Add Supervisor Agent</Button></Group>
+      <Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Host</Table.Th><Table.Th>Status</Table.Th><Table.Th>Version</Table.Th><Table.Th>System</Table.Th><Table.Th>Managed agents</Table.Th><Table.Th>Last seen</Table.Th></Table.Tr></Table.Thead>
+      <Table.Tbody>{autonomous.map(agent => <Table.Tr key={agent.id}><Table.Td><Text fw={600} size="sm">{agent.hostname ?? agent.reportedName ?? agent.name}</Text><Text size="xs" c="dimmed">{agent.name}</Text></Table.Td><Table.Td><Badge size="sm" variant="light" color={agent.online ? "green" : "gray"}>{agent.online ? "ONLINE" : "OFFLINE"}</Badge></Table.Td><Table.Td><Text size="sm">{agent.version ?? "—"}</Text><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.supervisorAgent} /></Table.Td><Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td><Table.Td><Badge size="xs" variant="light">{agent.managedAgents.length}</Badge></Table.Td><Table.Td><Text size="sm">{relativeAge(agent.lastSeenAt)}</Text></Table.Td></Table.Tr>)}{autonomous.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text ta="center" c="dimmed" py="xl">No autonomous Supervisor Agents registered yet.</Text></Table.Td></Table.Tr>}</Table.Tbody></Table>
+    </Card>
+
     <Card withBorder className="monitoring-table-card">
       <Group justify="space-between" mb="sm">
-        <div><Text fw={600}>Supervisor Agents</Text><Text size="xs" c="dimmed">Host-level supervisors used to manage Device and Monitoring Agent lifecycle.</Text></div>
+        <div><Text fw={600}>Legacy relayed Supervisors</Text><Text size="xs" c="dimmed">Backward-compatible Supervisor state reported through Device Agents. Hosts with a direct Supervisor connection are hidden here.</Text></div>
         <Text size="xs" c="dimmed">{filtered.length}/{supervisors.length}</Text>
       </Group>
       <Group gap="xs" mb="sm" wrap="wrap">
@@ -161,6 +200,23 @@ export function SupervisorAgentsPanel() {
         </Table>
       </div>
     </Card>
+
+
+    <Modal opened={createOpened} onClose={() => { setCreateOpened(false); setCreatedToken(null); createMutation.reset(); }} title="Add autonomous Supervisor Agent" centered>
+      <Stack>
+        {!createdToken ? <>
+          <Text size="sm" c="dimmed">Create a Supervisor identity and one-time token. Configure the token on the target host together with SENSORSPHERE_URL.</Text>
+          <TextInput label="Name" placeholder="homefcs-iot-ap" value={createName} onChange={event => setCreateName(event.currentTarget.value)} autoFocus />
+          {createMutation.isError && <Text c="red" size="sm">{createMutation.error instanceof Error ? createMutation.error.message : "Unable to create Supervisor Agent"}</Text>}
+          <Group justify="flex-end"><Button variant="default" onClick={() => setCreateOpened(false)}>Cancel</Button><Button loading={createMutation.isPending} disabled={!createName.trim()} onClick={() => createMutation.mutate(createName.trim())}>Create</Button></Group>
+        </> : <>
+          <Text size="sm">Token shown once. Add it to the Supervisor `.env` as `SENSORSPHERE_AGENT_TOKEN`.</Text>
+          <Code block>{createdToken}</Code>
+          <Text size="xs" c="dimmed">Also configure `SENSORSPHERE_URL` and restart the Supervisor container.</Text>
+          <Group justify="flex-end"><Button onClick={() => setCreateOpened(false)}>Close</Button></Group>
+        </>}
+      </Stack>
+    </Modal>
 
     <Modal opened={updateTarget != null} onClose={() => { setUpdateTarget(null); setUpdateVersion(""); updateMutation.reset(); }} title="Update Supervisor Agent" centered>
       <Stack>
