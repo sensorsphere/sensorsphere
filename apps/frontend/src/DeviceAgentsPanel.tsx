@@ -67,7 +67,7 @@ function compactDate(value: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   const seconds = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
-  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 60) return "less than 1 minute";
   if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.round(seconds / 3600)}h ago`;
   return `${Math.round(seconds / 86400)}d ago`;

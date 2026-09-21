@@ -307,8 +307,7 @@ function relativeSince(
   const seconds = ageSeconds(value);
 
   if (seconds === null) return "—";
-  if (seconds < 10) return "a few seconds ago";
-  if (seconds < 60) return `${seconds} sec ago`;
+  if (seconds < 60) return "less than 1 minute";
 
   const minutes =
     Math.floor(seconds / 60);

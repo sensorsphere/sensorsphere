@@ -207,8 +207,7 @@ function relativeAgo(
 ): string {
   const seconds = ageSeconds(value);
   if (seconds === null) return "Never";
-  if (seconds < 10) return "a few seconds ago";
-  if (seconds < 60) return `${seconds} sec ago`;
+  if (seconds < 60) return "less than 1 minute";
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.floor(minutes / 60);

@@ -63,7 +63,7 @@ function formatAge(
   }
 
   if (ageSeconds < 60) {
-    return `${ageSeconds} sec ago`;
+    return "less than 1 minute";
   }
 
   const minutes =

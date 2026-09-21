@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.67.2";
+export const MODULE_VERSION = "1.67.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.67.3": {
+    releasedAt: "2026-09-21T05:20:00+02:00",
+    patch: "PR-233a-autonomous-supervisor-v4-host-last-seen.patch",
+    changes: [
+      { type: "changed", description: "Autonomous Supervisor Host rows show the SensorSphere identity first, followed by reported Supervisor name and real host name" },
+      { type: "changed", description: "Supervisor bootstrap commands derive SUPERVISOR_NAME from hostname on the target host while retaining a leading history-safe space" },
+      { type: "changed", description: "Last-seen values below one minute are stabilized as less than 1 minute across frontend tables" }
+    ]
+  },
   "1.67.2": {
     releasedAt: "2026-09-21T05:05:00+02:00",
     patch: "PR-233a-autonomous-supervisor-v3-bootstrap-command.patch",
