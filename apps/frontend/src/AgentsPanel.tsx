@@ -25,22 +25,11 @@ export function AgentsPanel({ devices, onImportDiscoveredDevice, onUpdateDiscove
   const deviceAgents = deviceAgentsQuery.data ?? [];
   const monitoringAgents = monitoringAgentsQuery.data ?? [];
   const autonomousSupervisors = autonomousSupervisorsQuery.data ?? [];
-  const supervisors = React.useMemo(() => {
-    const byHost = new Map<string, (typeof deviceAgents)[number]>();
-    const directHosts = new Set(autonomousSupervisors.map(agent => (agent.hostname ?? agent.name).trim().toLowerCase()));
-    for (const agent of deviceAgents) {
-      const key = (agent.hostname ?? agent.name).trim().toLowerCase();
-      if (directHosts.has(key)) continue;
-      const current = byHost.get(key);
-      if (!current || (!current.online && agent.online) || (!current.supervisorAvailable && agent.supervisorAvailable)) byHost.set(key, agent);
-    }
-    return [...byHost.values()];
-  }, [deviceAgents, autonomousSupervisors]);
 
   const stats: Array<[string, number, number, string, AgentReleaseKind]> = [
     ["Device Agents", deviceAgents.length, deviceAgents.filter(agent => agent.online && agent.enabled).length, "blue", "deviceAgent"],
     ["Monitoring Agents", monitoringAgents.length, monitoringAgents.filter(agent => agent.online && agent.enabled).length, "violet", "monitorAgent"],
-    ["Supervisor Agents", autonomousSupervisors.length + supervisors.length, autonomousSupervisors.filter(agent => agent.online).length + supervisors.filter(agent => agent.online && agent.supervisorAvailable).length, "teal", "supervisorAgent"]
+    ["Supervisor Agents", autonomousSupervisors.length, autonomousSupervisors.filter(agent => agent.online && agent.enabled).length, "teal", "supervisorAgent"]
   ];
 
   return (

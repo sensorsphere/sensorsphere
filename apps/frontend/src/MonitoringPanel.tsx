@@ -57,7 +57,7 @@ import { activeFilterStyles } from "./ActiveFilterStyles";
 import { FilterClearAction } from "./FilterClearAction";
 import { AgentVersionFreshnessBadge, getAgentVersionAvailability } from "./AgentVersionAvailability";
 
-type AgentSortKey = "name" | "status" | "checks" | "host" | "version" | "lastSeen" | "labels" | "agentLabels";
+type AgentSortKey = "name" | "status" | "checks" | "host" | "version" | "lastSeen" | "agentLabels";
 type CheckSortKey = "device" | "class" | "type" | "technology" | "check" | "target" | "agents" | "mode" | "status";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -417,7 +417,7 @@ export function MonitoringPanel({
   };
   const filteredAgents = agents.filter(agent => {
     const status = !agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE";
-    const labels = [...Object.entries(agent.labels).map(([key, value]) => `${key}=${value}`), ...agent.agentLabels].join(" ").toLowerCase();
+    const labels = agent.agentLabels.join(" ").toLowerCase();
     return (!agentNameFilter.trim() || agent.name.toLowerCase().includes(agentNameFilter.trim().toLowerCase()))
       && (!agentStatusFilter || status === agentStatusFilter)
       && (!agentHostFilter.trim() || `${agent.hostname ?? ""} ${agent.lastIp ?? ""} ${agent.localIp ?? ""} ${agent.sourceIp ?? ""} ${agent.xForwardedFor ?? ""} ${agent.xRealIp ?? ""}`.toLowerCase().includes(agentHostFilter.trim().toLowerCase()))
@@ -430,7 +430,6 @@ export function MonitoringPanel({
       : agentSortKey === "host" ? `${agent.hostname ?? ""} ${agent.localIp ?? ""} ${agent.sourceIp ?? ""} ${agent.xForwardedFor ?? ""}`
       : agentSortKey === "version" ? agent.version
       : agentSortKey === "lastSeen" ? agent.lastSeenAt
-      : agentSortKey === "labels" ? Object.entries(agent.labels).map(([key, val]) => `${key}=${val}`).join(",")
       : agent.agentLabels.join(",");
     return compareTableValues(value(left), value(right), agentSortDirection);
   });
@@ -614,7 +613,7 @@ export function MonitoringPanel({
                           <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => openEditCheck(check)} /><Tooltip label="Copy monitoring check"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring check" onClick={() => openCopyCheck(check)}>⧉</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setCheckDeleteTarget(check)} /></Group></Table.Td>
                         </Table.Tr>;
                       })}
-                      {filteredChecks.length === 0 && <Table.Tr><Table.Td colSpan={11}><Text ta="center" c="dimmed" py="xl">{checks.length === 0 ? "No monitoring checks yet." : "No monitoring checks match the active filters."}</Text></Table.Td></Table.Tr>}
+                      {filteredChecks.length === 0 && <Table.Tr><Table.Td colSpan={9}><Text ta="center" c="dimmed" py="xl">{checks.length === 0 ? "No monitoring checks yet." : "No monitoring checks match the active filters."}</Text></Table.Td></Table.Tr>}
                     </Table.Tbody>
                       </Table>
                   </div>
@@ -632,7 +631,7 @@ export function MonitoringPanel({
                     <TextInput size="xs" placeholder="Filter name" value={agentNameFilter} onChange={event => setAgentNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentNameFilter.trim()))} rightSection={<FilterClearAction active={Boolean(agentNameFilter.trim())} onClear={() => setAgentNameFilter("")} />} w={180} />
                     <Select size="xs" clearable placeholder="Status" data={["ONLINE","OFFLINE","DISABLED"]} value={agentStatusFilter} onChange={setAgentStatusFilter} styles={activeFilterStyles(Boolean(agentStatusFilter))} w={140} />
                     <TextInput size="xs" placeholder="Host / IP" value={agentHostFilter} onChange={event => setAgentHostFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentHostFilter.trim()))} rightSection={<FilterClearAction active={Boolean(agentHostFilter.trim())} onClear={() => setAgentHostFilter("")} />} w={180} />
-                    <TextInput size="xs" placeholder="Labels / agent labels" value={agentLabelsFilter} onChange={event => setAgentLabelsFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentLabelsFilter.trim()))} rightSection={<FilterClearAction active={Boolean(agentLabelsFilter.trim())} onClear={() => setAgentLabelsFilter("")} />} w={220} />
+                    <TextInput size="xs" placeholder="Agent labels" value={agentLabelsFilter} onChange={event => setAgentLabelsFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentLabelsFilter.trim()))} rightSection={<FilterClearAction active={Boolean(agentLabelsFilter.trim())} onClear={() => setAgentLabelsFilter("")} />} w={220} />
                     <Text size="xs" c="dimmed">{filteredAgents.length}/{agents.length}</Text>
                   </Group>
                   <div className="monitoring-table-scroll">
@@ -640,38 +639,29 @@ export function MonitoringPanel({
                     <Table.Thead><Table.Tr>
                       <SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader>
                       <SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader>
-                      <SortableTableHeader active={agentSortKey === "checks"} direction={agentSortDirection} onClick={() => toggleAgentSort("checks")}>Checks</SortableTableHeader>
-                      <SortableTableHeader active={agentSortKey === "host"} direction={agentSortDirection} onClick={() => toggleAgentSort("host")}>Host</SortableTableHeader>
-                      <Table.Th>Connection</Table.Th>
+                      <SortableTableHeader active={agentSortKey === "host"} direction={agentSortDirection} onClick={() => toggleAgentSort("host")}>Reported</SortableTableHeader>
                       <SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>
                       <Table.Th>System</Table.Th>
-                      <SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last seen</SortableTableHeader>
-                      <SortableTableHeader active={agentSortKey === "labels"} direction={agentSortDirection} onClick={() => toggleAgentSort("labels")}>Labels</SortableTableHeader>
-                      <SortableTableHeader active={agentSortKey === "agentLabels"} direction={agentSortDirection} onClick={() => toggleAgentSort("agentLabels")}>Agent labels</SortableTableHeader>
-                      <Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th>
+                      <SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last Seen</SortableTableHeader>
+                      <SortableTableHeader active={agentSortKey === "checks"} direction={agentSortDirection} onClick={() => toggleAgentSort("checks")}>Checks count</SortableTableHeader>
+                      <SortableTableHeader active={agentSortKey === "agentLabels"} direction={agentSortDirection} onClick={() => toggleAgentSort("agentLabels")}>Agent Labels</SortableTableHeader>
+                      <Table.Th style={{ width: 160, textAlign: "right" }}>Actions</Table.Th>
                     </Table.Tr></Table.Thead>
                     <Table.Tbody>
                       {filteredAgents.map(agent => (
                         <Table.Tr key={agent.id}>
                           <Table.Td><Text fw={600} size="sm">{agent.name}</Text></Table.Td>
                           <Table.Td><Badge size="sm" color={!agent.enabled ? "gray" : agent.online ? "green" : "red"}>{!agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE"}</Badge></Table.Td>
-                          <Table.Td>{(() => { const count = checks.filter(check => check.assignments.some(item => item.agentId === agent.id)).length; return <Text size="sm" fw={700} c={count > 0 ? "green.6" : "dimmed"}>{count}</Text>; })()}</Table.Td>
-                          <Table.Td><Text size="sm">{agent.hostname ?? "—"}</Text><Text size="xs" c="dimmed">{agent.lastIp ?? ""}</Text></Table.Td>
-                          <Table.Td><Stack gap={0} style={{ minWidth: 210 }}>
-                            <Text size="xs"><Text span c="dimmed">Local:</Text> {agent.localIp ?? "—"}</Text>
-                            <Text size="xs"><Text span c="dimmed">Source:</Text> {agent.sourceIp ?? "—"}</Text>
-                            <Text size="xs" title={agent.xForwardedFor ?? undefined}><Text span c="dimmed">XFF:</Text> {agent.xForwardedFor ?? "—"}</Text>
-                            {agent.xRealIp && <Text size="xs"><Text span c="dimmed">X-Real-IP:</Text> {agent.xRealIp}</Text>}
-                          </Stack></Table.Td>
+                          <Table.Td><Text size="sm">{agent.hostname ?? "—"}</Text>{agent.lastIp && <Text size="xs" c="dimmed">{agent.lastIp}</Text>}</Table.Td>
                           <Table.Td><Text size="sm">{agent.version ?? "—"}</Text><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.monitorAgent} /></Table.Td>
                           <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td>
                           <Table.Td title={agent.lastSeenAt ?? undefined}>{relativeAge(agent.lastSeenAt)}</Table.Td>
-                          <Table.Td><Text size="xs">{Object.entries(agent.labels).map(([k, v]) => `${k}=${v}`).join(", ") || "—"}</Text></Table.Td>
+                          <Table.Td>{(() => { const count = checks.filter(check => check.assignments.some(item => item.agentId === agent.id)).length; return <Text size="sm" fw={700} c={count > 0 ? "green.6" : "dimmed"}>{count}</Text>; })()}</Table.Td>
                           <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
-                          <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => openEditAgent(agent)} /><Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} /></Group></Table.Td>
+                          <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => openEditAgent(agent)} /><Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} /></Group></Table.Td>
                         </Table.Tr>
                       ))}
-                      {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={11}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
+                      {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={9}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
                     </Table.Tbody>
                       </Table>
                   </div>

@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.67.4";
+export const MODULE_VERSION = "1.68.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.68.0": {
+    releasedAt: "2026-09-21T18:40:00+02:00",
+    patch: "PR-234-agents-table-consistency-v1.patch",
+    changes: [
+      { type: "changed", description: "Device, Monitoring and Supervisor Agent tables now share the same Name, Status, Reported, Version, System, Last Seen, agent-specific, Agent Labels and Actions layout" },
+      { type: "changed", description: "Standard agent actions use the Device Agent ordering and agent-specific actions are placed before them" },
+      { type: "added", description: "Supervisor self-update progress remains visible in the update dialog and table while SensorSphere polls the lifecycle state" },
+      { type: "removed", description: "Legacy relayed Supervisors are no longer shown in the Agents workspace" }
+    ]
+  },
   "1.67.4": {
     releasedAt: "2026-09-21T05:20:00+02:00",
     patch: "PR-233a-autonomous-supervisor-v5-actions.patch",
