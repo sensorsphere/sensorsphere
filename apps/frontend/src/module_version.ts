@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.67.0";
+export const MODULE_VERSION = "1.67.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.67.1": {
+    releasedAt: "2026-09-21T04:45:00+02:00",
+    patch: "PR-233a-autonomous-supervisor-v2-hotfix.patch",
+    changes: [
+      { type: "fixed", description: "Autonomous Supervisor WebSocket traffic is upgraded by Nginx instead of falling through as a normal API GET" },
+      { type: "added", description: "Autonomous Supervisor rows provide edit, copy, regenerate-token and delete actions matching other agent types" }
+    ]
+  },
   "1.67.0": {
     releasedAt: "2026-09-21T04:10:00+02:00",
     patch: "PR-233a-autonomous-supervisor-foundation-v1.patch",

@@ -430,6 +430,12 @@ const supervisorCreateSchema = z.object({
   heartbeatTimeoutSeconds: z.number().int().min(15).max(3600).optional()
 }).strict();
 
+const supervisorUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  enabled: z.boolean().optional(),
+  heartbeatTimeoutSeconds: z.number().int().min(15).max(3600).optional()
+}).strict().refine(value => Object.keys(value).length > 0, "At least one field is required");
+
 const supervisorHelloSchema = z.object({
   type: z.literal("HELLO"),
   supervisorName: z.string().trim().min(1).max(200).optional(),
@@ -1167,6 +1173,18 @@ export async function registerDeviceControlFeature(
     const result = await pool.query<SupervisorAgentRow>(`INSERT INTO supervisor_agents(name,token_hash,heartbeat_timeout_seconds) VALUES($1,$2,$3) RETURNING *`,
       [parsed.data.name,hashToken(token),parsed.data.heartbeatTimeoutSeconds ?? 60]);
     return reply.code(201).send({ supervisor: supervisorAgentDto(result.rows[0]!, false), token });
+  });
+
+  app.patch("/api/v1/device-control/supervisors/:id", async (request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply) => {
+    const parsed = supervisorUpdateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid Supervisor Agent" });
+    const input = parsed.data;
+    const result = await pool.query<SupervisorAgentRow>(`UPDATE supervisor_agents SET
+      name=COALESCE($2,name), enabled=COALESCE($3,enabled), heartbeat_timeout_seconds=COALESCE($4,heartbeat_timeout_seconds), updated_at=NOW()
+      WHERE id=$1 RETURNING *`, [request.params.id,input.name ?? null,input.enabled ?? null,input.heartbeatTimeoutSeconds ?? null]);
+    if (!result.rows[0]) return reply.code(404).send({ error: "Supervisor Agent not found" });
+    if (input.enabled === false) supervisorSockets.get(request.params.id)?.close(4003,"Supervisor disabled");
+    return reply.send(supervisorAgentDto(result.rows[0], supervisorSockets.has(request.params.id)));
   });
 
   app.post("/api/v1/device-control/supervisors/:id/regenerate-token", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {

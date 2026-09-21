@@ -1,5 +1,5 @@
 import React from "react";
-import { ActionIcon, Badge, Button, Card, Code, Group, Modal, Select, Stack, Table, Text, Textarea, TextInput, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Button, Card, Code, Group, Modal, NumberInput, Select, Stack, Table, Text, Textarea, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDeviceAgents, requestSupervisorAgentUpdate, runManagedAgentOperation } from "./api";
 import type { DeviceAgent, ManagedAgentStatus } from "./types";
@@ -7,6 +7,7 @@ import { FilterClearAction } from "./FilterClearAction";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 import { AgentVersionFreshnessBadge, getAgentVersionAvailability } from "./AgentVersionAvailability";
+import { DeleteActionIcon, EditActionIcon } from "./TableActionIcons";
 
 
 export interface AutonomousSupervisorAgent {
@@ -27,6 +28,25 @@ async function createAutonomousSupervisor(name: string): Promise<{ supervisor: A
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.error ?? `Unable to create Supervisor Agent (${response.status})`);
   return payload;
+}
+
+async function updateAutonomousSupervisor(id: string, input: { name?: string; enabled?: boolean; heartbeatTimeoutSeconds?: number }): Promise<AutonomousSupervisorAgent> {
+  const response = await fetch(`/api/v1/device-control/supervisors/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error ?? `Unable to update Supervisor Agent (${response.status})`);
+  return payload;
+}
+
+async function regenerateAutonomousSupervisorToken(id: string): Promise<{ supervisor: AutonomousSupervisorAgent; token: string }> {
+  const response = await fetch(`/api/v1/device-control/supervisors/${id}/regenerate-token`, { method: "POST" });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error ?? `Unable to regenerate Supervisor token (${response.status})`);
+  return payload;
+}
+
+async function deleteAutonomousSupervisor(id: string): Promise<void> {
+  const response = await fetch(`/api/v1/device-control/supervisors/${id}`, { method: "DELETE" });
+  if (!response.ok) throw new Error(`Unable to delete Supervisor Agent (${response.status})`);
 }
 
 function SupervisorUpdateIcon({ size = 16 }: { size?: number }) {
@@ -77,6 +97,12 @@ export function SupervisorAgentsPanel() {
   const [createOpened, setCreateOpened] = React.useState(false);
   const [createName, setCreateName] = React.useState("");
   const [createdToken, setCreatedToken] = React.useState<string | null>(null);
+  const [tokenTitle, setTokenTitle] = React.useState("Supervisor Agent token");
+  const [editTarget, setEditTarget] = React.useState<AutonomousSupervisorAgent | null>(null);
+  const [editName, setEditName] = React.useState("");
+  const [editEnabled, setEditEnabled] = React.useState(true);
+  const [editHeartbeatTimeout, setEditHeartbeatTimeout] = React.useState(60);
+  const [deleteTarget, setDeleteTarget] = React.useState<AutonomousSupervisorAgent | null>(null);
   const [statusFilter, setStatusFilter] = React.useState<string | null>(null);
   const [updateTarget, setUpdateTarget] = React.useState<DeviceAgent | null>(null);
   const [updateVersion, setUpdateVersion] = React.useState("");
@@ -89,7 +115,23 @@ export function SupervisorAgentsPanel() {
 
   const createMutation = useMutation({
     mutationFn: (name: string) => createAutonomousSupervisor(name),
-    onSuccess: async result => { setCreatedToken(result.token); await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] }); }
+    onSuccess: async result => { setTokenTitle("New Supervisor Agent token"); setCreatedToken(result.token); await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] }); }
+  });
+  const editMutation = useMutation({
+    mutationFn: () => editTarget ? updateAutonomousSupervisor(editTarget.id, { name: editName.trim(), enabled: editEnabled, heartbeatTimeoutSeconds: editHeartbeatTimeout }) : Promise.reject(new Error("No Supervisor Agent selected")),
+    onSuccess: async () => { setEditTarget(null); await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] }); }
+  });
+  const copyMutation = useMutation({
+    mutationFn: (agent: AutonomousSupervisorAgent) => createAutonomousSupervisor(`${agent.name} (copy)`),
+    onSuccess: async result => { setTokenTitle("Copied Supervisor Agent token"); setCreatedToken(result.token); await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] }); }
+  });
+  const regenerateMutation = useMutation({
+    mutationFn: (agent: AutonomousSupervisorAgent) => regenerateAutonomousSupervisorToken(agent.id),
+    onSuccess: async result => { setTokenTitle("Regenerated Supervisor Agent token"); setCreatedToken(result.token); await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] }); }
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (agent: AutonomousSupervisorAgent) => deleteAutonomousSupervisor(agent.id),
+    onSuccess: async () => { setDeleteTarget(null); await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] }); }
   });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["device-control", "agents"] });
@@ -159,8 +201,8 @@ export function SupervisorAgentsPanel() {
   return <Stack gap="md" className="agent-admin-panel">
     <Card withBorder>
       <Group justify="space-between" mb="sm"><div><Text fw={600}>Autonomous Supervisor Agents</Text><Text size="xs" c="dimmed">Direct outbound Supervisor → SensorSphere connections. No Device Agent relay required.</Text></div><Button size="xs" onClick={() => { setCreateOpened(true); setCreatedToken(null); setCreateName(""); }}>Add Supervisor Agent</Button></Group>
-      <Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Host</Table.Th><Table.Th>Status</Table.Th><Table.Th>Version</Table.Th><Table.Th>System</Table.Th><Table.Th>Managed agents</Table.Th><Table.Th>Last seen</Table.Th></Table.Tr></Table.Thead>
-      <Table.Tbody>{autonomous.map(agent => <Table.Tr key={agent.id}><Table.Td><Text fw={600} size="sm">{agent.hostname ?? agent.reportedName ?? agent.name}</Text><Text size="xs" c="dimmed">{agent.name}</Text></Table.Td><Table.Td><Badge size="sm" variant="light" color={agent.online ? "green" : "gray"}>{agent.online ? "ONLINE" : "OFFLINE"}</Badge></Table.Td><Table.Td><Text size="sm">{agent.version ?? "—"}</Text><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.supervisorAgent} /></Table.Td><Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td><Table.Td><Badge size="xs" variant="light">{agent.managedAgents.length}</Badge></Table.Td><Table.Td><Text size="sm">{relativeAge(agent.lastSeenAt)}</Text></Table.Td></Table.Tr>)}{autonomous.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text ta="center" c="dimmed" py="xl">No autonomous Supervisor Agents registered yet.</Text></Table.Td></Table.Tr>}</Table.Tbody></Table>
+      <Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Host</Table.Th><Table.Th>Status</Table.Th><Table.Th>Version</Table.Th><Table.Th>System</Table.Th><Table.Th>Managed agents</Table.Th><Table.Th>Last seen</Table.Th><Table.Th style={{ width: 140, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
+      <Table.Tbody>{autonomous.map(agent => <Table.Tr key={agent.id}><Table.Td><Text fw={600} size="sm">{agent.hostname ?? agent.reportedName ?? agent.name}</Text><Text size="xs" c="dimmed">{agent.name}</Text></Table.Td><Table.Td><Badge size="sm" variant="light" color={agent.online ? "green" : "gray"}>{agent.online ? "ONLINE" : "OFFLINE"}</Badge></Table.Td><Table.Td><Text size="sm">{agent.version ?? "—"}</Text><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.supervisorAgent} /></Table.Td><Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td><Table.Td><Badge size="xs" variant="light">{agent.managedAgents.length}</Badge></Table.Td><Table.Td><Text size="sm">{relativeAge(agent.lastSeenAt)}</Text></Table.Td><Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => { setEditTarget(agent); setEditName(agent.name); setEditEnabled(agent.enabled); setEditHeartbeatTimeout(agent.heartbeatTimeoutSeconds); editMutation.reset(); }} /><Tooltip label="Copy supervisor agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy supervisor agent" onClick={() => copyMutation.mutate(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate supervisor token" onClick={() => regenerateMutation.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Table.Td></Table.Tr>)}{autonomous.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text ta="center" c="dimmed" py="xl">No autonomous Supervisor Agents registered yet.</Text></Table.Td></Table.Tr>}</Table.Tbody></Table>
     </Card>
 
     <Card withBorder className="monitoring-table-card">
@@ -201,6 +243,18 @@ export function SupervisorAgentsPanel() {
       </div>
     </Card>
 
+
+    <Modal opened={editTarget != null} onClose={() => setEditTarget(null)} title="Edit Supervisor Agent" centered>
+      <Stack><TextInput label="Name" value={editName} onChange={event => setEditName(event.currentTarget.value)} /><Select label="Enabled" value={editEnabled ? "yes" : "no"} onChange={value => setEditEnabled(value !== "no")} data={[{ value: "yes", label: "Enabled" }, { value: "no", label: "Disabled" }]} /><NumberInput label="Heartbeat timeout (seconds)" min={15} max={3600} value={editHeartbeatTimeout} onChange={value => setEditHeartbeatTimeout(Number(value) || 60)} />{editMutation.isError && <Text c="red" size="sm">{editMutation.error instanceof Error ? editMutation.error.message : "Unable to update Supervisor Agent"}</Text>}<Group justify="flex-end"><Button variant="default" onClick={() => setEditTarget(null)}>Cancel</Button><Button loading={editMutation.isPending} disabled={!editName.trim()} onClick={() => editMutation.mutate()}>Save</Button></Group></Stack>
+    </Modal>
+
+    <Modal opened={deleteTarget != null} onClose={() => setDeleteTarget(null)} title="Delete Supervisor Agent" centered>
+      <Stack><Text size="sm">Delete Supervisor Agent <strong>{deleteTarget?.name}</strong>? The running host will lose its SensorSphere identity until configured with another token.</Text>{deleteMutation.isError && <Text c="red" size="sm">{deleteMutation.error instanceof Error ? deleteMutation.error.message : "Unable to delete Supervisor Agent"}</Text>}<Group justify="flex-end"><Button variant="default" onClick={() => setDeleteTarget(null)}>Cancel</Button><Button color="red" loading={deleteMutation.isPending} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget)}>Delete</Button></Group></Stack>
+    </Modal>
+
+    <Modal opened={createdToken != null && !createOpened} onClose={() => setCreatedToken(null)} title={tokenTitle} centered>
+      <Stack><Text size="sm">Token shown once. Update the Supervisor `.env` and restart the container.</Text><Code block>{createdToken}</Code><Group justify="flex-end"><Button onClick={() => setCreatedToken(null)}>Close</Button></Group></Stack>
+    </Modal>
 
     <Modal opened={createOpened} onClose={() => { setCreateOpened(false); setCreatedToken(null); createMutation.reset(); }} title="Add autonomous Supervisor Agent" centered>
       <Stack>

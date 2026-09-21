@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.32.0";
+export const MODULE_VERSION = "1.32.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.32.1": {
+    releasedAt: "2026-09-21T04:45:00+02:00",
+    patch: "PR-233a-autonomous-supervisor-v2-hotfix.patch",
+    changes: [
+      { type: "fixed", description: "Nginx proxies the autonomous Supervisor WebSocket upgrade endpoint" },
+      { type: "added", description: "Autonomous Supervisor Agent identities can be edited from Device Control" }
+    ]
+  },
   "1.32.0": {
     releasedAt: "2026-09-21T04:10:00+02:00",
     patch: "PR-233a-autonomous-supervisor-foundation-v1.patch",
