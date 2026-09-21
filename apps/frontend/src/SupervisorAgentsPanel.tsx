@@ -37,6 +37,16 @@ async function updateAutonomousSupervisor(id: string, input: { name?: string; en
   return payload;
 }
 
+async function requestAutonomousSupervisorUpdate(id: string, version: string): Promise<void> {
+  const response = await fetch(`/api/v1/device-control/supervisors/${id}/update`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ version })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error ?? `Unable to request Supervisor Agent update (${response.status})`);
+}
+
 async function regenerateAutonomousSupervisorToken(id: string): Promise<{ supervisor: AutonomousSupervisorAgent; token: string }> {
   const response = await fetch(`/api/v1/device-control/supervisors/${id}/regenerate-token`, { method: "POST" });
   const payload = await response.json();
@@ -126,6 +136,7 @@ export function SupervisorAgentsPanel() {
   const [deleteTarget, setDeleteTarget] = React.useState<AutonomousSupervisorAgent | null>(null);
   const [statusFilter, setStatusFilter] = React.useState<string | null>(null);
   const [updateTarget, setUpdateTarget] = React.useState<DeviceAgent | null>(null);
+  const [autonomousUpdateTarget, setAutonomousUpdateTarget] = React.useState<AutonomousSupervisorAgent | null>(null);
   const [updateVersion, setUpdateVersion] = React.useState("");
   const [managedTarget, setManagedTarget] = React.useState<DeviceAgent | null>(null);
   const [managedStatuses, setManagedStatuses] = React.useState<ManagedAgentStatus[]>([]);
@@ -160,6 +171,15 @@ export function SupervisorAgentsPanel() {
   const updateMutation = useMutation({
     mutationFn: ({ agentId, version }: { agentId: string; version: string }) => requestSupervisorAgentUpdate(agentId, version),
     onSuccess: async () => { setUpdateTarget(null); setUpdateVersion(""); await refresh(); }
+  });
+
+  const autonomousUpdateMutation = useMutation({
+    mutationFn: ({ id, version }: { id: string; version: string }) => requestAutonomousSupervisorUpdate(id, version),
+    onSuccess: async () => {
+      setAutonomousUpdateTarget(null);
+      setUpdateVersion("");
+      await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] });
+    }
   });
 
   const managedMutation = useMutation({
@@ -224,6 +244,19 @@ SENSORSPHERE_AGENT_TOKEN='${createdToken}' \
 SUPERVISOR_NAME="$(hostname)" \
 VERSION=${latestSupervisorVersion} \
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere-supervisor-agent/master/scripts/install.sh)"` : "";
+  const managedAgentsDetails = (agent: AutonomousSupervisorAgent) => {
+    if (!agent.managedAgents.length) return <Text size="xs">No managed agents reported.</Text>;
+    return <Stack gap={3}>
+      {agent.managedAgents.map((entry, index) => {
+        const type = typeof entry.agent_type === "string" ? entry.agent_type : "agent";
+        const instance = typeof entry.instance === "string" ? entry.instance : "main";
+        const version = typeof entry.configured_version === "string" ? entry.configured_version : "—";
+        const state = typeof entry.container_state === "string" ? entry.container_state : "unknown";
+        return <Text size="xs" key={`${type}-${instance}-${index}`}>{type}/{instance} · {version} · {state}</Text>;
+      })}
+    </Stack>;
+  };
+
   const copyAndMark = async (kind: "token" | "command", value: string) => {
     await copyText(value);
     setCopiedField(kind);
@@ -233,8 +266,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
   return <Stack gap="md" className="agent-admin-panel">
     <Card withBorder>
       <Group justify="space-between" mb="sm"><div><Text fw={600}>Autonomous Supervisor Agents</Text><Text size="xs" c="dimmed">Direct outbound Supervisor → SensorSphere connections. No Device Agent relay required.</Text></div><Button size="xs" onClick={() => { setCreateOpened(true); setCreatedToken(null); setTokenSupervisorName(""); setCopiedField(null); setCreateName(""); }}>Add Supervisor Agent</Button></Group>
-      <Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Host</Table.Th><Table.Th>Status</Table.Th><Table.Th>Version</Table.Th><Table.Th>System</Table.Th><Table.Th>Managed agents</Table.Th><Table.Th>Last seen</Table.Th><Table.Th style={{ width: 140, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
-      <Table.Tbody>{autonomous.map(agent => <Table.Tr key={agent.id}><Table.Td><Text fw={600} size="sm">{agent.name}</Text><Text size="xs" c="dimmed">{agent.reportedName ?? "—"} [{agent.hostname ?? "—"}]</Text></Table.Td><Table.Td><Badge size="sm" variant="light" color={agent.online ? "green" : "gray"}>{agent.online ? "ONLINE" : "OFFLINE"}</Badge></Table.Td><Table.Td><Text size="sm">{agent.version ?? "—"}</Text><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.supervisorAgent} /></Table.Td><Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td><Table.Td><Badge size="xs" variant="light">{agent.managedAgents.length}</Badge></Table.Td><Table.Td title={agent.lastSeenAt ?? undefined}><Text size="sm">{relativeAge(agent.lastSeenAt)}</Text></Table.Td><Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => { setEditTarget(agent); setEditName(agent.name); setEditEnabled(agent.enabled); setEditHeartbeatTimeout(agent.heartbeatTimeoutSeconds); editMutation.reset(); }} /><Tooltip label="Copy supervisor agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy supervisor agent" onClick={() => copyMutation.mutate(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate supervisor token" onClick={() => regenerateMutation.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Table.Td></Table.Tr>)}{autonomous.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text ta="center" c="dimmed" py="xl">No autonomous Supervisor Agents registered yet.</Text></Table.Td></Table.Tr>}</Table.Tbody></Table>
+      <Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Host</Table.Th><Table.Th>Status</Table.Th><Table.Th>Version</Table.Th><Table.Th>System</Table.Th><Table.Th>Last seen</Table.Th><Table.Th>Managed agents</Table.Th><Table.Th style={{ width: 170, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
+      <Table.Tbody>{autonomous.map(agent => <Table.Tr key={agent.id}><Table.Td><Text fw={600} size="sm">{agent.name}</Text><Text size="xs" c="dimmed">{agent.reportedName ?? "—"} [{agent.hostname ?? "—"}]</Text></Table.Td><Table.Td><Badge size="sm" variant="light" color={agent.online ? "green" : "gray"}>{agent.online ? "ONLINE" : "OFFLINE"}</Badge></Table.Td><Table.Td><Text size="sm">{agent.version ?? "—"}</Text><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.supervisorAgent} /></Table.Td><Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td><Table.Td title={agent.lastSeenAt ?? undefined}><Text size="sm">{relativeAge(agent.lastSeenAt)}</Text></Table.Td><Table.Td><Tooltip multiline withArrow label={managedAgentsDetails(agent)}><Badge size="xs" variant="light" style={{ cursor: "help" }}>{agent.managedAgents.length}</Badge></Tooltip></Table.Td><Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><Tooltip label={agent.selfUpdateSupported ? "Update Supervisor Agent" : "Supervisor self-update unavailable"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.selfUpdateSupported} onClick={() => { setAutonomousUpdateTarget(agent); setUpdateVersion(latestSupervisorVersion !== "latest" ? latestSupervisorVersion : agent.version ?? ""); autonomousUpdateMutation.reset(); }}><SupervisorUpdateIcon /></ActionIcon></Tooltip><EditActionIcon onClick={() => { setEditTarget(agent); setEditName(agent.name); setEditEnabled(agent.enabled); setEditHeartbeatTimeout(agent.heartbeatTimeoutSeconds); editMutation.reset(); }} /><Tooltip label="Copy supervisor agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy supervisor agent" onClick={() => copyMutation.mutate(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate supervisor token" onClick={() => regenerateMutation.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Table.Td></Table.Tr>)}{autonomous.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text ta="center" c="dimmed" py="xl">No autonomous Supervisor Agents registered yet.</Text></Table.Td></Table.Tr>}</Table.Tbody></Table>
     </Card>
 
     <Card withBorder className="monitoring-table-card">
@@ -313,6 +346,15 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
           <Text size="xs" c="dimmed">The command starts with a space intentionally so shells configured with HISTCONTROL=ignorespace do not retain the token in history. Latest Supervisor version: {latestSupervisorVersion}.</Text>
           <Group justify="flex-end"><Button onClick={() => { setCreateOpened(false); setCreatedToken(null); setTokenSupervisorName(""); setCopiedField(null); }}>Close</Button></Group>
         </>}
+      </Stack>
+    </Modal>
+
+    <Modal opened={autonomousUpdateTarget != null} onClose={() => { setAutonomousUpdateTarget(null); setUpdateVersion(""); autonomousUpdateMutation.reset(); }} title="Update Supervisor Agent" centered>
+      <Stack>
+        <Text size="sm">Update autonomous Supervisor <strong>{autonomousUpdateTarget?.name}</strong>{autonomousUpdateTarget?.version ? ` from ${autonomousUpdateTarget.version}` : ""}.</Text>
+        <TextInput label="Target version" placeholder={latestSupervisorVersion} value={updateVersion} onChange={event => setUpdateVersion(event.currentTarget.value)} autoFocus />
+        {autonomousUpdateMutation.isError && <Text c="red" size="sm">{autonomousUpdateMutation.error instanceof Error ? autonomousUpdateMutation.error.message : "Unable to request Supervisor Agent update"}</Text>}
+        <Group justify="flex-end"><Button variant="default" onClick={() => setAutonomousUpdateTarget(null)}>Cancel</Button><Button color="teal" loading={autonomousUpdateMutation.isPending} disabled={!/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(updateVersion.trim())} onClick={() => autonomousUpdateTarget && autonomousUpdateMutation.mutate({ id: autonomousUpdateTarget.id, version: updateVersion.trim() })}>Update</Button></Group>
       </Stack>
     </Modal>
 

@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.32.1";
+export const MODULE_VERSION = "1.32.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.32.2": {
+    releasedAt: "2026-09-21T05:20:00+02:00",
+    patch: "PR-233a-autonomous-supervisor-v5-actions.patch",
+    changes: [
+      { type: "added", description: "Autonomous Supervisor Agents can receive self-update commands directly over their SensorSphere WebSocket connection" },
+      { type: "changed", description: "Supervisor heartbeat/self-status now refreshes autonomous update lifecycle fields" }
+    ]
+  },
   "1.32.1": {
     releasedAt: "2026-09-21T04:45:00+02:00",
     patch: "PR-233a-autonomous-supervisor-v2-hotfix.patch",

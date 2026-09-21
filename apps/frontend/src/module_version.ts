@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.67.3";
+export const MODULE_VERSION = "1.67.4";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.67.4": {
+    releasedAt: "2026-09-21T05:20:00+02:00",
+    patch: "PR-233a-autonomous-supervisor-v5-actions.patch",
+    changes: [
+      { type: "added", description: "Autonomous Supervisor Agents expose self-update actions" },
+      { type: "changed", description: "Managed Agent counts show hover details and the Managed agents column is positioned immediately before Actions" }
+    ]
+  },
   "1.67.3": {
     releasedAt: "2026-09-21T05:20:00+02:00",
     patch: "PR-233a-autonomous-supervisor-v4-host-last-seen.patch",

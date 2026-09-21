@@ -457,7 +457,32 @@ const supervisorHeartbeatSchema = z.object({
   selfStatus: z.record(z.string(), z.unknown()).optional()
 }).strict();
 
-const supervisorRemoteMessageSchema = z.discriminatedUnion("type", [supervisorHelloSchema, supervisorHeartbeatSchema]);
+const supervisorCommandResultSchema = z.object({
+  type: z.literal("SUPERVISOR_COMMAND_RESULT"),
+  commandId: z.string().trim().min(1).max(200),
+  operation: z.enum(["LIST", "DEPLOY", "UPDATE", "REMOVE", "UPDATE_SELF"]),
+  status: z.enum(["SUCCESS", "FAILED"]),
+  result: z.unknown().optional(),
+  error: z.string().max(2000).optional()
+}).strict();
+
+const supervisorRemoteMessageSchema = z.discriminatedUnion("type", [supervisorHelloSchema, supervisorHeartbeatSchema, supervisorCommandResultSchema]);
+
+const supervisorSelfUpdateSchema = z.object({
+  version: z.string().trim().regex(/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/)
+}).strict();
+
+function supervisorSelfStatusFields(selfStatus: Record<string, unknown> | undefined) {
+  const update = selfStatus && typeof selfStatus.update === "object" && selfStatus.update != null
+    ? selfStatus.update as Record<string, unknown>
+    : undefined;
+  return {
+    configuredVersion: typeof selfStatus?.configured_version === "string" ? selfStatus.configured_version : null,
+    containerState: typeof selfStatus?.container_state === "string" ? selfStatus.container_state : null,
+    updateStatus: typeof update?.status === "string" ? update.status : null,
+    updateError: typeof update?.error === "string" ? update.error : null
+  };
+}
 
 interface SupervisorAgentRow {
   id: string; name: string; enabled: boolean; reported_name: string | null; version: string | null; hostname: string | null;
@@ -1044,21 +1069,29 @@ export async function registerDeviceControlFeature(
         const parsed = supervisorRemoteMessageSchema.safeParse(raw);
         if (!parsed.success) { socket.send(JSON.stringify({ type: "ERROR", error: parsed.error.issues[0]?.message ?? "Invalid message" })); return; }
         const message = parsed.data;
+        if (message.type === "SUPERVISOR_COMMAND_RESULT") {
+          const nextStatus = message.status === "FAILED" ? "FAILED" : (message.operation === "UPDATE_SELF" ? "UPDATING" : "IDLE");
+          await pool.query("UPDATE supervisor_agents SET update_status=$2,update_error=$3,last_seen_at=NOW(),updated_at=NOW() WHERE id=$1",
+            [supervisor.id,nextStatus,message.status === "FAILED" ? message.error ?? "Supervisor command failed" : null]);
+          return;
+        }
         if (message.type === "HELLO") {
-          const selfStatus = message.selfStatus ?? {};
+          const self = supervisorSelfStatusFields(message.selfStatus);
           await pool.query(`UPDATE supervisor_agents SET
             reported_name=COALESCE($2,reported_name),version=COALESCE($3,version),hostname=COALESCE($4,hostname),
             os_name=COALESCE($5,os_name),os_version=COALESCE($6,os_version),architecture=COALESCE($7,architecture),
             managed_agents=$8::jsonb,configured_version=COALESCE($9,configured_version),container_state=COALESCE($10,container_state),
-            self_update_supported=$11,last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
+            self_update_supported=$11,update_status=COALESCE($12,update_status),update_error=$13,last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
             [supervisor.id,message.supervisorName ?? null,message.version ?? null,message.hostname ?? null,message.systemInfo?.os ?? null,
              message.systemInfo?.osVersion ?? null,message.systemInfo?.architecture ?? null,JSON.stringify(message.managedAgents ?? []),
-             typeof selfStatus.configured_version === "string" ? selfStatus.configured_version : null,
-             typeof selfStatus.container_state === "string" ? selfStatus.container_state : null,message.selfUpdateSupported ?? true]);
+             self.configuredVersion,self.containerState,message.selfUpdateSupported ?? true,self.updateStatus,self.updateError]);
           socket.send(JSON.stringify({ type: "HELLO_ACK", supervisorId: supervisor.id, serverTime: new Date().toISOString() }));
           return;
         }
-        await pool.query("UPDATE supervisor_agents SET managed_agents=$2::jsonb,last_seen_at=NOW(),updated_at=NOW() WHERE id=$1", [supervisor.id, JSON.stringify(message.managedAgents ?? [])]);
+        const self = supervisorSelfStatusFields(message.selfStatus);
+        await pool.query(`UPDATE supervisor_agents SET managed_agents=$2::jsonb,configured_version=COALESCE($3,configured_version),
+          container_state=COALESCE($4,container_state),update_status=COALESCE($5,update_status),update_error=$6,last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
+          [supervisor.id,JSON.stringify(message.managedAgents ?? []),self.configuredVersion,self.containerState,self.updateStatus,self.updateError]);
         socket.send(JSON.stringify({ type: "HEARTBEAT_ACK", serverTime: new Date().toISOString() }));
       })().catch(error => app.log.error({ err: error, supervisorId: supervisor.id }, "Supervisor Agent WebSocket message failed"));
     });
@@ -1185,6 +1218,23 @@ export async function registerDeviceControlFeature(
     if (!result.rows[0]) return reply.code(404).send({ error: "Supervisor Agent not found" });
     if (input.enabled === false) supervisorSockets.get(request.params.id)?.close(4003,"Supervisor disabled");
     return reply.send(supervisorAgentDto(result.rows[0], supervisorSockets.has(request.params.id)));
+  });
+
+  app.post("/api/v1/device-control/supervisors/:id/update", async (request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply) => {
+    const parsed = supervisorSelfUpdateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid Supervisor version" });
+    const result = await pool.query<SupervisorAgentRow>("SELECT * FROM supervisor_agents WHERE id=$1", [request.params.id]);
+    const supervisor = result.rows[0];
+    if (!supervisor) return reply.code(404).send({ error: "Supervisor Agent not found" });
+    if (!supervisor.enabled) return reply.code(409).send({ error: "Supervisor Agent is disabled" });
+    if (!supervisor.self_update_supported) return reply.code(409).send({ error: "Supervisor Agent does not support self-update" });
+    const socket = supervisorSockets.get(supervisor.id);
+    if (!socket || socket.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Supervisor Agent is offline" });
+    const commandId = randomUUID();
+    socket.send(JSON.stringify({ type: "SUPERVISOR_COMMAND", commandId, operation: "UPDATE_SELF", version: parsed.data.version }));
+    await pool.query("UPDATE supervisor_agents SET configured_version=$2,update_status='REQUESTED',update_error=NULL,updated_at=NOW() WHERE id=$1",
+      [supervisor.id,parsed.data.version]);
+    return reply.code(202).send({ commandId, status: "REQUESTED", version: parsed.data.version });
   });
 
   app.post("/api/v1/device-control/supervisors/:id/regenerate-token", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
