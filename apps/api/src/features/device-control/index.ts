@@ -598,6 +598,19 @@ export async function registerDeviceControlFeature(
   }
   const managedAgentOperations = new Map<string, ManagedAgentOperationRecord>();
 
+  interface SupervisorManagedAgentOperationRecord {
+    id: string;
+    supervisorId: string;
+    operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE";
+    status: ManagedAgentOperationStatus;
+    result: unknown;
+    error: string | null;
+    createdAt: Date;
+    expiresAt: Date;
+    finishedAt: Date | null;
+  }
+  const supervisorManagedAgentOperations = new Map<string, SupervisorManagedAgentOperationRecord>();
+
   const discoveryDto = (record: DiscoveryRecord) => ({
     commandId: record.id,
     agentId: record.agentId,
@@ -636,6 +649,18 @@ export async function registerDeviceControlFeature(
     finishedAt: record.finishedAt?.toISOString() ?? null
   });
 
+  const supervisorManagedAgentOperationDto = (record: SupervisorManagedAgentOperationRecord) => ({
+    commandId: record.id,
+    supervisorId: record.supervisorId,
+    operation: record.operation,
+    status: record.status,
+    result: record.result,
+    error: record.error,
+    createdAt: record.createdAt.toISOString(),
+    expiresAt: record.expiresAt.toISOString(),
+    finishedAt: record.finishedAt?.toISOString() ?? null
+  });
+
   const expireManagedAgentOperations = () => {
     const now = Date.now();
     for (const record of managedAgentOperations.values()) {
@@ -645,6 +670,14 @@ export async function registerDeviceControlFeature(
         record.finishedAt = new Date();
       }
       if (record.finishedAt && now - record.finishedAt.getTime() > 10 * 60 * 1000) managedAgentOperations.delete(record.id);
+    }
+    for (const record of supervisorManagedAgentOperations.values()) {
+      if (record.status === "SENT" && record.expiresAt.getTime() <= now) {
+        record.status = "TIMEOUT";
+        record.error = "Supervisor managed-agent operation timed out";
+        record.finishedAt = new Date();
+      }
+      if (record.finishedAt && now - record.finishedAt.getTime() > 10 * 60 * 1000) supervisorManagedAgentOperations.delete(record.id);
     }
   };
 
@@ -1070,7 +1103,22 @@ export async function registerDeviceControlFeature(
         if (!parsed.success) { socket.send(JSON.stringify({ type: "ERROR", error: parsed.error.issues[0]?.message ?? "Invalid message" })); return; }
         const message = parsed.data;
         if (message.type === "SUPERVISOR_COMMAND_RESULT") {
-          const nextStatus = message.status === "FAILED" ? "FAILED" : (message.operation === "UPDATE_SELF" ? "UPDATING" : "IDLE");
+          if (message.operation !== "UPDATE_SELF") {
+            const operation = supervisorManagedAgentOperations.get(message.commandId);
+            if (!operation || operation.supervisorId !== supervisor.id) return;
+            if (operation.operation !== message.operation) {
+              operation.status = "FAILED";
+              operation.error = `Supervisor managed-agent operation mismatch: expected ${operation.operation}, received ${message.operation}`;
+            } else {
+              operation.status = message.status;
+              operation.result = message.result ?? null;
+              operation.error = message.error ?? null;
+            }
+            operation.finishedAt = new Date();
+            await pool.query("UPDATE supervisor_agents SET last_seen_at=NOW(),updated_at=NOW() WHERE id=$1", [supervisor.id]);
+            return;
+          }
+          const nextStatus = message.status === "FAILED" ? "FAILED" : "UPDATING";
           await pool.query("UPDATE supervisor_agents SET update_status=$2,update_error=$3,last_seen_at=NOW(),updated_at=NOW() WHERE id=$1",
             [supervisor.id,nextStatus,message.status === "FAILED" ? message.error ?? "Supervisor command failed" : null]);
           return;
@@ -1080,8 +1128,19 @@ export async function registerDeviceControlFeature(
           await pool.query(`UPDATE supervisor_agents SET
             reported_name=COALESCE($2,reported_name),version=COALESCE($3,version),hostname=COALESCE($4,hostname),
             os_name=COALESCE($5,os_name),os_version=COALESCE($6,os_version),architecture=COALESCE($7,architecture),
-            managed_agents=$8::jsonb,configured_version=COALESCE($9,configured_version),container_state=COALESCE($10,container_state),
-            self_update_supported=$11,update_status=COALESCE($12,update_status),update_error=$13,last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
+            managed_agents=$8::jsonb,
+            configured_version=CASE
+              WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND COALESCE($12,'') NOT IN ('UPDATED','FAILED','ROLLED_BACK') THEN configured_version
+              ELSE COALESCE($9,configured_version)
+            END,
+            container_state=COALESCE($10,container_state),self_update_supported=$11,
+            update_status=CASE
+              WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED') AND COALESCE($12,'') NOT IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','FAILED') THEN update_status
+              WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND COALESCE($12,'')='IDLE' THEN update_status
+              ELSE COALESCE($12,update_status)
+            END,
+            update_error=CASE WHEN COALESCE($12,'')='FAILED' THEN $13 WHEN COALESCE($12,'') IN ('UPDATED','ROLLED_BACK') THEN NULL ELSE update_error END,
+            last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
             [supervisor.id,message.supervisorName ?? null,message.version ?? null,message.hostname ?? null,message.systemInfo?.os ?? null,
              message.systemInfo?.osVersion ?? null,message.systemInfo?.architecture ?? null,JSON.stringify(message.managedAgents ?? []),
              self.configuredVersion,self.containerState,message.selfUpdateSupported ?? true,self.updateStatus,self.updateError]);
@@ -1089,8 +1148,19 @@ export async function registerDeviceControlFeature(
           return;
         }
         const self = supervisorSelfStatusFields(message.selfStatus);
-        await pool.query(`UPDATE supervisor_agents SET managed_agents=$2::jsonb,configured_version=COALESCE($3,configured_version),
-          container_state=COALESCE($4,container_state),update_status=COALESCE($5,update_status),update_error=$6,last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
+        await pool.query(`UPDATE supervisor_agents SET managed_agents=$2::jsonb,
+          configured_version=CASE
+            WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND COALESCE($5,'') NOT IN ('UPDATED','FAILED','ROLLED_BACK') THEN configured_version
+            ELSE COALESCE($3,configured_version)
+          END,
+          container_state=COALESCE($4,container_state),
+          update_status=CASE
+            WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED') AND COALESCE($5,'') NOT IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','FAILED') THEN update_status
+            WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND COALESCE($5,'')='IDLE' THEN update_status
+            ELSE COALESCE($5,update_status)
+          END,
+          update_error=CASE WHEN COALESCE($5,'')='FAILED' THEN $6 WHEN COALESCE($5,'') IN ('UPDATED','ROLLED_BACK') THEN NULL ELSE update_error END,
+          last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
           [supervisor.id,JSON.stringify(message.managedAgents ?? []),self.configuredVersion,self.containerState,self.updateStatus,self.updateError]);
         socket.send(JSON.stringify({ type: "HEARTBEAT_ACK", serverTime: new Date().toISOString() }));
       })().catch(error => app.log.error({ err: error, supervisorId: supervisor.id }, "Supervisor Agent WebSocket message failed"));
@@ -1235,6 +1305,40 @@ export async function registerDeviceControlFeature(
     await pool.query("UPDATE supervisor_agents SET configured_version=$2,update_status='REQUESTED',update_error=NULL,updated_at=NOW() WHERE id=$1",
       [supervisor.id,parsed.data.version]);
     return reply.code(202).send({ commandId, status: "REQUESTED", version: parsed.data.version });
+  });
+
+  app.post("/api/v1/device-control/supervisors/:id/managed-agents", async (request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply) => {
+    expireManagedAgentOperations();
+    const parsed = managedAgentRequestSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid Supervisor managed-agent request" });
+    const result = await pool.query<SupervisorAgentRow>("SELECT * FROM supervisor_agents WHERE id=$1", [request.params.id]);
+    const supervisor = result.rows[0];
+    if (!supervisor) return reply.code(404).send({ error: "Supervisor Agent not found" });
+    if (!supervisor.enabled) return reply.code(409).send({ error: "Supervisor Agent is disabled" });
+    const socket = supervisorSockets.get(supervisor.id);
+    if (!socket || socket.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Supervisor Agent is offline" });
+
+    const commandId = randomUUID();
+    const expiresAt = new Date(Date.now() + 3 * 60 * 1000);
+    const record: SupervisorManagedAgentOperationRecord = { id: commandId, supervisorId: supervisor.id, operation: parsed.data.operation, status: "SENT", result: null, error: null, createdAt: new Date(), expiresAt, finishedAt: null };
+    supervisorManagedAgentOperations.set(commandId, record);
+    socket.send(JSON.stringify({
+      type: "SUPERVISOR_COMMAND",
+      commandId,
+      operation: parsed.data.operation,
+      agentType: parsed.data.agentType,
+      instance: parsed.data.instance ?? "main",
+      version: parsed.data.version,
+      environment: parsed.data.environment
+    }));
+    return reply.code(202).send(supervisorManagedAgentOperationDto(record));
+  });
+
+  app.get("/api/v1/device-control/supervisor-managed-agents/:id", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    expireManagedAgentOperations();
+    const record = supervisorManagedAgentOperations.get(request.params.id);
+    if (!record) return reply.code(404).send({ error: "Supervisor managed-agent operation not found" });
+    return reply.send(supervisorManagedAgentOperationDto(record));
   });
 
   app.post("/api/v1/device-control/supervisors/:id/regenerate-token", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {

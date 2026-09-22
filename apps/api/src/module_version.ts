@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.32.2";
+export const MODULE_VERSION = "1.32.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.32.3": {
+    releasedAt: "2026-09-21T19:10:00+02:00",
+    patch: "PR-234-agents-table-consistency-v2.patch",
+    changes: [
+      { type: "fixed", description: "Autonomous Supervisor update lifecycle no longer regresses to stale READY/UPDATED state while a newer update request is active" },
+      { type: "added", description: "Autonomous Supervisor WebSocket connections accept direct managed-agent LIST, DEPLOY, UPDATE and REMOVE operations" }
+    ]
+  },
   "1.32.2": {
     releasedAt: "2026-09-21T05:20:00+02:00",
     patch: "PR-233a-autonomous-supervisor-v5-actions.patch",

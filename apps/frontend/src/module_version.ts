@@ -18,10 +18,21 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.68.0";
+export const MODULE_VERSION = "1.68.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.68.1": {
+    releasedAt: "2026-09-21T19:10:00+02:00",
+    patch: "PR-234-agents-table-consistency-v2.patch",
+    changes: [
+      { type: "fixed", description: "Supervisor self-update progress preserves the requested target and live lifecycle state across heartbeats and reconnects" },
+      { type: "changed", description: "Device, Monitoring and Supervisor Agent update actions use the same Supervisor-style update glyph" },
+      { type: "added", description: "Monitoring Agents can be updated through an autonomous Supervisor-managed monitor-agent instance" },
+      { type: "added", description: "Supervisor Agents can bootstrap a Device Agent directly on a Supervisor-only host" },
+      { type: "changed", description: "Monitoring Agent status badges match Device Agent status badge styling" }
+    ]
+  },
   "1.68.0": {
     releasedAt: "2026-09-21T18:40:00+02:00",
     patch: "PR-234-agents-table-consistency-v1.patch",
