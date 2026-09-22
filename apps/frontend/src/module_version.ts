@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.69.0";
+export const MODULE_VERSION = "1.69.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.69.1": {
+    releasedAt: "2026-09-22T19:15:00+02:00",
+    patch: "PR-235-explicit-supervisor-agent-associations-v1.1-frontend-fix.patch",
+    changes: [
+      { type: "fixed", description: "Supervisor Agents uses the monitorAgent version-availability key and safely tolerates temporarily missing agent version metadata" }
+    ]
+  },
   "1.69.0": {
     releasedAt: "2026-09-22T08:55:00+02:00",
     patch: "PR-235-explicit-supervisor-agent-associations-v1.patch",

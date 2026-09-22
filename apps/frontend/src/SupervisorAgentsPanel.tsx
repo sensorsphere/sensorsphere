@@ -273,9 +273,9 @@ export function SupervisorAgentsPanel() {
     return () => window.clearInterval(timer);
   }, [autonomousUpdateTarget, autonomousUpdateMutation.isSuccess, queryClient]);
 
-  const latestSupervisorVersion = versionsQuery.data?.agents.supervisorAgent.latestVersion ?? "latest";
-  const latestMonitoringAgentVersion = versionsQuery.data?.agents.monitoringAgent.latestVersion ?? "latest";
-  const latestDeviceAgentVersion = versionsQuery.data?.agents.deviceAgent.latestVersion ?? "latest";
+  const latestSupervisorVersion = versionsQuery.data?.agents?.supervisorAgent?.latestVersion ?? "latest";
+  const latestMonitoringAgentVersion = versionsQuery.data?.agents?.monitorAgent?.latestVersion ?? "latest";
+  const latestDeviceAgentVersion = versionsQuery.data?.agents?.deviceAgent?.latestVersion ?? "latest";
   const supervisorInstallCommand = createdToken && tokenSupervisorName ? ` SENSORSPHERE_URL=${window.location.origin} \
 SENSORSPHERE_AGENT_TOKEN='${createdToken}' \
 SUPERVISOR_NAME="$(hostname)" \
