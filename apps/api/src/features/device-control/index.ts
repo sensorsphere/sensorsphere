@@ -66,7 +66,9 @@ const managedAgentRequestSchema = z.object({
   agentType: z.enum(["device-agent", "monitor-agent"]).optional(),
   instance: z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/).optional(),
   version: z.string().trim().min(1).max(100).regex(/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/).optional(),
-  environment: z.record(z.string(), z.string()).optional()
+  environment: z.record(z.string(), z.string()).optional(),
+  agentId: z.string().uuid().optional(),
+  installDir: z.string().trim().min(1).max(2000).optional()
 }).strict().superRefine((value, ctx) => {
   if (value.operation !== "LIST" && !value.agentType) ctx.addIssue({ code: "custom", message: "agentType is required" });
   if (["DEPLOY", "UPDATE"].includes(value.operation) && !value.version) ctx.addIssue({ code: "custom", message: "version is required" });
@@ -491,6 +493,44 @@ interface SupervisorAgentRow {
   update_error: string | null; last_seen_at: Date | null; heartbeat_timeout_seconds: number; created_at: Date; updated_at: Date;
 }
 
+
+interface SupervisorManagedAssignmentRow {
+  id: string;
+  supervisor_agent_id: string;
+  agent_type: "device-agent" | "monitor-agent";
+  device_agent_id: string | null;
+  monitoring_agent_id: string | null;
+  instance: string;
+  install_dir: string | null;
+  compose_project: string | null;
+  compose_service: string;
+  desired_version: string | null;
+  reported_version: string | null;
+  local_state: string | null;
+  reconciliation_status: "MANAGED" | "MISSING" | "DISCOVERED" | "ERROR";
+  created_at: Date;
+  updated_at: Date;
+}
+
+function supervisorManagedAssignmentDto(row: SupervisorManagedAssignmentRow) {
+  return {
+    id: row.id,
+    supervisorId: row.supervisor_agent_id,
+    agentType: row.agent_type,
+    agentId: row.device_agent_id ?? row.monitoring_agent_id,
+    instance: row.instance,
+    installDir: row.install_dir,
+    composeProject: row.compose_project,
+    composeService: row.compose_service,
+    desiredVersion: row.desired_version,
+    reportedVersion: row.reported_version,
+    localState: row.local_state,
+    reconciliationStatus: row.reconciliation_status,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString()
+  };
+}
+
 function generateSupervisorToken(): string {
   return `sssa_${randomBytes(32).toString("base64url")}`;
 }
@@ -609,8 +649,51 @@ export async function registerDeviceControlFeature(
     expiresAt: Date;
     finishedAt: Date | null;
     deviceAgentId?: string;
+    assignmentId?: string;
   }
   const supervisorManagedAgentOperations = new Map<string, SupervisorManagedAgentOperationRecord>();
+
+  const loadSupervisorAssignments = async (supervisorId: string): Promise<SupervisorManagedAssignmentRow[]> => {
+    const result = await pool.query<SupervisorManagedAssignmentRow>(
+      `SELECT * FROM supervisor_managed_agents WHERE supervisor_agent_id=$1 ORDER BY agent_type,instance,id`,
+      [supervisorId]
+    );
+    return result.rows;
+  };
+
+  const reconcileSupervisorReportedAgents = async (supervisorId: string, reported: Array<Record<string, unknown>>): Promise<void> => {
+    for (const item of reported) {
+      const managementId = typeof item.management_id === "string" ? item.management_id : null;
+      if (!managementId) continue;
+      const version = typeof item.configured_version === "string" ? item.configured_version : null;
+      const localState = typeof item.container_state === "string" ? item.container_state : null;
+      const installDir = typeof item.install_dir === "string" ? item.install_dir : null;
+      const installed = item.installed === true;
+      await pool.query(`UPDATE supervisor_managed_agents SET
+        install_dir=COALESCE($3,install_dir),reported_version=$4,local_state=$5,
+        reconciliation_status=CASE WHEN $6 THEN 'MANAGED' ELSE 'MISSING' END,updated_at=NOW()
+        WHERE id=$1 AND supervisor_agent_id=$2`,
+        [managementId, supervisorId, installDir, version, localState, installed]
+      );
+    }
+  };
+
+  const upsertSupervisorAssignment = async (supervisorId: string, input: { agentType: "device-agent" | "monitor-agent"; agentId: string; instance: string; installDir?: string; desiredVersion?: string }): Promise<SupervisorManagedAssignmentRow> => {
+    const idColumn = input.agentType === "device-agent" ? "device_agent_id" : "monitoring_agent_id";
+    const otherColumn = input.agentType === "device-agent" ? "monitoring_agent_id" : "device_agent_id";
+    const sourceTable = input.agentType === "device-agent" ? "device_agents" : "monitoring_agents";
+    const exists = await pool.query(`SELECT 1 FROM ${sourceTable} WHERE id=$1`, [input.agentId]);
+    if (!exists.rows[0]) throw new Error(`${input.agentType === "device-agent" ? "Device" : "Monitoring"} Agent not found`);
+    const service = input.agentType === "device-agent" ? "device-agent" : "monitor-agent";
+    const result = await pool.query<SupervisorManagedAssignmentRow>(`INSERT INTO supervisor_managed_agents(
+      supervisor_agent_id,agent_type,${idColumn},${otherColumn},instance,install_dir,compose_service,desired_version
+    ) VALUES($1,$2,$3,NULL,$4,$5,$6,$7)
+    ON CONFLICT(supervisor_agent_id,agent_type,instance) DO UPDATE SET
+      ${idColumn}=EXCLUDED.${idColumn},${otherColumn}=NULL,install_dir=COALESCE(EXCLUDED.install_dir,supervisor_managed_agents.install_dir),
+      compose_service=EXCLUDED.compose_service,desired_version=COALESCE(EXCLUDED.desired_version,supervisor_managed_agents.desired_version),updated_at=NOW()
+    RETURNING *`, [supervisorId,input.agentType,input.agentId,input.instance,input.installDir ?? null,service,input.desiredVersion ?? null]);
+    return result.rows[0]!;
+  };
 
   const discoveryDto = (record: DiscoveryRecord) => ({
     commandId: record.id,
@@ -1116,6 +1199,16 @@ export async function registerDeviceControlFeature(
               operation.error = message.error ?? null;
             }
             operation.finishedAt = new Date();
+            if (operation.assignmentId) {
+              const resultObject = message.result && typeof message.result === "object" ? message.result as Record<string, unknown> : {};
+              const reportedVersion = typeof resultObject.configured_version === "string" ? resultObject.configured_version : typeof resultObject.target_version === "string" ? resultObject.target_version : null;
+              const localState = typeof resultObject.container_state === "string" ? resultObject.container_state : null;
+              const installDir = typeof resultObject.install_dir === "string" ? resultObject.install_dir : null;
+              await pool.query(`UPDATE supervisor_managed_agents SET
+                install_dir=COALESCE($2,install_dir),reported_version=COALESCE($3,reported_version),local_state=COALESCE($4,local_state),
+                reconciliation_status=CASE WHEN $5='SUCCESS' AND $6<>'REMOVE' THEN 'MANAGED' WHEN $5='SUCCESS' AND $6='REMOVE' THEN 'MISSING' ELSE 'ERROR' END,
+                updated_at=NOW() WHERE id=$1`, [operation.assignmentId,installDir,reportedVersion,localState,operation.status,operation.operation]);
+            }
             if (operation.deviceAgentId && operation.operation === "UPDATE") {
               const deviceStatus = operation.status === "SUCCESS" ? "VERIFYING" : "FAILED";
               await pool.query(`UPDATE device_agents SET
@@ -1156,7 +1249,14 @@ export async function registerDeviceControlFeature(
             [supervisor.id,message.supervisorName ?? null,message.version ?? null,message.hostname ?? null,message.systemInfo?.os ?? null,
              message.systemInfo?.osVersion ?? null,message.systemInfo?.architecture ?? null,JSON.stringify(message.managedAgents ?? []),
              self.configuredVersion,self.containerState,message.selfUpdateSupported ?? true,self.updateStatus,self.updateError]);
-          socket.send(JSON.stringify({ type: "HELLO_ACK", supervisorId: supervisor.id, serverTime: new Date().toISOString() }));
+          await reconcileSupervisorReportedAgents(supervisor.id, message.managedAgents ?? []);
+          const assignments = await loadSupervisorAssignments(supervisor.id);
+          socket.send(JSON.stringify({
+            type: "HELLO_ACK",
+            supervisorId: supervisor.id,
+            serverTime: new Date().toISOString(),
+            managedAssignments: assignments.map(supervisorManagedAssignmentDto)
+          }));
           return;
         }
         const self = supervisorSelfStatusFields(message.selfStatus);
@@ -1175,6 +1275,7 @@ export async function registerDeviceControlFeature(
           update_error=CASE WHEN COALESCE($5,'')='FAILED' THEN $6 WHEN COALESCE($5,'') IN ('UPDATED','ROLLED_BACK') THEN NULL ELSE update_error END,
           last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
           [supervisor.id,JSON.stringify(message.managedAgents ?? []),self.configuredVersion,self.containerState,self.updateStatus,self.updateError]);
+        await reconcileSupervisorReportedAgents(supervisor.id, message.managedAgents ?? []);
         socket.send(JSON.stringify({ type: "HEARTBEAT_ACK", serverTime: new Date().toISOString() }));
       })().catch(error => app.log.error({ err: error, supervisorId: supervisor.id }, "Supervisor Agent WebSocket message failed"));
     });
@@ -1331,18 +1432,42 @@ export async function registerDeviceControlFeature(
     const socket = supervisorSockets.get(supervisor.id);
     if (!socket || socket.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Supervisor Agent is offline" });
 
+    const instance = parsed.data.instance ?? "main";
+    let assignment: SupervisorManagedAssignmentRow | null = null;
+    if (parsed.data.agentType && parsed.data.agentId) {
+      try {
+        assignment = await upsertSupervisorAssignment(supervisor.id, {
+          agentType: parsed.data.agentType,
+          agentId: parsed.data.agentId,
+          instance,
+          installDir: parsed.data.installDir,
+          desiredVersion: parsed.data.version
+        });
+      } catch (error) {
+        return reply.code(400).send({ error: error instanceof Error ? error.message : "Unable to create Supervisor managed-agent association" });
+      }
+    }
+
+    if (assignment) {
+      const assignments = await loadSupervisorAssignments(supervisor.id);
+      socket.send(JSON.stringify({ type: "MANAGED_ASSIGNMENTS", managedAssignments: assignments.map(supervisorManagedAssignmentDto) }));
+    }
+
     const commandId = randomUUID();
     const expiresAt = new Date(Date.now() + 3 * 60 * 1000);
-    const record: SupervisorManagedAgentOperationRecord = { id: commandId, supervisorId: supervisor.id, operation: parsed.data.operation, status: "SENT", result: null, error: null, createdAt: new Date(), expiresAt, finishedAt: null };
+    const record: SupervisorManagedAgentOperationRecord = { id: commandId, supervisorId: supervisor.id, operation: parsed.data.operation, status: "SENT", result: null, error: null, createdAt: new Date(), expiresAt, finishedAt: null, assignmentId: assignment?.id };
     supervisorManagedAgentOperations.set(commandId, record);
     socket.send(JSON.stringify({
       type: "SUPERVISOR_COMMAND",
       commandId,
       operation: parsed.data.operation,
       agentType: parsed.data.agentType,
-      instance: parsed.data.instance ?? "main",
+      instance,
       version: parsed.data.version,
-      environment: parsed.data.environment
+      environment: parsed.data.environment,
+      managementId: assignment?.id,
+      agentId: parsed.data.agentId,
+      installDir: parsed.data.installDir ?? assignment?.install_dir ?? undefined
     }));
     return reply.code(202).send(supervisorManagedAgentOperationDto(record));
   });
@@ -1352,6 +1477,50 @@ export async function registerDeviceControlFeature(
     const record = supervisorManagedAgentOperations.get(request.params.id);
     if (!record) return reply.code(404).send({ error: "Supervisor managed-agent operation not found" });
     return reply.send(supervisorManagedAgentOperationDto(record));
+  });
+
+  app.get("/api/v1/device-control/supervisors/:id/managed-agent-assignments", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    const supervisor = await pool.query("SELECT 1 FROM supervisor_agents WHERE id=$1", [request.params.id]);
+    if (!supervisor.rows[0]) return reply.code(404).send({ error: "Supervisor Agent not found" });
+    const rows = await loadSupervisorAssignments(request.params.id);
+    return reply.send(rows.map(supervisorManagedAssignmentDto));
+  });
+
+  app.post("/api/v1/device-control/supervisors/:id/managed-agent-assignments", async (request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply) => {
+    const schema = z.object({
+      agentType: z.enum(["device-agent", "monitor-agent"]),
+      agentId: z.string().uuid(),
+      instance: z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/).default("main"),
+      installDir: z.string().trim().min(1).max(2000).optional(),
+      desiredVersion: z.string().trim().max(100).optional()
+    }).strict();
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid managed-agent association" });
+    const supervisor = await pool.query("SELECT 1 FROM supervisor_agents WHERE id=$1", [request.params.id]);
+    if (!supervisor.rows[0]) return reply.code(404).send({ error: "Supervisor Agent not found" });
+    try {
+      const row = await upsertSupervisorAssignment(request.params.id, parsed.data);
+      const socket = supervisorSockets.get(request.params.id);
+      if (socket?.readyState === WebSocket.OPEN) {
+        const assignments = await loadSupervisorAssignments(request.params.id);
+        socket.send(JSON.stringify({ type: "MANAGED_ASSIGNMENTS", managedAssignments: assignments.map(supervisorManagedAssignmentDto) }));
+      }
+      return reply.code(201).send(supervisorManagedAssignmentDto(row));
+    } catch (error) {
+      return reply.code(400).send({ error: error instanceof Error ? error.message : "Unable to create managed-agent association" });
+    }
+  });
+
+  app.delete("/api/v1/device-control/supervisor-managed-agent-assignments/:id", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    const result = await pool.query("DELETE FROM supervisor_managed_agents WHERE id=$1 RETURNING supervisor_agent_id", [request.params.id]);
+    if (!result.rows[0]) return reply.code(404).send({ error: "Managed-agent association not found" });
+    const supervisorId = result.rows[0].supervisor_agent_id as string;
+    const socket = supervisorSockets.get(supervisorId);
+    if (socket?.readyState === WebSocket.OPEN) {
+      const assignments = await loadSupervisorAssignments(supervisorId);
+      socket.send(JSON.stringify({ type: "MANAGED_ASSIGNMENTS", managedAssignments: assignments.map(supervisorManagedAssignmentDto) }));
+    }
+    return reply.code(204).send();
   });
 
   app.post("/api/v1/device-control/supervisors/:id/regenerate-token", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {

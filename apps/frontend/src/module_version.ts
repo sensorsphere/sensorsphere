@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.68.2";
+export const MODULE_VERSION = "1.69.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.69.0": {
+    releasedAt: "2026-09-22T08:55:00+02:00",
+    patch: "PR-235-explicit-supervisor-agent-associations-v1.patch",
+    changes: [
+      { type: "added", description: "Supervisor deployment binds Device Agents to their SensorSphere UUID at creation time" },
+      { type: "added", description: "Supervisor Agents can deploy Monitoring Agents directly and bind them to explicit SensorSphere associations" }
+    ]
+  },
   "1.68.2": {
     releasedAt: "2026-09-22T07:20:00+02:00",
     patch: "PR-234-agents-table-consistency-v3.patch",

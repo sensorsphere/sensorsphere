@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.32.4";
+export const MODULE_VERSION = "1.33.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.33.0": {
+    releasedAt: "2026-09-22T08:55:00+02:00",
+    patch: "PR-235-explicit-supervisor-agent-associations-v1.patch",
+    changes: [
+      { type: "added", description: "Supervisor-managed Device and Monitoring Agents have explicit immutable SensorSphere associations with agent UUID, instance and optional install directory" },
+      { type: "changed", description: "Autonomous Supervisor HELLO_ACK now sends authoritative managed-agent associations and runtime reports reconcile them by association ID" },
+      { type: "added", description: "Managed-agent deploy operations can bind the new local installation to the created SensorSphere agent identity" }
+    ]
+  },
   "1.32.4": {
     releasedAt: "2026-09-22T07:20:00+02:00",
     patch: "PR-234-agents-table-consistency-v3.patch",
