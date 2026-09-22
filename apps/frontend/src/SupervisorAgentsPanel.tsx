@@ -3,7 +3,8 @@ import { ActionIcon, Badge, Button, Card, Code, Group, Modal, NumberInput, Selec
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AgentVersionFreshnessBadge, getAgentVersionAvailability } from "./AgentVersionAvailability";
 import { DeleteActionIcon, EditActionIcon } from "./TableActionIcons";
-import { createMonitoringAgent } from "./api";
+import { createMonitoringAgent, getDeviceAgents, getMonitoringAgents, regenerateDeviceAgentToken, regenerateMonitoringAgentToken } from "./api";
+import { AgentTypeIcon, agentTypeLabel } from "./AgentTypeIcon";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import { usePersistentState } from "./preferences/usePersistentState";
 import { ResetFiltersAction } from "./ResetFiltersAction";
@@ -150,6 +151,11 @@ function DeployAgentIcon({ size = 16 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="5" width="10" height="14" rx="2" stroke="currentColor" strokeWidth="1.7"/><path d="M9 9v6M6 12h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><path d="M17 8h3m-1.5-1.5V9.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>;
 }
 
+
+function DeprovisionAgentIcon({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="M8 12h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>;
+}
+
 function relativeAge(value: string | null): string {
   if (!value) return "Never";
   const milliseconds = Date.now() - new Date(value).getTime();
@@ -196,6 +202,8 @@ type SupervisorSortKey = "name" | "status" | "reported" | "version" | "system" |
 export function SupervisorAgentsPanel() {
   const queryClient = useQueryClient();
   const autonomousQuery = useQuery({ queryKey: ["device-control", "supervisors"], queryFn: getAutonomousSupervisors, refetchInterval: 10000 });
+  const deviceAgentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
+  const monitoringAgentsQuery = useQuery({ queryKey: ["monitoring", "agents"], queryFn: getMonitoringAgents, refetchInterval: 15000 });
   const versionsQuery = useQuery({ queryKey: ["agent-version-availability"], queryFn: getAgentVersionAvailability, refetchInterval: 300000 });
   const [createOpened, setCreateOpened] = React.useState(false);
   const [createName, setCreateName] = React.useState("");
@@ -224,6 +232,7 @@ export function SupervisorAgentsPanel() {
   const [deployVersion, setDeployVersion] = React.useState("");
   const [deployStatus, setDeployStatus] = React.useState<"IDLE" | "CREATING" | "DEPLOYING" | "SUCCESS" | "FAILED">("IDLE");
   const [deployError, setDeployError] = React.useState<string | null>(null);
+  const [deprovisionTarget, setDeprovisionTarget] = React.useState<{ supervisor: AutonomousSupervisorAgent; agentType: "device-agent" | "monitor-agent"; instance: string; name: string } | null>(null);
 
   const createMutation = useMutation({
     mutationFn: (name: string) => createAutonomousSupervisor(name),
@@ -261,7 +270,9 @@ export function SupervisorAgentsPanel() {
         if (cleaned.status !== "SUCCESS") throw new Error(cleaned.error ?? "Unable to remove the unmanaged local Device Agent installation");
         setDeployStatus("CREATING");
       }
-      const identity = await createDeviceAgentIdentity(name);
+      const existing = (deviceAgentsQuery.data ?? []).find(agent => agent.name.trim().toLowerCase() === name.trim().toLowerCase());
+      if (existing?.managedBySupervisorId && existing.managedBySupervisorId !== supervisor.id) throw new Error(`Device Agent '${name}' is already managed by another Supervisor`);
+      const identity = existing ? await regenerateDeviceAgentToken(existing.id) : await createDeviceAgentIdentity(name);
       try {
         setDeployStatus("DEPLOYING");
         const operation = await requestSupervisorManagedOperation(supervisor.id, {
@@ -300,7 +311,9 @@ export function SupervisorAgentsPanel() {
         if (cleaned.status !== "SUCCESS") throw new Error(cleaned.error ?? "Unable to remove the unmanaged local Monitoring Agent installation");
         setDeployStatus("CREATING");
       }
-      const identity = await createMonitoringAgent({ name });
+      const existing = (monitoringAgentsQuery.data ?? []).find(agent => agent.name.trim().toLowerCase() === name.trim().toLowerCase());
+      if (existing?.managedBySupervisorId && existing.managedBySupervisorId !== supervisor.id) throw new Error(`Monitoring Agent '${name}' is already managed by another Supervisor`);
+      const identity = existing ? await regenerateMonitoringAgentToken(existing.id) : await createMonitoringAgent({ name });
       try {
         setDeployStatus("DEPLOYING");
         const operation = await requestSupervisorManagedOperation(supervisor.id, {
@@ -327,11 +340,26 @@ export function SupervisorAgentsPanel() {
     onError: error => { setDeployStatus("FAILED"); setDeployError(error instanceof Error ? error.message : "Unable to deploy Monitoring Agent"); }
   });
 
+  const deprovisionMutation = useMutation({
+    mutationFn: async (target: { supervisor: AutonomousSupervisorAgent; agentType: "device-agent" | "monitor-agent"; instance: string }) => {
+      const started = await requestSupervisorManagedOperation(target.supervisor.id, { operation: "REMOVE", agentType: target.agentType, instance: target.instance });
+      const completed = await waitSupervisorManagedOperation(started.commandId);
+      if (completed.status !== "SUCCESS") throw new Error(completed.error ?? `Unable to deprovision ${agentTypeLabel(target.agentType)}`);
+      return completed;
+    },
+    onSuccess: async () => { setDeprovisionTarget(null); await Promise.all([queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] }), queryClient.invalidateQueries({ queryKey: ["device-control", "agents"] }), queryClient.invalidateQueries({ queryKey: ["monitoring", "agents"] })]); }
+  });
+
   const autonomousUpdateMutation = useMutation({
-    mutationFn: ({ id, version }: { id: string; version: string }) => requestAutonomousSupervisorUpdate(id, version),
-    onSuccess: async () => {
+    mutationFn: ({ id, version, closeOnSuccess = false }: { id: string; version: string; closeOnSuccess?: boolean }) => requestAutonomousSupervisorUpdate(id, version).then(() => ({ id, version, closeOnSuccess })),
+    onMutate: ({ id, version }) => {
+      queryClient.setQueryData<AutonomousSupervisorAgent[]>(["device-control", "supervisors"], current => current?.map(agent => agent.id === id ? { ...agent, configuredVersion: version, updateStatus: "REQUESTED", updateError: null } : agent));
+    },
+    onSuccess: async result => {
+      if (result.closeOnSuccess) { setAutonomousUpdateTarget(null); setUpdateVersion(""); }
       await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] });
-    }
+    },
+    onError: async () => { await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] }); }
   });
 
   const autonomous = autonomousQuery.data ?? [];
@@ -355,17 +383,14 @@ SENSORSPHERE_AGENT_TOKEN='${createdToken}' \
 SUPERVISOR_NAME="$(hostname)" \
 VERSION=${latestSupervisorVersion} \
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere-supervisor-agent/master/scripts/install.sh)"` : "";
-  const managedAgentsDetails = (agent: AutonomousSupervisorAgent) => {
-    if (!agent.managedAgents.length) return <Text size="xs">No managed agents reported.</Text>;
-    return <Stack gap={3}>
-      {agent.managedAgents.map((entry, index) => {
-        const type = typeof entry.agent_type === "string" ? entry.agent_type : "agent";
-        const instance = typeof entry.instance === "string" ? entry.instance : "main";
-        const version = typeof entry.configured_version === "string" ? entry.configured_version : "—";
-        const state = typeof entry.container_state === "string" ? entry.container_state : "unknown";
-        return <Text size="xs" key={`${type}-${instance}-${index}`}>{type}/{instance} · {version} · {state}</Text>;
-      })}
-    </Stack>;
+  const managedAgentIcon = (entry: Record<string, unknown>, index: number) => {
+    const type = typeof entry.agent_type === "string" ? entry.agent_type : "agent";
+    const instance = typeof entry.instance === "string" ? entry.instance : "main";
+    const name = typeof entry.agent_name === "string" ? entry.agent_name : instance;
+    const version = typeof entry.configured_version === "string" ? entry.configured_version : "—";
+    const state = typeof entry.container_state === "string" ? entry.container_state : "unknown";
+    const iconType = type === "device-agent" ? "device" : "monitoring";
+    return <AgentTypeIcon key={`${type}-${instance}-${index}`} type={iconType} size={17} tooltip={`${name} · ${agentTypeLabel(type)} · ${version} · ${state}`} />;
   };
   const updateLifecycle = (agent: AutonomousSupervisorAgent) => {
     if (agent.updateStatus === "FAILED") return { label: "FAILED", color: "red" };
@@ -431,15 +456,19 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
               <Table.Td><Text size="sm">{agent.version ?? "—"}</Text>{["REQUESTED", "UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? <><Tooltip label={agent.updateError ?? `Supervisor update lifecycle: ${lifecycle.label}`}><Badge size="xs" variant="light" color={lifecycle.color}>{lifecycle.label}</Badge></Tooltip>{agent.configuredVersion && <Text size="xs" c="dimmed">Target {agent.configuredVersion}</Text>}</> : <><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents?.supervisorAgent} />{agent.updateStatus === "FAILED" && <Tooltip label={agent.updateError ?? "Supervisor update failed"}><Badge size="xs" variant="light" color="red">FAILED</Badge></Tooltip>}{agent.lastSuccessfulUpdateAt && <Text size="xs" c="dimmed" title={agent.lastSuccessfulUpdateAt}>Updated {relativeAge(agent.lastSuccessfulUpdateAt)}</Text>}</>}</Table.Td>
               <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td>
               <Table.Td title={agent.lastSeenAt ?? undefined}><Text size="sm">{relativeAge(agent.lastSeenAt)}</Text></Table.Td>
-              <Table.Td><Tooltip multiline withArrow label={managedAgentsDetails(agent)}><Badge size="xs" variant="light" style={{ cursor: "help" }}>{agent.managedAgents.length}</Badge></Tooltip></Table.Td>
+              <Table.Td>{agent.managedAgents.filter(entry => entry.installed !== false).length > 0 ? <Group gap={6} wrap="nowrap">{agent.managedAgents.filter(entry => entry.installed !== false).map(managedAgentIcon)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
               <Table.Td>{Object.keys(agent.labels).length > 0 ? <Group gap={4} wrap="wrap">{Object.entries(agent.labels).map(([key,value]) => <Badge key={key} size="xs" variant="light">{key}={value}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
               <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
-              <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><Tooltip label={!agent.online ? "Supervisor Agent must be online" : explicitlyManaged(agent, "device-agent") ? "Device Agent already managed on this host" : discoveredUnmanaged(agent, "device-agent") ? "Replace unmanaged local Device Agent installation" : "Deploy Device Agent"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Deploy Device Agent" disabled={!agent.online || explicitlyManaged(agent, "device-agent")} onClick={() => { setDeployTarget(agent); setDeployAgentType("device-agent"); setDeployAgentName(agent.name); setDeployVersion(latestDeviceAgentVersion !== "latest" ? latestDeviceAgentVersion : ""); setDeployStatus("IDLE"); setDeployError(null); deployDeviceAgentMutation.reset(); }}><DeployAgentIcon /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Supervisor Agent must be online" : explicitlyManaged(agent, "monitor-agent") ? "Monitoring Agent already managed on this host" : discoveredUnmanaged(agent, "monitor-agent") ? "Replace unmanaged local Monitoring Agent installation" : "Deploy Monitoring Agent"}><ActionIcon size="sm" variant="light" color="blue" aria-label="Deploy Monitoring Agent" disabled={!agent.online || explicitlyManaged(agent, "monitor-agent")} onClick={() => { setDeployTarget(agent); setDeployAgentType("monitor-agent"); setDeployAgentName(`${agent.name}-monitor`); setDeployVersion(latestMonitoringAgentVersion !== "latest" ? latestMonitoringAgentVersion : ""); setDeployStatus("IDLE"); setDeployError(null); deployMonitoringAgentMutation.reset(); }}><DeployAgentIcon /></ActionIcon></Tooltip><Tooltip label={agent.selfUpdateSupported ? "Update Supervisor Agent" : "Supervisor self-update unavailable"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.selfUpdateSupported || ["REQUESTED", "UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => { setAutonomousUpdateTarget(agent); setUpdateVersion(latestSupervisorVersion !== "latest" ? latestSupervisorVersion : agent.version ?? ""); autonomousUpdateMutation.reset(); }}><SupervisorUpdateIcon /></ActionIcon></Tooltip><EditActionIcon onClick={() => { setEditTarget(agent); setEditName(agent.name); setEditEnabled(agent.enabled); setEditHeartbeatTimeout(agent.heartbeatTimeoutSeconds); setEditLabelsText(labelsText(agent.labels)); editMutation.reset(); }} /><Tooltip label="Copy supervisor agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy supervisor agent" onClick={() => copyMutation.mutate(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check configured token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check configured token" onClick={() => checkTokenMutation.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerateMutation.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Table.Td>
+              <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">{explicitlyManaged(agent, "device-agent") ? <Tooltip label="Deprovision Device Agent"><ActionIcon size="sm" variant="light" color="red" aria-label="Deprovision Device Agent" disabled={!agent.online} onClick={() => { const entry = reportedManagedEntry(agent, "device-agent")!; setDeprovisionTarget({ supervisor: agent, agentType: "device-agent", instance: typeof entry.instance === "string" ? entry.instance : "main", name: typeof entry.agent_name === "string" ? entry.agent_name : agent.name }); }}><DeprovisionAgentIcon /></ActionIcon></Tooltip> : <Tooltip label={!agent.online ? "Supervisor Agent must be online" : discoveredUnmanaged(agent, "device-agent") ? "Replace unmanaged local Device Agent installation" : "Deploy Device Agent"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Deploy Device Agent" disabled={!agent.online} onClick={() => { setDeployTarget(agent); setDeployAgentType("device-agent"); setDeployAgentName(agent.name); setDeployVersion(latestDeviceAgentVersion !== "latest" ? latestDeviceAgentVersion : ""); setDeployStatus("IDLE"); setDeployError(null); deployDeviceAgentMutation.reset(); }}><DeployAgentIcon /></ActionIcon></Tooltip>}{explicitlyManaged(agent, "monitor-agent") ? <Tooltip label="Deprovision Monitoring Agent"><ActionIcon size="sm" variant="light" color="red" aria-label="Deprovision Monitoring Agent" disabled={!agent.online} onClick={() => { const entry = reportedManagedEntry(agent, "monitor-agent")!; setDeprovisionTarget({ supervisor: agent, agentType: "monitor-agent", instance: typeof entry.instance === "string" ? entry.instance : "main", name: typeof entry.agent_name === "string" ? entry.agent_name : `${agent.name}-monitor` }); }}><DeprovisionAgentIcon /></ActionIcon></Tooltip> : <Tooltip label={!agent.online ? "Supervisor Agent must be online" : discoveredUnmanaged(agent, "monitor-agent") ? "Replace unmanaged local Monitoring Agent installation" : "Deploy Monitoring Agent"}><ActionIcon size="sm" variant="light" color="violet" aria-label="Deploy Monitoring Agent" disabled={!agent.online} onClick={() => { setDeployTarget(agent); setDeployAgentType("monitor-agent"); setDeployAgentName(`${agent.name}-monitor`); setDeployVersion(latestMonitoringAgentVersion !== "latest" ? latestMonitoringAgentVersion : ""); setDeployStatus("IDLE"); setDeployError(null); deployMonitoringAgentMutation.reset(); }}><DeployAgentIcon /></ActionIcon></Tooltip>}<Tooltip label={agent.selfUpdateSupported ? "Update Supervisor Agent" : "Supervisor self-update unavailable"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.selfUpdateSupported || ["REQUESTED", "UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => { setAutonomousUpdateTarget(agent); setUpdateVersion(latestSupervisorVersion !== "latest" ? latestSupervisorVersion : agent.version ?? ""); autonomousUpdateMutation.reset(); }}><SupervisorUpdateIcon /></ActionIcon></Tooltip><EditActionIcon onClick={() => { setEditTarget(agent); setEditName(agent.name); setEditEnabled(agent.enabled); setEditHeartbeatTimeout(agent.heartbeatTimeoutSeconds); setEditLabelsText(labelsText(agent.labels)); editMutation.reset(); }} /><Tooltip label="Copy supervisor agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy supervisor agent" onClick={() => copyMutation.mutate(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check configured token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check configured token" onClick={() => checkTokenMutation.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerateMutation.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Table.Td>
             </Table.Tr>;
           })}{filteredAutonomous.length === 0 && <Table.Tr><Table.Td colSpan={10}><Text ta="center" c="dimmed" py="xl">No Supervisor Agents registered yet.</Text></Table.Td></Table.Tr>}</Table.Tbody>
         </Table>
       </div>
     </Card>
+
+    <Modal opened={deprovisionTarget != null} onClose={() => !deprovisionMutation.isPending && setDeprovisionTarget(null)} title={`Deprovision ${deprovisionTarget ? agentTypeLabel(deprovisionTarget.agentType) : "Agent"}`} centered>
+      <Stack><Text size="sm">Remove the local installation of <strong>{deprovisionTarget?.name}</strong> from Supervisor Agent <strong>{deprovisionTarget?.supervisor.name}</strong>? The SensorSphere agent identity is kept and can be deployed again later.</Text>{deprovisionMutation.isError && <Text size="sm" c="red">{deprovisionMutation.error instanceof Error ? deprovisionMutation.error.message : "Unable to deprovision agent"}</Text>}<Group justify="flex-end"><Button variant="default" disabled={deprovisionMutation.isPending} onClick={() => setDeprovisionTarget(null)}>Cancel</Button><Button color="red" loading={deprovisionMutation.isPending} onClick={() => deprovisionTarget && deprovisionMutation.mutate(deprovisionTarget)}>Deprovision</Button></Group></Stack>
+    </Modal>
 
     <Modal opened={editTarget != null} onClose={() => setEditTarget(null)} title="Edit Supervisor Agent" centered>
       <Stack><TextInput label="Name" value={editName} onChange={event => setEditName(event.currentTarget.value)} /><TextInput label="Labels" description="Comma separated. key=value or simple labels." value={editLabelsText} onChange={event => setEditLabelsText(event.currentTarget.value)} /><Select label="Enabled" value={editEnabled ? "yes" : "no"} onChange={value => setEditEnabled(value !== "no")} data={[{ value: "yes", label: "Enabled" }, { value: "no", label: "Disabled" }]} /><NumberInput label="Heartbeat timeout (seconds)" min={15} max={3600} value={editHeartbeatTimeout} onChange={value => setEditHeartbeatTimeout(Number(value) || 60)} />{editMutation.isError && <Text c="red" size="sm">{editMutation.error instanceof Error ? editMutation.error.message : "Unable to update Supervisor Agent"}</Text>}<Group justify="flex-end"><Button variant="default" onClick={() => setEditTarget(null)}>Cancel</Button><Button loading={editMutation.isPending} disabled={!editName.trim()} onClick={() => editMutation.mutate()}>Save</Button></Group></Stack>
@@ -516,7 +545,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
           </Stack>
         </Card>}
         {autonomousUpdateMutation.isError && <Text c="red" size="sm">{autonomousUpdateMutation.error instanceof Error ? autonomousUpdateMutation.error.message : "Unable to request Supervisor Agent update"}</Text>}
-        <Group justify="flex-end"><Button variant="default" onClick={() => { setAutonomousUpdateTarget(null); setUpdateVersion(""); autonomousUpdateMutation.reset(); }}>{autonomousUpdateMutation.isSuccess ? "Close" : "Cancel"}</Button>{!autonomousUpdateMutation.isSuccess && <Button color="teal" loading={autonomousUpdateMutation.isPending} disabled={!/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(updateVersion.trim())} onClick={() => autonomousUpdateTarget && autonomousUpdateMutation.mutate({ id: autonomousUpdateTarget.id, version: updateVersion.trim() })}>Update</Button>}</Group>
+        <Group justify="flex-end"><Button variant="default" onClick={() => { setAutonomousUpdateTarget(null); setUpdateVersion(""); autonomousUpdateMutation.reset(); }}>Close</Button><Button color="teal" variant="light" loading={autonomousUpdateMutation.isPending} disabled={!/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(updateVersion.trim()) || autonomousUpdateMutation.isPending} onClick={() => autonomousUpdateTarget && autonomousUpdateMutation.mutate({ id: autonomousUpdateTarget.id, version: updateVersion.trim(), closeOnSuccess: true })}>Update and Close</Button><Button color="teal" loading={autonomousUpdateMutation.isPending} disabled={!/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(updateVersion.trim()) || autonomousUpdateMutation.isPending} onClick={() => autonomousUpdateTarget && autonomousUpdateMutation.mutate({ id: autonomousUpdateTarget.id, version: updateVersion.trim(), closeOnSuccess: false })}>Update</Button></Group>
       </Stack>
     </Modal>
   </Stack>;

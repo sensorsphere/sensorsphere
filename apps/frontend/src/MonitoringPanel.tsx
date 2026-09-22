@@ -406,15 +406,16 @@ export function MonitoringPanel({
   };
 
   const monitoringAgentUpdateMutation = useMutation({
-    mutationFn: async ({ supervisorId, agentId, instance, version }: { supervisorId: string; agentId: string; instance: string; version: string }) => {
+    mutationFn: async ({ supervisorId, agentId, instance, version, closeOnSuccess = false }: { supervisorId: string; agentId: string; instance: string; version: string; closeOnSuccess?: boolean }) => {
       setAgentUpdateStatus("UPDATING");
       setAgentUpdateError(null);
       const requested = await requestMonitoringAgentUpdate(supervisorId, agentId, instance, version);
+      if (closeOnSuccess) return { ...requested, closeOnSuccess };
       const completed = await waitMonitoringAgentUpdate(requested.commandId);
       if (completed.status !== "SUCCESS") throw new Error(completed.error ?? `Monitoring Agent update ${completed.status.toLowerCase()}`);
-      return completed;
+      return { ...completed, closeOnSuccess };
     },
-    onSuccess: async () => { setAgentUpdateStatus("VERIFYING"); await Promise.all([queryClient.invalidateQueries({ queryKey: ["monitoring", "agents"] }), queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] })]); },
+    onSuccess: async result => { if (result.closeOnSuccess) { setAgentUpdateTarget(null); setAgentUpdateStatus("IDLE"); setAgentUpdateError(null); } else setAgentUpdateStatus("VERIFYING"); await Promise.all([queryClient.invalidateQueries({ queryKey: ["monitoring", "agents"] }), queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] })]); },
     onError: error => { setAgentUpdateStatus("FAILED"); setAgentUpdateError(error instanceof Error ? error.message : "Unable to update Monitoring Agent"); }
   });
 
@@ -792,7 +793,7 @@ export function MonitoringPanel({
           <TextInput label="Target version" value={agentUpdateVersion} onChange={event => setAgentUpdateVersion(event.currentTarget.value)} disabled={monitoringAgentUpdateMutation.isPending || agentUpdateStatus === "UPDATED"} />
           <Card withBorder p="sm"><Group justify="space-between"><Text size="xs" c="dimmed">Status</Text><Badge size="sm" variant="light" color={agentUpdateStatus === "UPDATED" ? "green" : agentUpdateStatus === "FAILED" ? "red" : ["UPDATING", "VERIFYING"].includes(agentUpdateStatus) ? "blue" : "teal"}>{agentUpdateStatus === "IDLE" ? "READY" : agentUpdateStatus}</Badge></Group></Card>
           {agentUpdateError && <Text size="sm" c="red">{agentUpdateError}</Text>}
-          <Group justify="flex-end"><Button variant="default" disabled={monitoringAgentUpdateMutation.isPending} onClick={() => { setAgentUpdateTarget(null); setAgentUpdateStatus("IDLE"); setAgentUpdateError(null); }}>{agentUpdateStatus === "UPDATED" ? "Close" : "Cancel"}</Button>{agentUpdateStatus !== "UPDATED" && <Button color="teal" loading={monitoringAgentUpdateMutation.isPending} disabled={!agentUpdateSupervisorId || !agentUpdateInstance || !/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(agentUpdateVersion.trim())} onClick={() => agentUpdateTarget && agentUpdateSupervisorId && agentUpdateInstance && monitoringAgentUpdateMutation.mutate({ supervisorId: agentUpdateSupervisorId, agentId: agentUpdateTarget.id, instance: agentUpdateInstance, version: agentUpdateVersion.trim() })}>Update</Button>}</Group>
+          <Group justify="flex-end"><Button variant="default" disabled={monitoringAgentUpdateMutation.isPending} onClick={() => { setAgentUpdateTarget(null); setAgentUpdateStatus("IDLE"); setAgentUpdateError(null); }}>Close</Button><Button color="teal" variant="light" loading={monitoringAgentUpdateMutation.isPending} disabled={!agentUpdateSupervisorId || !agentUpdateInstance || !/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(agentUpdateVersion.trim()) || monitoringAgentUpdateMutation.isPending} onClick={() => agentUpdateTarget && agentUpdateSupervisorId && agentUpdateInstance && monitoringAgentUpdateMutation.mutate({ supervisorId: agentUpdateSupervisorId, agentId: agentUpdateTarget.id, instance: agentUpdateInstance, version: agentUpdateVersion.trim(), closeOnSuccess: true })}>Update and Close</Button><Button color="teal" loading={monitoringAgentUpdateMutation.isPending} disabled={!agentUpdateSupervisorId || !agentUpdateInstance || !/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(agentUpdateVersion.trim()) || monitoringAgentUpdateMutation.isPending} onClick={() => agentUpdateTarget && agentUpdateSupervisorId && agentUpdateInstance && monitoringAgentUpdateMutation.mutate({ supervisorId: agentUpdateSupervisorId, agentId: agentUpdateTarget.id, instance: agentUpdateInstance, version: agentUpdateVersion.trim(), closeOnSuccess: false })}>Update</Button></Group>
         </Stack>
       </Modal>
 

@@ -18,10 +18,22 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.71.0";
+export const MODULE_VERSION = "1.72.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.72.0": {
+    releasedAt: "2026-09-23T00:20:00+02:00",
+    patch: "PR-239-agent-lifecycle-deprovision-icons-v1.patch",
+    changes: [
+      { type: "fixed", description: "Supervisor self-update requests stay in an active lifecycle without briefly reverting to stale freshness state" },
+      { type: "fixed", description: "Supervisor token checks accept the running Supervisor token response format and no longer show mismatch for identical fingerprints" },
+      { type: "added", description: "Update dialogs provide Update, Update and Close, and Close actions" },
+      { type: "added", description: "Supervisor Agents can deprovision managed Device and Monitoring Agent installations" },
+      { type: "changed", description: "Agent tabs and Supervisor managed-agent cells use dedicated colored agent-type icons with detailed hover labels" },
+      { type: "fixed", description: "Supervisor deployment reuses an existing unassociated same-name agent identity by regenerating its token instead of failing on duplicate names" }
+    ]
+  },
   "1.71.0": {
     releasedAt: "2026-09-23T00:15:00+02:00",
     patch: "PR-238-agent-token-runtime-table-consistency-v1.patch",

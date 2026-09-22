@@ -717,6 +717,21 @@ export async function registerDeviceControlFeature(
     return result.rows[0]!;
   };
 
+  const enrichSupervisorManagedAgents = async (supervisorId: string, reported: Array<Record<string, unknown>>): Promise<Array<Record<string, unknown>>> => {
+    const names = await pool.query<{ id: string; agent_name: string | null }>(`
+      SELECT sma.id, COALESCE(da.name, ma.name) AS agent_name
+      FROM supervisor_managed_agents sma
+      LEFT JOIN device_agents da ON da.id=sma.device_agent_id
+      LEFT JOIN monitoring_agents ma ON ma.id=sma.monitoring_agent_id
+      WHERE sma.supervisor_agent_id=$1`, [supervisorId]);
+    const byId = new Map(names.rows.map(row => [row.id, row.agent_name]));
+    return reported.map(entry => {
+      const managementId = typeof entry.management_id === "string" ? entry.management_id : null;
+      const agentName = managementId ? byId.get(managementId) ?? null : null;
+      return agentName ? { ...entry, agent_name: agentName } : entry;
+    });
+  };
+
   const discoveryDto = (record: DiscoveryRecord) => ({
     commandId: record.id,
     agentId: record.agentId,
@@ -1236,9 +1251,11 @@ export async function registerDeviceControlFeature(
                 const expectedHash = operation.expectedTokenHash ?? null;
                 const configuredMatches = Boolean(configuredHash && expectedHash && configuredHash === expectedHash);
                 const runtimeMatches = Boolean(runtimeHash && expectedHash && runtimeHash === expectedHash);
+                const fallbackMatches = Boolean(fallbackHash && expectedHash && fallbackHash === expectedHash);
                 const runtimePresent = resultObject.runtime_token_present === true;
+                const isSupervisorSelfCheck = operation.assignmentId == null && operation.deviceAgentId == null && operation.monitoringAgentId == null;
                 operation.result = {
-                  matches: runtimePresent ? runtimeMatches : false,
+                  matches: isSupervisorSelfCheck ? (runtimePresent ? runtimeMatches : fallbackMatches) : (runtimePresent ? runtimeMatches : false),
                   configuredMatches,
                   runtimeMatches,
                   runtimePresent,
@@ -1479,7 +1496,11 @@ export async function registerDeviceControlFeature(
 
   app.get("/api/v1/device-control/supervisors", async (_request, reply) => {
     const result = await pool.query<SupervisorAgentRow>("SELECT * FROM supervisor_agents ORDER BY LOWER(name),id");
-    return reply.send(result.rows.map(row => supervisorAgentDto(row, supervisorSockets.has(row.id))));
+    const payload = await Promise.all(result.rows.map(async row => {
+      const dto = supervisorAgentDto(row, supervisorSockets.has(row.id));
+      return { ...dto, managedAgents: await enrichSupervisorManagedAgents(row.id, dto.managedAgents) };
+    }));
+    return reply.send(payload);
   });
 
   app.post("/api/v1/device-control/supervisors", async (request: FastifyRequest<{ Body: unknown }>, reply) => {
@@ -1514,9 +1535,12 @@ export async function registerDeviceControlFeature(
     const socket = supervisorSockets.get(supervisor.id);
     if (!socket || socket.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Supervisor Agent is offline" });
     const commandId = randomUUID();
-    socket.send(JSON.stringify({ type: "SUPERVISOR_COMMAND", commandId, operation: "UPDATE_SELF", version: parsed.data.version }));
+    // Persist the requested lifecycle before sending the command. A fast Supervisor can
+    // otherwise answer UPDATING before this handler writes REQUESTED, causing the UI
+    // to momentarily regress to the previous stable/freshness state.
     await pool.query("UPDATE supervisor_agents SET configured_version=$2,update_status='REQUESTED',update_error=NULL,updated_at=NOW() WHERE id=$1",
       [supervisor.id,parsed.data.version]);
+    socket.send(JSON.stringify({ type: "SUPERVISOR_COMMAND", commandId, operation: "UPDATE_SELF", version: parsed.data.version }));
     return reply.code(202).send({ commandId, status: "REQUESTED", version: parsed.data.version });
   });
 
@@ -1747,11 +1771,16 @@ export async function registerDeviceControlFeature(
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid device agent" });
     const input = parsed.data;
     const token = generateToken();
-    const result = await pool.query<AgentRow>(`
-      INSERT INTO device_agents (name, token_hash, labels, heartbeat_timeout_seconds)
-      VALUES ($1,$2,$3::jsonb,$4) RETURNING *
-    `, [input.name, hashToken(token), JSON.stringify(input.labels ?? {}), input.heartbeatTimeoutSeconds ?? 60]);
-    return reply.code(201).send({ agent: agentDto(result.rows[0]!, false), token });
+    try {
+      const result = await pool.query<AgentRow>(`
+        INSERT INTO device_agents (name, token_hash, labels, heartbeat_timeout_seconds)
+        VALUES ($1,$2,$3::jsonb,$4) RETURNING *
+      `, [input.name, hashToken(token), JSON.stringify(input.labels ?? {}), input.heartbeatTimeoutSeconds ?? 60]);
+      return reply.code(201).send({ agent: agentDto(result.rows[0]!, false), token });
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505") return reply.code(409).send({ error: `Device Agent '${input.name}' already exists` });
+      throw error;
+    }
   });
 
   app.patch("/api/v1/device-control/agents/:id", async (request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply) => {

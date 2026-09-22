@@ -8,6 +8,7 @@ import { getAutonomousSupervisors, SupervisorAgentsPanel } from "./SupervisorAge
 import { usePersistentState } from "./preferences/usePersistentState";
 import { getDeviceAgents, getMonitoringAgents } from "./api";
 import { getAgentVersionAvailability, type AgentReleaseKind } from "./AgentVersionAvailability";
+import { AgentTypeIcon } from "./AgentTypeIcon";
 
 interface AgentsPanelProps {
   devices: DeviceRegistryDevice[];
@@ -46,9 +47,9 @@ export function AgentsPanel({ devices, onImportDiscoveredDevice, onUpdateDiscove
       </SimpleGrid>
       <Tabs value={tab} onChange={value => value && setTab(value as "device" | "monitoring" | "supervisor")} keepMounted={false} className="agents-workspace-tabs">
       <Tabs.List mb="sm">
-        <Tabs.Tab value="device">Device Agents</Tabs.Tab>
-        <Tabs.Tab value="monitoring">Monitoring Agents</Tabs.Tab>
-        <Tabs.Tab value="supervisor">Supervisor Agents</Tabs.Tab>
+        <Tabs.Tab value="device" leftSection={<AgentTypeIcon type="device" />}>Device Agents</Tabs.Tab>
+        <Tabs.Tab value="monitoring" leftSection={<AgentTypeIcon type="monitoring" />}>Monitoring Agents</Tabs.Tab>
+        <Tabs.Tab value="supervisor" leftSection={<AgentTypeIcon type="supervisor" />}>Supervisor Agents</Tabs.Tab>
       </Tabs.List>
       <Tabs.Panel value="device" className="agents-workspace-scroll-panel">
         <DeviceAgentsPanel

@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.35.0";
+export const MODULE_VERSION = "1.35.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.35.1": {
+    releasedAt: "2026-09-23T00:20:00+02:00",
+    patch: "PR-239-agent-lifecycle-deprovision-icons-v1.patch",
+    changes: [
+      { type: "fixed", description: "Persist Supervisor self-update REQUESTED state before sending the remote command to prevent lifecycle races" },
+      { type: "fixed", description: "Supervisor self-token checks remain compatible with token_hash-only Supervisor responses" },
+      { type: "changed", description: "Supervisor managed-agent responses include associated SensorSphere agent names for UI diagnostics" },
+      { type: "fixed", description: "Duplicate Device and Monitoring Agent names return explicit HTTP 409 errors instead of generic server errors" }
+    ]
+  },
   "1.35.0": {
     releasedAt: "2026-09-23T00:15:00+02:00",
     patch: "PR-238-agent-token-runtime-table-consistency-v1.patch",

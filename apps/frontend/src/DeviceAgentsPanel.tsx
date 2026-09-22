@@ -336,12 +336,12 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
   const regenerate = useMutation({ mutationFn: (agent: DeviceAgent) => regenerateDeviceAgentToken(agent.id), onSuccess: async result => { setTokenInfo({ name: result.agent.name, token: result.token }); await refresh(); } });
   const checkToken = useMutation({ mutationFn: (agent: DeviceAgent) => checkDeviceAgentToken(agent.id), onSuccess: (result, agent) => setTokenCheckResult({ name: agent.name, result }) });
   const agentUpdateMutation = useMutation({
-    mutationFn: ({ agentId, version }: { agentId: string; version: string }) => requestDeviceAgentUpdate(agentId, version),
-    onSuccess: async () => { setUpdateTarget(null); setUpdateVersion(""); await refresh(); }
+    mutationFn: ({ agentId, version, closeOnSuccess = false }: { agentId: string; version: string; closeOnSuccess?: boolean }) => requestDeviceAgentUpdate(agentId, version).then(result => ({ result, closeOnSuccess })),
+    onSuccess: async ({ closeOnSuccess }) => { if (closeOnSuccess) { setUpdateTarget(null); setUpdateVersion(""); } await refresh(); }
   });
   const supervisorUpdateMutation = useMutation({
-    mutationFn: ({ agentId, version }: { agentId: string; version: string }) => requestSupervisorAgentUpdate(agentId, version),
-    onSuccess: async () => { setSupervisorUpdateTarget(null); setSupervisorUpdateVersion(""); await refresh(); }
+    mutationFn: ({ agentId, version, closeOnSuccess = false }: { agentId: string; version: string; closeOnSuccess?: boolean }) => requestSupervisorAgentUpdate(agentId, version).then(result => ({ result, closeOnSuccess })),
+    onSuccess: async ({ closeOnSuccess }) => { if (closeOnSuccess) { setSupervisorUpdateTarget(null); setSupervisorUpdateVersion(""); } await refresh(); }
   });
   const managedMutation = useMutation({
     mutationFn: async ({ agent, operation, status }: { agent: DeviceAgent; operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE"; status?: ManagedAgentStatus }) => {
@@ -841,7 +841,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
         <Text size="sm">Update <strong>{updateTarget?.name}</strong>{updateTarget?.version ? ` from ${updateTarget.version}` : ""} to the requested version through its Supervisor Agent.</Text>
         <TextInput label="Target version" placeholder="1.2.1" value={updateVersion} onChange={event => setUpdateVersion(event.currentTarget.value)} autoFocus />
         {agentUpdateMutation.isError && <Text c="red" size="sm">{agentUpdateMutation.error instanceof Error ? agentUpdateMutation.error.message : "Unable to request Device Agent update"}</Text>}
-        <Group justify="flex-end"><Button variant="default" onClick={() => { setUpdateTarget(null); setUpdateVersion(""); agentUpdateMutation.reset(); }}>Cancel</Button><Button color="violet" loading={agentUpdateMutation.isPending} disabled={!/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(updateVersion.trim())} onClick={() => updateTarget && agentUpdateMutation.mutate({ agentId: updateTarget.id, version: updateVersion.trim() })}>Update</Button></Group>
+        <Group justify="flex-end"><Button variant="default" onClick={() => { setUpdateTarget(null); setUpdateVersion(""); agentUpdateMutation.reset(); }}>Close</Button><Button color="violet" variant="light" loading={agentUpdateMutation.isPending} disabled={!/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(updateVersion.trim()) || agentUpdateMutation.isPending} onClick={() => updateTarget && agentUpdateMutation.mutate({ agentId: updateTarget.id, version: updateVersion.trim(), closeOnSuccess: true })}>Update and Close</Button><Button color="violet" loading={agentUpdateMutation.isPending} disabled={!/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(updateVersion.trim()) || agentUpdateMutation.isPending} onClick={() => updateTarget && agentUpdateMutation.mutate({ agentId: updateTarget.id, version: updateVersion.trim(), closeOnSuccess: false })}>Update</Button></Group>
       </Stack>
     </Modal>
 
@@ -851,7 +851,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
         <Text size="sm">Update the Supervisor Agent for <strong>{supervisorUpdateTarget?.name}</strong>{supervisorUpdateTarget?.supervisorVersion ? ` from ${supervisorUpdateTarget.supervisorVersion}` : ""} to the requested version.</Text>
         <TextInput label="Target version" placeholder="0.3.1" value={supervisorUpdateVersion} onChange={event => setSupervisorUpdateVersion(event.currentTarget.value)} autoFocus />
         {supervisorUpdateMutation.isError && <Text c="red" size="sm">{supervisorUpdateMutation.error instanceof Error ? supervisorUpdateMutation.error.message : "Unable to request Supervisor Agent update"}</Text>}
-        <Group justify="flex-end"><Button variant="default" onClick={() => { setSupervisorUpdateTarget(null); setSupervisorUpdateVersion(""); supervisorUpdateMutation.reset(); }}>Cancel</Button><Button color="teal" loading={supervisorUpdateMutation.isPending} disabled={!/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(supervisorUpdateVersion.trim())} onClick={() => supervisorUpdateTarget && supervisorUpdateMutation.mutate({ agentId: supervisorUpdateTarget.id, version: supervisorUpdateVersion.trim() })}>Update</Button></Group>
+        <Group justify="flex-end"><Button variant="default" onClick={() => { setSupervisorUpdateTarget(null); setSupervisorUpdateVersion(""); supervisorUpdateMutation.reset(); }}>Close</Button><Button color="teal" variant="light" loading={supervisorUpdateMutation.isPending} disabled={!/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(supervisorUpdateVersion.trim()) || supervisorUpdateMutation.isPending} onClick={() => supervisorUpdateTarget && supervisorUpdateMutation.mutate({ agentId: supervisorUpdateTarget.id, version: supervisorUpdateVersion.trim(), closeOnSuccess: true })}>Update and Close</Button><Button color="teal" loading={supervisorUpdateMutation.isPending} disabled={!/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(supervisorUpdateVersion.trim()) || supervisorUpdateMutation.isPending} onClick={() => supervisorUpdateTarget && supervisorUpdateMutation.mutate({ agentId: supervisorUpdateTarget.id, version: supervisorUpdateVersion.trim(), closeOnSuccess: false })}>Update</Button></Group>
       </Stack>
     </Modal>
 

@@ -402,14 +402,19 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
   app.post("/api/v1/monitoring/agents", async (request, reply) => {
     const input = agentCreateSchema.parse(request.body);
     const token = generateToken();
-    const result = await pool.query<AgentRow>(
-      `INSERT INTO monitoring_agents (name, token_hash, labels, heartbeat_timeout_seconds)
-       VALUES ($1, $2, $3::jsonb, $4)
-       RETURNING *`,
-      [input.name, hashToken(token), JSON.stringify(input.labels ?? {}), input.heartbeatTimeoutSeconds ?? 90]
-    );
-    reply.code(201);
-    return { agent: agentDto(result.rows[0]!), token };
+    try {
+      const result = await pool.query<AgentRow>(
+        `INSERT INTO monitoring_agents (name, token_hash, labels, heartbeat_timeout_seconds)
+         VALUES ($1, $2, $3::jsonb, $4)
+         RETURNING *`,
+        [input.name, hashToken(token), JSON.stringify(input.labels ?? {}), input.heartbeatTimeoutSeconds ?? 90]
+      );
+      reply.code(201);
+      return { agent: agentDto(result.rows[0]!), token };
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505") return reply.code(409).send({ error: `Monitoring Agent '${input.name}' already exists` });
+      throw error;
+    }
   });
 
   app.patch("/api/v1/monitoring/agents/:id", async (request, reply) => {
