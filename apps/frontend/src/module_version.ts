@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.69.1";
+export const MODULE_VERSION = "1.70.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.70.0": {
+    releasedAt: "2026-09-22T20:30:00+02:00",
+    patch: "PR-236-agent-lifecycle-token-ownership-v1.patch",
+    changes: [
+      { type: "changed", description: "Device, Monitoring and Supervisor update lifecycle badges take precedence over version freshness while an update is active" },
+      { type: "changed", description: "Completed updates show UP TO DATE with the last successful update age instead of a redundant permanent UPDATED badge" },
+      { type: "added", description: "Check token actions compare SensorSphere and deployed token fingerprints without revealing raw tokens" },
+      { type: "changed", description: "Unconfigured Proxmox capability is shown as a disabled icon with an explanatory tooltip" }
+    ]
+  },
   "1.69.1": {
     releasedAt: "2026-09-22T19:15:00+02:00",
     patch: "PR-235-explicit-supervisor-agent-associations-v1.1-frontend-fix.patch",

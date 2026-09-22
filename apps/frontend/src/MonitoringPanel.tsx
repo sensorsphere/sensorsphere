@@ -35,10 +35,12 @@ import {
   getMonitoringAgents,
   getMonitoringChecks,
   regenerateMonitoringAgentToken,
+  checkMonitoringAgentToken,
   updateMonitoringAgent,
   updateMonitoringCheck
 } from "./api";
 import type {
+  AgentTokenCheckResult,
   CreateMonitoringCheckInput,
   MonitoringAgent,
   MonitoringCheck,
@@ -65,6 +67,10 @@ const STATUS_COLORS: Record<string, string> = {
   DOWN: "red",
   UNKNOWN: "gray"
 };
+
+function CheckTokenIcon({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-2.9 8.1-7 10-4.1-1.9-7-5.4-7-10V6l7-3z" stroke="currentColor" strokeWidth="1.8"/><path d="m8.5 12 2.2 2.2 4.8-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+}
 
 function relativeAge(value: string | null): string {
   if (!value) return "Never";
@@ -98,10 +104,10 @@ async function getMonitoringSupervisors(): Promise<MonitoringSupervisorAgent[]> 
   return response.json();
 }
 
-async function requestMonitoringAgentUpdate(supervisorId: string, instance: string, version: string): Promise<MonitoringManagedOperation> {
+async function requestMonitoringAgentUpdate(supervisorId: string, agentId: string, instance: string, version: string): Promise<MonitoringManagedOperation> {
   const response = await fetch(`/api/v1/device-control/supervisors/${supervisorId}/managed-agents`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ operation: "UPDATE", agentType: "monitor-agent", instance, version })
+    body: JSON.stringify({ operation: "UPDATE", agentType: "monitor-agent", agentId, instance, version })
   });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.error ?? `Unable to request Monitoring Agent update (${response.status})`);
@@ -337,7 +343,7 @@ export function MonitoringPanel({
   const [agentUpdateSupervisorId, setAgentUpdateSupervisorId] = React.useState<string | null>(null);
   const [agentUpdateInstance, setAgentUpdateInstance] = React.useState<string | null>(null);
   const [agentUpdateVersion, setAgentUpdateVersion] = React.useState("");
-  const [agentUpdateStatus, setAgentUpdateStatus] = React.useState<"IDLE" | "UPDATING" | "UPDATED" | "FAILED">("IDLE");
+  const [agentUpdateStatus, setAgentUpdateStatus] = React.useState<"IDLE" | "UPDATING" | "VERIFYING" | "UPDATED" | "FAILED">("IDLE");
   const [agentUpdateError, setAgentUpdateError] = React.useState<string | null>(null);
 
   const [agentModalOpen, setAgentModalOpen] = React.useState(false);
@@ -345,6 +351,7 @@ export function MonitoringPanel({
   const [agentForm, setAgentForm] = React.useState<AgentFormState>(emptyAgentForm());
   const [agentDeleteTarget, setAgentDeleteTarget] = React.useState<MonitoringAgent | null>(null);
   const [tokenInfo, setTokenInfo] = React.useState<{ agentName: string; token: string } | null>(null);
+  const [tokenCheckResult, setTokenCheckResult] = React.useState<{ name: string; result: AgentTokenCheckResult } | null>(null);
 
   const [checkModalOpen, setCheckModalOpen] = React.useState(false);
   const [editingCheck, setEditingCheck] = React.useState<MonitoringCheck | null>(null);
@@ -397,22 +404,23 @@ export function MonitoringPanel({
   };
 
   const monitoringAgentUpdateMutation = useMutation({
-    mutationFn: async ({ supervisorId, instance, version }: { supervisorId: string; instance: string; version: string }) => {
+    mutationFn: async ({ supervisorId, agentId, instance, version }: { supervisorId: string; agentId: string; instance: string; version: string }) => {
       setAgentUpdateStatus("UPDATING");
       setAgentUpdateError(null);
-      const requested = await requestMonitoringAgentUpdate(supervisorId, instance, version);
+      const requested = await requestMonitoringAgentUpdate(supervisorId, agentId, instance, version);
       const completed = await waitMonitoringAgentUpdate(requested.commandId);
       if (completed.status !== "SUCCESS") throw new Error(completed.error ?? `Monitoring Agent update ${completed.status.toLowerCase()}`);
       return completed;
     },
-    onSuccess: async () => { setAgentUpdateStatus("UPDATED"); await Promise.all([queryClient.invalidateQueries({ queryKey: ["monitoring", "agents"] }), queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] })]); },
+    onSuccess: async () => { setAgentUpdateStatus("VERIFYING"); await Promise.all([queryClient.invalidateQueries({ queryKey: ["monitoring", "agents"] }), queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] })]); },
     onError: error => { setAgentUpdateStatus("FAILED"); setAgentUpdateError(error instanceof Error ? error.message : "Unable to update Monitoring Agent"); }
   });
 
   const openMonitoringAgentUpdate = (agent: MonitoringAgent) => {
     const supervisors = (supervisorsQuery.data ?? []).filter(item => item.online && item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.installed !== false));
+    const explicitMatch = supervisors.find(item => item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.sensor_sphere_agent_id === agent.id));
     const hostnameMatch = supervisors.find(item => agent.hostname && item.hostname === agent.hostname);
-    const selected = hostnameMatch ?? (supervisors.length === 1 ? supervisors[0] : undefined);
+    const selected = explicitMatch ?? hostnameMatch ?? (supervisors.length === 1 ? supervisors[0] : undefined);
     const instances = selected?.managedAgents.filter(entry => entry.agent_type === "monitor-agent" && entry.installed !== false).map(entry => typeof entry.instance === "string" ? entry.instance : "main") ?? [];
     setAgentUpdateTarget(agent);
     setAgentUpdateSupervisorId(selected?.id ?? null);
@@ -459,6 +467,11 @@ export function MonitoringPanel({
     mutationFn: regenerateMonitoringAgentToken,
     onSuccess: result => setTokenInfo({ agentName: result.agent.name, token: result.token }),
     onError: cause => setError(cause instanceof Error ? cause.message : "Unable to regenerate token")
+  });
+  const checkToken = useMutation({
+    mutationFn: (agent: MonitoringAgent) => checkMonitoringAgentToken(agent.id),
+    onSuccess: (result, agent) => setTokenCheckResult({ name: agent.name, result }),
+    onError: cause => setError(cause instanceof Error ? cause.message : "Unable to check token")
   });
 
   const saveCheck = useMutation({
@@ -739,12 +752,12 @@ export function MonitoringPanel({
                           <Table.Td><Text fw={600} size="sm">{agent.name}</Text></Table.Td>
                           <Table.Td><Badge size="sm" variant="light" color={agent.online ? "green" : agent.enabled ? "gray" : "red"}>{agent.online ? "ONLINE" : agent.enabled ? "OFFLINE" : "DISABLED"}</Badge></Table.Td>
                           <Table.Td><Text size="sm">{agent.hostname ?? "—"}</Text>{agent.lastIp && <Text size="xs" c="dimmed">{agent.lastIp}</Text>}</Table.Td>
-                          <Table.Td><Text size="sm">{agent.version ?? "—"}</Text><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.monitorAgent} /></Table.Td>
+                          <Table.Td><Text size="sm">{agent.version ?? "—"}</Text>{["UPDATE_REQUESTED", "REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? <><Badge size="xs" variant="light" color="blue">{agent.updateStatus}</Badge>{agent.desiredVersion && <Text size="xs" c="dimmed">Target {agent.desiredVersion}</Text>}</> : <><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.monitorAgent} />{agent.updateStatus === "FAILED" && <Tooltip label={agent.updateError ?? "Monitoring Agent update failed"}><Badge size="xs" variant="light" color="red">FAILED</Badge></Tooltip>}{agent.lastSuccessfulUpdateAt && <Text size="xs" c="dimmed" title={agent.lastSuccessfulUpdateAt}>Updated {relativeAge(agent.lastSuccessfulUpdateAt)}</Text>}</>}</Table.Td>
                           <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td>
                           <Table.Td title={agent.lastSeenAt ?? undefined}>{relativeAge(agent.lastSeenAt)}</Table.Td>
                           <Table.Td>{(() => { const count = checks.filter(check => check.assignments.some(item => item.agentId === agent.id)).length; return <Text size="sm" fw={700} c={count > 0 ? "green.6" : "dimmed"}>{count}</Text>; })()}</Table.Td>
                           <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
-                          <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><Tooltip label={(supervisorsQuery.data ?? []).some(item => item.online && item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.installed !== false)) ? "Update Monitoring Agent" : "No online Supervisor manages a Monitoring Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Monitoring Agent" disabled={!(supervisorsQuery.data ?? []).some(item => item.online && item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.installed !== false))} onClick={() => openMonitoringAgentUpdate(agent)}><AgentUpdateIcon /></ActionIcon></Tooltip><EditActionIcon onClick={() => openEditAgent(agent)} /><Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} /></Group></Table.Td>
+                          <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><Tooltip label={(supervisorsQuery.data ?? []).some(item => item.online && item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.installed !== false)) ? "Update Monitoring Agent" : "No online Supervisor manages a Monitoring Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Monitoring Agent" disabled={!(supervisorsQuery.data ?? []).some(item => item.online && item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.installed !== false))} onClick={() => openMonitoringAgentUpdate(agent)}><AgentUpdateIcon /></ActionIcon></Tooltip><EditActionIcon onClick={() => openEditAgent(agent)} /><Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check deployed token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check deployed token" onClick={() => checkToken.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} /></Group></Table.Td>
                         </Table.Tr>
                       ))}
                       {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={9}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
@@ -761,9 +774,9 @@ export function MonitoringPanel({
           <Select label="Supervisor Agent" searchable data={(supervisorsQuery.data ?? []).filter(item => item.online && item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.installed !== false)).map(item => ({ value: item.id, label: item.name }))} value={agentUpdateSupervisorId} onChange={value => { setAgentUpdateSupervisorId(value); const supervisor = (supervisorsQuery.data ?? []).find(item => item.id === value); const instances = supervisor?.managedAgents.filter(entry => entry.agent_type === "monitor-agent" && entry.installed !== false).map(entry => typeof entry.instance === "string" ? entry.instance : "main") ?? []; setAgentUpdateInstance(instances.length === 1 ? instances[0]! : null); }} disabled={monitoringAgentUpdateMutation.isPending || agentUpdateStatus === "UPDATED"} />
           <Select label="Managed instance" data={((supervisorsQuery.data ?? []).find(item => item.id === agentUpdateSupervisorId)?.managedAgents ?? []).filter(entry => entry.agent_type === "monitor-agent" && entry.installed !== false).map(entry => { const instance = typeof entry.instance === "string" ? entry.instance : "main"; const version = typeof entry.configured_version === "string" ? entry.configured_version : "—"; return { value: instance, label: `${instance} · ${version}` }; })} value={agentUpdateInstance} onChange={setAgentUpdateInstance} disabled={monitoringAgentUpdateMutation.isPending || agentUpdateStatus === "UPDATED"} />
           <TextInput label="Target version" value={agentUpdateVersion} onChange={event => setAgentUpdateVersion(event.currentTarget.value)} disabled={monitoringAgentUpdateMutation.isPending || agentUpdateStatus === "UPDATED"} />
-          <Card withBorder p="sm"><Group justify="space-between"><Text size="xs" c="dimmed">Status</Text><Badge size="sm" variant="light" color={agentUpdateStatus === "UPDATED" ? "green" : agentUpdateStatus === "FAILED" ? "red" : agentUpdateStatus === "UPDATING" ? "blue" : "teal"}>{agentUpdateStatus === "IDLE" ? "READY" : agentUpdateStatus}</Badge></Group></Card>
+          <Card withBorder p="sm"><Group justify="space-between"><Text size="xs" c="dimmed">Status</Text><Badge size="sm" variant="light" color={agentUpdateStatus === "UPDATED" ? "green" : agentUpdateStatus === "FAILED" ? "red" : ["UPDATING", "VERIFYING"].includes(agentUpdateStatus) ? "blue" : "teal"}>{agentUpdateStatus === "IDLE" ? "READY" : agentUpdateStatus}</Badge></Group></Card>
           {agentUpdateError && <Text size="sm" c="red">{agentUpdateError}</Text>}
-          <Group justify="flex-end"><Button variant="default" disabled={monitoringAgentUpdateMutation.isPending} onClick={() => { setAgentUpdateTarget(null); setAgentUpdateStatus("IDLE"); setAgentUpdateError(null); }}>{agentUpdateStatus === "UPDATED" ? "Close" : "Cancel"}</Button>{agentUpdateStatus !== "UPDATED" && <Button color="teal" loading={monitoringAgentUpdateMutation.isPending} disabled={!agentUpdateSupervisorId || !agentUpdateInstance || !/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(agentUpdateVersion.trim())} onClick={() => agentUpdateSupervisorId && agentUpdateInstance && monitoringAgentUpdateMutation.mutate({ supervisorId: agentUpdateSupervisorId, instance: agentUpdateInstance, version: agentUpdateVersion.trim() })}>Update</Button>}</Group>
+          <Group justify="flex-end"><Button variant="default" disabled={monitoringAgentUpdateMutation.isPending} onClick={() => { setAgentUpdateTarget(null); setAgentUpdateStatus("IDLE"); setAgentUpdateError(null); }}>{agentUpdateStatus === "UPDATED" ? "Close" : "Cancel"}</Button>{agentUpdateStatus !== "UPDATED" && <Button color="teal" loading={monitoringAgentUpdateMutation.isPending} disabled={!agentUpdateSupervisorId || !agentUpdateInstance || !/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(agentUpdateVersion.trim())} onClick={() => agentUpdateTarget && agentUpdateSupervisorId && agentUpdateInstance && monitoringAgentUpdateMutation.mutate({ supervisorId: agentUpdateSupervisorId, agentId: agentUpdateTarget.id, instance: agentUpdateInstance, version: agentUpdateVersion.trim() })}>Update</Button>}</Group>
         </Stack>
       </Modal>
 
@@ -782,6 +795,17 @@ export function MonitoringPanel({
           {copyNotice}
         </Notification>
       )}
+
+      <Modal opened={tokenCheckResult !== null} onClose={() => setTokenCheckResult(null)} title="Check Monitoring Agent token" centered>
+        <Stack>
+          <Text size="sm"><strong>{tokenCheckResult?.name}</strong></Text>
+          <Badge color={tokenCheckResult?.result.matches ? "green" : "red"} variant="light">{tokenCheckResult?.result.matches ? "TOKEN MATCH" : "TOKEN MISMATCH"}</Badge>
+          <Text size="sm">SensorSphere fingerprint: <Code>{tokenCheckResult?.result.expectedFingerprint ?? "—"}</Code></Text>
+          <Text size="sm">Deployed fingerprint: <Code>{tokenCheckResult?.result.deployedFingerprint ?? "—"}</Code></Text>
+          {tokenCheckResult?.result.installDir && <Text size="xs" c="dimmed">Install directory: {tokenCheckResult.result.installDir}</Text>}
+          <Group justify="flex-end"><Button onClick={() => setTokenCheckResult(null)}>Close</Button></Group>
+        </Stack>
+      </Modal>
 
       <Modal opened={tokenInfo !== null} onClose={() => setTokenInfo(null)} title="Monitoring agent token" size="lg">
         <Stack>

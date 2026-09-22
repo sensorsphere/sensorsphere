@@ -70,7 +70,7 @@ import type {
   CreateMonitoringCheckInput,
   UpdateMonitoringCheckInput,
   DeviceAgent,
-  DeviceAgentTokenResponse, ManagedAgentOperation, ManagedAgentOperationInput,
+  DeviceAgentTokenResponse, ManagedAgentOperation, ManagedAgentOperationInput, AgentTokenCheckResult,
   CreateDeviceAgentInput,
   UpdateDeviceAgentInput,
   DeviceControlCommand,
@@ -1758,6 +1758,26 @@ export async function runManagedAgentOperation(id: string, input: ManagedAgentOp
   if (operation.status === "SENT") throw new Error("Managed Agent operation did not finish before the client timeout");
   if (operation.status !== "SUCCESS") throw new Error(operation.error ?? `Managed Agent operation ${operation.status.toLowerCase()}`);
   return operation;
+}
+
+async function waitSupervisorTokenCheck(startUrl: string): Promise<AgentTokenCheckResult> {
+  let operation = await readJson<ManagedAgentOperation>(await fetch(startUrl, { method: "POST" }));
+  const deadline = Date.now() + 35_000;
+  while (operation.status === "SENT" && Date.now() < deadline) {
+    await new Promise(resolve => window.setTimeout(resolve, 400));
+    operation = await readJson<ManagedAgentOperation>(await fetch(`/api/v1/device-control/supervisor-managed-agents/${operation.commandId}`));
+  }
+  if (operation.status === "SENT") throw new Error("Token check did not finish before the client timeout");
+  if (operation.status !== "SUCCESS") throw new Error(operation.error ?? `Token check ${operation.status.toLowerCase()}`);
+  return (operation.result ?? {}) as AgentTokenCheckResult;
+}
+
+export async function checkDeviceAgentToken(id: string): Promise<AgentTokenCheckResult> {
+  return waitSupervisorTokenCheck(`/api/v1/device-control/agents/${id}/check-token`);
+}
+
+export async function checkMonitoringAgentToken(id: string): Promise<AgentTokenCheckResult> {
+  return waitSupervisorTokenCheck(`/api/v1/device-control/monitoring-agents/${id}/check-token`);
 }
 
 export async function deleteDeviceAgent(id: string): Promise<void> {

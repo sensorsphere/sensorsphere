@@ -62,7 +62,7 @@ const supervisorUpdateRequestSchema = z.object({
 }).strict();
 
 const managedAgentRequestSchema = z.object({
-  operation: z.enum(["LIST", "DEPLOY", "UPDATE", "REMOVE"]),
+  operation: z.enum(["LIST", "DEPLOY", "UPDATE", "REMOVE", "CHECK_TOKEN"]),
   agentType: z.enum(["device-agent", "monitor-agent"]).optional(),
   instance: z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/).optional(),
   version: z.string().trim().min(1).max(100).regex(/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/).optional(),
@@ -216,6 +216,8 @@ interface AgentRow {
   update_started_at: Date | null;
   update_finished_at: Date | null;
   update_error: string | null;
+  last_successful_update_at: Date | null;
+  last_successful_update_version: string | null;
   last_seen_at: Date | null;
   heartbeat_timeout_seconds: number;
   created_at: Date;
@@ -232,6 +234,11 @@ interface DeviceControlRow {
 
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function tokenFingerprint(tokenHash: string | null | undefined): string | null {
+  if (!tokenHash || tokenHash.length < 8) return null;
+  return `${tokenHash.slice(0, 4).toUpperCase()}-${tokenHash.slice(4, 8).toUpperCase()}`;
 }
 
 function generateToken(): string {
@@ -352,6 +359,8 @@ function agentDto(row: AgentRow, connected: boolean) {
     updateStartedAt: row.update_started_at?.toISOString() ?? null,
     updateFinishedAt: row.update_finished_at?.toISOString() ?? null,
     updateError: row.update_error,
+    lastSuccessfulUpdateAt: row.last_successful_update_at?.toISOString() ?? null,
+    lastSuccessfulUpdateVersion: row.last_successful_update_version,
     lastSeenAt: row.last_seen_at?.toISOString() ?? null,
     heartbeatTimeoutSeconds: row.heartbeat_timeout_seconds,
     online: row.enabled && connected && recent,
@@ -462,7 +471,7 @@ const supervisorHeartbeatSchema = z.object({
 const supervisorCommandResultSchema = z.object({
   type: z.literal("SUPERVISOR_COMMAND_RESULT"),
   commandId: z.string().trim().min(1).max(200),
-  operation: z.enum(["LIST", "DEPLOY", "UPDATE", "REMOVE", "UPDATE_SELF"]),
+  operation: z.enum(["LIST", "DEPLOY", "UPDATE", "REMOVE", "CHECK_TOKEN", "UPDATE_SELF"]),
   status: z.enum(["SUCCESS", "FAILED"]),
   result: z.unknown().optional(),
   error: z.string().max(2000).optional()
@@ -490,7 +499,7 @@ interface SupervisorAgentRow {
   id: string; name: string; enabled: boolean; reported_name: string | null; version: string | null; hostname: string | null;
   os_name: string | null; os_version: string | null; architecture: string | null; managed_agents: Array<Record<string, unknown>>;
   configured_version: string | null; container_state: string | null; self_update_supported: boolean; update_status: string;
-  update_error: string | null; last_seen_at: Date | null; heartbeat_timeout_seconds: number; created_at: Date; updated_at: Date;
+  update_error: string | null; last_successful_update_at: Date | null; last_successful_update_version: string | null; last_seen_at: Date | null; heartbeat_timeout_seconds: number; created_at: Date; updated_at: Date;
 }
 
 
@@ -541,7 +550,7 @@ function supervisorAgentDto(row: SupervisorAgentRow, connected: boolean) {
     id: row.id, name: row.name, enabled: row.enabled, reportedName: row.reported_name, version: row.version, hostname: row.hostname,
     os: row.os_name, osVersion: row.os_version, architecture: row.architecture, managedAgents: row.managed_agents ?? [],
     configuredVersion: row.configured_version, containerState: row.container_state, selfUpdateSupported: row.self_update_supported ?? false,
-    updateStatus: row.update_status ?? "IDLE", updateError: row.update_error, lastSeenAt: row.last_seen_at?.toISOString() ?? null,
+    updateStatus: row.update_status ?? "IDLE", updateError: row.update_error, lastSuccessfulUpdateAt: row.last_successful_update_at?.toISOString() ?? null, lastSuccessfulUpdateVersion: row.last_successful_update_version, lastSeenAt: row.last_seen_at?.toISOString() ?? null,
     heartbeatTimeoutSeconds: row.heartbeat_timeout_seconds, online: row.enabled && connected && recent,
     createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString()
   };
@@ -628,7 +637,7 @@ export async function registerDeviceControlFeature(
   interface ManagedAgentOperationRecord {
     id: string;
     agentId: string;
-    operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE";
+    operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE" | "CHECK_TOKEN";
     status: ManagedAgentOperationStatus;
     result: unknown;
     error: string | null;
@@ -641,7 +650,7 @@ export async function registerDeviceControlFeature(
   interface SupervisorManagedAgentOperationRecord {
     id: string;
     supervisorId: string;
-    operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE";
+    operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE" | "CHECK_TOKEN";
     status: ManagedAgentOperationStatus;
     result: unknown;
     error: string | null;
@@ -649,7 +658,10 @@ export async function registerDeviceControlFeature(
     expiresAt: Date;
     finishedAt: Date | null;
     deviceAgentId?: string;
+    monitoringAgentId?: string;
     assignmentId?: string;
+    expectedTokenHash?: string;
+    targetVersion?: string;
   }
   const supervisorManagedAgentOperations = new Map<string, SupervisorManagedAgentOperationRecord>();
 
@@ -971,6 +983,14 @@ export async function registerDeviceControlFeature(
                 WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NULL
                 ELSE update_error
               END,
+              last_successful_update_at=CASE
+                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NOW()
+                ELSE last_successful_update_at
+              END,
+              last_successful_update_version=CASE
+                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN $3
+                ELSE last_successful_update_version
+              END,
               last_seen_at=NOW(), updated_at=NOW()
             WHERE id=$1
           `, [agent.id, message.agentName ?? null, message.version ?? null, message.hostname ?? null, JSON.stringify(labels), JSON.stringify(message.capabilities ?? []),
@@ -1002,9 +1022,11 @@ export async function registerDeviceControlFeature(
               update_error=CASE WHEN $3='FAILED' THEN COALESCE($4,'Device Agent update failed') ELSE NULL END,
               desired_version=CASE WHEN $3='UPDATED' THEN NULL ELSE desired_version END,
               previous_version=COALESCE(previous_version,$5),
+              last_successful_update_at=CASE WHEN $3='UPDATED' THEN NOW() ELSE last_successful_update_at END,
+              last_successful_update_version=CASE WHEN $3='UPDATED' THEN COALESCE($6,version,last_successful_update_version) ELSE last_successful_update_version END,
               updated_at=NOW()
             WHERE id=$1 AND update_command_id=$2
-          `, [agent.id, message.commandId, nextStatus, message.error ?? null, message.currentVersion ?? null]);
+          `, [agent.id, message.commandId, nextStatus, message.error ?? null, message.currentVersion ?? null, message.targetVersion ?? null]);
           return;
         }
 
@@ -1195,8 +1217,32 @@ export async function registerDeviceControlFeature(
               operation.error = `Supervisor managed-agent operation mismatch: expected ${operation.operation}, received ${message.operation}`;
             } else {
               operation.status = message.status;
-              operation.result = message.result ?? null;
               operation.error = message.error ?? null;
+              if (message.operation === "CHECK_TOKEN" && message.status === "SUCCESS") {
+                const resultObject = message.result && typeof message.result === "object" ? message.result as Record<string, unknown> : {};
+                const deployedHash = typeof resultObject.token_hash === "string" ? resultObject.token_hash : null;
+                operation.result = {
+                  matches: Boolean(deployedHash && operation.expectedTokenHash && deployedHash === operation.expectedTokenHash),
+                  expectedFingerprint: tokenFingerprint(operation.expectedTokenHash),
+                  deployedFingerprint: tokenFingerprint(deployedHash),
+                  agentType: typeof resultObject.agent_type === "string" ? resultObject.agent_type : null,
+                  instance: typeof resultObject.instance === "string" ? resultObject.instance : null,
+                  installDir: typeof resultObject.install_dir === "string" ? resultObject.install_dir : null
+                };
+              } else if (message.operation === "DEPLOY" && message.status === "SUCCESS" && operation.expectedTokenHash) {
+                const resultObject = message.result && typeof message.result === "object" ? { ...(message.result as Record<string, unknown>) } : {};
+                const deployedHash = typeof resultObject.token_hash === "string" ? resultObject.token_hash : null;
+                delete resultObject.token_hash;
+                resultObject.tokenFingerprint = tokenFingerprint(deployedHash);
+                if (!deployedHash || deployedHash !== operation.expectedTokenHash) {
+                  operation.status = "FAILED";
+                  operation.error = "Supervisor deployed an agent token that does not match the SensorSphere identity";
+                  resultObject.expectedTokenFingerprint = tokenFingerprint(operation.expectedTokenHash);
+                }
+                operation.result = resultObject;
+              } else {
+                operation.result = message.result ?? null;
+              }
             }
             operation.finishedAt = new Date();
             if (operation.assignmentId) {
@@ -1217,7 +1263,16 @@ export async function registerDeviceControlFeature(
                 update_finished_at=CASE WHEN $2='FAILED' THEN NOW() ELSE update_finished_at END,
                 update_error=CASE WHEN $2='FAILED' THEN COALESCE($3,'Supervisor-managed Device Agent update failed') ELSE NULL END,
                 updated_at=NOW()
-                WHERE id=$1`, [operation.deviceAgentId, deviceStatus, operation.error]);
+                WHERE id=$1`, [operation.deviceAgentId, deviceStatus, operation.error, operation.targetVersion ?? null]);
+            }
+            if (operation.monitoringAgentId && operation.operation === "UPDATE") {
+              const monitoringStatus = operation.status === "SUCCESS" ? "VERIFYING" : "FAILED";
+              await pool.query(`UPDATE monitoring_agents SET
+                update_status=$2,
+                update_error=CASE WHEN $2='FAILED' THEN COALESCE($3,'Supervisor-managed Monitoring Agent update failed') ELSE NULL END,
+                update_finished_at=CASE WHEN $2='FAILED' THEN NOW() ELSE update_finished_at END,
+                updated_at=NOW()
+                WHERE id=$1`, [operation.monitoringAgentId, monitoringStatus, operation.error]);
             }
             await pool.query("UPDATE supervisor_agents SET last_seen_at=NOW(),updated_at=NOW() WHERE id=$1", [supervisor.id]);
             return;
@@ -1249,6 +1304,12 @@ export async function registerDeviceControlFeature(
             [supervisor.id,message.supervisorName ?? null,message.version ?? null,message.hostname ?? null,message.systemInfo?.os ?? null,
              message.systemInfo?.osVersion ?? null,message.systemInfo?.architecture ?? null,JSON.stringify(message.managedAgents ?? []),
              self.configuredVersion,self.containerState,message.selfUpdateSupported ?? true,self.updateStatus,self.updateError]);
+          if (self.updateStatus === "UPDATED") {
+            await pool.query(`UPDATE supervisor_agents SET
+              last_successful_update_at=CASE WHEN last_successful_update_version IS DISTINCT FROM version OR last_successful_update_at IS NULL THEN NOW() ELSE last_successful_update_at END,
+              last_successful_update_version=version
+              WHERE id=$1 AND configured_version IS NOT NULL AND version=configured_version`, [supervisor.id]);
+          }
           await reconcileSupervisorReportedAgents(supervisor.id, message.managedAgents ?? []);
           const assignments = await loadSupervisorAssignments(supervisor.id);
           socket.send(JSON.stringify({
@@ -1275,6 +1336,12 @@ export async function registerDeviceControlFeature(
           update_error=CASE WHEN COALESCE($5,'')='FAILED' THEN $6 WHEN COALESCE($5,'') IN ('UPDATED','ROLLED_BACK') THEN NULL ELSE update_error END,
           last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
           [supervisor.id,JSON.stringify(message.managedAgents ?? []),self.configuredVersion,self.containerState,self.updateStatus,self.updateError]);
+        if (self.updateStatus === "UPDATED") {
+          await pool.query(`UPDATE supervisor_agents SET
+            last_successful_update_at=CASE WHEN last_successful_update_version IS DISTINCT FROM version OR last_successful_update_at IS NULL THEN NOW() ELSE last_successful_update_at END,
+            last_successful_update_version=version
+            WHERE id=$1 AND configured_version IS NOT NULL AND version=configured_version`, [supervisor.id]);
+        }
         await reconcileSupervisorReportedAgents(supervisor.id, message.managedAgents ?? []);
         socket.send(JSON.stringify({ type: "HEARTBEAT_ACK", serverTime: new Date().toISOString() }));
       })().catch(error => app.log.error({ err: error, supervisorId: supervisor.id }, "Supervisor Agent WebSocket message failed"));
@@ -1455,7 +1522,30 @@ export async function registerDeviceControlFeature(
 
     const commandId = randomUUID();
     const expiresAt = new Date(Date.now() + 3 * 60 * 1000);
-    const record: SupervisorManagedAgentOperationRecord = { id: commandId, supervisorId: supervisor.id, operation: parsed.data.operation, status: "SENT", result: null, error: null, createdAt: new Date(), expiresAt, finishedAt: null, assignmentId: assignment?.id };
+    let expectedTokenHash: string | undefined;
+    let deviceAgentId: string | undefined;
+    let monitoringAgentId: string | undefined;
+    if (parsed.data.agentId && parsed.data.agentType === "device-agent") {
+      const tokenRow = await pool.query<{ token_hash: string }>("SELECT token_hash FROM device_agents WHERE id=$1", [parsed.data.agentId]);
+      expectedTokenHash = tokenRow.rows[0]?.token_hash;
+      deviceAgentId = parsed.data.agentId;
+    } else if (parsed.data.agentId && parsed.data.agentType === "monitor-agent") {
+      const tokenRow = await pool.query<{ token_hash: string }>("SELECT token_hash FROM monitoring_agents WHERE id=$1", [parsed.data.agentId]);
+      expectedTokenHash = tokenRow.rows[0]?.token_hash;
+      monitoringAgentId = parsed.data.agentId;
+    }
+    if (parsed.data.operation === "UPDATE" && monitoringAgentId) {
+      await pool.query(`UPDATE monitoring_agents SET
+        desired_version=$2,update_status='UPDATE_REQUESTED',update_error=NULL,
+        update_started_at=NOW(),update_finished_at=NULL,updated_at=NOW()
+        WHERE id=$1`, [monitoringAgentId, parsed.data.version ?? null]);
+    }
+
+    const record: SupervisorManagedAgentOperationRecord = {
+      id: commandId, supervisorId: supervisor.id, operation: parsed.data.operation, status: "SENT", result: null, error: null,
+      createdAt: new Date(), expiresAt, finishedAt: null, assignmentId: assignment?.id, expectedTokenHash,
+      deviceAgentId, monitoringAgentId, targetVersion: parsed.data.version
+    };
     supervisorManagedAgentOperations.set(commandId, record);
     socket.send(JSON.stringify({
       type: "SUPERVISOR_COMMAND",
@@ -1469,6 +1559,71 @@ export async function registerDeviceControlFeature(
       agentId: parsed.data.agentId,
       installDir: parsed.data.installDir ?? assignment?.install_dir ?? undefined
     }));
+    return reply.code(202).send(supervisorManagedAgentOperationDto(record));
+  });
+
+  app.post("/api/v1/device-control/supervisors/:id/check-token", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    expireManagedAgentOperations();
+    const result = await pool.query<SupervisorAgentRow>("SELECT * FROM supervisor_agents WHERE id=$1", [request.params.id]);
+    const supervisor = result.rows[0];
+    if (!supervisor) return reply.code(404).send({ error: "Supervisor Agent not found" });
+    const socket = supervisorSockets.get(supervisor.id);
+    if (!socket || socket.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Supervisor Agent is offline" });
+    const commandId = randomUUID();
+    const expiresAt = new Date(Date.now() + 30_000);
+    const tokenRow = await pool.query<{ token_hash: string }>("SELECT token_hash FROM supervisor_agents WHERE id=$1", [supervisor.id]);
+    const record: SupervisorManagedAgentOperationRecord = {
+      id: commandId, supervisorId: supervisor.id, operation: "CHECK_TOKEN", status: "SENT", result: null, error: null,
+      createdAt: new Date(), expiresAt, finishedAt: null, expectedTokenHash: tokenRow.rows[0]?.token_hash
+    };
+    supervisorManagedAgentOperations.set(commandId, record);
+    socket.send(JSON.stringify({ type: "SUPERVISOR_COMMAND", commandId, operation: "CHECK_TOKEN" }));
+    return reply.code(202).send(supervisorManagedAgentOperationDto(record));
+  });
+
+  app.post("/api/v1/device-control/agents/:id/check-token", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    expireManagedAgentOperations();
+    const assignmentResult = await pool.query<SupervisorManagedAssignmentRow>(
+      "SELECT * FROM supervisor_managed_agents WHERE device_agent_id=$1 ORDER BY updated_at DESC LIMIT 1", [request.params.id]
+    );
+    const assignment = assignmentResult.rows[0];
+    if (!assignment) return reply.code(409).send({ error: "Device Agent is not explicitly associated with a Supervisor" });
+    const socket = supervisorSockets.get(assignment.supervisor_agent_id);
+    if (!socket || socket.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Associated Supervisor Agent is offline" });
+    const tokenRow = await pool.query<{ token_hash: string }>("SELECT token_hash FROM device_agents WHERE id=$1", [request.params.id]);
+    if (!tokenRow.rows[0]) return reply.code(404).send({ error: "Device Agent not found" });
+    const commandId = randomUUID();
+    const expiresAt = new Date(Date.now() + 30_000);
+    const record: SupervisorManagedAgentOperationRecord = {
+      id: commandId, supervisorId: assignment.supervisor_agent_id, operation: "CHECK_TOKEN", status: "SENT", result: null, error: null,
+      createdAt: new Date(), expiresAt, finishedAt: null, assignmentId: assignment.id, expectedTokenHash: tokenRow.rows[0].token_hash,
+      deviceAgentId: request.params.id
+    };
+    supervisorManagedAgentOperations.set(commandId, record);
+    socket.send(JSON.stringify({ type: "SUPERVISOR_COMMAND", commandId, operation: "CHECK_TOKEN", agentType: "device-agent", instance: assignment.instance }));
+    return reply.code(202).send(supervisorManagedAgentOperationDto(record));
+  });
+
+  app.post("/api/v1/device-control/monitoring-agents/:id/check-token", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    expireManagedAgentOperations();
+    const assignmentResult = await pool.query<SupervisorManagedAssignmentRow>(
+      "SELECT * FROM supervisor_managed_agents WHERE monitoring_agent_id=$1 ORDER BY updated_at DESC LIMIT 1", [request.params.id]
+    );
+    const assignment = assignmentResult.rows[0];
+    if (!assignment) return reply.code(409).send({ error: "Monitoring Agent is not explicitly associated with a Supervisor" });
+    const socket = supervisorSockets.get(assignment.supervisor_agent_id);
+    if (!socket || socket.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Associated Supervisor Agent is offline" });
+    const tokenRow = await pool.query<{ token_hash: string }>("SELECT token_hash FROM monitoring_agents WHERE id=$1", [request.params.id]);
+    if (!tokenRow.rows[0]) return reply.code(404).send({ error: "Monitoring Agent not found" });
+    const commandId = randomUUID();
+    const expiresAt = new Date(Date.now() + 30_000);
+    const record: SupervisorManagedAgentOperationRecord = {
+      id: commandId, supervisorId: assignment.supervisor_agent_id, operation: "CHECK_TOKEN", status: "SENT", result: null, error: null,
+      createdAt: new Date(), expiresAt, finishedAt: null, assignmentId: assignment.id, expectedTokenHash: tokenRow.rows[0].token_hash,
+      monitoringAgentId: request.params.id
+    };
+    supervisorManagedAgentOperations.set(commandId, record);
+    socket.send(JSON.stringify({ type: "SUPERVISOR_COMMAND", commandId, operation: "CHECK_TOKEN", agentType: "monitor-agent", instance: assignment.instance }));
     return reply.code(202).send(supervisorManagedAgentOperationDto(record));
   });
 
@@ -1598,6 +1753,31 @@ export async function registerDeviceControlFeature(
       WHERE id=$1 RETURNING *
     `, [agent.id, parsed.data.version, commandId]);
 
+    const explicitAssignmentResult = await pool.query<SupervisorManagedAssignmentRow>(
+      "SELECT * FROM supervisor_managed_agents WHERE device_agent_id=$1 ORDER BY updated_at DESC LIMIT 1", [agent.id]
+    );
+    const explicitAssignment = explicitAssignmentResult.rows[0];
+    if (explicitAssignment) {
+      const explicitSupervisorSocket = supervisorSockets.get(explicitAssignment.supervisor_agent_id);
+      if (explicitSupervisorSocket?.readyState === WebSocket.OPEN) {
+        const operation: SupervisorManagedAgentOperationRecord = {
+          id: commandId, supervisorId: explicitAssignment.supervisor_agent_id, operation: "UPDATE", status: "SENT", result: null, error: null,
+          createdAt: new Date(), expiresAt, finishedAt: null, deviceAgentId: agent.id, assignmentId: explicitAssignment.id,
+          targetVersion: parsed.data.version
+        };
+        supervisorManagedAgentOperations.set(commandId, operation);
+        explicitSupervisorSocket.send(JSON.stringify({
+          type: "SUPERVISOR_COMMAND",
+          commandId,
+          operation: "UPDATE",
+          agentType: "device-agent",
+          instance: explicitAssignment.instance,
+          version: parsed.data.version
+        }));
+        return reply.code(202).send(agentDto(updated.rows[0]!, true));
+      }
+    }
+
     if (agent.supervisor_available) {
       socket.send(JSON.stringify({
         type: "AGENT_UPDATE_REQUEST",
@@ -1629,7 +1809,7 @@ export async function registerDeviceControlFeature(
     const supervisorSocket = supervisorSockets.get(autonomousSupervisor.id)!;
     const operation: SupervisorManagedAgentOperationRecord = {
       id: commandId, supervisorId: autonomousSupervisor.id, operation: "UPDATE", status: "SENT", result: null, error: null,
-      createdAt: new Date(), expiresAt, finishedAt: null, deviceAgentId: agent.id
+      createdAt: new Date(), expiresAt, finishedAt: null, deviceAgentId: agent.id, targetVersion: parsed.data.version
     };
     supervisorManagedAgentOperations.set(commandId, operation);
     supervisorSocket.send(JSON.stringify({

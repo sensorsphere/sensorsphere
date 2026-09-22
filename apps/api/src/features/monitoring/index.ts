@@ -127,6 +127,13 @@ interface AgentRow {
   last_seen_at: Date | null;
   heartbeat_timeout_seconds: number;
   config_revision: string | number;
+  desired_version: string | null;
+  update_status: string;
+  update_error: string | null;
+  update_started_at: Date | null;
+  update_finished_at: Date | null;
+  last_successful_update_at: Date | null;
+  last_successful_update_version: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -209,6 +216,13 @@ function agentDto(row: AgentRow) {
     lastSeenAt: row.last_seen_at?.toISOString() ?? null,
     heartbeatTimeoutSeconds: row.heartbeat_timeout_seconds,
     configRevision: Number(row.config_revision),
+    desiredVersion: row.desired_version,
+    updateStatus: row.update_status ?? "READY",
+    updateError: row.update_error,
+    updateStartedAt: row.update_started_at?.toISOString() ?? null,
+    updateFinishedAt: row.update_finished_at?.toISOString() ?? null,
+    lastSuccessfulUpdateAt: row.last_successful_update_at?.toISOString() ?? null,
+    lastSuccessfulUpdateVersion: row.last_successful_update_version,
     online,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString()
@@ -535,6 +549,30 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
               hostname=COALESCE($4,hostname), agent_labels=COALESCE($5::jsonb,agent_labels),
               local_ip=COALESCE($6,local_ip), source_ip=$7, x_forwarded_for=$8, x_real_ip=$9,
               os_name=COALESCE($10,os_name), os_version=COALESCE($11,os_version), architecture=COALESCE($12,architecture),
+              update_status=CASE
+                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING') THEN 'UPDATED'
+                ELSE update_status
+              END,
+              update_finished_at=CASE
+                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING') THEN NOW()
+                ELSE update_finished_at
+              END,
+              last_successful_update_at=CASE
+                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING') THEN NOW()
+                ELSE last_successful_update_at
+              END,
+              last_successful_update_version=CASE
+                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING') THEN $3
+                ELSE last_successful_update_version
+              END,
+              update_error=CASE
+                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING') THEN NULL
+                ELSE update_error
+              END,
+              desired_version=CASE
+                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING') THEN NULL
+                ELSE desired_version
+              END,
               updated_at=NOW() WHERE id=$1 RETURNING *`,
       [agent.id, connection.effectiveIp, input.version ?? null, input.hostname ?? null, reportedLabels == null ? null : JSON.stringify(reportedLabels),
        input.localIp ?? null, connection.sourceIp, connection.xForwardedFor, connection.xRealIp,

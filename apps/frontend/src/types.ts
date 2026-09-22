@@ -990,6 +990,13 @@ export interface MonitoringAgent {
   lastSeenAt: string | null;
   heartbeatTimeoutSeconds: number;
   configRevision: number;
+  desiredVersion: string | null;
+  updateStatus: string;
+  updateError: string | null;
+  updateStartedAt: string | null;
+  updateFinishedAt: string | null;
+  lastSuccessfulUpdateAt: string | null;
+  lastSuccessfulUpdateVersion: string | null;
   online: boolean;
   createdAt: string;
   updatedAt: string;
@@ -1114,6 +1121,8 @@ export interface DeviceAgent {
   updateStartedAt: string | null;
   updateFinishedAt: string | null;
   updateError: string | null;
+  lastSuccessfulUpdateAt: string | null;
+  lastSuccessfulUpdateVersion: string | null;
   lastSeenAt: string | null;
   heartbeatTimeoutSeconds: number;
   online: boolean;
@@ -1154,7 +1163,7 @@ export interface ManagedAgentStatus {
 export interface ManagedAgentOperation {
   commandId: string;
   agentId: string;
-  operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE";
+  operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE" | "CHECK_TOKEN";
   status: "SENT" | "SUCCESS" | "FAILED" | "TIMEOUT";
   result: unknown;
   error: string | null;
@@ -1164,11 +1173,20 @@ export interface ManagedAgentOperation {
 }
 
 export interface ManagedAgentOperationInput {
-  operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE";
+  operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE" | "CHECK_TOKEN";
   agentType?: "device-agent" | "monitor-agent";
   instance?: string;
   version?: string;
   environment?: Record<string, string>;
+}
+
+export interface AgentTokenCheckResult {
+  matches: boolean;
+  expectedFingerprint: string | null;
+  deployedFingerprint: string | null;
+  agentType?: string | null;
+  instance?: string | null;
+  installDir?: string | null;
 }
 
 export type DeviceControlCommandStatus =

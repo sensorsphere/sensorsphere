@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.33.0";
+export const MODULE_VERSION = "1.34.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.34.0": {
+    releasedAt: "2026-09-22T20:30:00+02:00",
+    patch: "PR-236-agent-lifecycle-token-ownership-v1.patch",
+    changes: [
+      { type: "added", description: "Device, Monitoring and Supervisor Agents expose safe token verification through Supervisor-side SHA-256 fingerprints" },
+      { type: "added", description: "Successful agent updates persist last-successful update timestamp and version for durable UI history" },
+      { type: "changed", description: "Device Agent updates prefer explicit Supervisor managed-agent associations before hostname compatibility fallback" }
+    ]
+  },
   "1.33.0": {
     releasedAt: "2026-09-22T08:55:00+02:00",
     patch: "PR-235-explicit-supervisor-agent-associations-v1.patch",
