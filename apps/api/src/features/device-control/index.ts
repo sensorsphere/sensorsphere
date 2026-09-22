@@ -608,6 +608,7 @@ export async function registerDeviceControlFeature(
     createdAt: Date;
     expiresAt: Date;
     finishedAt: Date | null;
+    deviceAgentId?: string;
   }
   const supervisorManagedAgentOperations = new Map<string, SupervisorManagedAgentOperationRecord>();
 
@@ -1115,6 +1116,16 @@ export async function registerDeviceControlFeature(
               operation.error = message.error ?? null;
             }
             operation.finishedAt = new Date();
+            if (operation.deviceAgentId && operation.operation === "UPDATE") {
+              const deviceStatus = operation.status === "SUCCESS" ? "VERIFYING" : "FAILED";
+              await pool.query(`UPDATE device_agents SET
+                update_status=$2,
+                update_started_at=COALESCE(update_started_at,NOW()),
+                update_finished_at=CASE WHEN $2='FAILED' THEN NOW() ELSE update_finished_at END,
+                update_error=CASE WHEN $2='FAILED' THEN COALESCE($3,'Supervisor-managed Device Agent update failed') ELSE NULL END,
+                updated_at=NOW()
+                WHERE id=$1`, [operation.deviceAgentId, deviceStatus, operation.error]);
+            }
             await pool.query("UPDATE supervisor_agents SET last_seen_at=NOW(),updated_at=NOW() WHERE id=$1", [supervisor.id]);
             return;
           }
@@ -1129,15 +1140,16 @@ export async function registerDeviceControlFeature(
             reported_name=COALESCE($2,reported_name),version=COALESCE($3,version),hostname=COALESCE($4,hostname),
             os_name=COALESCE($5,os_name),os_version=COALESCE($6,os_version),architecture=COALESCE($7,architecture),
             managed_agents=$8::jsonb,
-            configured_version=CASE
-              WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND COALESCE($12,'') NOT IN ('UPDATED','FAILED','ROLLED_BACK') THEN configured_version
-              ELSE COALESCE($9,configured_version)
-            END,
+            configured_version=COALESCE($9,configured_version),
             container_state=COALESCE($10,container_state),self_update_supported=$11,
             update_status=CASE
-              WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED') AND COALESCE($12,'') NOT IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','FAILED') THEN update_status
+              WHEN COALESCE($12,'')='FAILED' THEN 'FAILED'
+              WHEN COALESCE($12,'')='ROLLED_BACK' THEN 'ROLLED_BACK'
+              WHEN COALESCE($12,'')='UPDATED' AND configured_version IS NOT NULL AND COALESCE($3,version)=configured_version THEN 'UPDATED'
+              WHEN COALESCE($12,'')='UPDATED' AND configured_version IS NOT NULL AND COALESCE($3,version)<>configured_version THEN 'UPDATING'
               WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND COALESCE($12,'')='IDLE' THEN update_status
-              ELSE COALESCE($12,update_status)
+              WHEN COALESCE($12,'') IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') THEN COALESCE($12,update_status)
+              ELSE update_status
             END,
             update_error=CASE WHEN COALESCE($12,'')='FAILED' THEN $13 WHEN COALESCE($12,'') IN ('UPDATED','ROLLED_BACK') THEN NULL ELSE update_error END,
             last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
@@ -1149,15 +1161,16 @@ export async function registerDeviceControlFeature(
         }
         const self = supervisorSelfStatusFields(message.selfStatus);
         await pool.query(`UPDATE supervisor_agents SET managed_agents=$2::jsonb,
-          configured_version=CASE
-            WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND COALESCE($5,'') NOT IN ('UPDATED','FAILED','ROLLED_BACK') THEN configured_version
-            ELSE COALESCE($3,configured_version)
-          END,
+          configured_version=COALESCE($3,configured_version),
           container_state=COALESCE($4,container_state),
           update_status=CASE
-            WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED') AND COALESCE($5,'') NOT IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','FAILED') THEN update_status
+            WHEN COALESCE($5,'')='FAILED' THEN 'FAILED'
+            WHEN COALESCE($5,'')='ROLLED_BACK' THEN 'ROLLED_BACK'
+            WHEN COALESCE($5,'')='UPDATED' AND configured_version IS NOT NULL AND version=configured_version THEN 'UPDATED'
+            WHEN COALESCE($5,'')='UPDATED' AND configured_version IS NOT NULL AND version<>configured_version THEN 'UPDATING'
             WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND COALESCE($5,'')='IDLE' THEN update_status
-            ELSE COALESCE($5,update_status)
+            WHEN COALESCE($5,'') IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') THEN COALESCE($5,update_status)
+            ELSE update_status
           END,
           update_error=CASE WHEN COALESCE($5,'')='FAILED' THEN $6 WHEN COALESCE($5,'') IN ('UPDATED','ROLLED_BACK') THEN NULL ELSE update_error END,
           last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
@@ -1403,7 +1416,6 @@ export async function registerDeviceControlFeature(
     if (!agent.enabled) return reply.code(409).send({ error: "Device Agent is disabled" });
     const socket = sockets.get(agent.id);
     if (socket?.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Device Agent is offline" });
-    if (!agent.supervisor_available) return reply.code(409).send({ error: "Supervisor Agent is unavailable for this Device Agent" });
     if (["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.update_status)) {
       return reply.code(409).send({ error: "A Device Agent update is already in progress" });
     }
@@ -1417,11 +1429,47 @@ export async function registerDeviceControlFeature(
       WHERE id=$1 RETURNING *
     `, [agent.id, parsed.data.version, commandId]);
 
-    socket.send(JSON.stringify({
-      type: "AGENT_UPDATE_REQUEST",
+    if (agent.supervisor_available) {
+      socket.send(JSON.stringify({
+        type: "AGENT_UPDATE_REQUEST",
+        commandId,
+        version: parsed.data.version,
+        expiresAt: expiresAt.toISOString()
+      }));
+      return reply.code(202).send(agentDto(updated.rows[0]!, true));
+    }
+
+    const candidates = agent.hostname ? await pool.query<SupervisorAgentRow>(
+      "SELECT * FROM supervisor_agents WHERE enabled=TRUE AND LOWER(hostname)=LOWER($1) ORDER BY updated_at DESC",
+      [agent.hostname]
+    ) : { rows: [] as SupervisorAgentRow[] };
+    const autonomousSupervisor = candidates.rows.find(candidate => {
+      const supervisorSocket = supervisorSockets.get(candidate.id);
+      if (!supervisorSocket || supervisorSocket.readyState !== WebSocket.OPEN) return false;
+      return (candidate.managed_agents ?? []).some(entry =>
+        entry.agent_type === "device-agent" &&
+        (entry.instance ?? "main") === "main" &&
+        entry.installed !== false
+      );
+    });
+    if (!autonomousSupervisor) {
+      await pool.query("UPDATE device_agents SET update_status='FAILED',update_finished_at=NOW(),update_error='No online autonomous Supervisor manages this Device Agent',updated_at=NOW() WHERE id=$1", [agent.id]);
+      return reply.code(409).send({ error: "No online autonomous Supervisor manages this Device Agent" });
+    }
+
+    const supervisorSocket = supervisorSockets.get(autonomousSupervisor.id)!;
+    const operation: SupervisorManagedAgentOperationRecord = {
+      id: commandId, supervisorId: autonomousSupervisor.id, operation: "UPDATE", status: "SENT", result: null, error: null,
+      createdAt: new Date(), expiresAt, finishedAt: null, deviceAgentId: agent.id
+    };
+    supervisorManagedAgentOperations.set(commandId, operation);
+    supervisorSocket.send(JSON.stringify({
+      type: "SUPERVISOR_COMMAND",
       commandId,
-      version: parsed.data.version,
-      expiresAt: expiresAt.toISOString()
+      operation: "UPDATE",
+      agentType: "device-agent",
+      instance: "main",
+      version: parsed.data.version
     }));
 
     return reply.code(202).send(agentDto(updated.rows[0]!, true));

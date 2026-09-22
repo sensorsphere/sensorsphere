@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.68.1";
+export const MODULE_VERSION = "1.68.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.68.2": {
+    releasedAt: "2026-09-22T07:20:00+02:00",
+    patch: "PR-234-agents-table-consistency-v3.patch",
+    changes: [
+      { type: "fixed", description: "Device Agent update remains available when the host is managed by an autonomous Supervisor instead of the legacy relayed Supervisor" },
+      { type: "fixed", description: "Supervisor update dialogs and tables show the requested target version separately from the currently configured/running version" },
+      { type: "fixed", description: "Supervisor update status no longer reports UPDATED before the requested version is actually running" }
+    ]
+  },
   "1.68.1": {
     releasedAt: "2026-09-21T19:10:00+02:00",
     patch: "PR-234-agents-table-consistency-v2.patch",

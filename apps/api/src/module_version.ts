@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.32.3";
+export const MODULE_VERSION = "1.32.4";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.32.4": {
+    releasedAt: "2026-09-22T07:20:00+02:00",
+    patch: "PR-234-agents-table-consistency-v3.patch",
+    changes: [
+      { type: "fixed", description: "Device Agent updates fall back to the online autonomous Supervisor managing the same host" },
+      { type: "fixed", description: "Autonomous Supervisor configured target is preserved while an update is active" },
+      { type: "fixed", description: "Supervisor UPDATED lifecycle is accepted only after the requested runtime version is observed" }
+    ]
+  },
   "1.32.3": {
     releasedAt: "2026-09-21T19:10:00+02:00",
     patch: "PR-234-agents-table-consistency-v2.patch",
