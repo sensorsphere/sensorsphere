@@ -997,6 +997,10 @@ export interface MonitoringAgent {
   updateFinishedAt: string | null;
   lastSuccessfulUpdateAt: string | null;
   lastSuccessfulUpdateVersion: string | null;
+  managedAssociationId: string | null;
+  managedBySupervisorId: string | null;
+  managedBySupervisorName: string | null;
+  managedInstance: string | null;
   online: boolean;
   createdAt: string;
   updatedAt: string;
@@ -1123,6 +1127,10 @@ export interface DeviceAgent {
   updateError: string | null;
   lastSuccessfulUpdateAt: string | null;
   lastSuccessfulUpdateVersion: string | null;
+  managedAssociationId: string | null;
+  managedBySupervisorId: string | null;
+  managedBySupervisorName: string | null;
+  managedInstance: string | null;
   lastSeenAt: string | null;
   heartbeatTimeoutSeconds: number;
   online: boolean;

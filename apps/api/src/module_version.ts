@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.34.0";
+export const MODULE_VERSION = "1.34.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.34.1": {
+    releasedAt: "2026-09-22T21:30:00+02:00",
+    patch: "PR-237-managed-agent-delete-association-v1.patch",
+    changes: [
+      { type: "fixed", description: "Agent list responses expose the explicit Supervisor name and managed instance for Device and Monitoring Agents" }
+    ]
+  },
   "1.34.0": {
     releasedAt: "2026-09-22T20:30:00+02:00",
     patch: "PR-236-agent-lifecycle-token-ownership-v1.patch",

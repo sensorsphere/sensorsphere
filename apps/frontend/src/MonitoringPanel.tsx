@@ -30,6 +30,7 @@ import {
   createMonitoringAgent,
   createMonitoringCheck,
   deleteMonitoringAgent,
+  deleteSupervisorManagedAgentAssignment,
   deleteMonitoringCheck,
   getDeviceRegistryDevices,
   getMonitoringAgents,
@@ -37,7 +38,8 @@ import {
   regenerateMonitoringAgentToken,
   checkMonitoringAgentToken,
   updateMonitoringAgent,
-  updateMonitoringCheck
+  updateMonitoringCheck,
+  runSupervisorManagedAgentOperation
 } from "./api";
 import type {
   AgentTokenCheckResult,
@@ -458,7 +460,18 @@ export function MonitoringPanel({
   });
 
   const removeAgent = useMutation({
-    mutationFn: deleteMonitoringAgent,
+    mutationFn: async (agent: MonitoringAgent) => {
+      if (agent.managedBySupervisorId) {
+        await runSupervisorManagedAgentOperation(agent.managedBySupervisorId, {
+          operation: "REMOVE",
+          agentType: "monitor-agent",
+          agentId: agent.id,
+          instance: agent.managedInstance ?? "main"
+        });
+      }
+      if (agent.managedAssociationId) await deleteSupervisorManagedAgentAssignment(agent.managedAssociationId);
+      await deleteMonitoringAgent(agent.id);
+    },
     onSuccess: async () => { setAgentDeleteTarget(null); await refresh(); },
     onError: cause => setError(cause instanceof Error ? cause.message : "Unable to delete monitoring agent")
   });
@@ -749,7 +762,7 @@ export function MonitoringPanel({
                     <Table.Tbody>
                       {filteredAgents.map(agent => (
                         <Table.Tr key={agent.id}>
-                          <Table.Td><Text fw={600} size="sm">{agent.name}</Text></Table.Td>
+                          <Table.Td><Text fw={600} size="sm">{agent.name}</Text>{agent.managedBySupervisorName && <Text size="xs" c="dimmed">Supervisor: {agent.managedBySupervisorName}{agent.managedInstance && agent.managedInstance !== "main" ? ` / ${agent.managedInstance}` : ""}</Text>}</Table.Td>
                           <Table.Td><Badge size="sm" variant="light" color={agent.online ? "green" : agent.enabled ? "gray" : "red"}>{agent.online ? "ONLINE" : agent.enabled ? "OFFLINE" : "DISABLED"}</Badge></Table.Td>
                           <Table.Td><Text size="sm">{agent.hostname ?? "—"}</Text>{agent.lastIp && <Text size="xs" c="dimmed">{agent.lastIp}</Text>}</Table.Td>
                           <Table.Td><Text size="sm">{agent.version ?? "—"}</Text>{["UPDATE_REQUESTED", "REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? <><Badge size="xs" variant="light" color="blue">{agent.updateStatus}</Badge>{agent.desiredVersion && <Text size="xs" c="dimmed">Target {agent.desiredVersion}</Text>}</> : <><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.monitorAgent} />{agent.updateStatus === "FAILED" && <Tooltip label={agent.updateError ?? "Monitoring Agent update failed"}><Badge size="xs" variant="light" color="red">FAILED</Badge></Tooltip>}{agent.lastSuccessfulUpdateAt && <Text size="xs" c="dimmed" title={agent.lastSuccessfulUpdateAt}>Updated {relativeAge(agent.lastSuccessfulUpdateAt)}</Text>}</>}</Table.Td>
@@ -887,7 +900,7 @@ export function MonitoringPanel({
       </Modal>
 
       <Modal opened={agentDeleteTarget !== null} onClose={() => setAgentDeleteTarget(null)} title="Delete monitoring agent" centered>
-        <Stack><Text>Delete monitoring agent <b>{agentDeleteTarget?.name}</b>? Its check assignments and current results will also be removed.</Text><Group justify="flex-end"><Button variant="light" color="gray" onClick={() => setAgentDeleteTarget(null)}>Cancel</Button><Button color="red" variant="light" loading={removeAgent.isPending} onClick={() => agentDeleteTarget && removeAgent.mutate(agentDeleteTarget.id)}>Delete</Button></Group></Stack>
+        <Stack><Text>Delete monitoring agent <b>{agentDeleteTarget?.name}</b>? Its check assignments and current results will also be removed.{agentDeleteTarget?.managedBySupervisorId ? " Its local installation will first be removed by the associated Supervisor Agent." : ""}</Text><Group justify="flex-end"><Button variant="light" color="gray" onClick={() => setAgentDeleteTarget(null)}>Cancel</Button><Button color="red" variant="light" loading={removeAgent.isPending} onClick={() => agentDeleteTarget && removeAgent.mutate(agentDeleteTarget)}>Delete</Button></Group></Stack>
       </Modal>
 
       <Modal opened={checkDeleteTarget !== null} onClose={() => setCheckDeleteTarget(null)} title="Delete monitoring check" centered>

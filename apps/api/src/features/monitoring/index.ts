@@ -136,6 +136,10 @@ interface AgentRow {
   last_successful_update_version: string | null;
   created_at: Date;
   updated_at: Date;
+  managed_association_id?: string | null;
+  managed_by_supervisor_id?: string | null;
+  managed_by_supervisor_name?: string | null;
+  managed_instance?: string | null;
 }
 
 interface CheckRow {
@@ -223,6 +227,10 @@ function agentDto(row: AgentRow) {
     updateFinishedAt: row.update_finished_at?.toISOString() ?? null,
     lastSuccessfulUpdateAt: row.last_successful_update_at?.toISOString() ?? null,
     lastSuccessfulUpdateVersion: row.last_successful_update_version,
+    managedAssociationId: row.managed_association_id ?? null,
+    managedBySupervisorId: row.managed_by_supervisor_id ?? null,
+    managedBySupervisorName: row.managed_by_supervisor_name ?? null,
+    managedInstance: row.managed_instance ?? null,
     online,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString()
@@ -379,7 +387,15 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
   const { pool } = options;
 
   app.get("/api/v1/monitoring/agents", async () => {
-    const result = await pool.query<AgentRow>(`SELECT * FROM monitoring_agents ORDER BY name`);
+    const result = await pool.query<AgentRow>(`SELECT a.*,
+      sma.id AS managed_association_id,
+      sma.supervisor_agent_id AS managed_by_supervisor_id,
+      s.name AS managed_by_supervisor_name,
+      sma.instance AS managed_instance
+      FROM monitoring_agents a
+      LEFT JOIN supervisor_managed_agents sma ON sma.monitoring_agent_id=a.id
+      LEFT JOIN supervisor_agents s ON s.id=sma.supervisor_agent_id
+      ORDER BY a.name`);
     return result.rows.map(agentDto);
   });
 

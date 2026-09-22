@@ -1,7 +1,7 @@
 import React from "react";
 import { ActionIcon, Badge, Button, Card, Checkbox, Code, Group, Modal, Notification, NumberInput, Select, Stack, Table, Text, Textarea, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createDeviceAgent, deleteDeviceAgent, getDeviceAgents, getDeviceDiscovery, getDiscoveredDeviceAction, regenerateDeviceAgentToken, checkDeviceAgentToken, requestDeviceAgentUpdate, requestSupervisorAgentUpdate, runManagedAgentOperation, startDeviceDiscovery, startDiscoveredDeviceAction, updateDeviceAgent } from "./api";
+import { createDeviceAgent, deleteDeviceAgent, deleteSupervisorManagedAgentAssignment, getDeviceAgents, getDeviceDiscovery, getDiscoveredDeviceAction, regenerateDeviceAgentToken, checkDeviceAgentToken, requestDeviceAgentUpdate, requestSupervisorAgentUpdate, runManagedAgentOperation, runSupervisorManagedAgentOperation, startDeviceDiscovery, startDiscoveredDeviceAction, updateDeviceAgent } from "./api";
 import { ResolvedIconGlyph, resolveProviderIcon } from "./ResolvedDeviceIcon";
 import { DeviceGlyph } from "./DeviceGlyph";
 import type { AgentTokenCheckResult, DeviceAgent, DeviceDiscovery, DeviceRegistryDevice, DiscoveredDeviceAction, ManagedAgentStatus } from "./types";
@@ -305,7 +305,21 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
       setOpened(false); setEditing(null); setForm(emptyForm()); await refresh();
     }
   });
-  const remove = useMutation({ mutationFn: (id: string) => deleteDeviceAgent(id), onSuccess: async () => { setDeleteTarget(null); await refresh(); } });
+  const remove = useMutation({
+    mutationFn: async (agent: DeviceAgent) => {
+      if (agent.managedBySupervisorId) {
+        await runSupervisorManagedAgentOperation(agent.managedBySupervisorId, {
+          operation: "REMOVE",
+          agentType: "device-agent",
+          agentId: agent.id,
+          instance: agent.managedInstance ?? "main"
+        });
+      }
+      if (agent.managedAssociationId) await deleteSupervisorManagedAgentAssignment(agent.managedAssociationId);
+      await deleteDeviceAgent(agent.id);
+    },
+    onSuccess: async () => { setDeleteTarget(null); await refresh(); }
+  });
   const regenerate = useMutation({ mutationFn: (agent: DeviceAgent) => regenerateDeviceAgentToken(agent.id), onSuccess: async result => { setTokenInfo({ name: result.agent.name, token: result.token }); await refresh(); } });
   const checkToken = useMutation({ mutationFn: (agent: DeviceAgent) => checkDeviceAgentToken(agent.id), onSuccess: (result, agent) => setTokenCheckResult({ name: agent.name, result }) });
   const agentUpdateMutation = useMutation({
@@ -542,7 +556,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
       <div className="monitoring-table-scroll"><Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
         <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Status</Table.Th><Table.Th>Reported</Table.Th><Table.Th>Version</Table.Th>{showSupervisorControls && <Table.Th>Supervisor</Table.Th>}<Table.Th>System</Table.Th><Table.Th style={{ width: 110 }}>Last Seen</Table.Th><Table.Th>Capabilities</Table.Th><Table.Th>Agent Labels</Table.Th><Table.Th style={{ width: showSupervisorControls ? 202 : 160, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
         <Table.Tbody>{(agentsQuery.data ?? []).map(agent => <Table.Tr key={agent.id}>
-          <Table.Td><Text size="sm" fw={600}>{agent.name}</Text></Table.Td>
+          <Table.Td><Text size="sm" fw={600}>{agent.name}</Text>{agent.managedBySupervisorName && <Text size="xs" c="dimmed">Supervisor: {agent.managedBySupervisorName}{agent.managedInstance && agent.managedInstance !== "main" ? ` / ${agent.managedInstance}` : ""}</Text>}</Table.Td>
           <Table.Td><Badge color={agent.online ? "green" : agent.enabled ? "gray" : "red"} variant="light">{agent.online ? "ONLINE" : agent.enabled ? "OFFLINE" : "DISABLED"}</Badge></Table.Td>
           <Table.Td><Text size="sm">{agent.reportedName ?? "—"}</Text>{agent.hostname && <Text size="xs" c="dimmed">{agent.hostname}</Text>}</Table.Td>
           <Table.Td><Text size="sm">{agent.version ?? "—"}</Text>{ACTIVE_UPDATE_STATES.includes(agent.updateStatus) ? <><Badge size="xs" variant="light" color="blue">{agent.updateStatus}</Badge>{agent.desiredVersion && <Text size="xs" c="dimmed">Target {agent.desiredVersion}</Text>}</> : <><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.deviceAgent} />{agent.updateStatus === "FAILED" && <Tooltip label={agent.updateError ?? "Device Agent update failed"}><Badge size="xs" variant="light" color="red">FAILED</Badge></Tooltip>}{agent.lastSuccessfulUpdateAt && <Text size="xs" c="dimmed" title={agent.lastSuccessfulUpdateAt}>Updated {updateAge(agent.lastSuccessfulUpdateAt)}</Text>}</>}</Table.Td>
@@ -794,7 +808,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
     </>}
 
     <Modal opened={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Device Agent?" centered>
-      <Stack><Text>Delete <strong>{deleteTarget?.name}</strong>? Devices assigned to it will keep their provider but lose the Device Agent association.</Text><Group justify="flex-end"><Button variant="default" onClick={() => setDeleteTarget(null)}>Cancel</Button><Button color="red" loading={remove.isPending} onClick={() => deleteTarget && remove.mutate(deleteTarget.id)}>Delete</Button></Group></Stack>
+      <Stack><Text>Delete <strong>{deleteTarget?.name}</strong>? Devices assigned to it will keep their provider but lose the Device Agent association.{deleteTarget?.managedBySupervisorId ? " Its local installation will first be removed by the associated Supervisor Agent." : ""}</Text><Group justify="flex-end"><Button variant="default" onClick={() => setDeleteTarget(null)}>Cancel</Button><Button color="red" loading={remove.isPending} onClick={() => deleteTarget && remove.mutate(deleteTarget)}>Delete</Button></Group></Stack>
     </Modal>
 
     {copyNotice && (

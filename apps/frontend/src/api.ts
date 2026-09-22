@@ -1772,6 +1772,28 @@ async function waitSupervisorTokenCheck(startUrl: string): Promise<AgentTokenChe
   return (operation.result ?? {}) as AgentTokenCheckResult;
 }
 
+
+export async function deleteSupervisorManagedAgentAssignment(assignmentId: string): Promise<void> {
+  const response = await fetch(`/api/v1/device-control/supervisor-managed-agent-assignments/${assignmentId}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
+}
+
+export async function runSupervisorManagedAgentOperation(supervisorId: string, input: ManagedAgentOperationInput & { agentId?: string; installDir?: string }): Promise<ManagedAgentOperation> {
+  let operation = await readJson<ManagedAgentOperation>(await fetch(`/api/v1/device-control/supervisors/${supervisorId}/managed-agents`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  }));
+  const deadline = Date.now() + 185000;
+  while (operation.status === "SENT" && Date.now() < deadline) {
+    await new Promise(resolve => window.setTimeout(resolve, 400));
+    operation = await readJson<ManagedAgentOperation>(await fetch(`/api/v1/device-control/supervisor-managed-agents/${operation.commandId}`));
+  }
+  if (operation.status === "SENT") throw new Error("Supervisor managed-agent operation did not finish before the client timeout");
+  if (operation.status !== "SUCCESS") throw new Error(operation.error ?? `Supervisor managed-agent operation ${operation.status.toLowerCase()}`);
+  return operation;
+}
+
 export async function checkDeviceAgentToken(id: string): Promise<AgentTokenCheckResult> {
   return waitSupervisorTokenCheck(`/api/v1/device-control/agents/${id}/check-token`);
 }

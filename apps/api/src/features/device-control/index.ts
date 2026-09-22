@@ -222,6 +222,10 @@ interface AgentRow {
   heartbeat_timeout_seconds: number;
   created_at: Date;
   updated_at: Date;
+  managed_association_id?: string | null;
+  managed_by_supervisor_id?: string | null;
+  managed_by_supervisor_name?: string | null;
+  managed_instance?: string | null;
 }
 
 interface DeviceControlRow {
@@ -361,6 +365,10 @@ function agentDto(row: AgentRow, connected: boolean) {
     updateError: row.update_error,
     lastSuccessfulUpdateAt: row.last_successful_update_at?.toISOString() ?? null,
     lastSuccessfulUpdateVersion: row.last_successful_update_version,
+    managedAssociationId: row.managed_association_id ?? null,
+    managedBySupervisorId: row.managed_by_supervisor_id ?? null,
+    managedBySupervisorName: row.managed_by_supervisor_name ?? null,
+    managedInstance: row.managed_instance ?? null,
     lastSeenAt: row.last_seen_at?.toISOString() ?? null,
     heartbeatTimeoutSeconds: row.heartbeat_timeout_seconds,
     online: row.enabled && connected && recent,
@@ -1698,7 +1706,15 @@ export async function registerDeviceControlFeature(
   });
 
   app.get("/api/v1/device-control/agents", async (_request, reply) => {
-    const result = await pool.query<AgentRow>("SELECT * FROM device_agents ORDER BY LOWER(name), id");
+    const result = await pool.query<AgentRow>(`SELECT a.*,
+      sma.id AS managed_association_id,
+      sma.supervisor_agent_id AS managed_by_supervisor_id,
+      s.name AS managed_by_supervisor_name,
+      sma.instance AS managed_instance
+      FROM device_agents a
+      LEFT JOIN supervisor_managed_agents sma ON sma.device_agent_id=a.id
+      LEFT JOIN supervisor_agents s ON s.id=sma.supervisor_agent_id
+      ORDER BY LOWER(a.name), a.id`);
     return reply.send(result.rows.map(row => agentDto(row, sockets.has(row.id))));
   });
 
