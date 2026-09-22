@@ -61,7 +61,7 @@ import { activeFilterStyles } from "./ActiveFilterStyles";
 import { FilterClearAction } from "./FilterClearAction";
 import { AgentVersionFreshnessBadge, getAgentVersionAvailability } from "./AgentVersionAvailability";
 
-type AgentSortKey = "name" | "status" | "checks" | "host" | "version" | "lastSeen" | "agentLabels";
+type AgentSortKey = "name" | "status" | "checks" | "host" | "version" | "lastSeen" | "labels" | "agentLabels";
 type CheckSortKey = "device" | "class" | "type" | "technology" | "check" | "target" | "agents" | "mode" | "status";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -529,7 +529,7 @@ export function MonitoringPanel({
   };
   const filteredAgents = agents.filter(agent => {
     const status = !agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE";
-    const labels = agent.agentLabels.join(" ").toLowerCase();
+    const labels = `${Object.entries(agent.labels).map(([key,value]) => `${key}=${value}`).join(" ")} ${agent.agentLabels.join(" ")}`.toLowerCase();
     return (!agentNameFilter.trim() || agent.name.toLowerCase().includes(agentNameFilter.trim().toLowerCase()))
       && (!agentStatusFilter || status === agentStatusFilter)
       && (!agentHostFilter.trim() || `${agent.hostname ?? ""} ${agent.lastIp ?? ""} ${agent.localIp ?? ""} ${agent.sourceIp ?? ""} ${agent.xForwardedFor ?? ""} ${agent.xRealIp ?? ""}`.toLowerCase().includes(agentHostFilter.trim().toLowerCase()))
@@ -542,6 +542,7 @@ export function MonitoringPanel({
       : agentSortKey === "host" ? `${agent.hostname ?? ""} ${agent.localIp ?? ""} ${agent.sourceIp ?? ""} ${agent.xForwardedFor ?? ""}`
       : agentSortKey === "version" ? agent.version
       : agentSortKey === "lastSeen" ? agent.lastSeenAt
+      : agentSortKey === "labels" ? Object.entries(agent.labels).map(([key,value]) => `${key}=${value}`).join(",")
       : agent.agentLabels.join(",");
     return compareTableValues(value(left), value(right), agentSortDirection);
   });
@@ -725,7 +726,7 @@ export function MonitoringPanel({
                           <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => openEditCheck(check)} /><Tooltip label="Copy monitoring check"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring check" onClick={() => openCopyCheck(check)}>⧉</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setCheckDeleteTarget(check)} /></Group></Table.Td>
                         </Table.Tr>;
                       })}
-                      {filteredChecks.length === 0 && <Table.Tr><Table.Td colSpan={9}><Text ta="center" c="dimmed" py="xl">{checks.length === 0 ? "No monitoring checks yet." : "No monitoring checks match the active filters."}</Text></Table.Td></Table.Tr>}
+                      {filteredChecks.length === 0 && <Table.Tr><Table.Td colSpan={10}><Text ta="center" c="dimmed" py="xl">{checks.length === 0 ? "No monitoring checks yet." : "No monitoring checks match the active filters."}</Text></Table.Td></Table.Tr>}
                     </Table.Tbody>
                       </Table>
                   </div>
@@ -736,7 +737,7 @@ export function MonitoringPanel({
       <Card withBorder className="monitoring-table-card">
                   <Group justify="space-between" mb="sm">
                     <div><Title order={4}>Monitoring agents</Title><Text size="xs" c="dimmed">Independent pull agents authenticate with a SensorSphere-generated token.</Text></div>
-                    <Button size="xs" onClick={openCreateAgent}>+ Add agent</Button>
+                    <Button size="xs" onClick={openCreateAgent}>Add Monitoring Agent</Button>
                   </Group>
                   <Group gap="xs" mb="sm" wrap="wrap">
                     <ResetFiltersAction active={agentFiltersActive} onReset={() => { setAgentNameFilter(""); setAgentStatusFilter(null); setAgentHostFilter(""); setAgentLabelsFilter(""); }} />
@@ -756,6 +757,7 @@ export function MonitoringPanel({
                       <Table.Th>System</Table.Th>
                       <SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last Seen</SortableTableHeader>
                       <SortableTableHeader active={agentSortKey === "checks"} direction={agentSortDirection} onClick={() => toggleAgentSort("checks")}>Checks count</SortableTableHeader>
+                      <SortableTableHeader active={agentSortKey === "labels"} direction={agentSortDirection} onClick={() => toggleAgentSort("labels")}>Labels</SortableTableHeader>
                       <SortableTableHeader active={agentSortKey === "agentLabels"} direction={agentSortDirection} onClick={() => toggleAgentSort("agentLabels")}>Agent Labels</SortableTableHeader>
                       <Table.Th style={{ width: 160, textAlign: "right" }}>Actions</Table.Th>
                     </Table.Tr></Table.Thead>
@@ -769,11 +771,12 @@ export function MonitoringPanel({
                           <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td>
                           <Table.Td title={agent.lastSeenAt ?? undefined}>{relativeAge(agent.lastSeenAt)}</Table.Td>
                           <Table.Td>{(() => { const count = checks.filter(check => check.assignments.some(item => item.agentId === agent.id)).length; return <Text size="sm" fw={700} c={count > 0 ? "green.6" : "dimmed"}>{count}</Text>; })()}</Table.Td>
+                          <Table.Td>{Object.keys(agent.labels).length > 0 ? <Group gap={4} wrap="wrap">{Object.entries(agent.labels).map(([key,value]) => <Badge key={key} size="xs" variant="light">{key}={value}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
                           <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
                           <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><Tooltip label={(supervisorsQuery.data ?? []).some(item => item.online && item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.installed !== false)) ? "Update Monitoring Agent" : "No online Supervisor manages a Monitoring Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Monitoring Agent" disabled={!(supervisorsQuery.data ?? []).some(item => item.online && item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.installed !== false))} onClick={() => openMonitoringAgentUpdate(agent)}><AgentUpdateIcon /></ActionIcon></Tooltip><EditActionIcon onClick={() => openEditAgent(agent)} /><Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check deployed token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check deployed token" onClick={() => checkToken.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} /></Group></Table.Td>
                         </Table.Tr>
                       ))}
-                      {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={9}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
+                      {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={10}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
                     </Table.Tbody>
                       </Table>
                   </div>
@@ -814,7 +817,12 @@ export function MonitoringPanel({
           <Text size="sm"><strong>{tokenCheckResult?.name}</strong></Text>
           <Badge color={tokenCheckResult?.result.matches ? "green" : "red"} variant="light">{tokenCheckResult?.result.matches ? "TOKEN MATCH" : "TOKEN MISMATCH"}</Badge>
           <Text size="sm">SensorSphere fingerprint: <Code>{tokenCheckResult?.result.expectedFingerprint ?? "—"}</Code></Text>
-          <Text size="sm">Deployed fingerprint: <Code>{tokenCheckResult?.result.deployedFingerprint ?? "—"}</Code></Text>
+          <Text size="sm">Configured .env fingerprint: <Code>{tokenCheckResult?.result.configuredFingerprint ?? "—"}</Code></Text>
+          <Text size="sm">Running container fingerprint: <Code>{tokenCheckResult?.result.runtimeFingerprint ?? "—"}</Code></Text>
+        {tokenCheckResult?.result.configuredSensorSphereUrl && <Text size="xs" c="dimmed">Configured SensorSphere URL: {tokenCheckResult.result.configuredSensorSphereUrl}</Text>}
+        {tokenCheckResult?.result.runtimeSensorSphereUrl && <Text size="xs" c="dimmed">Running container SensorSphere URL: {tokenCheckResult.result.runtimeSensorSphereUrl}</Text>}
+          {tokenCheckResult?.result.runtimePresent === false && <Text size="xs" c="orange">The running container does not expose the expected token variable. Recreate the container before trusting the configured .env.</Text>}
+          {tokenCheckResult?.result.configuredMatches === true && tokenCheckResult?.result.runtimeMatches === false && <Text size="xs" c="red">The .env token matches SensorSphere, but the running container is using a different token.</Text>}
           {tokenCheckResult?.result.installDir && <Text size="xs" c="dimmed">Install directory: {tokenCheckResult.result.installDir}</Text>}
           <Group justify="flex-end"><Button onClick={() => setTokenCheckResult(null)}>Close</Button></Group>
         </Stack>

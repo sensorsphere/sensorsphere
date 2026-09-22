@@ -1190,8 +1190,16 @@ export interface ManagedAgentOperationInput {
 
 export interface AgentTokenCheckResult {
   matches: boolean;
+  configuredMatches?: boolean;
+  runtimeMatches?: boolean;
+  runtimePresent?: boolean;
   expectedFingerprint: string | null;
+  configuredFingerprint?: string | null;
+  runtimeFingerprint?: string | null;
   deployedFingerprint: string | null;
+  containerState?: string | null;
+  configuredSensorSphereUrl?: string | null;
+  runtimeSensorSphereUrl?: string | null;
   agentType?: string | null;
   instance?: string | null;
   installDir?: string | null;

@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.70.1";
+export const MODULE_VERSION = "1.71.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.71.0": {
+    releasedAt: "2026-09-23T00:15:00+02:00",
+    patch: "PR-238-agent-token-runtime-table-consistency-v1.patch",
+    changes: [
+      { type: "fixed", description: "Token diagnostics show SensorSphere, configured .env, and running-container fingerprints separately" },
+      { type: "changed", description: "Device, Monitoring and Supervisor Agent tables share the same column order, Labels and Agent Labels presentation, and standard action ordering" },
+      { type: "added", description: "Device and Supervisor Agent tables gain Monitoring-style persistent filters and sortable headers" },
+      { type: "changed", description: "Monitoring Agent creation button is labelled Add Monitoring Agent" }
+    ]
+  },
   "1.70.1": {
     releasedAt: "2026-09-22T21:30:00+02:00",
     patch: "PR-237-managed-agent-delete-association-v1.patch",

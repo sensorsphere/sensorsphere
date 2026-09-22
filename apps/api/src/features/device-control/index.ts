@@ -446,12 +446,14 @@ async function fetchGhcrLatestVersion(repository: string): Promise<string> {
 
 const supervisorCreateSchema = z.object({
   name: z.string().trim().min(1).max(200),
+  labels: z.record(z.string(), z.string()).optional(),
   heartbeatTimeoutSeconds: z.number().int().min(15).max(3600).optional()
 }).strict();
 
 const supervisorUpdateSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   enabled: z.boolean().optional(),
+  labels: z.record(z.string(), z.string()).optional(),
   heartbeatTimeoutSeconds: z.number().int().min(15).max(3600).optional()
 }).strict().refine(value => Object.keys(value).length > 0, "At least one field is required");
 
@@ -504,7 +506,7 @@ function supervisorSelfStatusFields(selfStatus: Record<string, unknown> | undefi
 }
 
 interface SupervisorAgentRow {
-  id: string; name: string; enabled: boolean; reported_name: string | null; version: string | null; hostname: string | null;
+  id: string; name: string; enabled: boolean; labels: Record<string, string>; agent_labels: string[]; reported_name: string | null; version: string | null; hostname: string | null;
   os_name: string | null; os_version: string | null; architecture: string | null; managed_agents: Array<Record<string, unknown>>;
   configured_version: string | null; container_state: string | null; self_update_supported: boolean; update_status: string;
   update_error: string | null; last_successful_update_at: Date | null; last_successful_update_version: string | null; last_seen_at: Date | null; heartbeat_timeout_seconds: number; created_at: Date; updated_at: Date;
@@ -555,7 +557,7 @@ function generateSupervisorToken(): string {
 function supervisorAgentDto(row: SupervisorAgentRow, connected: boolean) {
   const recent = row.last_seen_at != null && Date.now() - row.last_seen_at.getTime() <= row.heartbeat_timeout_seconds * 1000;
   return {
-    id: row.id, name: row.name, enabled: row.enabled, reportedName: row.reported_name, version: row.version, hostname: row.hostname,
+    id: row.id, name: row.name, enabled: row.enabled, labels: row.labels ?? {}, agentLabels: Array.isArray(row.agent_labels) ? row.agent_labels : [], reportedName: row.reported_name, version: row.version, hostname: row.hostname,
     os: row.os_name, osVersion: row.os_version, architecture: row.architecture, managedAgents: row.managed_agents ?? [],
     configuredVersion: row.configured_version, containerState: row.container_state, selfUpdateSupported: row.self_update_supported ?? false,
     updateStatus: row.update_status ?? "IDLE", updateError: row.update_error, lastSuccessfulUpdateAt: row.last_successful_update_at?.toISOString() ?? null, lastSuccessfulUpdateVersion: row.last_successful_update_version, lastSeenAt: row.last_seen_at?.toISOString() ?? null,
@@ -1228,23 +1230,45 @@ export async function registerDeviceControlFeature(
               operation.error = message.error ?? null;
               if (message.operation === "CHECK_TOKEN" && message.status === "SUCCESS") {
                 const resultObject = message.result && typeof message.result === "object" ? message.result as Record<string, unknown> : {};
-                const deployedHash = typeof resultObject.token_hash === "string" ? resultObject.token_hash : null;
+                const configuredHash = typeof resultObject.configured_token_hash === "string" ? resultObject.configured_token_hash : null;
+                const runtimeHash = typeof resultObject.runtime_token_hash === "string" ? resultObject.runtime_token_hash : null;
+                const fallbackHash = typeof resultObject.token_hash === "string" ? resultObject.token_hash : null;
+                const expectedHash = operation.expectedTokenHash ?? null;
+                const configuredMatches = Boolean(configuredHash && expectedHash && configuredHash === expectedHash);
+                const runtimeMatches = Boolean(runtimeHash && expectedHash && runtimeHash === expectedHash);
+                const runtimePresent = resultObject.runtime_token_present === true;
                 operation.result = {
-                  matches: Boolean(deployedHash && operation.expectedTokenHash && deployedHash === operation.expectedTokenHash),
-                  expectedFingerprint: tokenFingerprint(operation.expectedTokenHash),
-                  deployedFingerprint: tokenFingerprint(deployedHash),
+                  matches: runtimePresent ? runtimeMatches : false,
+                  configuredMatches,
+                  runtimeMatches,
+                  runtimePresent,
+                  expectedFingerprint: tokenFingerprint(expectedHash),
+                  configuredFingerprint: tokenFingerprint(configuredHash),
+                  runtimeFingerprint: tokenFingerprint(runtimeHash),
+                  deployedFingerprint: tokenFingerprint(runtimeHash ?? fallbackHash),
+                  containerState: typeof resultObject.container_state === "string" ? resultObject.container_state : null,
+                  configuredSensorSphereUrl: typeof resultObject.configured_sensorsphere_url === "string" ? resultObject.configured_sensorsphere_url : null,
+                  runtimeSensorSphereUrl: typeof resultObject.runtime_sensorsphere_url === "string" ? resultObject.runtime_sensorsphere_url : null,
                   agentType: typeof resultObject.agent_type === "string" ? resultObject.agent_type : null,
                   instance: typeof resultObject.instance === "string" ? resultObject.instance : null,
                   installDir: typeof resultObject.install_dir === "string" ? resultObject.install_dir : null
                 };
               } else if (message.operation === "DEPLOY" && message.status === "SUCCESS" && operation.expectedTokenHash) {
                 const resultObject = message.result && typeof message.result === "object" ? { ...(message.result as Record<string, unknown>) } : {};
-                const deployedHash = typeof resultObject.token_hash === "string" ? resultObject.token_hash : null;
+                const configuredHash = typeof resultObject.configured_token_hash === "string" ? resultObject.configured_token_hash : null;
+                const runtimeHash = typeof resultObject.runtime_token_hash === "string" ? resultObject.runtime_token_hash : null;
+                const fallbackHash = typeof resultObject.token_hash === "string" ? resultObject.token_hash : null;
                 delete resultObject.token_hash;
-                resultObject.tokenFingerprint = tokenFingerprint(deployedHash);
-                if (!deployedHash || deployedHash !== operation.expectedTokenHash) {
+                delete resultObject.configured_token_hash;
+                delete resultObject.runtime_token_hash;
+                resultObject.configuredTokenFingerprint = tokenFingerprint(configuredHash);
+                resultObject.runtimeTokenFingerprint = tokenFingerprint(runtimeHash);
+                resultObject.tokenFingerprint = tokenFingerprint(runtimeHash ?? fallbackHash);
+                if (!configuredHash || configuredHash !== operation.expectedTokenHash || !runtimeHash || runtimeHash !== operation.expectedTokenHash) {
                   operation.status = "FAILED";
-                  operation.error = "Supervisor deployed an agent token that does not match the SensorSphere identity";
+                  operation.error = !configuredHash || configuredHash !== operation.expectedTokenHash
+                    ? "Supervisor wrote an agent token that does not match the SensorSphere identity"
+                    : "Running agent container is not using the SensorSphere token written by the Supervisor";
                   resultObject.expectedTokenFingerprint = tokenFingerprint(operation.expectedTokenHash);
                 }
                 operation.result = resultObject;
@@ -1462,8 +1486,8 @@ export async function registerDeviceControlFeature(
     const parsed = supervisorCreateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid Supervisor Agent" });
     const token = generateSupervisorToken();
-    const result = await pool.query<SupervisorAgentRow>(`INSERT INTO supervisor_agents(name,token_hash,heartbeat_timeout_seconds) VALUES($1,$2,$3) RETURNING *`,
-      [parsed.data.name,hashToken(token),parsed.data.heartbeatTimeoutSeconds ?? 60]);
+    const result = await pool.query<SupervisorAgentRow>(`INSERT INTO supervisor_agents(name,token_hash,labels,heartbeat_timeout_seconds) VALUES($1,$2,$3::jsonb,$4) RETURNING *`,
+      [parsed.data.name,hashToken(token),JSON.stringify(parsed.data.labels ?? {}),parsed.data.heartbeatTimeoutSeconds ?? 60]);
     return reply.code(201).send({ supervisor: supervisorAgentDto(result.rows[0]!, false), token });
   });
 
@@ -1472,8 +1496,8 @@ export async function registerDeviceControlFeature(
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid Supervisor Agent" });
     const input = parsed.data;
     const result = await pool.query<SupervisorAgentRow>(`UPDATE supervisor_agents SET
-      name=COALESCE($2,name), enabled=COALESCE($3,enabled), heartbeat_timeout_seconds=COALESCE($4,heartbeat_timeout_seconds), updated_at=NOW()
-      WHERE id=$1 RETURNING *`, [request.params.id,input.name ?? null,input.enabled ?? null,input.heartbeatTimeoutSeconds ?? null]);
+      name=COALESCE($2,name), enabled=COALESCE($3,enabled), labels=COALESCE($4::jsonb,labels), heartbeat_timeout_seconds=COALESCE($5,heartbeat_timeout_seconds), updated_at=NOW()
+      WHERE id=$1 RETURNING *`, [request.params.id,input.name ?? null,input.enabled ?? null,input.labels == null ? null : JSON.stringify(input.labels),input.heartbeatTimeoutSeconds ?? null]);
     if (!result.rows[0]) return reply.code(404).send({ error: "Supervisor Agent not found" });
     if (input.enabled === false) supervisorSockets.get(request.params.id)?.close(4003,"Supervisor disabled");
     return reply.send(supervisorAgentDto(result.rows[0], supervisorSockets.has(request.params.id)));

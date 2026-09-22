@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.34.1";
+export const MODULE_VERSION = "1.35.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.35.0": {
+    releasedAt: "2026-09-23T00:15:00+02:00",
+    patch: "PR-238-agent-token-runtime-table-consistency-v1.patch",
+    changes: [
+      { type: "fixed", description: "Check token distinguishes configured .env token from the token actually present in the running managed-agent container" },
+      { type: "added", description: "Supervisor Agents support managed Labels and Agent Labels columns consistently with Device and Monitoring Agents" }
+    ]
+  },
   "1.34.1": {
     releasedAt: "2026-09-22T21:30:00+02:00",
     patch: "PR-237-managed-agent-delete-association-v1.patch",

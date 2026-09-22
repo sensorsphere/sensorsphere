@@ -7,6 +7,11 @@ import { DeviceGlyph } from "./DeviceGlyph";
 import type { AgentTokenCheckResult, DeviceAgent, DeviceDiscovery, DeviceRegistryDevice, DiscoveredDeviceAction, ManagedAgentStatus } from "./types";
 import { DeleteActionIcon, EditActionIcon } from "./TableActionIcons";
 import { AgentVersionFreshnessBadge, getAgentVersionAvailability } from "./AgentVersionAvailability";
+import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
+import { usePersistentState } from "./preferences/usePersistentState";
+import { ResetFiltersAction } from "./ResetFiltersAction";
+import { activeFilterStyles } from "./ActiveFilterStyles";
+import { FilterClearAction } from "./FilterClearAction";
 
 
 
@@ -70,6 +75,8 @@ interface DeviceAgentsPanelProps {
   onUpdateDiscoveredDevice?: (request: DiscoveredDeviceImportRequest, device: DeviceRegistryDevice) => Promise<void>;
   onOpenRegisteredDevice?: (device: DeviceRegistryDevice) => void;
 }
+
+type DeviceAgentSortKey = "name" | "status" | "reported" | "version" | "system" | "lastSeen" | "capabilities" | "labels" | "agentLabels";
 
 interface AgentFormState {
   name: string;
@@ -294,6 +301,12 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
   const [managedInstance, setManagedInstance] = React.useState("main");
   const [managedVersion, setManagedVersion] = React.useState("");
   const [managedEnvironment, setManagedEnvironment] = React.useState("{}");
+  const [agentNameFilter, setAgentNameFilter] = usePersistentState("device-control.agents.filter.name", "");
+  const [agentStatusFilter, setAgentStatusFilter] = usePersistentState<string | null>("device-control.agents.filter.status", null);
+  const [agentReportedFilter, setAgentReportedFilter] = usePersistentState("device-control.agents.filter.reported", "");
+  const [agentLabelsFilter, setAgentLabelsFilter] = usePersistentState("device-control.agents.filter.labels", "");
+  const [agentSortKey, setAgentSortKey] = usePersistentState<DeviceAgentSortKey>("device-control.agents.sort.key", "name");
+  const [agentSortDirection, setAgentSortDirection] = usePersistentState<SortDirection>("device-control.agents.sort.direction", "asc");
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["device-control", "agents"] });
   const save = useMutation({
@@ -550,12 +563,48 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
     });
   }, [discoveredDevices, discoverySortKey, discoverySortDirection, discoveryProvider, discoveryAgent, devices]);
 
+  const allAgents = agentsQuery.data ?? [];
+  const toggleAgentSort = (key: DeviceAgentSortKey) => {
+    if (agentSortKey === key) setAgentSortDirection(current => current === "asc" ? "desc" : "asc");
+    else { setAgentSortKey(key); setAgentSortDirection("asc"); }
+  };
+  const filteredAgents = allAgents.filter(agent => {
+    const status = !agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE";
+    const reported = `${agent.reportedName ?? ""} ${agent.hostname ?? ""}`.toLowerCase();
+    const labels = `${Object.entries(agent.labels).map(([key,value]) => `${key}=${value}`).join(" ")} ${agent.agentLabels.join(" ")}`.toLowerCase();
+    return (!agentNameFilter.trim() || agent.name.toLowerCase().includes(agentNameFilter.trim().toLowerCase()))
+      && (!agentStatusFilter || status === agentStatusFilter)
+      && (!agentReportedFilter.trim() || reported.includes(agentReportedFilter.trim().toLowerCase()))
+      && (!agentLabelsFilter.trim() || labels.includes(agentLabelsFilter.trim().toLowerCase()));
+  }).sort((left, right) => {
+    const status = (agent: DeviceAgent) => !agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE";
+    const value = (agent: DeviceAgent) => agentSortKey === "name" ? agent.name
+      : agentSortKey === "status" ? status(agent)
+      : agentSortKey === "reported" ? `${agent.reportedName ?? ""} ${agent.hostname ?? ""}`
+      : agentSortKey === "version" ? agent.version
+      : agentSortKey === "system" ? `${agent.os ?? ""} ${agent.osVersion ?? ""} ${agent.architecture ?? ""}`
+      : agentSortKey === "lastSeen" ? agent.lastSeenAt
+      : agentSortKey === "capabilities" ? agent.capabilities.map(item => item.provider).join(",")
+      : agentSortKey === "labels" ? Object.entries(agent.labels).map(([key,value]) => `${key}=${value}`).join(",")
+      : agent.agentLabels.join(",");
+    return compareTableValues(value(left), value(right), agentSortDirection);
+  });
+  const agentFiltersActive = Boolean(agentNameFilter || agentStatusFilter || agentReportedFilter || agentLabelsFilter);
+
   return <Stack gap="md" className="agent-admin-panel">
     <Card withBorder className="monitoring-table-card">
       <Group justify="space-between" mb="sm"><div><Text fw={600}>Device Agents</Text><Text size="xs" c="dimmed">Outbound WebSocket agents used for discovery and interactive device control.</Text></div><Button size="xs" onClick={openCreate}>Add Device Agent</Button></Group>
+      <Group gap="xs" mb="sm" wrap="wrap">
+        <ResetFiltersAction active={agentFiltersActive} onReset={() => { setAgentNameFilter(""); setAgentStatusFilter(null); setAgentReportedFilter(""); setAgentLabelsFilter(""); }} />
+        <TextInput size="xs" placeholder="Filter name" value={agentNameFilter} onChange={event => setAgentNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentNameFilter.trim()))} rightSection={<FilterClearAction active={Boolean(agentNameFilter.trim())} onClear={() => setAgentNameFilter("")} />} w={180} />
+        <Select size="xs" clearable placeholder="Status" data={["ONLINE","OFFLINE","DISABLED"]} value={agentStatusFilter} onChange={setAgentStatusFilter} styles={activeFilterStyles(Boolean(agentStatusFilter))} w={140} />
+        <TextInput size="xs" placeholder="Reported / host" value={agentReportedFilter} onChange={event => setAgentReportedFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentReportedFilter.trim()))} rightSection={<FilterClearAction active={Boolean(agentReportedFilter.trim())} onClear={() => setAgentReportedFilter("")} />} w={180} />
+        <TextInput size="xs" placeholder="Labels" value={agentLabelsFilter} onChange={event => setAgentLabelsFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentLabelsFilter.trim()))} rightSection={<FilterClearAction active={Boolean(agentLabelsFilter.trim())} onClear={() => setAgentLabelsFilter("")} />} w={200} />
+        <Text size="xs" c="dimmed">{filteredAgents.length}/{allAgents.length}</Text>
+      </Group>
       <div className="monitoring-table-scroll"><Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
-        <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Status</Table.Th><Table.Th>Reported</Table.Th><Table.Th>Version</Table.Th>{showSupervisorControls && <Table.Th>Supervisor</Table.Th>}<Table.Th>System</Table.Th><Table.Th style={{ width: 110 }}>Last Seen</Table.Th><Table.Th>Capabilities</Table.Th><Table.Th>Agent Labels</Table.Th><Table.Th style={{ width: showSupervisorControls ? 202 : 160, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
-        <Table.Tbody>{(agentsQuery.data ?? []).map(agent => <Table.Tr key={agent.id}>
+        <Table.Thead><Table.Tr><SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader><SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader><SortableTableHeader active={agentSortKey === "reported"} direction={agentSortDirection} onClick={() => toggleAgentSort("reported")}>Reported</SortableTableHeader><SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>{showSupervisorControls && <Table.Th>Supervisor</Table.Th>}<SortableTableHeader active={agentSortKey === "system"} direction={agentSortDirection} onClick={() => toggleAgentSort("system")}>System</SortableTableHeader><SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last Seen</SortableTableHeader><SortableTableHeader active={agentSortKey === "capabilities"} direction={agentSortDirection} onClick={() => toggleAgentSort("capabilities")}>Capabilities</SortableTableHeader><SortableTableHeader active={agentSortKey === "labels"} direction={agentSortDirection} onClick={() => toggleAgentSort("labels")}>Labels</SortableTableHeader><SortableTableHeader active={agentSortKey === "agentLabels"} direction={agentSortDirection} onClick={() => toggleAgentSort("agentLabels")}>Agent Labels</SortableTableHeader><Table.Th style={{ width: showSupervisorControls ? 202 : 160, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
+        <Table.Tbody>{filteredAgents.map(agent => <Table.Tr key={agent.id}>
           <Table.Td><Text size="sm" fw={600}>{agent.name}</Text>{agent.managedBySupervisorName && <Text size="xs" c="dimmed">Supervisor: {agent.managedBySupervisorName}{agent.managedInstance && agent.managedInstance !== "main" ? ` / ${agent.managedInstance}` : ""}</Text>}</Table.Td>
           <Table.Td><Badge color={agent.online ? "green" : agent.enabled ? "gray" : "red"} variant="light">{agent.online ? "ONLINE" : agent.enabled ? "OFFLINE" : "DISABLED"}</Badge></Table.Td>
           <Table.Td><Text size="sm">{agent.reportedName ?? "—"}</Text>{agent.hostname && <Text size="xs" c="dimmed">{agent.hostname}</Text>}</Table.Td>
@@ -564,9 +613,10 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
           <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td>
           <Table.Td title={agent.lastSeenAt ?? undefined}><Text size="sm">{compactDate(agent.lastSeenAt)}</Text></Table.Td>
           <Table.Td><Group gap={8}>{agent.capabilities.map(item => { const resolved=resolveProviderIcon(item.provider); return <Tooltip key={item.provider} label={`${item.provider} · ${item.actions.join(", ") || "No actions reported"}${item.discovery ? " · discovery" : ""}`}><span style={{ display: "inline-flex" }}><DeviceGlyph icon={resolved.icon} color={resolved.color} size={22} /></span></Tooltip>; })}{!agent.capabilities.some(item => item.provider.toLowerCase() === "proxmox") && (() => { const resolved=resolveProviderIcon("proxmox"); return <Tooltip label="No Proxmox server configured on this agent"><span style={{ display: "inline-flex", filter: "grayscale(1)", opacity: 0.35 }}><DeviceGlyph icon={resolved.icon} color={resolved.color} size={22} /></span></Tooltip>; })()}</Group></Table.Td>
+          <Table.Td>{Object.keys(agent.labels).length > 0 ? <Group gap={4} wrap="wrap">{Object.entries(agent.labels).map(([key,value]) => <Badge key={key} size="xs" variant="light">{key}={value}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
           <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
           <Table.Td><Group gap={10} wrap="nowrap" justify="flex-end"><Tooltip label={agent.online ? "Discover devices" : "Device Agent must be online to discover"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Discover devices" disabled={!agent.online || !agent.capabilities.some(capability => capability.discovery)} onClick={() => openDiscovery(agent)}><RadarIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online to update" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? "An update is already in progress" : "Update Device Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Device Agent" disabled={!agent.online || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => openAgentUpdate(agent)}><AgentUpdateIcon size={16} /></ActionIcon></Tooltip>{showSupervisorControls && <><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : !agent.supervisorSelfUpdateSupported ? "Supervisor Agent does not support self-update" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus) ? "Supervisor update already in progress" : "Update Supervisor Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.supervisorAvailable || !agent.supervisorSelfUpdateSupported || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus)} onClick={() => openSupervisorUpdate(agent)}><SupervisorUpdateIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : "Managed agents"}><ActionIcon size="sm" variant="light" color="indigo" aria-label="Managed agents" disabled={!agent.online || !agent.supervisorAvailable} onClick={() => openManagedAgents(agent)}>M</ActionIcon></Tooltip></>}<Group gap={4} wrap="nowrap"><EditActionIcon onClick={() => openEdit(agent)} /><Tooltip label="Copy device agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy device agent" onClick={() => openCopy(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check deployed token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check deployed token" onClick={() => checkToken.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerate.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Group></Table.Td>
-        </Table.Tr>)}{(agentsQuery.data ?? []).length === 0 && <Table.Tr><Table.Td colSpan={showSupervisorControls ? 10 : 9}><Text ta="center" c="dimmed" py="xl">No Device Agents yet.</Text></Table.Td></Table.Tr>}</Table.Tbody>
+        </Table.Tr>)}{filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={showSupervisorControls ? 11 : 10}><Text ta="center" c="dimmed" py="xl">No Device Agents yet.</Text></Table.Td></Table.Tr>}</Table.Tbody>
       </Table></div>
     </Card>
 
@@ -822,7 +872,12 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
         <Text size="sm"><strong>{tokenCheckResult?.name}</strong></Text>
         <Badge color={tokenCheckResult?.result.matches ? "green" : "red"} variant="light">{tokenCheckResult?.result.matches ? "TOKEN MATCH" : "TOKEN MISMATCH"}</Badge>
         <Text size="sm">SensorSphere fingerprint: <Code>{tokenCheckResult?.result.expectedFingerprint ?? "—"}</Code></Text>
-        <Text size="sm">Deployed fingerprint: <Code>{tokenCheckResult?.result.deployedFingerprint ?? "—"}</Code></Text>
+        <Text size="sm">Configured .env fingerprint: <Code>{tokenCheckResult?.result.configuredFingerprint ?? "—"}</Code></Text>
+        <Text size="sm">Running container fingerprint: <Code>{tokenCheckResult?.result.runtimeFingerprint ?? "—"}</Code></Text>
+        {tokenCheckResult?.result.configuredSensorSphereUrl && <Text size="xs" c="dimmed">Configured SensorSphere URL: {tokenCheckResult.result.configuredSensorSphereUrl}</Text>}
+        {tokenCheckResult?.result.runtimeSensorSphereUrl && <Text size="xs" c="dimmed">Running container SensorSphere URL: {tokenCheckResult.result.runtimeSensorSphereUrl}</Text>}
+        {tokenCheckResult?.result.runtimePresent === false && <Text size="xs" c="orange">The running container does not expose the expected token variable. Recreate the container before trusting the configured .env.</Text>}
+        {tokenCheckResult?.result.configuredMatches === true && tokenCheckResult?.result.runtimeMatches === false && <Text size="xs" c="red">The .env token matches SensorSphere, but the running container is using a different token.</Text>}
         {tokenCheckResult?.result.installDir && <Text size="xs" c="dimmed">Install directory: {tokenCheckResult.result.installDir}</Text>}
         <Group justify="flex-end"><Button onClick={() => setTokenCheckResult(null)}>Close</Button></Group>
       </Stack>
