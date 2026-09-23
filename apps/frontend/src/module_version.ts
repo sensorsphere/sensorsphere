@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.72.1";
+export const MODULE_VERSION = "1.73.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.73.0": {
+    releasedAt: "2026-09-23T05:50:00+02:00",
+    patch: "PR-241-agent-bulk-update-host-network-v1.patch",
+    changes: [
+      { type: "added", description: "Device, Monitoring and Supervisor Agent tables expose host network IP/CIDR/MAC details reported by the Supervisor" },
+      { type: "added", description: "Each Agent table provides an Update All action for online agents with a newer stable version available" }
+    ]
+  },
   "1.72.1": {
     releasedAt: "2026-09-23T00:45:00+02:00",
     patch: "PR-240-supervisor-update-action-lock-v1.patch",

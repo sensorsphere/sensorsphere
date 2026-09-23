@@ -60,6 +60,8 @@ import { ResetFiltersAction } from "./ResetFiltersAction";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { FilterClearAction } from "./FilterClearAction";
 import { AgentVersionFreshnessBadge, getAgentVersionAvailability } from "./AgentVersionAvailability";
+import { HostNetworkCell, type HostNetworkInterface } from "./HostNetworkCell";
+import { hasAgentUpdate } from "./AgentBulkUpdate";
 
 type AgentSortKey = "name" | "status" | "checks" | "host" | "version" | "lastSeen" | "labels" | "agentLabels";
 type CheckSortKey = "device" | "class" | "type" | "technology" | "check" | "target" | "agents" | "mode" | "status";
@@ -92,6 +94,7 @@ interface MonitoringSupervisorAgent {
   hostname: string | null;
   online: boolean;
   managedAgents: Array<Record<string, unknown>>;
+  hostNetworks: HostNetworkInterface[];
 }
 
 interface MonitoringManagedOperation {
@@ -342,6 +345,7 @@ export function MonitoringPanel({
   const checksQuery = useQuery({ queryKey: ["monitoring", "checks"], queryFn: getMonitoringChecks, refetchInterval: 15000 });
   const devicesQuery = useQuery({ queryKey: ["device-registry", "devices"], queryFn: getDeviceRegistryDevices });
   const [agentUpdateTarget, setAgentUpdateTarget] = React.useState<MonitoringAgent | null>(null);
+  const [bulkUpdateOpen, setBulkUpdateOpen] = React.useState(false);
   const [agentUpdateSupervisorId, setAgentUpdateSupervisorId] = React.useState<string | null>(null);
   const [agentUpdateInstance, setAgentUpdateInstance] = React.useState<string | null>(null);
   const [agentUpdateVersion, setAgentUpdateVersion] = React.useState("");
@@ -417,6 +421,15 @@ export function MonitoringPanel({
     },
     onSuccess: async result => { if (result.closeOnSuccess) { setAgentUpdateTarget(null); setAgentUpdateStatus("IDLE"); setAgentUpdateError(null); } else setAgentUpdateStatus("VERIFYING"); await Promise.all([queryClient.invalidateQueries({ queryKey: ["monitoring", "agents"] }), queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] })]); },
     onError: error => { setAgentUpdateStatus("FAILED"); setAgentUpdateError(error instanceof Error ? error.message : "Unable to update Monitoring Agent"); }
+  });
+
+  const bulkMonitoringUpdateMutation = useMutation({
+    mutationFn: async (items: Array<{ agent: MonitoringAgent; supervisorId: string; instance: string }>) => {
+      const latest = versionsQuery.data?.agents.monitorAgent.latestVersion;
+      if (!latest) throw new Error("Latest Monitoring Agent version is unavailable");
+      for (const item of items) await requestMonitoringAgentUpdate(item.supervisorId, item.agent.id, item.instance, latest);
+    },
+    onSuccess: async () => { setBulkUpdateOpen(false); await refresh(); }
   });
 
   const openMonitoringAgentUpdate = (agent: MonitoringAgent) => {
@@ -523,6 +536,15 @@ export function MonitoringPanel({
   const checks = checksQuery.data ?? [];
   const devices = devicesQuery.data ?? [];
   const deviceById = new Map(devices.map(device => [device.id, device]));
+  const latestMonitoringVersion = versionsQuery.data?.agents.monitorAgent.latestVersion ?? null;
+  const supervisorById = new Map((supervisorsQuery.data ?? []).map(supervisor => [supervisor.id, supervisor]));
+  const bulkMonitoringCandidates = agents.flatMap(agent => {
+    if (!agent.online || !agent.enabled || !agent.managedBySupervisorId || !hasAgentUpdate(agent.version, latestMonitoringVersion) || ["UPDATE_REQUESTED", "REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)) return [];
+    const supervisor = supervisorById.get(agent.managedBySupervisorId);
+    if (!supervisor?.online) return [];
+    return [{ agent, supervisorId: supervisor.id, instance: agent.managedInstance ?? "main" }];
+  });
+
 
   const toggleAgentSort = (key: AgentSortKey) => {
     if (agentSortKey === key) setAgentSortDirection(current => current === "asc" ? "desc" : "asc");
@@ -738,7 +760,7 @@ export function MonitoringPanel({
       <Card withBorder className="monitoring-table-card">
                   <Group justify="space-between" mb="sm">
                     <div><Title order={4}>Monitoring agents</Title><Text size="xs" c="dimmed">Independent pull agents authenticate with a SensorSphere-generated token.</Text></div>
-                    <Button size="xs" onClick={openCreateAgent}>Add Monitoring Agent</Button>
+                    <Group gap="xs"><Button size="xs" variant="light" disabled={bulkMonitoringCandidates.length === 0} onClick={() => setBulkUpdateOpen(true)}>Update All ({bulkMonitoringCandidates.length})</Button><Button size="xs" onClick={openCreateAgent}>Add Monitoring Agent</Button></Group>
                   </Group>
                   <Group gap="xs" mb="sm" wrap="wrap">
                     <ResetFiltersAction active={agentFiltersActive} onReset={() => { setAgentNameFilter(""); setAgentStatusFilter(null); setAgentHostFilter(""); setAgentLabelsFilter(""); }} />
@@ -756,6 +778,7 @@ export function MonitoringPanel({
                       <SortableTableHeader active={agentSortKey === "host"} direction={agentSortDirection} onClick={() => toggleAgentSort("host")}>Reported</SortableTableHeader>
                       <SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>
                       <Table.Th>System</Table.Th>
+                      <Table.Th>Host Network</Table.Th>
                       <SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last Seen</SortableTableHeader>
                       <SortableTableHeader active={agentSortKey === "checks"} direction={agentSortDirection} onClick={() => toggleAgentSort("checks")}>Checks count</SortableTableHeader>
                       <SortableTableHeader active={agentSortKey === "labels"} direction={agentSortDirection} onClick={() => toggleAgentSort("labels")}>Labels</SortableTableHeader>
@@ -770,6 +793,7 @@ export function MonitoringPanel({
                           <Table.Td><Text size="sm">{agent.hostname ?? "—"}</Text>{agent.lastIp && <Text size="xs" c="dimmed">{agent.lastIp}</Text>}</Table.Td>
                           <Table.Td><Text size="sm">{agent.version ?? "—"}</Text>{["UPDATE_REQUESTED", "REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? <><Badge size="xs" variant="light" color="blue">{agent.updateStatus}</Badge>{agent.desiredVersion && <Text size="xs" c="dimmed">Target {agent.desiredVersion}</Text>}</> : <><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.monitorAgent} />{agent.updateStatus === "FAILED" && <Tooltip label={agent.updateError ?? "Monitoring Agent update failed"}><Badge size="xs" variant="light" color="red">FAILED</Badge></Tooltip>}{agent.lastSuccessfulUpdateAt && <Text size="xs" c="dimmed" title={agent.lastSuccessfulUpdateAt}>Updated {relativeAge(agent.lastSuccessfulUpdateAt)}</Text>}</>}</Table.Td>
                           <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td>
+                          <Table.Td><HostNetworkCell networks={agent.managedBySupervisorId ? supervisorById.get(agent.managedBySupervisorId)?.hostNetworks : undefined} /></Table.Td>
                           <Table.Td title={agent.lastSeenAt ?? undefined}>{relativeAge(agent.lastSeenAt)}</Table.Td>
                           <Table.Td>{(() => { const count = checks.filter(check => check.assignments.some(item => item.agentId === agent.id)).length; return <Text size="sm" fw={700} c={count > 0 ? "green.6" : "dimmed"}>{count}</Text>; })()}</Table.Td>
                           <Table.Td>{Object.keys(agent.labels).length > 0 ? <Group gap={4} wrap="wrap">{Object.entries(agent.labels).map(([key,value]) => <Badge key={key} size="xs" variant="light">{key}={value}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
@@ -777,13 +801,17 @@ export function MonitoringPanel({
                           <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><Tooltip label={(supervisorsQuery.data ?? []).some(item => item.online && item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.installed !== false)) ? "Update Monitoring Agent" : "No online Supervisor manages a Monitoring Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Monitoring Agent" disabled={!(supervisorsQuery.data ?? []).some(item => item.online && item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.installed !== false))} onClick={() => openMonitoringAgentUpdate(agent)}><AgentUpdateIcon /></ActionIcon></Tooltip><EditActionIcon onClick={() => openEditAgent(agent)} /><Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check deployed token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check deployed token" onClick={() => checkToken.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} /></Group></Table.Td>
                         </Table.Tr>
                       ))}
-                      {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={10}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
+                      {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={11}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
                     </Table.Tbody>
                       </Table>
                   </div>
                 </Card>
         </Tabs.Panel>
       </Tabs>
+
+      <Modal opened={bulkUpdateOpen} onClose={() => !bulkMonitoringUpdateMutation.isPending && setBulkUpdateOpen(false)} title="Update all Monitoring Agents" centered>
+        <Stack><Text size="sm">Update {bulkMonitoringCandidates.length} Monitoring Agent{bulkMonitoringCandidates.length === 1 ? "" : "s"} to <strong>{latestMonitoringVersion ?? "—"}</strong>?</Text>{bulkMonitoringCandidates.map(({ agent }) => <Text size="sm" key={agent.id}>{agent.name}: {agent.version ?? "—"} → {latestMonitoringVersion}</Text>)}{bulkMonitoringUpdateMutation.isError && <Text size="sm" c="red">{bulkMonitoringUpdateMutation.error instanceof Error ? bulkMonitoringUpdateMutation.error.message : "Unable to update all Monitoring Agents"}</Text>}<Group justify="flex-end"><Button variant="default" disabled={bulkMonitoringUpdateMutation.isPending} onClick={() => setBulkUpdateOpen(false)}>Cancel</Button><Button loading={bulkMonitoringUpdateMutation.isPending} disabled={bulkMonitoringCandidates.length === 0} onClick={() => bulkMonitoringUpdateMutation.mutate(bulkMonitoringCandidates)}>Update All</Button></Group></Stack>
+      </Modal>
 
       <Modal opened={agentUpdateTarget != null} onClose={() => { if (!monitoringAgentUpdateMutation.isPending) { setAgentUpdateTarget(null); setAgentUpdateStatus("IDLE"); setAgentUpdateError(null); } }} title="Update Monitoring Agent" centered>
         <Stack>

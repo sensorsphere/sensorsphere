@@ -12,6 +12,9 @@ import { usePersistentState } from "./preferences/usePersistentState";
 import { ResetFiltersAction } from "./ResetFiltersAction";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { FilterClearAction } from "./FilterClearAction";
+import { getAutonomousSupervisors } from "./SupervisorAgentsPanel";
+import { HostNetworkCell } from "./HostNetworkCell";
+import { hasAgentUpdate } from "./AgentBulkUpdate";
 
 
 
@@ -274,7 +277,9 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
   const queryClient = useQueryClient();
   const agentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
   const versionsQuery = useQuery({ queryKey: ["agent-version-availability"], queryFn: getAgentVersionAvailability, refetchInterval: 300000 });
+  const supervisorsQuery = useQuery({ queryKey: ["device-control", "supervisors"], queryFn: getAutonomousSupervisors, refetchInterval: 10000 });
   const [opened, setOpened] = React.useState(false);
+  const [bulkUpdateOpen, setBulkUpdateOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<DeviceAgent | null>(null);
   const [form, setForm] = React.useState<AgentFormState>(emptyForm());
   const [deleteTarget, setDeleteTarget] = React.useState<DeviceAgent | null>(null);
@@ -338,6 +343,14 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
   const agentUpdateMutation = useMutation({
     mutationFn: ({ agentId, version, closeOnSuccess = false }: { agentId: string; version: string; closeOnSuccess?: boolean }) => requestDeviceAgentUpdate(agentId, version).then(result => ({ result, closeOnSuccess })),
     onSuccess: async ({ closeOnSuccess }) => { if (closeOnSuccess) { setUpdateTarget(null); setUpdateVersion(""); } await refresh(); }
+  });
+  const bulkDeviceUpdateMutation = useMutation({
+    mutationFn: async (agents: DeviceAgent[]) => {
+      const latest = versionsQuery.data?.agents.deviceAgent.latestVersion;
+      if (!latest) throw new Error("Latest Device Agent version is unavailable");
+      for (const agent of agents) await requestDeviceAgentUpdate(agent.id, latest);
+    },
+    onSuccess: async () => { setBulkUpdateOpen(false); await refresh(); }
   });
   const supervisorUpdateMutation = useMutation({
     mutationFn: ({ agentId, version, closeOnSuccess = false }: { agentId: string; version: string; closeOnSuccess?: boolean }) => requestSupervisorAgentUpdate(agentId, version).then(result => ({ result, closeOnSuccess })),
@@ -590,10 +603,13 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
     return compareTableValues(value(left), value(right), agentSortDirection);
   });
   const agentFiltersActive = Boolean(agentNameFilter || agentStatusFilter || agentReportedFilter || agentLabelsFilter);
+  const latestDeviceVersion = versionsQuery.data?.agents.deviceAgent.latestVersion ?? null;
+  const bulkDeviceCandidates = allAgents.filter(agent => agent.online && agent.enabled && !ACTIVE_UPDATE_STATES.includes(agent.updateStatus) && hasAgentUpdate(agent.version, latestDeviceVersion));
+  const supervisorById = new Map((supervisorsQuery.data ?? []).map(supervisor => [supervisor.id, supervisor]));
 
   return <Stack gap="md" className="agent-admin-panel">
     <Card withBorder className="monitoring-table-card">
-      <Group justify="space-between" mb="sm"><div><Text fw={600}>Device Agents</Text><Text size="xs" c="dimmed">Outbound WebSocket agents used for discovery and interactive device control.</Text></div><Button size="xs" onClick={openCreate}>Add Device Agent</Button></Group>
+      <Group justify="space-between" mb="sm"><div><Text fw={600}>Device Agents</Text><Text size="xs" c="dimmed">Outbound WebSocket agents used for discovery and interactive device control.</Text></div><Group gap="xs"><Button size="xs" variant="light" disabled={bulkDeviceCandidates.length === 0} onClick={() => setBulkUpdateOpen(true)}>Update All ({bulkDeviceCandidates.length})</Button><Button size="xs" onClick={openCreate}>Add Device Agent</Button></Group></Group>
       <Group gap="xs" mb="sm" wrap="wrap">
         <ResetFiltersAction active={agentFiltersActive} onReset={() => { setAgentNameFilter(""); setAgentStatusFilter(null); setAgentReportedFilter(""); setAgentLabelsFilter(""); }} />
         <TextInput size="xs" placeholder="Filter name" value={agentNameFilter} onChange={event => setAgentNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentNameFilter.trim()))} rightSection={<FilterClearAction active={Boolean(agentNameFilter.trim())} onClear={() => setAgentNameFilter("")} />} w={180} />
@@ -603,14 +619,14 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
         <Text size="xs" c="dimmed">{filteredAgents.length}/{allAgents.length}</Text>
       </Group>
       <div className="monitoring-table-scroll"><Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
-        <Table.Thead><Table.Tr><SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader><SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader><SortableTableHeader active={agentSortKey === "reported"} direction={agentSortDirection} onClick={() => toggleAgentSort("reported")}>Reported</SortableTableHeader><SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>{showSupervisorControls && <Table.Th>Supervisor</Table.Th>}<SortableTableHeader active={agentSortKey === "system"} direction={agentSortDirection} onClick={() => toggleAgentSort("system")}>System</SortableTableHeader><SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last Seen</SortableTableHeader><SortableTableHeader active={agentSortKey === "capabilities"} direction={agentSortDirection} onClick={() => toggleAgentSort("capabilities")}>Capabilities</SortableTableHeader><SortableTableHeader active={agentSortKey === "labels"} direction={agentSortDirection} onClick={() => toggleAgentSort("labels")}>Labels</SortableTableHeader><SortableTableHeader active={agentSortKey === "agentLabels"} direction={agentSortDirection} onClick={() => toggleAgentSort("agentLabels")}>Agent Labels</SortableTableHeader><Table.Th style={{ width: showSupervisorControls ? 202 : 160, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
+        <Table.Thead><Table.Tr><SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader><SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader><SortableTableHeader active={agentSortKey === "reported"} direction={agentSortDirection} onClick={() => toggleAgentSort("reported")}>Reported</SortableTableHeader><SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>{showSupervisorControls && <Table.Th>Supervisor</Table.Th>}<SortableTableHeader active={agentSortKey === "system"} direction={agentSortDirection} onClick={() => toggleAgentSort("system")}>System</SortableTableHeader><Table.Th>Host Network</Table.Th><SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last Seen</SortableTableHeader><SortableTableHeader active={agentSortKey === "capabilities"} direction={agentSortDirection} onClick={() => toggleAgentSort("capabilities")}>Capabilities</SortableTableHeader><SortableTableHeader active={agentSortKey === "labels"} direction={agentSortDirection} onClick={() => toggleAgentSort("labels")}>Labels</SortableTableHeader><SortableTableHeader active={agentSortKey === "agentLabels"} direction={agentSortDirection} onClick={() => toggleAgentSort("agentLabels")}>Agent Labels</SortableTableHeader><Table.Th style={{ width: showSupervisorControls ? 202 : 160, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
         <Table.Tbody>{filteredAgents.map(agent => <Table.Tr key={agent.id}>
           <Table.Td><Text size="sm" fw={600}>{agent.name}</Text>{agent.managedBySupervisorName && <Text size="xs" c="dimmed">Supervisor: {agent.managedBySupervisorName}{agent.managedInstance && agent.managedInstance !== "main" ? ` / ${agent.managedInstance}` : ""}</Text>}</Table.Td>
           <Table.Td><Badge color={agent.online ? "green" : agent.enabled ? "gray" : "red"} variant="light">{agent.online ? "ONLINE" : agent.enabled ? "OFFLINE" : "DISABLED"}</Badge></Table.Td>
           <Table.Td><Text size="sm">{agent.reportedName ?? "—"}</Text>{agent.hostname && <Text size="xs" c="dimmed">{agent.hostname}</Text>}</Table.Td>
           <Table.Td><Text size="sm">{agent.version ?? "—"}</Text>{ACTIVE_UPDATE_STATES.includes(agent.updateStatus) ? <><Badge size="xs" variant="light" color="blue">{agent.updateStatus}</Badge>{agent.desiredVersion && <Text size="xs" c="dimmed">Target {agent.desiredVersion}</Text>}</> : <><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.deviceAgent} />{agent.updateStatus === "FAILED" && <Tooltip label={agent.updateError ?? "Device Agent update failed"}><Badge size="xs" variant="light" color="red">FAILED</Badge></Tooltip>}{agent.lastSuccessfulUpdateAt && <Text size="xs" c="dimmed" title={agent.lastSuccessfulUpdateAt}>Updated {updateAge(agent.lastSuccessfulUpdateAt)}</Text>}</>}</Table.Td>
           {showSupervisorControls && <Table.Td><Text size="sm">{agent.supervisorVersion ?? "—"}</Text><Tooltip label={agent.supervisorUpdateError ?? (agent.supervisorAvailable ? `Supervisor ${agent.supervisorContainerState ?? "available"}` : "Supervisor Agent unavailable")}><Badge size="xs" variant="light" color={!agent.supervisorAvailable ? "gray" : agent.supervisorUpdateStatus === "FAILED" ? "red" : agent.supervisorUpdateStatus === "UPDATED" ? "green" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus) ? "blue" : agent.supervisorSelfUpdateSupported ? "teal" : "gray"}>{agent.supervisorUpdateStatus === "IDLE" ? (agent.supervisorSelfUpdateSupported ? "READY" : agent.supervisorAvailable ? "NO SELF-UPDATE" : "OFFLINE") : agent.supervisorUpdateStatus}</Badge></Tooltip>{agent.supervisorDesiredVersion && agent.supervisorDesiredVersion !== agent.supervisorVersion && agent.supervisorUpdateStatus !== "UPDATED" && <Text size="xs" c="dimmed">Target {agent.supervisorDesiredVersion}</Text>}</Table.Td>}
-          <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td>
+          <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td><Table.Td><HostNetworkCell networks={agent.managedBySupervisorId ? supervisorById.get(agent.managedBySupervisorId)?.hostNetworks : undefined} /></Table.Td>
           <Table.Td title={agent.lastSeenAt ?? undefined}><Text size="sm">{compactDate(agent.lastSeenAt)}</Text></Table.Td>
           <Table.Td><Group gap={8}>{agent.capabilities.map(item => { const resolved=resolveProviderIcon(item.provider); return <Tooltip key={item.provider} label={`${item.provider} · ${item.actions.join(", ") || "No actions reported"}${item.discovery ? " · discovery" : ""}`}><span style={{ display: "inline-flex" }}><DeviceGlyph icon={resolved.icon} color={resolved.color} size={22} /></span></Tooltip>; })}{!agent.capabilities.some(item => item.provider.toLowerCase() === "proxmox") && (() => { const resolved=resolveProviderIcon("proxmox"); return <Tooltip label="No Proxmox server configured on this agent"><span style={{ display: "inline-flex", filter: "grayscale(1)", opacity: 0.35 }}><DeviceGlyph icon={resolved.icon} color={resolved.color} size={22} /></span></Tooltip>; })()}</Group></Table.Td>
           <Table.Td>{Object.keys(agent.labels).length > 0 ? <Group gap={4} wrap="wrap">{Object.entries(agent.labels).map(([key,value]) => <Badge key={key} size="xs" variant="light">{key}={value}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
@@ -619,6 +635,10 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
         </Table.Tr>)}{filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={showSupervisorControls ? 11 : 10}><Text ta="center" c="dimmed" py="xl">No Device Agents yet.</Text></Table.Td></Table.Tr>}</Table.Tbody>
       </Table></div>
     </Card>
+
+    <Modal opened={bulkUpdateOpen} onClose={() => !bulkDeviceUpdateMutation.isPending && setBulkUpdateOpen(false)} title="Update all Device Agents" centered>
+      <Stack><Text size="sm">Update {bulkDeviceCandidates.length} Device Agent{bulkDeviceCandidates.length === 1 ? "" : "s"} to <strong>{latestDeviceVersion ?? "—"}</strong>?</Text>{bulkDeviceCandidates.map(agent => <Text size="sm" key={agent.id}>{agent.name}: {agent.version ?? "—"} → {latestDeviceVersion}</Text>)}{bulkDeviceUpdateMutation.isError && <Text size="sm" c="red">{bulkDeviceUpdateMutation.error instanceof Error ? bulkDeviceUpdateMutation.error.message : "Unable to update all Device Agents"}</Text>}<Group justify="flex-end"><Button variant="default" disabled={bulkDeviceUpdateMutation.isPending} onClick={() => setBulkUpdateOpen(false)}>Cancel</Button><Button loading={bulkDeviceUpdateMutation.isPending} disabled={bulkDeviceCandidates.length === 0} onClick={() => bulkDeviceUpdateMutation.mutate(bulkDeviceCandidates)}>Update All</Button></Group></Stack>
+    </Modal>
 
     <Modal opened={opened} onClose={() => setOpened(false)} title={editing ? "Edit Device Agent" : "Add Device Agent"} centered>
       <Stack><TextInput data-autofocus label="Name" required value={form.name} onChange={event => { const value = event.currentTarget.value; setForm(current => ({ ...current, name: value })); }} />

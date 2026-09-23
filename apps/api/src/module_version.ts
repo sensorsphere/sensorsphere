@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.35.1";
+export const MODULE_VERSION = "1.36.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.36.0": {
+    releasedAt: "2026-09-23T05:50:00+02:00",
+    patch: "PR-241-agent-bulk-update-host-network-v1.patch",
+    changes: [
+      { type: "added", description: "Supervisor Agents persist host network interface inventory with MAC, IP, CIDR and IPv4 subnet data" }
+    ]
+  },
   "1.35.1": {
     releasedAt: "2026-09-23T00:20:00+02:00",
     patch: "PR-239-agent-lifecycle-deprovision-icons-v1.patch",

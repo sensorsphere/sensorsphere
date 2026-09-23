@@ -457,6 +457,18 @@ const supervisorUpdateSchema = z.object({
   heartbeatTimeoutSeconds: z.number().int().min(15).max(3600).optional()
 }).strict().refine(value => Object.keys(value).length > 0, "At least one field is required");
 
+const supervisorHostNetworksSchema = z.array(z.object({
+  interface: z.string().trim().min(1).max(200),
+  mac: z.string().trim().max(64).nullable(),
+  addresses: z.array(z.object({
+    family: z.enum(["IPv4", "IPv6"]),
+    address: z.string().trim().min(1).max(200),
+    prefixLength: z.number().int().min(0).max(128),
+    cidr: z.string().trim().min(1).max(240),
+    network: z.string().trim().max(240).nullable()
+  }).strict()).max(100)
+}).strict()).max(100);
+
 const supervisorHelloSchema = z.object({
   type: z.literal("HELLO"),
   supervisorName: z.string().trim().min(1).max(200).optional(),
@@ -468,12 +480,14 @@ const supervisorHelloSchema = z.object({
     architecture: z.string().trim().min(1).max(100)
   }).strict().optional(),
   selfUpdateSupported: z.boolean().optional(),
+  hostNetworks: supervisorHostNetworksSchema.optional(),
   managedAgents: z.array(z.record(z.string(), z.unknown())).max(500).optional(),
   selfStatus: z.record(z.string(), z.unknown()).optional()
 }).strict();
 
 const supervisorHeartbeatSchema = z.object({
   type: z.literal("HEARTBEAT"),
+  hostNetworks: supervisorHostNetworksSchema.optional(),
   managedAgents: z.array(z.record(z.string(), z.unknown())).max(500).optional(),
   selfStatus: z.record(z.string(), z.unknown()).optional()
 }).strict();
@@ -507,7 +521,7 @@ function supervisorSelfStatusFields(selfStatus: Record<string, unknown> | undefi
 
 interface SupervisorAgentRow {
   id: string; name: string; enabled: boolean; labels: Record<string, string>; agent_labels: string[]; reported_name: string | null; version: string | null; hostname: string | null;
-  os_name: string | null; os_version: string | null; architecture: string | null; managed_agents: Array<Record<string, unknown>>;
+  os_name: string | null; os_version: string | null; architecture: string | null; host_networks: Array<Record<string, unknown>>; managed_agents: Array<Record<string, unknown>>;
   configured_version: string | null; container_state: string | null; self_update_supported: boolean; update_status: string;
   update_error: string | null; last_successful_update_at: Date | null; last_successful_update_version: string | null; last_seen_at: Date | null; heartbeat_timeout_seconds: number; created_at: Date; updated_at: Date;
 }
@@ -558,7 +572,7 @@ function supervisorAgentDto(row: SupervisorAgentRow, connected: boolean) {
   const recent = row.last_seen_at != null && Date.now() - row.last_seen_at.getTime() <= row.heartbeat_timeout_seconds * 1000;
   return {
     id: row.id, name: row.name, enabled: row.enabled, labels: row.labels ?? {}, agentLabels: Array.isArray(row.agent_labels) ? row.agent_labels : [], reportedName: row.reported_name, version: row.version, hostname: row.hostname,
-    os: row.os_name, osVersion: row.os_version, architecture: row.architecture, managedAgents: row.managed_agents ?? [],
+    os: row.os_name, osVersion: row.os_version, architecture: row.architecture, hostNetworks: row.host_networks ?? [], managedAgents: row.managed_agents ?? [],
     configuredVersion: row.configured_version, containerState: row.container_state, selfUpdateSupported: row.self_update_supported ?? false,
     updateStatus: row.update_status ?? "IDLE", updateError: row.update_error, lastSuccessfulUpdateAt: row.last_successful_update_at?.toISOString() ?? null, lastSuccessfulUpdateVersion: row.last_successful_update_version, lastSeenAt: row.last_seen_at?.toISOString() ?? null,
     heartbeatTimeoutSeconds: row.heartbeat_timeout_seconds, online: row.enabled && connected && recent,
@@ -1336,22 +1350,22 @@ export async function registerDeviceControlFeature(
           await pool.query(`UPDATE supervisor_agents SET
             reported_name=COALESCE($2,reported_name),version=COALESCE($3,version),hostname=COALESCE($4,hostname),
             os_name=COALESCE($5,os_name),os_version=COALESCE($6,os_version),architecture=COALESCE($7,architecture),
-            managed_agents=$8::jsonb,
-            configured_version=COALESCE($9,configured_version),
-            container_state=COALESCE($10,container_state),self_update_supported=$11,
+            host_networks=$8::jsonb,managed_agents=$9::jsonb,
+            configured_version=COALESCE($10,configured_version),
+            container_state=COALESCE($11,container_state),self_update_supported=$12,
             update_status=CASE
-              WHEN COALESCE($12,'')='FAILED' THEN 'FAILED'
-              WHEN COALESCE($12,'')='ROLLED_BACK' THEN 'ROLLED_BACK'
-              WHEN COALESCE($12,'')='UPDATED' AND configured_version IS NOT NULL AND COALESCE($3,version)=configured_version THEN 'UPDATED'
-              WHEN COALESCE($12,'')='UPDATED' AND configured_version IS NOT NULL AND COALESCE($3,version)<>configured_version THEN 'UPDATING'
-              WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND COALESCE($12,'')='IDLE' THEN update_status
-              WHEN COALESCE($12,'') IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') THEN COALESCE($12,update_status)
+              WHEN COALESCE($13,'')='FAILED' THEN 'FAILED'
+              WHEN COALESCE($13,'')='ROLLED_BACK' THEN 'ROLLED_BACK'
+              WHEN COALESCE($13,'')='UPDATED' AND configured_version IS NOT NULL AND COALESCE($3,version)=configured_version THEN 'UPDATED'
+              WHEN COALESCE($13,'')='UPDATED' AND configured_version IS NOT NULL AND COALESCE($3,version)<>configured_version THEN 'UPDATING'
+              WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND COALESCE($13,'')='IDLE' THEN update_status
+              WHEN COALESCE($13,'') IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') THEN COALESCE($13,update_status)
               ELSE update_status
             END,
-            update_error=CASE WHEN COALESCE($12,'')='FAILED' THEN $13 WHEN COALESCE($12,'') IN ('UPDATED','ROLLED_BACK') THEN NULL ELSE update_error END,
+            update_error=CASE WHEN COALESCE($13,'')='FAILED' THEN $14 WHEN COALESCE($13,'') IN ('UPDATED','ROLLED_BACK') THEN NULL ELSE update_error END,
             last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
             [supervisor.id,message.supervisorName ?? null,message.version ?? null,message.hostname ?? null,message.systemInfo?.os ?? null,
-             message.systemInfo?.osVersion ?? null,message.systemInfo?.architecture ?? null,JSON.stringify(message.managedAgents ?? []),
+             message.systemInfo?.osVersion ?? null,message.systemInfo?.architecture ?? null,JSON.stringify(message.hostNetworks ?? []),JSON.stringify(message.managedAgents ?? []),
              self.configuredVersion,self.containerState,message.selfUpdateSupported ?? true,self.updateStatus,self.updateError]);
           if (self.updateStatus === "UPDATED") {
             await pool.query(`UPDATE supervisor_agents SET
@@ -1370,21 +1384,21 @@ export async function registerDeviceControlFeature(
           return;
         }
         const self = supervisorSelfStatusFields(message.selfStatus);
-        await pool.query(`UPDATE supervisor_agents SET managed_agents=$2::jsonb,
-          configured_version=COALESCE($3,configured_version),
-          container_state=COALESCE($4,container_state),
+        await pool.query(`UPDATE supervisor_agents SET host_networks=$2::jsonb,managed_agents=$3::jsonb,
+          configured_version=COALESCE($4,configured_version),
+          container_state=COALESCE($5,container_state),
           update_status=CASE
-            WHEN COALESCE($5,'')='FAILED' THEN 'FAILED'
-            WHEN COALESCE($5,'')='ROLLED_BACK' THEN 'ROLLED_BACK'
-            WHEN COALESCE($5,'')='UPDATED' AND configured_version IS NOT NULL AND version=configured_version THEN 'UPDATED'
-            WHEN COALESCE($5,'')='UPDATED' AND configured_version IS NOT NULL AND version<>configured_version THEN 'UPDATING'
-            WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND COALESCE($5,'')='IDLE' THEN update_status
-            WHEN COALESCE($5,'') IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') THEN COALESCE($5,update_status)
+            WHEN COALESCE($6,'')='FAILED' THEN 'FAILED'
+            WHEN COALESCE($6,'')='ROLLED_BACK' THEN 'ROLLED_BACK'
+            WHEN COALESCE($6,'')='UPDATED' AND configured_version IS NOT NULL AND version=configured_version THEN 'UPDATED'
+            WHEN COALESCE($6,'')='UPDATED' AND configured_version IS NOT NULL AND version<>configured_version THEN 'UPDATING'
+            WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND COALESCE($6,'')='IDLE' THEN update_status
+            WHEN COALESCE($6,'') IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') THEN COALESCE($6,update_status)
             ELSE update_status
           END,
-          update_error=CASE WHEN COALESCE($5,'')='FAILED' THEN $6 WHEN COALESCE($5,'') IN ('UPDATED','ROLLED_BACK') THEN NULL ELSE update_error END,
+          update_error=CASE WHEN COALESCE($6,'')='FAILED' THEN $7 WHEN COALESCE($6,'') IN ('UPDATED','ROLLED_BACK') THEN NULL ELSE update_error END,
           last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
-          [supervisor.id,JSON.stringify(message.managedAgents ?? []),self.configuredVersion,self.containerState,self.updateStatus,self.updateError]);
+          [supervisor.id,JSON.stringify(message.hostNetworks ?? []),JSON.stringify(message.managedAgents ?? []),self.configuredVersion,self.containerState,self.updateStatus,self.updateError]);
         if (self.updateStatus === "UPDATED") {
           await pool.query(`UPDATE supervisor_agents SET
             last_successful_update_at=CASE WHEN last_successful_update_version IS DISTINCT FROM version OR last_successful_update_at IS NULL THEN NOW() ELSE last_successful_update_at END,
