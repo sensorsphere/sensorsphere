@@ -628,13 +628,17 @@ export async function registerDeviceControlFeature(
     return agentReleaseSnapshot;
   };
 
-  const getAgentReleaseSnapshot = async (): Promise<AgentReleaseSnapshot> => {
-    const checkedAt = agentReleaseSnapshot ? new Date(agentReleaseSnapshot.checkedAt).getTime() : 0;
-    if (agentReleaseSnapshot && Date.now() - checkedAt < AGENT_RELEASE_CACHE_TTL_MS) return agentReleaseSnapshot;
+  const forceAgentReleaseRefresh = async (): Promise<AgentReleaseSnapshot> => {
     if (!agentReleaseRefresh) {
       agentReleaseRefresh = refreshAgentReleaseSnapshot().finally(() => { agentReleaseRefresh = null; });
     }
-    return agentReleaseRefresh!;
+    return agentReleaseRefresh;
+  };
+
+  const getAgentReleaseSnapshot = async (): Promise<AgentReleaseSnapshot> => {
+    const checkedAt = agentReleaseSnapshot ? new Date(agentReleaseSnapshot.checkedAt).getTime() : 0;
+    if (agentReleaseSnapshot && Date.now() - checkedAt < AGENT_RELEASE_CACHE_TTL_MS) return agentReleaseSnapshot;
+    return forceAgentReleaseRefresh();
   };
 
   type DiscoveryStatus = "SENT" | "SUCCESS" | "FAILED" | "TIMEOUT";
@@ -1380,7 +1384,10 @@ export async function registerDeviceControlFeature(
             if (operation.monitoringAgentId && operation.operation === "UPDATE") {
               const monitoringStatus = operation.status === "SUCCESS" ? "VERIFYING" : "FAILED";
               await pool.query(`UPDATE monitoring_agents SET
-                update_status=$2,
+                update_status=CASE
+                  WHEN $2='VERIFYING' AND desired_version IS NULL AND last_successful_update_version IS NOT NULL AND version=last_successful_update_version THEN 'UPDATED'
+                  ELSE $2
+                END,
                 update_error=CASE WHEN $2='FAILED' THEN COALESCE($3,'Supervisor-managed Monitoring Agent update failed') ELSE NULL END,
                 update_finished_at=CASE WHEN $2='FAILED' THEN NOW() ELSE update_finished_at END,
                 updated_at=NOW()
@@ -1860,6 +1867,11 @@ export async function registerDeviceControlFeature(
 
   app.get("/api/v1/device-control/agent-versions", async (_request, reply) => {
     return reply.send(await getAgentReleaseSnapshot());
+  });
+
+  app.post("/api/v1/device-control/agent-versions/refresh", async (_request, reply) => {
+    agentReleaseSnapshot = null;
+    return reply.send(await forceAgentReleaseRefresh());
   });
 
   app.get("/api/v1/device-control/agents", async (_request, reply) => {

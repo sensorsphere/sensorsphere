@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.38.0";
+export const MODULE_VERSION = "1.39.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.39.0": {
+    releasedAt: "2026-09-23T20:45:00+02:00",
+    patch: "PR-246-agent-lifecycle-observability-v1.patch",
+    changes: [
+      { type: "fixed", description: "Supervisor Monitoring Agent update results no longer regress an already heartbeat-confirmed UPDATED lifecycle back to VERIFYING" },
+      { type: "added", description: "Agent release availability can be refreshed immediately from GHCR without restarting the API" }
+    ]
+  },
   "1.38.0": {
     releasedAt: "2026-09-23T19:15:00+02:00",
     patch: "PR-244-managed-runtime-multi-instance-v1.patch",

@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.75.0";
+export const MODULE_VERSION = "1.76.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.76.0": {
+    releasedAt: "2026-09-23T20:45:00+02:00",
+    patch: "PR-246-agent-lifecycle-observability-v1.patch",
+    changes: [
+      { type: "added", description: "Agent update lifecycle statuses show relative age and highlight potentially stalled transitions" },
+      { type: "added", description: "Agents workspace can refresh available GHCR versions immediately and refreshes them again on mount or window focus" },
+      { type: "changed", description: "Device Registry Taxonomy is visually anchored at the far right of its tab bar" }
+    ]
+  },
   "1.75.0": {
     releasedAt: "2026-09-23T19:15:00+02:00",
     patch: "PR-244-managed-runtime-multi-instance-v1.patch",

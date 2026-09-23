@@ -1,13 +1,13 @@
 import React from "react";
-import { Card, Group, SimpleGrid, Stack, Tabs, Text } from "@mantine/core";
-import { useQuery } from "@tanstack/react-query";
+import { ActionIcon, Card, Group, SimpleGrid, Stack, Tabs, Text, Tooltip } from "@mantine/core";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DeviceRegistryDevice } from "./types";
 import { DeviceAgentsPanel, type DiscoveredDeviceImportRequest } from "./DeviceAgentsPanel";
 import { MonitoringPanel } from "./MonitoringPanel";
 import { getAutonomousSupervisors, SupervisorAgentsPanel } from "./SupervisorAgentsPanel";
 import { usePersistentState } from "./preferences/usePersistentState";
 import { getDeviceAgents, getMonitoringAgents } from "./api";
-import { getAgentVersionAvailability, type AgentReleaseKind } from "./AgentVersionAvailability";
+import { getAgentVersionAvailability, refreshAgentVersionAvailability, type AgentReleaseKind } from "./AgentVersionAvailability";
 import { hasAgentUpdate } from "./AgentBulkUpdate";
 import { AgentTypeIcon } from "./AgentTypeIcon";
 
@@ -20,13 +20,29 @@ interface AgentsPanelProps {
 
 export function AgentsPanel({ devices, onImportDiscoveredDevice, onUpdateDiscoveredDevice, onOpenRegisteredDevice }: AgentsPanelProps) {
   const [tab, setTab] = usePersistentState<"device" | "monitoring" | "supervisor">("device-registry.agents.tab", "device");
+  const queryClient = useQueryClient();
+  const [versionsRefreshing, setVersionsRefreshing] = React.useState(false);
+  const [versionsRefreshError, setVersionsRefreshError] = React.useState<string | null>(null);
   const deviceAgentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
   const monitoringAgentsQuery = useQuery({ queryKey: ["monitoring", "agents"], queryFn: getMonitoringAgents, refetchInterval: 15000 });
-  const versionsQuery = useQuery({ queryKey: ["agent-version-availability"], queryFn: getAgentVersionAvailability, refetchInterval: 300000 });
+  const versionsQuery = useQuery({ queryKey: ["agent-version-availability"], queryFn: getAgentVersionAvailability, refetchInterval: 300000, refetchOnMount: "always", refetchOnWindowFocus: true });
   const autonomousSupervisorsQuery = useQuery({ queryKey: ["device-control", "supervisors"], queryFn: getAutonomousSupervisors, refetchInterval: 10000 });
   const deviceAgents = deviceAgentsQuery.data ?? [];
   const monitoringAgents = monitoringAgentsQuery.data ?? [];
   const autonomousSupervisors = autonomousSupervisorsQuery.data ?? [];
+
+  const refreshVersions = async () => {
+    setVersionsRefreshing(true);
+    setVersionsRefreshError(null);
+    try {
+      const refreshed = await refreshAgentVersionAvailability();
+      queryClient.setQueryData(["agent-version-availability"], refreshed);
+    } catch (error) {
+      setVersionsRefreshError(error instanceof Error ? error.message : "Unable to refresh agent versions");
+    } finally {
+      setVersionsRefreshing(false);
+    }
+  };
 
   const stats: Array<[string, number, number, number, string, AgentReleaseKind, "device" | "monitoring" | "supervisor"]> = [
     ["Device Agents", deviceAgents.length, deviceAgents.filter(agent => agent.online && agent.enabled).length, deviceAgents.filter(agent => hasAgentUpdate(agent.version, versionsQuery.data?.agents.deviceAgent.latestVersion)).length, "cyan", "deviceAgent", "device"],
@@ -46,6 +62,11 @@ export function AgentsPanel({ devices, onImportDiscoveredDevice, onUpdateDiscove
           </Card>;
         })}
       </SimpleGrid>
+      <Group justify="flex-end" gap="xs">
+        {versionsRefreshError && <Text size="xs" c="red">{versionsRefreshError}</Text>}
+        <Text size="xs" c="dimmed">Versions checked {versionsQuery.data?.checkedAt ? new Date(versionsQuery.data.checkedAt).toLocaleTimeString() : "—"}</Text>
+        <Tooltip label="Refresh available agent versions from GHCR"><ActionIcon size="sm" variant="light" color="blue" aria-label="Refresh available agent versions" loading={versionsRefreshing} onClick={() => void refreshVersions()}>↻</ActionIcon></Tooltip>
+      </Group>
       <Tabs value={tab} onChange={value => value && setTab(value as "device" | "monitoring" | "supervisor")} keepMounted={false} className="agents-workspace-tabs">
       <Tabs.List mb="sm">
         <Tabs.Tab value="device" leftSection={<AgentTypeIcon type="device" />}>Device Agents</Tabs.Tab>

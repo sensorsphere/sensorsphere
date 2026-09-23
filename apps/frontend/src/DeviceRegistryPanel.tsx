@@ -1195,7 +1195,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           <Tabs.Tab value="monitoring">Monitoring</Tabs.Tab>
           <Tabs.Tab value="health-profiles">Health Profiles</Tabs.Tab>
           <Tabs.Tab value="agents">Agents</Tabs.Tab>
-          <Tabs.Tab value="taxonomy">Taxonomy</Tabs.Tab>
+          <Tabs.Tab value="taxonomy" ml="auto">Taxonomy</Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="devices" pt="md" className="device-registry-devices-panel">

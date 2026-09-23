@@ -1,5 +1,5 @@
 import React from "react";
-import { Badge, Tooltip } from "@mantine/core";
+import { Badge, Text, Tooltip } from "@mantine/core";
 
 export type AgentReleaseKind = "deviceAgent" | "monitorAgent" | "supervisorAgent";
 
@@ -20,6 +20,33 @@ export async function getAgentVersionAvailability(): Promise<AgentVersionAvailab
   const response = await fetch("/api/v1/device-control/agent-versions");
   if (!response.ok) throw new Error(`Unable to load agent versions (${response.status})`);
   return response.json() as Promise<AgentVersionAvailability>;
+}
+
+export async function refreshAgentVersionAvailability(): Promise<AgentVersionAvailability> {
+  const response = await fetch("/api/v1/device-control/agent-versions/refresh", { method: "POST" });
+  if (!response.ok) throw new Error(`Unable to refresh agent versions (${response.status})`);
+  return response.json() as Promise<AgentVersionAvailability>;
+}
+
+function compactAge(value: string | null | undefined): string {
+  if (!value) return "";
+  const milliseconds = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return value;
+  const seconds = Math.floor(milliseconds / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+export function UpdateLifecycleAge({ status, timestamp, label }: { status: string; timestamp: string | null | undefined; label?: string }) {
+  if (!timestamp) return null;
+  const ageMs = Date.now() - new Date(timestamp).getTime();
+  const stalled = Number.isFinite(ageMs) && ageMs >= 5 * 60 * 1000;
+  const slow = Number.isFinite(ageMs) && ageMs >= 2 * 60 * 1000;
+  const text = `${label ?? status.toLowerCase()} ${compactAge(timestamp)}`;
+  const node = <Text size="xs" c={stalled ? "red" : slow ? "orange" : "dimmed"} title={timestamp}>{text}</Text>;
+  return stalled ? <Tooltip label={`${status} has been active for more than 5 minutes and may be stalled`}>{node}</Tooltip> : node;
 }
 
 function parseSemver(value: string | null | undefined): [number, number, number] | null {
