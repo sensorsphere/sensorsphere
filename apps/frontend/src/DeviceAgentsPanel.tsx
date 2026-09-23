@@ -622,6 +622,15 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
   const bulkDeviceCandidates = allAgents.filter(agent => agent.online && agent.enabled && !ACTIVE_UPDATE_STATES.includes(agent.updateStatus) && hasAgentUpdate(agent.version, latestDeviceVersion));
   const supervisorById = new Map((supervisorsQuery.data ?? []).map(supervisor => [supervisor.id, supervisor]));
 
+  const proxmoxConfigPayload = (endpoints: ProxmoxEndpointConfigDto[]): ProxmoxEndpointConfigDto[] => endpoints.map(endpoint => ({
+    id: endpoint.id,
+    product: endpoint.product,
+    url: endpoint.url,
+    tokenId: endpoint.tokenId,
+    ...(endpoint.tokenSecret ? { tokenSecret: endpoint.tokenSecret } : {}),
+    verifyTls: endpoint.verifyTls
+  }));
+
   const openProxmoxConfig = async (agent: DeviceAgent) => {
     setProxmoxTarget(agent); setProxmoxEndpoints([]); setProxmoxError(null); setProxmoxTestResult(null); setProxmoxLoading(true);
     try {
@@ -634,7 +643,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
     if (!proxmoxTarget) return;
     setProxmoxLoading(true); setProxmoxError(null); setProxmoxTestResult(null);
     try {
-      const saved = await saveDeviceAgentProxmoxConfig(proxmoxTarget.id, proxmoxEndpoints);
+      const saved = await saveDeviceAgentProxmoxConfig(proxmoxTarget.id, proxmoxConfigPayload(proxmoxEndpoints));
       setProxmoxEndpoints(saved.endpoints.map(endpoint => ({ ...endpoint, tokenSecret: "" })));
       await refresh();
     } catch (error) { setProxmoxError(error instanceof Error ? error.message : "Unable to save Proxmox configuration"); }
@@ -651,7 +660,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
     if (!proxmoxTarget) return;
     setProxmoxLoading(true); setProxmoxError(null); setProxmoxTestResult(null);
     try {
-      await saveDeviceAgentProxmoxConfig(proxmoxTarget.id, proxmoxEndpoints);
+      await saveDeviceAgentProxmoxConfig(proxmoxTarget.id, proxmoxConfigPayload(proxmoxEndpoints));
       let discovery = await startDeviceDiscovery(proxmoxTarget.id, "PROXMOX", 8);
       const deadline = Date.now() + 20_000;
       while (discovery.status === "SENT" && Date.now() < deadline) { await new Promise(resolve => window.setTimeout(resolve, 500)); discovery = await getDeviceDiscovery(discovery.commandId); }

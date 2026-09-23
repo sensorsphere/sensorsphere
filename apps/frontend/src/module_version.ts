@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.76.2";
+export const MODULE_VERSION = "1.76.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.76.3": {
+    releasedAt: "2026-09-23T23:35:00+02:00",
+    patch: "PR-251-proxmox-config-readonly-field-v1.patch",
+    changes: [
+      { type: "fixed", description: "Proxmox Save and Test connection omit the read-only tokenSecretConfigured marker when sending endpoint configuration back to the API" }
+    ]
+  },
   "1.76.2": {
     releasedAt: "2026-09-23T23:20:00+02:00",
     patch: "PR-250-proxmox-test-connection-command-id-v1.patch",
