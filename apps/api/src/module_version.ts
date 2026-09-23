@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.37.0";
+export const MODULE_VERSION = "1.37.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.37.1": {
+    releasedAt: "2026-09-23T17:45:00+02:00",
+    patch: "PR-243-monitoring-managed-update-safety-v1.patch",
+    changes: [
+      { type: "fixed", description: "Monitoring Agent updates require an existing exact Supervisor association and can no longer create or retarget a main instance implicitly" }
+    ]
+  },
   "1.37.0": {
     releasedAt: "2026-09-23T06:00:00+02:00",
     patch: "PR-242-proxmox-config-agent-ui-v1.patch",

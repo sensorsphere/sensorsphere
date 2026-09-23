@@ -433,14 +433,10 @@ export function MonitoringPanel({
   });
 
   const openMonitoringAgentUpdate = (agent: MonitoringAgent) => {
-    const supervisors = (supervisorsQuery.data ?? []).filter(item => item.online && item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.installed !== false));
-    const explicitMatch = supervisors.find(item => item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.sensor_sphere_agent_id === agent.id));
-    const hostnameMatch = supervisors.find(item => agent.hostname && item.hostname === agent.hostname);
-    const selected = explicitMatch ?? hostnameMatch ?? (supervisors.length === 1 ? supervisors[0] : undefined);
-    const instances = selected?.managedAgents.filter(entry => entry.agent_type === "monitor-agent" && entry.installed !== false).map(entry => typeof entry.instance === "string" ? entry.instance : "main") ?? [];
+    const selected = agent.managedBySupervisorId ? (supervisorsQuery.data ?? []).find(item => item.id === agent.managedBySupervisorId && item.online) : undefined;
     setAgentUpdateTarget(agent);
     setAgentUpdateSupervisorId(selected?.id ?? null);
-    setAgentUpdateInstance(instances.length === 1 ? instances[0]! : null);
+    setAgentUpdateInstance(selected && agent.managedInstance ? agent.managedInstance : null);
     setAgentUpdateVersion(versionsQuery.data?.agents.monitorAgent.latestVersion ?? agent.version ?? "");
     setAgentUpdateStatus("IDLE");
     setAgentUpdateError(null);
@@ -816,8 +812,9 @@ export function MonitoringPanel({
       <Modal opened={agentUpdateTarget != null} onClose={() => { if (!monitoringAgentUpdateMutation.isPending) { setAgentUpdateTarget(null); setAgentUpdateStatus("IDLE"); setAgentUpdateError(null); } }} title="Update Monitoring Agent" centered>
         <Stack>
           <Text size="sm">Update Monitoring Agent <strong>{agentUpdateTarget?.name}</strong> through its host Supervisor.</Text>
-          <Select label="Supervisor Agent" searchable data={(supervisorsQuery.data ?? []).filter(item => item.online && item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.installed !== false)).map(item => ({ value: item.id, label: item.name }))} value={agentUpdateSupervisorId} onChange={value => { setAgentUpdateSupervisorId(value); const supervisor = (supervisorsQuery.data ?? []).find(item => item.id === value); const instances = supervisor?.managedAgents.filter(entry => entry.agent_type === "monitor-agent" && entry.installed !== false).map(entry => typeof entry.instance === "string" ? entry.instance : "main") ?? []; setAgentUpdateInstance(instances.length === 1 ? instances[0]! : null); }} disabled={monitoringAgentUpdateMutation.isPending || agentUpdateStatus === "UPDATED"} />
-          <Select label="Managed instance" data={((supervisorsQuery.data ?? []).find(item => item.id === agentUpdateSupervisorId)?.managedAgents ?? []).filter(entry => entry.agent_type === "monitor-agent" && entry.installed !== false).map(entry => { const instance = typeof entry.instance === "string" ? entry.instance : "main"; const version = typeof entry.configured_version === "string" ? entry.configured_version : "—"; return { value: instance, label: `${instance} · ${version}` }; })} value={agentUpdateInstance} onChange={setAgentUpdateInstance} disabled={monitoringAgentUpdateMutation.isPending || agentUpdateStatus === "UPDATED"} />
+          {agentUpdateTarget && !agentUpdateTarget.managedAssociationId && <Text size="sm" c="orange">This Monitoring Agent has no explicit Supervisor association. Associate its existing installation before updating it.</Text>}
+          <Select label="Supervisor Agent" data={(supervisorsQuery.data ?? []).filter(item => item.id === agentUpdateSupervisorId).map(item => ({ value: item.id, label: item.name }))} value={agentUpdateSupervisorId} disabled />
+          <TextInput label="Managed instance" value={agentUpdateInstance ?? ""} readOnly />
           <TextInput label="Target version" value={agentUpdateVersion} onChange={event => setAgentUpdateVersion(event.currentTarget.value)} disabled={monitoringAgentUpdateMutation.isPending || agentUpdateStatus === "UPDATED"} />
           <Card withBorder p="sm"><Group justify="space-between"><Text size="xs" c="dimmed">Status</Text><Badge size="sm" variant="light" color={agentUpdateStatus === "UPDATED" ? "green" : agentUpdateStatus === "FAILED" ? "red" : ["UPDATING", "VERIFYING"].includes(agentUpdateStatus) ? "blue" : "teal"}>{agentUpdateStatus === "IDLE" ? "READY" : agentUpdateStatus}</Badge></Group></Card>
           {agentUpdateError && <Text size="sm" c="red">{agentUpdateError}</Text>}

@@ -1579,9 +1579,20 @@ export async function registerDeviceControlFeature(
     const socket = supervisorSockets.get(supervisor.id);
     if (!socket || socket.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Supervisor Agent is offline" });
 
-    const instance = parsed.data.instance ?? "main";
+    let instance = parsed.data.instance ?? "main";
     let assignment: SupervisorManagedAssignmentRow | null = null;
-    if (parsed.data.agentType && parsed.data.agentId) {
+    if (parsed.data.operation === "UPDATE") {
+      if (!parsed.data.agentType || !parsed.data.agentId) return reply.code(400).send({ error: "Managed UPDATE requires agentType and agentId" });
+      const idColumn = parsed.data.agentType === "device-agent" ? "device_agent_id" : "monitoring_agent_id";
+      const exact = await pool.query<SupervisorManagedAssignmentRow>(
+        `SELECT * FROM supervisor_managed_agents WHERE supervisor_agent_id=$1 AND agent_type=$2 AND ${idColumn}=$3 LIMIT 1`,
+        [supervisor.id, parsed.data.agentType, parsed.data.agentId]
+      );
+      assignment = exact.rows[0] ?? null;
+      if (!assignment) return reply.code(409).send({ error: `${parsed.data.agentType === "monitor-agent" ? "Monitoring" : "Device"} Agent is not explicitly associated with this Supervisor` });
+      if (parsed.data.instance && parsed.data.instance !== assignment.instance) return reply.code(409).send({ error: `Requested instance ${parsed.data.instance} does not match associated instance ${assignment.instance}` });
+      instance = assignment.instance;
+    } else if (parsed.data.agentType && parsed.data.agentId) {
       try {
         assignment = await upsertSupervisorAssignment(supervisor.id, {
           agentType: parsed.data.agentType,
@@ -1636,8 +1647,8 @@ export async function registerDeviceControlFeature(
       version: parsed.data.version,
       environment: parsed.data.environment,
       managementId: assignment?.id,
-      agentId: parsed.data.agentId,
-      installDir: parsed.data.installDir ?? assignment?.install_dir ?? undefined
+      agentId: assignment ? (assignment.device_agent_id ?? assignment.monitoring_agent_id) : parsed.data.agentId,
+      installDir: assignment?.install_dir ?? parsed.data.installDir ?? undefined
     }));
     return reply.code(202).send(supervisorManagedAgentOperationDto(record));
   });

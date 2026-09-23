@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.74.0";
+export const MODULE_VERSION = "1.74.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.74.1": {
+    releasedAt: "2026-09-23T17:45:00+02:00",
+    patch: "PR-243-monitoring-managed-update-safety-v1.patch",
+    changes: [
+      { type: "fixed", description: "Monitoring Agent update dialogs use only explicit Supervisor/instance associations and no longer fall back to hostname or main" }
+    ]
+  },
   "1.74.0": {
     releasedAt: "2026-09-23T06:00:00+02:00",
     patch: "PR-242-proxmox-config-agent-ui-v1.patch",
