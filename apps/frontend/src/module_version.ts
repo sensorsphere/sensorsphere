@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.76.4";
+export const MODULE_VERSION = "1.77.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.77.0": {
+    releasedAt: "2026-09-24T00:25:00+02:00",
+    patch: "PR-253-proxmox-discovery-registry-matching-v1.patch",
+    changes: [
+      { type: "added", description: "Discovery Possible/Ambiguous matches expose the Registry candidate directly in the table and show matching evidence in reconciliation" },
+      { type: "added", description: "Discovery reconciliation offers explicit Link and update, Add as new, and Ignore choices without losing stable Proxmox identities" }
+    ]
+  },
   "1.76.4": {
     releasedAt: "2026-09-23T23:45:00+02:00",
     patch: "PR-252-proxmox-test-wait-agent-reconnect-v1.patch",

@@ -641,18 +641,44 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     setSelectedRegistryDeviceId(row.matchCandidates[0]?.device.id ?? null);
   };
 
+  const reconcileImportRequest = (row: DisplayDiscoveryRow): DiscoveredDeviceImportRequest | null => {
+    const selected = row.sourceRows.find(source => source.agent?.online && source.agent.enabled) ?? row;
+    if (!selected.agent) return null;
+    return {
+      agent: selected.agent,
+      provider: selected.discovery.provider.toUpperCase(),
+      device: mergedDiscoveryDevice(row.sourceRows, selected)
+    };
+  };
+
+  const closeReconcile = () => {
+    setReconcileChoice(null);
+    setSelectedRegistryDeviceId(null);
+  };
+
   const confirmReconcile = () => {
     if (!reconcileChoice || !selectedRegistryDeviceId) return;
     const registered = reconcileChoice.row.matchCandidates.find(candidate => candidate.device.id === selectedRegistryDeviceId)?.device;
-    const selected = reconcileChoice.row.sourceRows.find(source => source.agent?.online && source.agent.enabled) ?? reconcileChoice.row;
-    if (!registered || !selected.agent) return;
-    updateMutation.mutate({
-      request: { agent: selected.agent, provider: selected.discovery.provider.toUpperCase(), device: mergedDiscoveryDevice(reconcileChoice.row.sourceRows, selected) },
-      registered,
-      key: reconcileChoice.rowKey
-    });
-    setReconcileChoice(null);
-    setSelectedRegistryDeviceId(null);
+    const request = reconcileImportRequest(reconcileChoice.row);
+    if (!registered || !request) return;
+    updateMutation.mutate({ request, registered, key: reconcileChoice.rowKey });
+    closeReconcile();
+  };
+
+  const addReconcileAsNew = () => {
+    if (!reconcileChoice) return;
+    const request = reconcileImportRequest(reconcileChoice.row);
+    if (!request) return;
+    closeReconcile();
+    onImportDiscoveredDevice(request);
+  };
+
+  const ignoreReconcile = () => {
+    if (!reconcileChoice) return;
+    const row = reconcileChoice.row;
+    const provider = row.discovery.provider.toUpperCase();
+    discardMutation.mutate({ provider, identityKey: row.logicalKey, label: textValue(row.device, "name"), discarded: true });
+    closeReconcile();
   };
 
   return <Stack gap="sm" className="device-registry-discovery-panel">
@@ -799,10 +825,10 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                 <Table.Td><Text size="sm">{provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text></Table.Td>
                 <Table.Td><Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Discovery details</Text><Text size="xs">Name: {textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")}</Text><Text size="xs">IP: {textValue(row.device, "ipAddresses") !== "—" ? textValue(row.device, "ipAddresses") : textValue(row.device, "ip")}</Text><Text size="xs">MAC: {textValue(row.device, "macAddresses") !== "—" ? textValue(row.device, "macAddresses") : textValue(row.device, "mac")}</Text><Text size="xs">Identity: {provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")}</Text><Text size="xs">Model / kind: {provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text>{entitySummaries.length > 0 && <><Text size="xs" fw={600}>Entities ({entitySummaries.length})</Text>{entitySummaries.map((entity, entityIndex) => <Text key={`${entity.type}:${entity.name}:${entityIndex}`} size="xs">• {entity.type}: {entity.name}</Text>)}</>}{provider === "PROXMOX" && <><Text size="xs">Endpoint: {textValue(row.device, "endpointId")}</Text><Text size="xs">Node: {textValue(row.device, "node")}</Text><Text size="xs">VMID: {textValue(row.device, "vmid")}</Text>{proxmoxGuest && <Group gap={5} wrap="nowrap"><Text component="span" size="xs">Status:</Text><ProxmoxRuntimeStatus status={proxmoxStatus} /></Group>}<Text size="xs">Version: {textValue(row.device, "version")}</Text><Text size="xs">OS: {textValue(row.device, "os")} / {textValue(row.device, "osType")}</Text><Text size="xs">Guest agent: {textValue(row.device, "guestAgent")}</Text><Text size="xs">Parent: {textValue(row.device, "parentProviderId")}</Text></>} {!proxmoxGuest && <Text size="xs">{details}</Text>}</Stack>}><span style={{ cursor: "help" }}>{detailsContent}</span></Tooltip></Table.Td>
                 <Table.Td>{agentContent}</Table.Td>
-                <Table.Td style={{ minWidth: 138 }}>{row.status === "UPDATE"
+                <Table.Td style={{ minWidth: 160 }}>{row.status === "UPDATE"
                   ? <Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Expected updates</Text>{row.updateReasons.map(reason => <Text key={reason} size="xs">• {reason}</Text>)}</Stack>}>{statusBadge}</Tooltip>
                   : ["POSSIBLE", "AMBIGUOUS"].includes(row.status)
-                    ? <Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Registry match candidates</Text>{row.matchCandidates.map(candidate => <Text key={candidate.device.id} size="xs">• {candidate.device.name}: {candidate.reasons.join(" · ")}</Text>)}</Stack>}>{statusBadge}</Tooltip>
+                    ? <Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Registry match candidates</Text>{row.matchCandidates.map(candidate => <Text key={candidate.device.id} size="xs">• {candidate.device.name}: {candidate.reasons.join(" · ")}</Text>)}</Stack>}><Stack gap={2} align="flex-start"><span>{statusBadge}</span><Text size="xs" c="dimmed">{row.status === "POSSIBLE" ? `→ ${row.matchCandidates[0]?.device.name ?? "Registry candidate"}` : `${row.matchCandidates.length} Registry candidates`}</Text></Stack></Tooltip>
                     : statusBadge}</Table.Td>
                 <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">
                   {row.status === "CAN_ADD" && row.agent && <Tooltip label="Import into Device Registry"><ActionIcon size="sm" variant="light" color="green" onClick={() => onImportDiscoveredDevice(request)}>+</ActionIcon></Tooltip>}
@@ -822,9 +848,17 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       </div>
     </Card>
 
-    <Modal opened={Boolean(reconcileChoice)} onClose={() => { setReconcileChoice(null); setSelectedRegistryDeviceId(null); }} title="Reconcile discovered device" centered>
+    <Modal opened={Boolean(reconcileChoice)} onClose={closeReconcile} title="Reconcile discovered device" centered>
       <Stack gap="sm">
-        <Text size="sm" c="dimmed">Select the existing Registry device that represents this discovered device. Matching evidence is shown for each candidate.</Text>
+        <Text size="sm" c="dimmed">Select the existing Registry device that represents this discovered device. Matching evidence is shown for each candidate. You can also add it as a separate Registry device or ignore this discovery.</Text>
+        {reconcileChoice && <Card withBorder padding="sm">
+          <Stack gap={3}>
+            <Text size="xs" fw={600}>Discovered object</Text>
+            <Text size="xs">Name: {textValue(reconcileChoice.row.device, "name")}</Text>
+            <Text size="xs">Identity: {reconcileChoice.row.discovery.provider.toUpperCase() === "PROXMOX" ? textValue(reconcileChoice.row.device, "providerId") : reconcileChoice.row.logicalKey}</Text>
+            <Text size="xs">IP: {textValue(reconcileChoice.row.device, "ip")}</Text>
+          </Stack>
+        </Card>}
         <Select
           label="Registry device"
           data={(reconcileChoice?.row.matchCandidates ?? []).map(candidate => ({ value: candidate.device.id, label: `${candidate.device.name} · ${candidate.reasons.join(" · ")}` }))}
@@ -854,9 +888,13 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
             </Stack>
           </Card>;
         })()}
-        <Group justify="flex-end">
-          <Button variant="default" onClick={() => { setReconcileChoice(null); setSelectedRegistryDeviceId(null); }}>Cancel</Button>
-          <Button color="orange" disabled={!selectedRegistryDeviceId} loading={updateMutation.isPending} onClick={confirmReconcile}>Link and update</Button>
+        <Group justify="space-between" wrap="wrap">
+          <Button variant="subtle" color="gray" loading={discardMutation.isPending} onClick={ignoreReconcile}>Ignore</Button>
+          <Group gap="xs">
+            <Button variant="default" onClick={closeReconcile}>Cancel</Button>
+            <Button variant="light" color="green" onClick={addReconcileAsNew}>Add as new</Button>
+            <Button color="orange" disabled={!selectedRegistryDeviceId} loading={updateMutation.isPending} onClick={confirmReconcile}>Link and update</Button>
+          </Group>
         </Group>
       </Stack>
     </Modal>
