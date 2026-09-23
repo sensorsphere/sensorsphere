@@ -1396,10 +1396,57 @@ export async function registerDeviceControlFeature(
             if (operation.deviceAgentId && operation.operation === "UPDATE") {
               const deviceStatus = operation.status === "SUCCESS" ? "VERIFYING" : "FAILED";
               await pool.query(`UPDATE device_agents SET
-                update_status=$2,
+                update_status=CASE
+                  WHEN $2='VERIFYING' AND (
+                    (desired_version IS NOT NULL AND version=desired_version)
+                    OR ($4::text IS NOT NULL AND version=$4::text)
+                    OR (desired_version IS NULL AND last_successful_update_version IS NOT NULL AND version=last_successful_update_version)
+                  ) THEN 'UPDATED'
+                  ELSE $2
+                END,
+                desired_version=CASE
+                  WHEN $2='VERIFYING' AND (
+                    (desired_version IS NOT NULL AND version=desired_version)
+                    OR ($4::text IS NOT NULL AND version=$4::text)
+                    OR (desired_version IS NULL AND last_successful_update_version IS NOT NULL AND version=last_successful_update_version)
+                  ) THEN NULL
+                  ELSE desired_version
+                END,
                 update_started_at=COALESCE(update_started_at,NOW()),
-                update_finished_at=CASE WHEN $2='FAILED' THEN NOW() ELSE update_finished_at END,
-                update_error=CASE WHEN $2='FAILED' THEN COALESCE($3,'Supervisor-managed Device Agent update failed') ELSE NULL END,
+                update_finished_at=CASE
+                  WHEN $2='FAILED' THEN NOW()
+                  WHEN $2='VERIFYING' AND (
+                    (desired_version IS NOT NULL AND version=desired_version)
+                    OR ($4::text IS NOT NULL AND version=$4::text)
+                    OR (desired_version IS NULL AND last_successful_update_version IS NOT NULL AND version=last_successful_update_version)
+                  ) THEN COALESCE(update_finished_at,NOW())
+                  ELSE update_finished_at
+                END,
+                update_error=CASE
+                  WHEN $2='FAILED' THEN COALESCE($3,'Supervisor-managed Device Agent update failed')
+                  WHEN $2='VERIFYING' AND (
+                    (desired_version IS NOT NULL AND version=desired_version)
+                    OR ($4::text IS NOT NULL AND version=$4::text)
+                    OR (desired_version IS NULL AND last_successful_update_version IS NOT NULL AND version=last_successful_update_version)
+                  ) THEN NULL
+                  ELSE update_error
+                END,
+                last_successful_update_at=CASE
+                  WHEN $2='VERIFYING' AND (
+                    (desired_version IS NOT NULL AND version=desired_version)
+                    OR ($4::text IS NOT NULL AND version=$4::text)
+                    OR (desired_version IS NULL AND last_successful_update_version IS NOT NULL AND version=last_successful_update_version)
+                  ) THEN COALESCE(last_successful_update_at,NOW())
+                  ELSE last_successful_update_at
+                END,
+                last_successful_update_version=CASE
+                  WHEN $2='VERIFYING' AND (
+                    (desired_version IS NOT NULL AND version=desired_version)
+                    OR ($4::text IS NOT NULL AND version=$4::text)
+                    OR (desired_version IS NULL AND last_successful_update_version IS NOT NULL AND version=last_successful_update_version)
+                  ) THEN COALESCE(version,$4::text,last_successful_update_version)
+                  ELSE last_successful_update_version
+                END,
                 updated_at=NOW()
                 WHERE id=$1`, [operation.deviceAgentId, deviceStatus, operation.error, operation.targetVersion ?? null]);
             }
@@ -1897,6 +1944,16 @@ export async function registerDeviceControlFeature(
   });
 
   app.get("/api/v1/device-control/agents", async (_request, reply) => {
+    // Defensive reconciliation: if the Agent already reports the requested version,
+    // a transitional lifecycle is complete even if a late Supervisor result or an
+    // API restart prevented the normal HELLO transition from being the final write.
+    await pool.query(`UPDATE device_agents SET
+      update_status='UPDATED',desired_version=NULL,update_command_id=NULL,
+      update_finished_at=COALESCE(update_finished_at,NOW()),update_error=NULL,
+      last_successful_update_at=COALESCE(last_successful_update_at,NOW()),
+      last_successful_update_version=version,updated_at=NOW()
+      WHERE desired_version IS NOT NULL AND version=desired_version
+        AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING')`);
     const result = await pool.query<AgentRow>(`SELECT a.*,
       sma.id AS managed_association_id,
       sma.supervisor_agent_id AS managed_by_supervisor_id,
@@ -1952,6 +2009,20 @@ export async function registerDeviceControlFeature(
     if (!agent.enabled) return reply.code(409).send({ error: "Device Agent is disabled" });
     const socket = sockets.get(agent.id);
     if (socket?.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Device Agent is offline" });
+
+    // Updating to the version already reported by the Agent is a no-op. Reconcile any
+    // stale transitional lifecycle instead of sending an UPDATE that may not recreate
+    // the container and therefore may never produce another HELLO.
+    if (agent.version === parsed.data.version) {
+      const reconciled = await pool.query<AgentRow>(`UPDATE device_agents SET
+        desired_version=NULL,update_status='UPDATED',update_command_id=NULL,
+        update_finished_at=COALESCE(update_finished_at,NOW()),update_error=NULL,
+        last_successful_update_at=COALESCE(last_successful_update_at,NOW()),
+        last_successful_update_version=version,updated_at=NOW()
+        WHERE id=$1 RETURNING *`, [agent.id]);
+      return reply.send(agentDto(reconciled.rows[0]!, true));
+    }
+
     if (["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.update_status)) {
       return reply.code(409).send({ error: "A Device Agent update is already in progress" });
     }

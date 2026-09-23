@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.39.1";
+export const MODULE_VERSION = "1.39.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.39.2": {
+    releasedAt: "2026-09-23T23:30:00+02:00",
+    patch: "PR-249-device-agent-lifecycle-race-v1.patch",
+    changes: [
+      { type: "fixed", description: "Device Agent Supervisor results can no longer regress an already target-version-confirmed update back to VERIFYING or UPDATING" },
+      { type: "fixed", description: "Device Agent reads defensively reconcile stale transitional lifecycle rows when the reported version already equals the requested version" },
+      { type: "fixed", description: "Requesting the Device Agent version already running is treated as a successful no-op instead of starting an update that may never reconnect" }
+    ]
+  },
   "1.39.1": {
     releasedAt: "2026-09-23T21:20:00+02:00",
     patch: "PR-248-agent-update-reliability-ui-consistency-v1.patch",
