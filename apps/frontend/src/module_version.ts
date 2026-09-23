@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.72.0";
+export const MODULE_VERSION = "1.72.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.72.1": {
+    releasedAt: "2026-09-23T00:45:00+02:00",
+    patch: "PR-240-supervisor-update-action-lock-v1.patch",
+    changes: [
+      { type: "fixed", description: "Disable Device and Monitoring deploy actions while a Supervisor self-update lifecycle is active" }
+    ]
+  },
   "1.72.0": {
     releasedAt: "2026-09-23T00:20:00+02:00",
     patch: "PR-239-agent-lifecycle-deprovision-icons-v1.patch",
