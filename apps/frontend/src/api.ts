@@ -1794,6 +1794,33 @@ export async function runSupervisorManagedAgentOperation(supervisorId: string, i
   return operation;
 }
 
+export interface ProxmoxEndpointConfigDto {
+  id: string; product: "PVE" | "PBS"; url: string; tokenId: string; tokenSecret?: string; tokenSecretConfigured?: boolean; verifyTls: boolean;
+}
+export interface ProxmoxConfigDto { configured: boolean; endpoints: ProxmoxEndpointConfigDto[]; config_path?: string; }
+
+async function waitSupervisorConfigOperation(response: Response): Promise<ProxmoxConfigDto> {
+  let operation = await readJson<ManagedAgentOperation>(response);
+  const deadline = Date.now() + 65_000;
+  while (operation.status === "SENT" && Date.now() < deadline) {
+    await new Promise(resolve => window.setTimeout(resolve, 400));
+    operation = await readJson<ManagedAgentOperation>(await fetch(`/api/v1/device-control/supervisor-managed-agents/${operation.commandId}`));
+  }
+  if (operation.status === "SENT") throw new Error("Proxmox configuration operation did not finish before the client timeout");
+  if (operation.status !== "SUCCESS") throw new Error(operation.error ?? `Proxmox configuration operation ${operation.status.toLowerCase()}`);
+  return (operation.result ?? { configured: false, endpoints: [] }) as ProxmoxConfigDto;
+}
+
+export async function getDeviceAgentProxmoxConfig(id: string): Promise<ProxmoxConfigDto> {
+  return waitSupervisorConfigOperation(await fetch(`/api/v1/device-control/agents/${id}/proxmox-config`));
+}
+export async function saveDeviceAgentProxmoxConfig(id: string, endpoints: ProxmoxEndpointConfigDto[]): Promise<ProxmoxConfigDto> {
+  return waitSupervisorConfigOperation(await fetch(`/api/v1/device-control/agents/${id}/proxmox-config`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ endpoints }) }));
+}
+export async function deleteDeviceAgentProxmoxConfig(id: string): Promise<ProxmoxConfigDto> {
+  return waitSupervisorConfigOperation(await fetch(`/api/v1/device-control/agents/${id}/proxmox-config`, { method: "DELETE" }));
+}
+
 export async function checkDeviceAgentToken(id: string): Promise<AgentTokenCheckResult> {
   return waitSupervisorTokenCheck(`/api/v1/device-control/agents/${id}/check-token`);
 }

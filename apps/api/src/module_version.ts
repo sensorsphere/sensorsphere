@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.36.0";
+export const MODULE_VERSION = "1.37.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.37.0": {
+    releasedAt: "2026-09-23T06:00:00+02:00",
+    patch: "PR-242-proxmox-config-agent-ui-v1.patch",
+    changes: [
+      { type: "added", description: "Device Agents expose Supervisor-backed Proxmox configuration get/save/delete operations without storing provider secrets in SensorSphere" }
+    ]
+  },
   "1.36.0": {
     releasedAt: "2026-09-23T05:50:00+02:00",
     patch: "PR-241-agent-bulk-update-host-network-v1.patch",

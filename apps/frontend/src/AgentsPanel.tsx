@@ -1,5 +1,5 @@
 import React from "react";
-import { Card, SimpleGrid, Stack, Tabs, Text } from "@mantine/core";
+import { Card, Group, SimpleGrid, Stack, Tabs, Text } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import type { DeviceRegistryDevice } from "./types";
 import { DeviceAgentsPanel, type DiscoveredDeviceImportRequest } from "./DeviceAgentsPanel";
@@ -8,6 +8,7 @@ import { getAutonomousSupervisors, SupervisorAgentsPanel } from "./SupervisorAge
 import { usePersistentState } from "./preferences/usePersistentState";
 import { getDeviceAgents, getMonitoringAgents } from "./api";
 import { getAgentVersionAvailability, type AgentReleaseKind } from "./AgentVersionAvailability";
+import { hasAgentUpdate } from "./AgentBulkUpdate";
 import { AgentTypeIcon } from "./AgentTypeIcon";
 
 interface AgentsPanelProps {
@@ -27,20 +28,20 @@ export function AgentsPanel({ devices, onImportDiscoveredDevice, onUpdateDiscove
   const monitoringAgents = monitoringAgentsQuery.data ?? [];
   const autonomousSupervisors = autonomousSupervisorsQuery.data ?? [];
 
-  const stats: Array<[string, number, number, string, AgentReleaseKind]> = [
-    ["Device Agents", deviceAgents.length, deviceAgents.filter(agent => agent.online && agent.enabled).length, "blue", "deviceAgent"],
-    ["Monitoring Agents", monitoringAgents.length, monitoringAgents.filter(agent => agent.online && agent.enabled).length, "violet", "monitorAgent"],
-    ["Supervisor Agents", autonomousSupervisors.length, autonomousSupervisors.filter(agent => agent.online && agent.enabled).length, "teal", "supervisorAgent"]
+  const stats: Array<[string, number, number, number, string, AgentReleaseKind, "device" | "monitoring" | "supervisor"]> = [
+    ["Device Agents", deviceAgents.length, deviceAgents.filter(agent => agent.online && agent.enabled).length, deviceAgents.filter(agent => hasAgentUpdate(agent.version, versionsQuery.data?.agents.deviceAgent.latestVersion)).length, "cyan", "deviceAgent", "device"],
+    ["Monitoring Agents", monitoringAgents.length, monitoringAgents.filter(agent => agent.online && agent.enabled).length, monitoringAgents.filter(agent => hasAgentUpdate(agent.version, versionsQuery.data?.agents.monitorAgent.latestVersion)).length, "violet", "monitorAgent", "monitoring"],
+    ["Supervisor Agents", autonomousSupervisors.length, autonomousSupervisors.filter(agent => agent.online && agent.enabled).length, autonomousSupervisors.filter(agent => hasAgentUpdate(agent.version, versionsQuery.data?.agents.supervisorAgent.latestVersion)).length, "teal", "supervisorAgent", "supervisor"]
   ];
 
   return (
     <Stack gap="sm" className="agents-workspace">
       <SimpleGrid cols={{ base: 1, sm: 3 }}>
-        {stats.map(([label, total, online, color, releaseKind]) => {
+        {stats.map(([label, total, online, toUpdate, color, releaseKind, iconType]) => {
           const release = versionsQuery.data?.agents[releaseKind];
           return <Card key={label} withBorder p="sm" style={{ borderLeft: `4px solid var(--mantine-color-${color}-6)` }}>
-            <Text size="xs" c="dimmed">{label}</Text>
-            <Text fw={700} size="xl" c={color}>{online}<Text component="span" size="sm" c="dimmed" fw={400}> online / {total} total</Text></Text>
+            <Group gap={6}><AgentTypeIcon type={iconType} size={17} /><Text size="sm" fw={700}>{label}</Text></Group>
+            <Text fw={700} size="xl" c={color}>{online}<Text component="span" size="sm" c="dimmed" fw={400}> online / {total} total</Text>{toUpdate > 0 && <Text component="span" size="sm" c="orange" fw={700}>  [{toUpdate} to be updated]</Text>}</Text>
             <Text size="xs" c="dimmed">Latest available: {release?.status === "OK" ? release.latestVersion ?? "—" : "unknown"}</Text>
           </Card>;
         })}

@@ -495,7 +495,7 @@ const supervisorHeartbeatSchema = z.object({
 const supervisorCommandResultSchema = z.object({
   type: z.literal("SUPERVISOR_COMMAND_RESULT"),
   commandId: z.string().trim().min(1).max(200),
-  operation: z.enum(["LIST", "DEPLOY", "UPDATE", "REMOVE", "CHECK_TOKEN", "UPDATE_SELF"]),
+  operation: z.enum(["LIST", "DEPLOY", "UPDATE", "REMOVE", "CHECK_TOKEN", "GET_PROXMOX_CONFIG", "SET_PROXMOX_CONFIG", "DELETE_PROXMOX_CONFIG", "UPDATE_SELF"]),
   status: z.enum(["SUCCESS", "FAILED"]),
   result: z.unknown().optional(),
   error: z.string().max(2000).optional()
@@ -506,6 +506,16 @@ const supervisorRemoteMessageSchema = z.discriminatedUnion("type", [supervisorHe
 const supervisorSelfUpdateSchema = z.object({
   version: z.string().trim().regex(/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/)
 }).strict();
+
+const proxmoxEndpointSchema = z.object({
+  id: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
+  product: z.enum(["PVE", "PBS"]),
+  url: z.string().trim().url().max(1000),
+  tokenId: z.string().trim().min(3).max(500),
+  tokenSecret: z.string().max(2000).optional(),
+  verifyTls: z.boolean()
+}).strict();
+const proxmoxConfigSchema = z.object({ endpoints: z.array(proxmoxEndpointSchema).max(50) }).strict();
 
 function supervisorSelfStatusFields(selfStatus: Record<string, unknown> | undefined) {
   const update = selfStatus && typeof selfStatus.update === "object" && selfStatus.update != null
@@ -661,7 +671,7 @@ export async function registerDeviceControlFeature(
   interface ManagedAgentOperationRecord {
     id: string;
     agentId: string;
-    operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE" | "CHECK_TOKEN";
+    operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE" | "CHECK_TOKEN" | "GET_PROXMOX_CONFIG" | "SET_PROXMOX_CONFIG" | "DELETE_PROXMOX_CONFIG";
     status: ManagedAgentOperationStatus;
     result: unknown;
     error: string | null;
@@ -674,7 +684,7 @@ export async function registerDeviceControlFeature(
   interface SupervisorManagedAgentOperationRecord {
     id: string;
     supervisorId: string;
-    operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE" | "CHECK_TOKEN";
+    operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE" | "CHECK_TOKEN" | "GET_PROXMOX_CONFIG" | "SET_PROXMOX_CONFIG" | "DELETE_PROXMOX_CONFIG";
     status: ManagedAgentOperationStatus;
     result: unknown;
     error: string | null;
@@ -1695,6 +1705,41 @@ export async function registerDeviceControlFeature(
     supervisorManagedAgentOperations.set(commandId, record);
     socket.send(JSON.stringify({ type: "SUPERVISOR_COMMAND", commandId, operation: "CHECK_TOKEN", agentType: "monitor-agent", instance: assignment.instance }));
     return reply.code(202).send(supervisorManagedAgentOperationDto(record));
+  });
+
+  async function startProxmoxConfigOperation(deviceAgentId: string, operation: "GET_PROXMOX_CONFIG" | "SET_PROXMOX_CONFIG" | "DELETE_PROXMOX_CONFIG", config?: unknown) {
+    const assignmentResult = await pool.query<SupervisorManagedAssignmentRow>(
+      "SELECT * FROM supervisor_managed_agents WHERE device_agent_id=$1 ORDER BY updated_at DESC LIMIT 1", [deviceAgentId]
+    );
+    const assignment = assignmentResult.rows[0];
+    if (!assignment) throw Object.assign(new Error("Device Agent is not explicitly associated with a Supervisor"), { statusCode: 409 });
+    const socket = supervisorSockets.get(assignment.supervisor_agent_id);
+    if (!socket || socket.readyState !== WebSocket.OPEN) throw Object.assign(new Error("Associated Supervisor Agent is offline"), { statusCode: 409 });
+    const commandId = randomUUID();
+    const record: SupervisorManagedAgentOperationRecord = {
+      id: commandId, supervisorId: assignment.supervisor_agent_id, operation, status: "SENT", result: null, error: null,
+      createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000), finishedAt: null, assignmentId: assignment.id, deviceAgentId
+    };
+    supervisorManagedAgentOperations.set(commandId, record);
+    socket.send(JSON.stringify({ type: "SUPERVISOR_COMMAND", commandId, operation, agentType: "device-agent", instance: assignment.instance, ...(config === undefined ? {} : { config }) }));
+    return record;
+  }
+
+  app.get("/api/v1/device-control/agents/:id/proxmox-config", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    try { return reply.code(202).send(supervisorManagedAgentOperationDto(await startProxmoxConfigOperation(request.params.id, "GET_PROXMOX_CONFIG"))); }
+    catch (error) { const e = error as Error & { statusCode?: number }; return reply.code(e.statusCode ?? 500).send({ error: e.message }); }
+  });
+
+  app.put("/api/v1/device-control/agents/:id/proxmox-config", async (request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply) => {
+    const parsed = proxmoxConfigSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid Proxmox configuration" });
+    try { return reply.code(202).send(supervisorManagedAgentOperationDto(await startProxmoxConfigOperation(request.params.id, "SET_PROXMOX_CONFIG", parsed.data))); }
+    catch (error) { const e = error as Error & { statusCode?: number }; return reply.code(e.statusCode ?? 500).send({ error: e.message }); }
+  });
+
+  app.delete("/api/v1/device-control/agents/:id/proxmox-config", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    try { return reply.code(202).send(supervisorManagedAgentOperationDto(await startProxmoxConfigOperation(request.params.id, "DELETE_PROXMOX_CONFIG"))); }
+    catch (error) { const e = error as Error & { statusCode?: number }; return reply.code(e.statusCode ?? 500).send({ error: e.message }); }
   });
 
   app.get("/api/v1/device-control/supervisor-managed-agents/:id", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {

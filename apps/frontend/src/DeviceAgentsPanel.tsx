@@ -1,7 +1,7 @@
 import React from "react";
 import { ActionIcon, Badge, Button, Card, Checkbox, Code, Group, Modal, Notification, NumberInput, Select, Stack, Table, Text, Textarea, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createDeviceAgent, deleteDeviceAgent, deleteSupervisorManagedAgentAssignment, getDeviceAgents, getDeviceDiscovery, getDiscoveredDeviceAction, regenerateDeviceAgentToken, checkDeviceAgentToken, requestDeviceAgentUpdate, requestSupervisorAgentUpdate, runManagedAgentOperation, runSupervisorManagedAgentOperation, startDeviceDiscovery, startDiscoveredDeviceAction, updateDeviceAgent } from "./api";
+import { createDeviceAgent, deleteDeviceAgent, deleteSupervisorManagedAgentAssignment, getDeviceAgents, getDeviceDiscovery, getDiscoveredDeviceAction, regenerateDeviceAgentToken, checkDeviceAgentToken, requestDeviceAgentUpdate, requestSupervisorAgentUpdate, runManagedAgentOperation, runSupervisorManagedAgentOperation, startDeviceDiscovery, startDiscoveredDeviceAction, updateDeviceAgent, getDeviceAgentProxmoxConfig, saveDeviceAgentProxmoxConfig, deleteDeviceAgentProxmoxConfig, type ProxmoxEndpointConfigDto } from "./api";
 import { ResolvedIconGlyph, resolveProviderIcon } from "./ResolvedDeviceIcon";
 import { DeviceGlyph } from "./DeviceGlyph";
 import type { AgentTokenCheckResult, DeviceAgent, DeviceDiscovery, DeviceRegistryDevice, DiscoveredDeviceAction, ManagedAgentStatus } from "./types";
@@ -33,6 +33,10 @@ function updateAge(value: string | null): string {
 
 function CheckTokenIcon({ size = 16 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-2.9 8.1-7 10-4.1-1.9-7-5.4-7-10V6l7-3z" stroke="currentColor" strokeWidth="1.8"/><path d="m8.5 12 2.2 2.2 4.8-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+}
+
+function ProxmoxConfigIcon({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h9M4 12h16M4 17h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><circle cx="17" cy="7" r="2" stroke="currentColor" strokeWidth="1.6"/><circle cx="13" cy="17" r="2" stroke="currentColor" strokeWidth="1.6"/></svg>;
 }
 
 function RadarIcon({ size = 16 }: { size?: number }) {
@@ -280,6 +284,11 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
   const supervisorsQuery = useQuery({ queryKey: ["device-control", "supervisors"], queryFn: getAutonomousSupervisors, refetchInterval: 10000 });
   const [opened, setOpened] = React.useState(false);
   const [bulkUpdateOpen, setBulkUpdateOpen] = React.useState(false);
+  const [proxmoxTarget, setProxmoxTarget] = React.useState<DeviceAgent | null>(null);
+  const [proxmoxEndpoints, setProxmoxEndpoints] = React.useState<ProxmoxEndpointConfigDto[]>([]);
+  const [proxmoxLoading, setProxmoxLoading] = React.useState(false);
+  const [proxmoxError, setProxmoxError] = React.useState<string | null>(null);
+  const [proxmoxTestResult, setProxmoxTestResult] = React.useState<string | null>(null);
   const [editing, setEditing] = React.useState<DeviceAgent | null>(null);
   const [form, setForm] = React.useState<AgentFormState>(emptyForm());
   const [deleteTarget, setDeleteTarget] = React.useState<DeviceAgent | null>(null);
@@ -607,6 +616,46 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
   const bulkDeviceCandidates = allAgents.filter(agent => agent.online && agent.enabled && !ACTIVE_UPDATE_STATES.includes(agent.updateStatus) && hasAgentUpdate(agent.version, latestDeviceVersion));
   const supervisorById = new Map((supervisorsQuery.data ?? []).map(supervisor => [supervisor.id, supervisor]));
 
+  const openProxmoxConfig = async (agent: DeviceAgent) => {
+    setProxmoxTarget(agent); setProxmoxEndpoints([]); setProxmoxError(null); setProxmoxTestResult(null); setProxmoxLoading(true);
+    try {
+      const config = await getDeviceAgentProxmoxConfig(agent.id);
+      setProxmoxEndpoints(config.endpoints.map(endpoint => ({ ...endpoint, tokenSecret: "" })));
+    } catch (error) { setProxmoxError(error instanceof Error ? error.message : "Unable to load Proxmox configuration"); }
+    finally { setProxmoxLoading(false); }
+  };
+  const saveProxmoxConfig = async () => {
+    if (!proxmoxTarget) return;
+    setProxmoxLoading(true); setProxmoxError(null); setProxmoxTestResult(null);
+    try {
+      const saved = await saveDeviceAgentProxmoxConfig(proxmoxTarget.id, proxmoxEndpoints);
+      setProxmoxEndpoints(saved.endpoints.map(endpoint => ({ ...endpoint, tokenSecret: "" })));
+      await refresh();
+    } catch (error) { setProxmoxError(error instanceof Error ? error.message : "Unable to save Proxmox configuration"); }
+    finally { setProxmoxLoading(false); }
+  };
+  const removeProxmoxConfig = async () => {
+    if (!proxmoxTarget) return;
+    setProxmoxLoading(true); setProxmoxError(null);
+    try { await deleteDeviceAgentProxmoxConfig(proxmoxTarget.id); setProxmoxEndpoints([]); await refresh(); }
+    catch (error) { setProxmoxError(error instanceof Error ? error.message : "Unable to delete Proxmox configuration"); }
+    finally { setProxmoxLoading(false); }
+  };
+  const testProxmoxConfig = async () => {
+    if (!proxmoxTarget) return;
+    setProxmoxLoading(true); setProxmoxError(null); setProxmoxTestResult(null);
+    try {
+      await saveDeviceAgentProxmoxConfig(proxmoxTarget.id, proxmoxEndpoints);
+      let discovery = await startDeviceDiscovery(proxmoxTarget.id, "PROXMOX", 8);
+      const deadline = Date.now() + 20_000;
+      while (discovery.status === "SENT" && Date.now() < deadline) { await new Promise(resolve => window.setTimeout(resolve, 500)); discovery = await getDeviceDiscovery(discovery.id); }
+      if (discovery.status !== "SUCCESS") throw new Error(discovery.error ?? `Proxmox test ${discovery.status.toLowerCase()}`);
+      setProxmoxTestResult(`Connection OK · ${discovery.devices.length} object(s) discovered`);
+      await refresh();
+    } catch (error) { setProxmoxError(error instanceof Error ? error.message : "Proxmox connection test failed"); }
+    finally { setProxmoxLoading(false); }
+  };
+
   return <Stack gap="md" className="agent-admin-panel">
     <Card withBorder className="monitoring-table-card">
       <Group justify="space-between" mb="sm"><div><Text fw={600}>Device Agents</Text><Text size="xs" c="dimmed">Outbound WebSocket agents used for discovery and interactive device control.</Text></div><Group gap="xs"><Button size="xs" variant="light" disabled={bulkDeviceCandidates.length === 0} onClick={() => setBulkUpdateOpen(true)}>Update All ({bulkDeviceCandidates.length})</Button><Button size="xs" onClick={openCreate}>Add Device Agent</Button></Group></Group>
@@ -619,7 +668,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
         <Text size="xs" c="dimmed">{filteredAgents.length}/{allAgents.length}</Text>
       </Group>
       <div className="monitoring-table-scroll"><Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
-        <Table.Thead><Table.Tr><SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader><SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader><SortableTableHeader active={agentSortKey === "reported"} direction={agentSortDirection} onClick={() => toggleAgentSort("reported")}>Reported</SortableTableHeader><SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>{showSupervisorControls && <Table.Th>Supervisor</Table.Th>}<SortableTableHeader active={agentSortKey === "system"} direction={agentSortDirection} onClick={() => toggleAgentSort("system")}>System</SortableTableHeader><Table.Th>Host Network</Table.Th><SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last Seen</SortableTableHeader><SortableTableHeader active={agentSortKey === "capabilities"} direction={agentSortDirection} onClick={() => toggleAgentSort("capabilities")}>Capabilities</SortableTableHeader><SortableTableHeader active={agentSortKey === "labels"} direction={agentSortDirection} onClick={() => toggleAgentSort("labels")}>Labels</SortableTableHeader><SortableTableHeader active={agentSortKey === "agentLabels"} direction={agentSortDirection} onClick={() => toggleAgentSort("agentLabels")}>Agent Labels</SortableTableHeader><Table.Th style={{ width: showSupervisorControls ? 202 : 160, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
+        <Table.Thead><Table.Tr><SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader><SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader><SortableTableHeader active={agentSortKey === "reported"} direction={agentSortDirection} onClick={() => toggleAgentSort("reported")}>Reported</SortableTableHeader><SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>{showSupervisorControls && <Table.Th>Supervisor</Table.Th>}<SortableTableHeader active={agentSortKey === "system"} direction={agentSortDirection} onClick={() => toggleAgentSort("system")}>System</SortableTableHeader><Table.Th>Host Network</Table.Th><SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last Seen</SortableTableHeader><SortableTableHeader active={agentSortKey === "capabilities"} direction={agentSortDirection} onClick={() => toggleAgentSort("capabilities")}>Capabilities</SortableTableHeader><SortableTableHeader active={agentSortKey === "agentLabels"} direction={agentSortDirection} onClick={() => toggleAgentSort("agentLabels")}>Agent Labels</SortableTableHeader><Table.Th style={{ width: showSupervisorControls ? 202 : 160, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
         <Table.Tbody>{filteredAgents.map(agent => <Table.Tr key={agent.id}>
           <Table.Td><Text size="sm" fw={600}>{agent.name}</Text>{agent.managedBySupervisorName && <Text size="xs" c="dimmed">Supervisor: {agent.managedBySupervisorName}{agent.managedInstance && agent.managedInstance !== "main" ? ` / ${agent.managedInstance}` : ""}</Text>}</Table.Td>
           <Table.Td><Badge color={agent.online ? "green" : agent.enabled ? "gray" : "red"} variant="light">{agent.online ? "ONLINE" : agent.enabled ? "OFFLINE" : "DISABLED"}</Badge></Table.Td>
@@ -629,12 +678,29 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
           <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td><Table.Td><HostNetworkCell networks={agent.managedBySupervisorId ? supervisorById.get(agent.managedBySupervisorId)?.hostNetworks : undefined} /></Table.Td>
           <Table.Td title={agent.lastSeenAt ?? undefined}><Text size="sm">{compactDate(agent.lastSeenAt)}</Text></Table.Td>
           <Table.Td><Group gap={8}>{agent.capabilities.map(item => { const resolved=resolveProviderIcon(item.provider); return <Tooltip key={item.provider} label={`${item.provider} · ${item.actions.join(", ") || "No actions reported"}${item.discovery ? " · discovery" : ""}`}><span style={{ display: "inline-flex" }}><DeviceGlyph icon={resolved.icon} color={resolved.color} size={22} /></span></Tooltip>; })}{!agent.capabilities.some(item => item.provider.toLowerCase() === "proxmox") && (() => { const resolved=resolveProviderIcon("proxmox"); return <Tooltip label="No Proxmox server configured on this agent"><span style={{ display: "inline-flex", filter: "grayscale(1)", opacity: 0.35 }}><DeviceGlyph icon={resolved.icon} color={resolved.color} size={22} /></span></Tooltip>; })()}</Group></Table.Td>
-          <Table.Td>{Object.keys(agent.labels).length > 0 ? <Group gap={4} wrap="wrap">{Object.entries(agent.labels).map(([key,value]) => <Badge key={key} size="xs" variant="light">{key}={value}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
+
           <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
-          <Table.Td><Group gap={10} wrap="nowrap" justify="flex-end"><Tooltip label={agent.online ? "Discover devices" : "Device Agent must be online to discover"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Discover devices" disabled={!agent.online || !agent.capabilities.some(capability => capability.discovery)} onClick={() => openDiscovery(agent)}><RadarIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online to update" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? "An update is already in progress" : "Update Device Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Device Agent" disabled={!agent.online || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => openAgentUpdate(agent)}><AgentUpdateIcon size={16} /></ActionIcon></Tooltip>{showSupervisorControls && <><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : !agent.supervisorSelfUpdateSupported ? "Supervisor Agent does not support self-update" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus) ? "Supervisor update already in progress" : "Update Supervisor Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.supervisorAvailable || !agent.supervisorSelfUpdateSupported || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus)} onClick={() => openSupervisorUpdate(agent)}><SupervisorUpdateIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : "Managed agents"}><ActionIcon size="sm" variant="light" color="indigo" aria-label="Managed agents" disabled={!agent.online || !agent.supervisorAvailable} onClick={() => openManagedAgents(agent)}>M</ActionIcon></Tooltip></>}<Group gap={4} wrap="nowrap"><EditActionIcon onClick={() => openEdit(agent)} /><Tooltip label="Copy device agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy device agent" onClick={() => openCopy(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check deployed token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check deployed token" onClick={() => checkToken.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerate.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Group></Table.Td>
+          <Table.Td><Group gap={10} wrap="nowrap" justify="flex-end"><Tooltip label={agent.managedBySupervisorId ? "Configure Proxmox" : "Proxmox configuration requires a Supervisor-managed Device Agent"}><ActionIcon size="sm" variant="light" color="orange" aria-label="Configure Proxmox" disabled={!agent.managedBySupervisorId} onClick={() => openProxmoxConfig(agent)}><ProxmoxConfigIcon /></ActionIcon></Tooltip><Tooltip label={agent.online ? "Discover devices" : "Device Agent must be online to discover"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Discover devices" disabled={!agent.online || !agent.capabilities.some(capability => capability.discovery)} onClick={() => openDiscovery(agent)}><RadarIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online to update" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? "An update is already in progress" : "Update Device Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Device Agent" disabled={!agent.online || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => openAgentUpdate(agent)}><AgentUpdateIcon size={16} /></ActionIcon></Tooltip>{showSupervisorControls && <><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : !agent.supervisorSelfUpdateSupported ? "Supervisor Agent does not support self-update" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus) ? "Supervisor update already in progress" : "Update Supervisor Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.supervisorAvailable || !agent.supervisorSelfUpdateSupported || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus)} onClick={() => openSupervisorUpdate(agent)}><SupervisorUpdateIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : "Managed agents"}><ActionIcon size="sm" variant="light" color="indigo" aria-label="Managed agents" disabled={!agent.online || !agent.supervisorAvailable} onClick={() => openManagedAgents(agent)}>M</ActionIcon></Tooltip></>}<Group gap={4} wrap="nowrap"><EditActionIcon onClick={() => openEdit(agent)} /><Tooltip label="Copy device agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy device agent" onClick={() => openCopy(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check deployed token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check deployed token" onClick={() => checkToken.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerate.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Group></Table.Td>
         </Table.Tr>)}{filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={showSupervisorControls ? 11 : 10}><Text ta="center" c="dimmed" py="xl">No Device Agents yet.</Text></Table.Td></Table.Tr>}</Table.Tbody>
       </Table></div>
     </Card>
+
+    <Modal opened={!!proxmoxTarget} onClose={() => !proxmoxLoading && setProxmoxTarget(null)} title={`Proxmox configuration${proxmoxTarget ? ` — ${proxmoxTarget.name}` : ""}`} size="lg" centered>
+      <Stack gap="sm">
+        <Text size="xs" c="dimmed">Stored on the Device Agent host in <Code>config/proxmox.yml</Code>. Secrets stay on the host and are never returned to SensorSphere.</Text>
+        {proxmoxEndpoints.map((endpoint, index) => <Card key={`${endpoint.id}-${index}`} withBorder p="sm"><Stack gap="xs">
+          <Group grow><TextInput label="Endpoint id" value={endpoint.id} onChange={event => setProxmoxEndpoints(current => current.map((item,i) => i === index ? { ...item, id: event.currentTarget.value } : item))} /><Select label="Product" value={endpoint.product} data={["PVE","PBS"]} onChange={value => setProxmoxEndpoints(current => current.map((item,i) => i === index ? { ...item, product: (value === "PBS" ? "PBS" : "PVE") } : item))} /></Group>
+          <TextInput label="URL" placeholder="https://pve.example.net:8006" value={endpoint.url} onChange={event => setProxmoxEndpoints(current => current.map((item,i) => i === index ? { ...item, url: event.currentTarget.value } : item))} />
+          <TextInput label="Token ID" placeholder="user@realm!token" value={endpoint.tokenId} onChange={event => setProxmoxEndpoints(current => current.map((item,i) => i === index ? { ...item, tokenId: event.currentTarget.value } : item))} />
+          <TextInput type="password" label="Token secret" description={endpoint.tokenSecretConfigured ? "Leave empty to keep the current secret." : "Required for a new endpoint."} value={endpoint.tokenSecret ?? ""} onChange={event => setProxmoxEndpoints(current => current.map((item,i) => i === index ? { ...item, tokenSecret: event.currentTarget.value } : item))} />
+          <Group justify="space-between"><Checkbox label="Verify TLS certificate" checked={endpoint.verifyTls} onChange={event => setProxmoxEndpoints(current => current.map((item,i) => i === index ? { ...item, verifyTls: event.currentTarget.checked } : item))} /><Button size="compact-xs" variant="subtle" color="red" onClick={() => setProxmoxEndpoints(current => current.filter((_,i) => i !== index))}>Remove endpoint</Button></Group>
+        </Stack></Card>)}
+        <Button variant="light" size="xs" onClick={() => setProxmoxEndpoints(current => [...current, { id: `proxmox-${current.length + 1}`, product: "PVE", url: "", tokenId: "", tokenSecret: "", verifyTls: true }])}>Add Proxmox server</Button>
+        {proxmoxError && <Text c="red" size="sm">{proxmoxError}</Text>}
+        {proxmoxTestResult && <Text c="green" size="sm">{proxmoxTestResult}</Text>}
+        <Group justify="space-between"><Button variant="light" color="red" disabled={proxmoxEndpoints.length === 0 || proxmoxLoading} onClick={removeProxmoxConfig}>Delete configuration</Button><Group><Button variant="default" disabled={proxmoxLoading} onClick={() => setProxmoxTarget(null)}>Close</Button><Button variant="light" loading={proxmoxLoading} disabled={proxmoxEndpoints.length === 0} onClick={testProxmoxConfig}>Test connection</Button><Button loading={proxmoxLoading} disabled={proxmoxEndpoints.length === 0} onClick={saveProxmoxConfig}>Save</Button></Group></Group>
+      </Stack>
+    </Modal>
 
     <Modal opened={bulkUpdateOpen} onClose={() => !bulkDeviceUpdateMutation.isPending && setBulkUpdateOpen(false)} title="Update all Device Agents" centered>
       <Stack><Text size="sm">Update {bulkDeviceCandidates.length} Device Agent{bulkDeviceCandidates.length === 1 ? "" : "s"} to <strong>{latestDeviceVersion ?? "—"}</strong>?</Text>{bulkDeviceCandidates.map(agent => <Text size="sm" key={agent.id}>{agent.name}: {agent.version ?? "—"} → {latestDeviceVersion}</Text>)}{bulkDeviceUpdateMutation.isError && <Text size="sm" c="red">{bulkDeviceUpdateMutation.error instanceof Error ? bulkDeviceUpdateMutation.error.message : "Unable to update all Device Agents"}</Text>}<Group justify="flex-end"><Button variant="default" disabled={bulkDeviceUpdateMutation.isPending} onClick={() => setBulkUpdateOpen(false)}>Cancel</Button><Button loading={bulkDeviceUpdateMutation.isPending} disabled={bulkDeviceCandidates.length === 0} onClick={() => bulkDeviceUpdateMutation.mutate(bulkDeviceCandidates)}>Update All</Button></Group></Stack>
