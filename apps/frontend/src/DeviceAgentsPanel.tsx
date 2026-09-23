@@ -656,11 +656,22 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
     catch (error) { setProxmoxError(error instanceof Error ? error.message : "Unable to delete Proxmox configuration"); }
     finally { setProxmoxLoading(false); }
   };
+  const waitForDeviceAgentOnline = async (agentId: string, timeoutMs = 30_000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const agent = (await getDeviceAgents()).find(item => item.id === agentId);
+      if (agent?.online) return;
+      await new Promise(resolve => window.setTimeout(resolve, 500));
+    }
+    throw new Error("Device Agent did not reconnect after applying the Proxmox configuration");
+  };
+
   const testProxmoxConfig = async () => {
     if (!proxmoxTarget) return;
     setProxmoxLoading(true); setProxmoxError(null); setProxmoxTestResult(null);
     try {
       await saveDeviceAgentProxmoxConfig(proxmoxTarget.id, proxmoxConfigPayload(proxmoxEndpoints));
+      await waitForDeviceAgentOnline(proxmoxTarget.id);
       let discovery = await startDeviceDiscovery(proxmoxTarget.id, "PROXMOX", 8);
       const deadline = Date.now() + 20_000;
       while (discovery.status === "SENT" && Date.now() < deadline) { await new Promise(resolve => window.setTimeout(resolve, 500)); discovery = await getDeviceDiscovery(discovery.commandId); }

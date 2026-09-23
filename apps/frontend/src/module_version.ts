@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.76.3";
+export const MODULE_VERSION = "1.76.4";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.76.4": {
+    releasedAt: "2026-09-23T23:45:00+02:00",
+    patch: "PR-252-proxmox-test-wait-agent-reconnect-v1.patch",
+    changes: [
+      { type: "fixed", description: "Proxmox Test connection waits for the force-recreated Device Agent to reconnect before starting discovery" }
+    ]
+  },
   "1.76.3": {
     releasedAt: "2026-09-23T23:35:00+02:00",
     patch: "PR-251-proxmox-config-readonly-field-v1.patch",
