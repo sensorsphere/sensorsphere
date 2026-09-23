@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.74.1";
+export const MODULE_VERSION = "1.75.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.75.0": {
+    releasedAt: "2026-09-23T19:15:00+02:00",
+    patch: "PR-244-managed-runtime-multi-instance-v1.patch",
+    changes: [
+      { type: "added", description: "Supervisor Agents provide a Managed Runtime Inspector with association IDs, paths, instances, versions, container state and reconciliation status" },
+      { type: "added", description: "Monitoring Agent deployment supports multiple explicit Supervisor-local instances and keeps the deploy action available when other instances already exist" }
+    ]
+  },
   "1.74.1": {
     releasedAt: "2026-09-23T17:45:00+02:00",
     patch: "PR-243-monitoring-managed-update-safety-v1.patch",

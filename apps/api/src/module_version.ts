@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.37.1";
+export const MODULE_VERSION = "1.38.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.38.0": {
+    releasedAt: "2026-09-23T19:15:00+02:00",
+    patch: "PR-244-managed-runtime-multi-instance-v1.patch",
+    changes: [
+      { type: "added", description: "Supervisor managed-agent payloads expose both SensorSphere association metadata and Supervisor runtime state, including associations not currently reported at runtime" }
+    ]
+  },
   "1.37.1": {
     releasedAt: "2026-09-23T17:45:00+02:00",
     patch: "PR-243-monitoring-managed-update-safety-v1.patch",

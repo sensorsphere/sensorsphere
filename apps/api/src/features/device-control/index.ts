@@ -742,18 +742,57 @@ export async function registerDeviceControlFeature(
   };
 
   const enrichSupervisorManagedAgents = async (supervisorId: string, reported: Array<Record<string, unknown>>): Promise<Array<Record<string, unknown>>> => {
-    const names = await pool.query<{ id: string; agent_name: string | null }>(`
-      SELECT sma.id, COALESCE(da.name, ma.name) AS agent_name
+    type EnrichedAssignmentRow = SupervisorManagedAssignmentRow & { agent_name: string | null };
+    const assignments = await pool.query<EnrichedAssignmentRow>(`
+      SELECT sma.*, COALESCE(da.name, ma.name) AS agent_name
       FROM supervisor_managed_agents sma
       LEFT JOIN device_agents da ON da.id=sma.device_agent_id
       LEFT JOIN monitoring_agents ma ON ma.id=sma.monitoring_agent_id
-      WHERE sma.supervisor_agent_id=$1`, [supervisorId]);
-    const byId = new Map(names.rows.map(row => [row.id, row.agent_name]));
-    return reported.map(entry => {
-      const managementId = typeof entry.management_id === "string" ? entry.management_id : null;
-      const agentName = managementId ? byId.get(managementId) ?? null : null;
-      return agentName ? { ...entry, agent_name: agentName } : entry;
+      WHERE sma.supervisor_agent_id=$1
+      ORDER BY sma.agent_type,sma.instance,sma.id`, [supervisorId]);
+    const byId = new Map(assignments.rows.map(row => [row.id, row]));
+    const reportedIds = new Set<string>();
+    const associationPayload = (row: EnrichedAssignmentRow) => ({
+      id: row.id,
+      agent_id: row.device_agent_id ?? row.monitoring_agent_id,
+      agent_name: row.agent_name,
+      agent_type: row.agent_type,
+      instance: row.instance,
+      install_dir: row.install_dir,
+      compose_project: row.compose_project,
+      compose_service: row.compose_service,
+      desired_version: row.desired_version,
+      reported_version: row.reported_version,
+      local_state: row.local_state,
+      reconciliation_status: row.reconciliation_status,
+      updated_at: row.updated_at.toISOString()
     });
+    const enriched = reported.map(entry => {
+      const managementId = typeof entry.management_id === "string" ? entry.management_id : null;
+      if (!managementId) return entry;
+      reportedIds.add(managementId);
+      const assignment = byId.get(managementId);
+      if (!assignment) return entry;
+      return { ...entry, agent_name: assignment.agent_name, runtime_reported: true, sensor_sphere_association: associationPayload(assignment) };
+    });
+    for (const assignment of assignments.rows) {
+      if (reportedIds.has(assignment.id)) continue;
+      enriched.push({
+        agent_type: assignment.agent_type,
+        instance: assignment.instance,
+        installed: false,
+        management_id: assignment.id,
+        sensor_sphere_agent_id: assignment.device_agent_id ?? assignment.monitoring_agent_id,
+        install_dir: assignment.install_dir,
+        configured_version: assignment.reported_version,
+        container_state: assignment.local_state ?? "not_reported",
+        reconciliation_status: assignment.reconciliation_status,
+        agent_name: assignment.agent_name,
+        runtime_reported: false,
+        sensor_sphere_association: associationPayload(assignment)
+      });
+    }
+    return enriched;
   };
 
   const discoveryDto = (record: DiscoveryRecord) => ({
