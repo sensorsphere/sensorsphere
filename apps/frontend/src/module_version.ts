@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.77.1";
+export const MODULE_VERSION = "1.78.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.78.0": {
+    releasedAt: "2026-09-24T01:35:00+02:00",
+    patch: "PR-255-proxmox-registry-integration-host-network-copy-v1.patch",
+    changes: [
+      { type: "fixed", description: "Host Network clipboard actions fall back to a DOM copy path when the browser Clipboard API is unavailable or denied" },
+      { type: "changed", description: "Proxmox discovery tracks Registry parent relationships by stable PROXMOX_ID so imported or linked VM/LXC devices are flagged for update when their PVE parent is missing or incorrect" },
+      { type: "changed", description: "Stable Proxmox identities remain the authoritative discovery match so name or IP changes update the existing Registry device instead of creating duplicates" }
+    ]
+  },
   "1.77.1": {
     releasedAt: "2026-09-24T00:45:00+02:00",
     patch: "PR-254-proxmox-endpoint-rename-preserve-secret-v1.patch",

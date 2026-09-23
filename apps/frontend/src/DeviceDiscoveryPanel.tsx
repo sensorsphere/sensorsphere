@@ -249,7 +249,8 @@ function registryUpdateReasons(
   discovered: Record<string, unknown>,
   registered: DeviceRegistryDevice,
   discoveryAgent: DeviceAgent | null,
-  agentById: Map<string, DeviceAgent>
+  agentById: Map<string, DeviceAgent>,
+  devices: DeviceRegistryDevice[]
 ): string[] {
   const reasons: string[] = [];
   const providerName = provider.toUpperCase();
@@ -280,6 +281,16 @@ function registryUpdateReasons(
     const expectedType = kind === "PVE_NODE" ? "hypervisor" : kind === "PBS_SERVER" ? "backup_server" : kind === "PVE_LXC" ? "lxc_container" : kind === "PVE_VM" ? "virtual_machine" : "";
     if (expectedType && registered.deviceClass !== expectedClass) reasons.push(`Class: ${registered.deviceClass} → ${expectedClass}`);
     if (expectedType && registered.deviceType !== expectedType) reasons.push(`Type: ${registered.deviceType} → ${expectedType}`);
+    const parentProviderId = normalizeText(discovered.parentProviderId);
+    if (parentProviderId) {
+      const expectedParent = devices.find(device => device.id !== registered.id && device.identities.some(identity =>
+        identity.identityType.toUpperCase() === "PROXMOX_ID"
+        && normalizeText(identity.value) === parentProviderId
+      )) ?? null;
+      if (expectedParent && registered.parentDevice?.id !== expectedParent.id) {
+        reasons.push(`Parent: ${registered.parentDevice?.name ?? "none"} → ${expectedParent.name}`);
+      }
+    }
   }
 
   for (const mac of macs) {
@@ -482,7 +493,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     for (const selected of selectedRows) {
       const discarded = discardedKeys.has(`${provider}|${selected.logicalKey}`);
       const mergedDevice = mergedDiscoveryDevice(sourceRows, selected);
-      const updateReasons = registered ? registryUpdateReasons(provider, mergedDevice, registered, selected.agent, agentById) : [];
+      const updateReasons = registered ? registryUpdateReasons(provider, mergedDevice, registered, selected.agent, agentById, devices) : [];
       const exactCandidates = matchCandidates.filter(candidate => candidate.exact);
       const status: DiscoveryRowStatus = discarded
         ? "DISCARDED"
@@ -563,7 +574,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     const assigned = registered.controlAgent?.id ? sourceRowsForKey(groups, provider, row.logicalKey).find(item => item.discovery.agentId === registered.controlAgent?.id) : undefined;
     const candidate = assigned ?? row;
     const merged = mergedDiscoveryDevice(sourceRowsForKey(groups, provider, row.logicalKey), candidate);
-    return registryUpdateReasons(provider, merged, registered, candidate.agent, agentById).length ? "UPDATE" as const : "REGISTERED" as const;
+    return registryUpdateReasons(provider, merged, registered, candidate.agent, agentById, devices).length ? "UPDATE" as const : "REGISTERED" as const;
   });
   const canAddCount = logicalStatuses.filter(item => item === "CAN_ADD").length;
   const possibleCount = logicalStatuses.filter(item => item === "POSSIBLE").length;
@@ -876,7 +887,8 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
             merged,
             candidate.device,
             selectedSource.agent,
-            agentById
+            agentById,
+            devices
           );
           return <Card withBorder padding="sm">
             <Stack gap={4}>

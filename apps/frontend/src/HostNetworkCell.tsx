@@ -19,11 +19,37 @@ function CopyIcon({ size = 13 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="9" y="9" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="M15 9V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" stroke="currentColor" strokeWidth="1.8"/></svg>;
 }
 
+async function copyTextToClipboard(value: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return;
+    } catch {
+      // Fall back for insecure HTTP contexts or browsers that deny Clipboard API access.
+    }
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try {
+    if (!document.execCommand("copy")) throw new Error("Clipboard copy was rejected");
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
 function CopyValue({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = React.useState(false);
   const copy = async (event: React.MouseEvent) => {
+    event.preventDefault();
     event.stopPropagation();
-    await navigator.clipboard.writeText(value);
+    await copyTextToClipboard(value);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1200);
   };
