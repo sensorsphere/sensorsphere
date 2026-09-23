@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.39.2";
+export const MODULE_VERSION = "1.39.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.39.3": {
+    releasedAt: "2026-09-24T00:45:00+02:00",
+    patch: "PR-254-proxmox-endpoint-rename-preserve-secret-v1.patch",
+    changes: [
+      { type: "fixed", description: "Proxmox endpoint configuration accepts an optional originalId rename hint without persisting or exposing the token secret" }
+    ]
+  },
   "1.39.2": {
     releasedAt: "2026-09-23T23:30:00+02:00",
     patch: "PR-249-device-agent-lifecycle-race-v1.patch",

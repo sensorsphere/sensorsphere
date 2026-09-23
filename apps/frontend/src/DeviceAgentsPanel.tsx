@@ -627,6 +627,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
     product: endpoint.product,
     url: endpoint.url,
     tokenId: endpoint.tokenId,
+    ...(endpoint.originalId ? { originalId: endpoint.originalId } : {}),
     ...(endpoint.tokenSecret ? { tokenSecret: endpoint.tokenSecret } : {}),
     verifyTls: endpoint.verifyTls
   }));
@@ -635,7 +636,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
     setProxmoxTarget(agent); setProxmoxEndpoints([]); setProxmoxError(null); setProxmoxTestResult(null); setProxmoxLoading(true);
     try {
       const config = await getDeviceAgentProxmoxConfig(agent.id);
-      setProxmoxEndpoints(config.endpoints.map(endpoint => ({ ...endpoint, tokenSecret: "" })));
+      setProxmoxEndpoints(config.endpoints.map(endpoint => ({ ...endpoint, originalId: endpoint.id, tokenSecret: "" })));
     } catch (error) { setProxmoxError(error instanceof Error ? error.message : "Unable to load Proxmox configuration"); }
     finally { setProxmoxLoading(false); }
   };
@@ -644,7 +645,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
     setProxmoxLoading(true); setProxmoxError(null); setProxmoxTestResult(null);
     try {
       const saved = await saveDeviceAgentProxmoxConfig(proxmoxTarget.id, proxmoxConfigPayload(proxmoxEndpoints));
-      setProxmoxEndpoints(saved.endpoints.map(endpoint => ({ ...endpoint, tokenSecret: "" })));
+      setProxmoxEndpoints(saved.endpoints.map(endpoint => ({ ...endpoint, originalId: endpoint.id, tokenSecret: "" })));
       await refresh();
     } catch (error) { setProxmoxError(error instanceof Error ? error.message : "Unable to save Proxmox configuration"); }
     finally { setProxmoxLoading(false); }

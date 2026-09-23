@@ -513,6 +513,7 @@ const proxmoxEndpointSchema = z.object({
   url: z.string().trim().url().max(1000),
   tokenId: z.string().trim().min(3).max(500),
   tokenSecret: z.string().max(2000).optional(),
+  originalId: z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/).optional(),
   verifyTls: z.boolean()
 }).strict();
 const proxmoxConfigSchema = z.object({ endpoints: z.array(proxmoxEndpointSchema).max(50) }).strict();

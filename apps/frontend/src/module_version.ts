@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.77.0";
+export const MODULE_VERSION = "1.77.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.77.1": {
+    releasedAt: "2026-09-24T00:45:00+02:00",
+    patch: "PR-254-proxmox-endpoint-rename-preserve-secret-v1.patch",
+    changes: [
+      { type: "fixed", description: "Renaming a Proxmox endpoint keeps a stable original endpoint identity in the edit payload so the Supervisor can preserve the existing token secret" }
+    ]
+  },
   "1.77.0": {
     releasedAt: "2026-09-24T00:25:00+02:00",
     patch: "PR-253-proxmox-discovery-registry-matching-v1.patch",

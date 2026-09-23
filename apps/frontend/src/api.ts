@@ -1795,7 +1795,7 @@ export async function runSupervisorManagedAgentOperation(supervisorId: string, i
 }
 
 export interface ProxmoxEndpointConfigDto {
-  id: string; product: "PVE" | "PBS"; url: string; tokenId: string; tokenSecret?: string; tokenSecretConfigured?: boolean; verifyTls: boolean;
+  id: string; product: "PVE" | "PBS"; url: string; tokenId: string; tokenSecret?: string; tokenSecretConfigured?: boolean; originalId?: string; verifyTls: boolean;
 }
 export interface ProxmoxConfigDto { configured: boolean; endpoints: ProxmoxEndpointConfigDto[]; config_path?: string; }
 
