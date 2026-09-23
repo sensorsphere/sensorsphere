@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.78.0";
+export const MODULE_VERSION = "1.78.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.78.1": {
+    releasedAt: "2026-09-24T01:55:00+02:00",
+    patch: "PR-256-discovery-update-reasons-reconciliation-v1.patch",
+    changes: [
+      { type: "fixed", description: "Discovery updates promote the active provider technology to the primary legacy technology field so controlProvider no longer remains stale after reconciliation" },
+      { type: "changed", description: "The Update registered device action shows the exact pending Registry differences and refetches the active Device Registry immediately after saving" }
+    ]
+  },
   "1.78.0": {
     releasedAt: "2026-09-24T01:35:00+02:00",
     patch: "PR-255-proxmox-registry-integration-host-network-copy-v1.patch",

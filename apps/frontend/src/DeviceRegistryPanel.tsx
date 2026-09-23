@@ -1084,12 +1084,19 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       ].filter(Boolean).join(" · ");
     }
     form.controlAgentId = agent.id;
-    if (!form.technologies.some(item => item.toLowerCase() === provider.toLowerCase())) {
-      form.technologies = [...form.technologies, provider.toLowerCase()];
-    }
+    // Keep the discovery provider first: deviceFormPayload maps the first technology
+    // to the legacy `technology` field used by Device Registry as controlProvider.
+    // Appending the provider could therefore leave controlProvider on an older
+    // technology and make Discovery immediately flag the device for update again.
+    const providerTechnology = provider.toLowerCase();
+    form.technologies = [
+      providerTechnology,
+      ...form.technologies.filter(item => item.toLowerCase() !== providerTechnology)
+    ];
 
     await updateDeviceRegistryDevice(registered.id, deviceFormPayload(form));
     await refresh();
+    await queryClient.refetchQueries({ queryKey: ["device-registry", "devices"], type: "active" });
   };
 
   const openCreateDevice = () => {
