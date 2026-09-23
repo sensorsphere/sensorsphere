@@ -406,7 +406,8 @@ export function SupervisorAgentsPanel() {
 
   const autonomousUpdateMutation = useMutation({
     mutationFn: ({ id, version, closeOnSuccess = false }: { id: string; version: string; closeOnSuccess?: boolean }) => requestAutonomousSupervisorUpdate(id, version).then(() => ({ id, version, closeOnSuccess })),
-    onMutate: ({ id, version }) => {
+    onMutate: async ({ id, version }) => {
+      await queryClient.cancelQueries({ queryKey: ["device-control", "supervisors"] });
       queryClient.setQueryData<AutonomousSupervisorAgent[]>(["device-control", "supervisors"], current => current?.map(agent => agent.id === id ? { ...agent, configuredVersion: version, updateStatus: "REQUESTED", updateError: null } : agent));
     },
     onSuccess: async result => {
@@ -493,7 +494,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
 
   return <Stack gap="md" className="agent-admin-panel">
     <Card withBorder className="monitoring-table-card">
-      <Group justify="space-between" mb="sm"><div><Text fw={600}>Supervisor Agents</Text><Text size="xs" c="dimmed">Direct outbound Supervisor → SensorSphere connections.</Text></div><Group gap="xs"><Button size="xs" variant="light" disabled={bulkSupervisorCandidates.length === 0} onClick={() => setBulkUpdateOpen(true)}>Update All ({bulkSupervisorCandidates.length})</Button><Button size="xs" onClick={() => { setCreateOpened(true); setCreatedToken(null); setTokenSupervisorName(""); setCopiedField(null); setCreateName(""); }}>Add Supervisor Agent</Button></Group></Group>
+      <Group justify="space-between" mb="sm"><div><Text fw={600}>Supervisor Agents</Text><Text size="xs" c="dimmed">Direct outbound Supervisor → SensorSphere connections.</Text></div><Group gap="xs"><Button size="xs" variant="light" color="teal" disabled={bulkSupervisorCandidates.length === 0} onClick={() => setBulkUpdateOpen(true)}>Update All ({bulkSupervisorCandidates.length})</Button><Button size="xs" onClick={() => { setCreateOpened(true); setCreatedToken(null); setTokenSupervisorName(""); setCopiedField(null); setCreateName(""); }}>Add Supervisor Agent</Button></Group></Group>
       <Group gap="xs" mb="sm" wrap="wrap">
         <ResetFiltersAction active={agentFiltersActive} onReset={() => { setAgentNameFilter(""); setAgentStatusFilter(null); setAgentReportedFilter(""); setAgentLabelsFilter(""); }} />
         <TextInput size="xs" placeholder="Filter name" value={agentNameFilter} onChange={event => setAgentNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentNameFilter.trim()))} rightSection={<FilterClearAction active={Boolean(agentNameFilter.trim())} onClear={() => setAgentNameFilter("")} />} w={180} />

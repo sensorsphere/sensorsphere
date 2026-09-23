@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.76.0";
+export const MODULE_VERSION = "1.76.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.76.1": {
+    releasedAt: "2026-09-23T21:20:00+02:00",
+    patch: "PR-248-agent-update-reliability-ui-consistency-v1.patch",
+    changes: [
+      { type: "changed", description: "Device and Monitoring Agents without an explicit Supervisor association show [No supervisor] in orange" },
+      { type: "changed", description: "Agent update actions use a consistent teal style and optimistic lifecycle state without briefly reverting to stale update availability" },
+      { type: "fixed", description: "Host Network details stay open while the pointer moves into the popup so copy actions remain usable" },
+      { type: "changed", description: "Service Registry Taxonomy is visually anchored at the far right of its tab bar" }
+    ]
+  },
   "1.76.0": {
     releasedAt: "2026-09-23T20:45:00+02:00",
     patch: "PR-246-agent-lifecycle-observability-v1.patch",

@@ -864,10 +864,32 @@ export async function registerDeviceControlFeature(
         record.status = "TIMEOUT";
         record.error = "Supervisor managed-agent operation timed out";
         record.finishedAt = new Date();
+        if (record.operation === "UPDATE" && record.deviceAgentId) {
+          void pool.query(`UPDATE device_agents SET
+            update_status='FAILED',update_finished_at=NOW(),update_error=$3,updated_at=NOW()
+            WHERE id=$1 AND update_command_id=$2 AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING')`,
+            [record.deviceAgentId, record.id, record.error]
+          ).catch(error => app.log.error({ err: error, commandId: record.id }, "Unable to persist timed-out Device Agent update"));
+        }
+        if (record.operation === "UPDATE" && record.monitoringAgentId) {
+          void pool.query(`UPDATE monitoring_agents SET
+            update_status='FAILED',update_finished_at=NOW(),update_error=$3,updated_at=NOW()
+            WHERE id=$1 AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING')
+              AND desired_version IS NOT DISTINCT FROM $2`,
+            [record.monitoringAgentId, record.targetVersion ?? null, record.error]
+          ).catch(error => app.log.error({ err: error, commandId: record.id }, "Unable to persist timed-out Monitoring Agent update"));
+        }
+        if (record.assignmentId) {
+          void pool.query(`UPDATE supervisor_managed_agents SET reconciliation_status='ERROR',updated_at=NOW() WHERE id=$1`, [record.assignmentId])
+            .catch(error => app.log.error({ err: error, commandId: record.id }, "Unable to mark timed-out managed-agent association"));
+        }
       }
       if (record.finishedAt && now - record.finishedAt.getTime() > 10 * 60 * 1000) supervisorManagedAgentOperations.delete(record.id);
     }
   };
+
+  const managedOperationExpiryTimer = setInterval(expireManagedAgentOperations, 15_000);
+  managedOperationExpiryTimer.unref();
 
   const expireDiscoveries = () => {
     const now = Date.now();
@@ -1962,7 +1984,10 @@ export async function registerDeviceControlFeature(
           operation: "UPDATE",
           agentType: "device-agent",
           instance: explicitAssignment.instance,
-          version: parsed.data.version
+          version: parsed.data.version,
+          managementId: explicitAssignment.id,
+          agentId: agent.id,
+          installDir: explicitAssignment.install_dir ?? undefined
         }));
         return reply.code(202).send(agentDto(updated.rows[0]!, true));
       }

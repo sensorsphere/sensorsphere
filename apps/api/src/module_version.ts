@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.39.0";
+export const MODULE_VERSION = "1.39.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.39.1": {
+    releasedAt: "2026-09-23T21:20:00+02:00",
+    patch: "PR-248-agent-update-reliability-ui-consistency-v1.patch",
+    changes: [
+      { type: "fixed", description: "Device Agent updates through explicit Supervisor associations include the management and SensorSphere agent identities required by Supervisor 0.7.2+" },
+      { type: "fixed", description: "Timed-out Supervisor-managed Device and Monitoring Agent updates persist FAILED lifecycle state instead of remaining indefinitely transitional" }
+    ]
+  },
   "1.39.0": {
     releasedAt: "2026-09-23T20:45:00+02:00",
     patch: "PR-246-agent-lifecycle-observability-v1.patch",

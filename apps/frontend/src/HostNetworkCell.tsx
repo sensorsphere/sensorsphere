@@ -1,5 +1,5 @@
 import React from "react";
-import { ActionIcon, Code, Group, Stack, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Code, Group, HoverCard, Stack, Text, Tooltip } from "@mantine/core";
 
 export interface HostNetworkAddress {
   family: "IPv4" | "IPv6";
@@ -48,10 +48,15 @@ export function HostNetworkCell({ networks }: { networks: HostNetworkInterface[]
       {address.network && <CopyValue label="Network" value={address.network} />}
     </React.Fragment>)}
   </Stack>)}</Stack>;
-  return <Tooltip multiline maw={520} label={detail} styles={{ tooltip: { background: "var(--mantine-color-dark-8)", color: "var(--mantine-color-gray-0)", border: "1px solid var(--mantine-color-dark-4)", boxShadow: "var(--mantine-shadow-md)" } }}>
-    <div style={{ cursor: "help" }}>
-      <Text size="sm">{primary?.cidr ?? "—"}{addresses.length > 1 ? ` +${addresses.length - 1}` : ""}</Text>
-      {mac && <Text size="xs" c="dimmed">{mac}</Text>}
-    </div>
-  </Tooltip>;
+  return <HoverCard width={520} shadow="md" openDelay={150} closeDelay={250} position="bottom-start" withinPortal>
+    <HoverCard.Target>
+      <div style={{ cursor: "help", display: "inline-block" }}>
+        <Text size="sm">{primary?.cidr ?? "—"}{addresses.length > 1 ? ` +${addresses.length - 1}` : ""}</Text>
+        {mac && <Text size="xs" c="dimmed">{mac}</Text>}
+      </div>
+    </HoverCard.Target>
+    <HoverCard.Dropdown style={{ background: "var(--mantine-color-dark-8)", color: "var(--mantine-color-gray-0)", border: "1px solid var(--mantine-color-dark-4)", boxShadow: "var(--mantine-shadow-md)" }}>
+      {detail}
+    </HoverCard.Dropdown>
+  </HoverCard>;
 }
