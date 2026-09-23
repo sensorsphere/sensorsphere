@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.76.1";
+export const MODULE_VERSION = "1.76.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.76.2": {
+    releasedAt: "2026-09-23T23:20:00+02:00",
+    patch: "PR-250-proxmox-test-connection-command-id-v1.patch",
+    changes: [
+      { type: "fixed", description: "Proxmox Test connection polls discovery results with the returned commandId instead of an undefined id" }
+    ]
+  },
   "1.76.1": {
     releasedAt: "2026-09-23T21:20:00+02:00",
     patch: "PR-248-agent-update-reliability-ui-consistency-v1.patch",

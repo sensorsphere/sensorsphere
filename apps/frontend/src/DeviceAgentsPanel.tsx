@@ -654,7 +654,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
       await saveDeviceAgentProxmoxConfig(proxmoxTarget.id, proxmoxEndpoints);
       let discovery = await startDeviceDiscovery(proxmoxTarget.id, "PROXMOX", 8);
       const deadline = Date.now() + 20_000;
-      while (discovery.status === "SENT" && Date.now() < deadline) { await new Promise(resolve => window.setTimeout(resolve, 500)); discovery = await getDeviceDiscovery(discovery.id); }
+      while (discovery.status === "SENT" && Date.now() < deadline) { await new Promise(resolve => window.setTimeout(resolve, 500)); discovery = await getDeviceDiscovery(discovery.commandId); }
       if (discovery.status !== "SUCCESS") throw new Error(discovery.error ?? `Proxmox test ${discovery.status.toLowerCase()}`);
       setProxmoxTestResult(`Connection OK · ${discovery.devices.length} object(s) discovered`);
       await refresh();
