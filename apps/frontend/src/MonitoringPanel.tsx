@@ -540,10 +540,17 @@ export function MonitoringPanel({
   const deviceById = new Map(devices.map(device => [device.id, device]));
   const latestMonitoringVersion = versionsQuery.data?.agents.monitorAgent.latestVersion ?? null;
   const supervisorById = new Map((supervisorsQuery.data ?? []).map(supervisor => [supervisor.id, supervisor]));
+  const managedRuntimeInstalled = (agent: MonitoringAgent): boolean => {
+    if (!agent.managedBySupervisorId) return false;
+    const supervisor = supervisorById.get(agent.managedBySupervisorId);
+    if (!supervisor?.online) return false;
+    const instance = agent.managedInstance ?? "main";
+    return supervisor.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.instance === instance && entry.installed !== false && entry.sensor_sphere_agent_id === agent.id);
+  };
   const bulkMonitoringCandidates = agents.flatMap(agent => {
     if (!agent.online || !agent.enabled || !agent.managedBySupervisorId || !hasAgentUpdate(agent.version, latestMonitoringVersion) || ["UPDATE_REQUESTED", "REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)) return [];
     const supervisor = supervisorById.get(agent.managedBySupervisorId);
-    if (!supervisor?.online) return [];
+    if (!supervisor?.online || !managedRuntimeInstalled(agent)) return [];
     return [{ agent, supervisorId: supervisor.id, instance: agent.managedInstance ?? "main" }];
   });
 
@@ -804,7 +811,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
                           <Table.Td>{(() => { const count = checks.filter(check => check.assignments.some(item => item.agentId === agent.id)).length; return <Text size="sm" fw={700} c={count > 0 ? "green.6" : "dimmed"}>{count}</Text>; })()}</Table.Td>
 
                           <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
-                          <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><Tooltip label={(supervisorsQuery.data ?? []).some(item => item.online && item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.installed !== false)) ? "Update Monitoring Agent" : "No online Supervisor manages a Monitoring Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Monitoring Agent" disabled={!(supervisorsQuery.data ?? []).some(item => item.online && item.managedAgents.some(entry => entry.agent_type === "monitor-agent" && entry.installed !== false))} onClick={() => openMonitoringAgentUpdate(agent)}><AgentUpdateIcon /></ActionIcon></Tooltip><EditActionIcon onClick={() => openEditAgent(agent)} /><Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check deployed token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check deployed token" onClick={() => checkToken.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip><ReinstallCommandActionIcon onClick={() => reinstallToken.mutate(agent)} loading={reinstallToken.isPending && reinstallToken.variables?.id === agent.id} /><DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} /></Group></Table.Td>
+                          <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><Tooltip label={managedRuntimeInstalled(agent) ? "Update Monitoring Agent" : agent.managedBySupervisorId ? "Monitoring Agent runtime is missing; reinstall it from Supervisor Agents" : "No online Supervisor manages this Monitoring Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Monitoring Agent" disabled={!managedRuntimeInstalled(agent)} onClick={() => openMonitoringAgentUpdate(agent)}><AgentUpdateIcon /></ActionIcon></Tooltip><EditActionIcon onClick={() => openEditAgent(agent)} /><Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check deployed token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check deployed token" onClick={() => checkToken.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip><ReinstallCommandActionIcon onClick={() => reinstallToken.mutate(agent)} loading={reinstallToken.isPending && reinstallToken.variables?.id === agent.id} /><DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} /></Group></Table.Td>
                         </Table.Tr>
                       ))}
                       {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={11}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}

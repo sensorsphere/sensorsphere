@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.80.1";
+export const MODULE_VERSION = "1.80.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.80.2": {
+    releasedAt: "2026-09-24T22:55:00+02:00",
+    patch: "PR-263-agent-runtime-missing-reinstall-hotfix-v1.patch",
+    changes: [
+      { type: "fixed", description: "Allow Supervisor-managed Monitoring Agent instances reported as MISSING/not installed to be reinstalled without creating a duplicate identity" },
+      { type: "fixed", description: "Disable Monitoring Agent update actions when the associated Supervisor runtime is missing and direct users to reinstall instead" },
+      { type: "changed", description: "Managed Runtime Inspector exposes a reinstall action for missing Monitoring Agent runtimes" }
+    ]
+  },
   "1.80.1": {
     releasedAt: "2026-09-24T20:50:00+02:00",
     patch: "PR-263-agent-ui-runtime-consistency-v2.patch",
