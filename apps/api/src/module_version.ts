@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.40.1";
+export const MODULE_VERSION = "1.40.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.40.2": {
+    releasedAt: "2026-09-24T09:10:00+02:00",
+    patch: "PR-259-installation-environment-v5.patch",
+    changes: [
+      { type: "fixed", description: "Make SENSORSPHERE_ENVIRONMENT installation-wide instead of storing an environment on each Supervisor identity" },
+      { type: "added", description: "Expose the installation environment to Supervisor bootstrap generation and validate Supervisor HELLO against it" }
+    ]
+  },
   "1.40.1": {
     releasedAt: "2026-09-24T08:35:00+02:00",
     patch: "PR-259-sensorsphere-supervisor-environments-v2.patch",

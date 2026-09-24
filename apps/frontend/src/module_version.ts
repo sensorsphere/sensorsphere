@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.79.0";
+export const MODULE_VERSION = "1.79.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.79.1": {
+    releasedAt: "2026-09-24T08:30:00+02:00",
+    patch: "PR-259-installation-environment-v5.patch",
+    changes: [
+      { type: "fixed", description: "Supervisor bootstrap now inherits the single SensorSphere installation environment instead of configuring environments per Supervisor" },
+      { type: "removed", description: "Remove per-Supervisor environment field, filter and table column from Supervisor Agents" }
+    ]
+  },
   "1.79.0": {
     releasedAt: "2026-09-24T07:55:00+02:00",
     patch: "PR-259-supervisor-environment-isolation-v1.patch",

@@ -121,6 +121,7 @@ services:
 
       LOG_LEVEL: ${LOG_LEVEL:-info}
       INSTANCE_NAME: ${INSTANCE_NAME:-SensorSphere}
+      SENSORSPHERE_ENVIRONMENT: ${SENSORSPHERE_ENVIRONMENT:-DEFAULT}
 
       HISTORY_CONFIG_PATH: ${HISTORY_CONFIG_PATH:-/app/data/history-config.json}
 
