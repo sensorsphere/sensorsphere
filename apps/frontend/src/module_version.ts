@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.78.1";
+export const MODULE_VERSION = "1.78.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.78.2": {
+    releasedAt: "2026-09-24T02:20:00+02:00",
+    patch: "PR-257-discovery-control-provider-persistence-v1.patch",
+    changes: [
+      { type: "fixed", description: "Discovery imports and updates persist the Device Registry controlProvider explicitly instead of relying on technology inference" },
+      { type: "changed", description: "The Device editor exposes the persisted Control provider as a read-only field alongside the assigned Device Agent" }
+    ]
+  },
   "1.78.1": {
     releasedAt: "2026-09-24T01:55:00+02:00",
     patch: "PR-256-discovery-update-reasons-reconciliation-v1.patch",

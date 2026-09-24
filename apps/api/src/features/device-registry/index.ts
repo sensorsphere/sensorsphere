@@ -95,6 +95,7 @@ const deviceCreateSchema = z.object({
   parentDeviceId: z.string().uuid().nullable().optional(),
   healthProfileId: z.string().uuid().nullable().optional(),
   controlAgentId: z.string().uuid().nullable().optional(),
+  controlProvider: z.string().trim().max(100).nullable().optional(),
   enabled: z.boolean().optional(),
   lastSeenAt: z.string().datetime({ offset: true }).nullable().optional(),
   batteryPercent: z.number().min(0).max(100).nullable().optional(),
@@ -515,6 +516,7 @@ function controlProviderFromTechnologies(technologies: string[]): string | null 
   const normalized = technologies.map(value => value.toLowerCase());
   if (normalized.includes("yeelight")) return "YEELIGHT";
   if (normalized.includes("esphome")) return "ESPHOME";
+  if (normalized.includes("proxmox")) return "PROXMOX";
   return null;
 }
 
@@ -953,7 +955,7 @@ export async function registerDeviceRegistryFeature(
         input.manufacturer ?? null, input.model ?? null, input.firmwareVersion ?? null,
         input.description ?? null, input.locationId ?? null, input.parentDeviceId ?? null,
         input.healthProfileId ?? null, input.controlAgentId ?? null,
-        controlProviderFromTechnologies(input.technologies ?? (input.technology ? [input.technology] : [])),
+        input.controlProvider ?? controlProviderFromTechnologies(input.technologies ?? (input.technology ? [input.technology] : [])),
         input.enabled ?? true, input.lastSeenAt ?? null, input.batteryPercent ?? null, input.rssi ?? null
       ]);
       const id = result.rows[0]!.id;
@@ -1038,8 +1040,10 @@ export async function registerDeviceRegistryFeature(
         Object.prototype.hasOwnProperty.call(input, "parentDeviceId"), input.parentDeviceId ?? null,
         Object.prototype.hasOwnProperty.call(input, "healthProfileId"), input.healthProfileId ?? null,
         Object.prototype.hasOwnProperty.call(input, "controlAgentId"), input.controlAgentId ?? null,
-        Object.prototype.hasOwnProperty.call(input, "technologies"),
-        input.technologies ? controlProviderFromTechnologies(input.technologies) : null,
+        Object.prototype.hasOwnProperty.call(input, "controlProvider") || Object.prototype.hasOwnProperty.call(input, "technologies"),
+        Object.prototype.hasOwnProperty.call(input, "controlProvider")
+          ? input.controlProvider ?? null
+          : input.technologies ? controlProviderFromTechnologies(input.technologies) : null,
         input.enabled ?? null,
         Object.prototype.hasOwnProperty.call(input, "lastSeenAt"), input.lastSeenAt ?? null,
         Object.prototype.hasOwnProperty.call(input, "batteryPercent"), input.batteryPercent ?? null,

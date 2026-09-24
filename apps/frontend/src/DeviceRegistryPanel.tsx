@@ -219,6 +219,7 @@ interface DeviceFormState {
   parentDeviceId: string | null;
   healthProfileId: string | null;
   controlAgentId: string | null;
+  controlProvider: string;
   enabled: boolean;
   lastSeenAt: string;
   batteryPercent: number | string;
@@ -245,6 +246,7 @@ function emptyDeviceForm(): DeviceFormState {
     parentDeviceId: null,
     healthProfileId: null,
     controlAgentId: null,
+    controlProvider: "",
     enabled: true,
     lastSeenAt: "",
     batteryPercent: "",
@@ -272,6 +274,7 @@ function deviceToForm(device: DeviceRegistryDevice): DeviceFormState {
     parentDeviceId: device.parentDevice?.id ?? null,
     healthProfileId: device.healthProfile?.id ?? null,
     controlAgentId: device.controlAgent?.id ?? null,
+    controlProvider: device.controlProvider ?? "",
     enabled: device.enabled,
     lastSeenAt: device.lastSeenAt ? device.lastSeenAt.slice(0, 16) : "",
     batteryPercent: device.batteryPercent ?? "",
@@ -303,6 +306,7 @@ function deviceFormPayload(form: DeviceFormState): CreateDeviceRegistryDeviceInp
     parentDeviceId: form.parentDeviceId,
     healthProfileId: form.healthProfileId,
     controlAgentId: form.controlAgentId,
+    controlProvider: form.controlProvider.trim() || null,
     enabled: form.enabled,
     lastSeenAt: form.lastSeenAt ? new Date(form.lastSeenAt).toISOString() : null,
     batteryPercent: form.batteryPercent === "" ? null : Number(form.batteryPercent),
@@ -1003,7 +1007,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           ? proxmoxDescription
           : (entities.length ? `Discovered ESPHome entities: ${entities.join(", ")}` : "Discovered through ESPHome mDNS"),
       parentDeviceId: providerName === "PROXMOX" ? proxmoxParent?.id ?? null : null,
-      controlAgentId: agent.id
+      controlAgentId: agent.id,
+      controlProvider: providerName
     });
     setError(null);
     setTab("devices");
@@ -1084,10 +1089,9 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       ].filter(Boolean).join(" · ");
     }
     form.controlAgentId = agent.id;
-    // Keep the discovery provider first: deviceFormPayload maps the first technology
-    // to the legacy `technology` field used by Device Registry as controlProvider.
-    // Appending the provider could therefore leave controlProvider on an older
-    // technology and make Discovery immediately flag the device for update again.
+    form.controlProvider = providerName;
+    // Keep the discovery provider first so the legacy `technology` field remains
+    // aligned with the explicit controlProvider persisted for Device Control.
     const providerTechnology = provider.toLowerCase();
     form.technologies = [
       providerTechnology,
@@ -1797,6 +1801,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
             <Select label="Parent device" searchable clearable value={deviceForm.parentDeviceId} onChange={value => setDeviceForm(current => ({ ...current, parentDeviceId: value }))} data={devices.filter(device => device.id !== editingDevice?.id).map(device => ({ value: device.id, label: device.name }))} />
             <Select label="Health profile" searchable clearable value={deviceForm.healthProfileId} onChange={value => setDeviceForm(current => ({ ...current, healthProfileId: value }))} data={(profilesQuery.data ?? []).map(profile => ({ value: profile.id, label: profile.name }))} />
             <Select label="Device Agent" description={deviceForm.technologies.some(value => value.toLowerCase() === "yeelight") ? "Yeelight control will use this agent." : deviceForm.technologies.some(value => value.toLowerCase() === "esphome") ? "ESPHome Native API control will use this agent. Add ESPHOME_ENTITY when the node exposes multiple light/switch entities." : "Used by Device Control providers."} searchable clearable value={deviceForm.controlAgentId} onChange={value => setDeviceForm(current => ({ ...current, controlAgentId: value }))} data={(deviceAgentsQuery.data ?? []).filter(agent => agent.enabled).map(agent => ({ value: agent.id, label: `${agent.name}${agent.online ? " · ONLINE" : " · OFFLINE"}` }))} />
+            <TextInput label="Control provider" description="Set by Discovery / Device Control provider." value={deviceForm.controlProvider || "—"} readOnly />
             <TextInput type="datetime-local" label="Last seen" value={deviceForm.lastSeenAt} onChange={event => setDeviceForm(current => ({ ...current, lastSeenAt: event.currentTarget.value }))} />
             <NumberInput label="Battery %" min={0} max={100} value={deviceForm.batteryPercent} onChange={value => setDeviceForm(current => ({ ...current, batteryPercent: value }))} />
             <NumberInput label="RSSI dBm" value={deviceForm.rssi} onChange={value => setDeviceForm(current => ({ ...current, rssi: value }))} />

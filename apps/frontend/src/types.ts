@@ -845,6 +845,7 @@ export interface CreateDeviceRegistryDeviceInput {
   parentDeviceId?: string | null;
   healthProfileId?: string | null;
   controlAgentId?: string | null;
+  controlProvider?: string | null;
   enabled?: boolean;
   lastSeenAt?: string | null;
   batteryPercent?: number | null;

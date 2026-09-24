@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.39.3";
+export const MODULE_VERSION = "1.39.4";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.39.4": {
+    releasedAt: "2026-09-24T02:20:00+02:00",
+    patch: "PR-257-discovery-control-provider-persistence-v1.patch",
+    changes: [
+      { type: "fixed", description: "Device Registry create and update payloads accept an explicit controlProvider while preserving legacy technology-based inference" }
+    ]
+  },
   "1.39.3": {
     releasedAt: "2026-09-24T00:45:00+02:00",
     patch: "PR-254-proxmox-endpoint-rename-preserve-secret-v1.patch",
