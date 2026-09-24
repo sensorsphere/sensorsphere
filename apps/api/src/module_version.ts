@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.40.0";
+export const MODULE_VERSION = "1.40.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.40.1": {
+    releasedAt: "2026-09-24T08:35:00+02:00",
+    patch: "PR-259-sensorsphere-supervisor-environments-v2.patch",
+    changes: [
+      { type: "fixed", description: "Persist Supervisor deployment environments in supervisor_agents, defaulting existing Supervisor identities to DEFAULT" }
+    ]
+  },
   "1.40.0": {
     releasedAt: "2026-09-24T07:55:00+02:00",
     patch: "PR-259-supervisor-environment-isolation-v1.patch",
