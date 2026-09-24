@@ -83,6 +83,7 @@ const checkUpdateSchema = z.object({
 }).strict().refine(value => Object.keys(value).length > 0, "At least one field is required");
 
 const heartbeatSchema = z.object({
+  reportedName: z.string().trim().max(500).nullable().optional(),
   version: z.string().trim().max(200).nullable().optional(),
   hostname: z.string().trim().max(500).nullable().optional(),
   localIp: z.string().trim().max(200).nullable().optional(),
@@ -114,11 +115,16 @@ interface AgentRow {
   enabled: boolean;
   labels: Record<string, string>;
   agent_labels: string[];
+  reported_name: string | null;
   version: string | null;
   hostname: string | null;
   os_name: string | null;
   os_version: string | null;
   architecture: string | null;
+  host_networks: Array<Record<string, unknown>>;
+  configured_version: string | null;
+  container_state: string | null;
+  self_update_supported: boolean;
   last_ip: string | null;
   local_ip: string | null;
   source_ip: string | null;
@@ -128,7 +134,9 @@ interface AgentRow {
   heartbeat_timeout_seconds: number;
   config_revision: string | number;
   desired_version: string | null;
+  previous_version: string | null;
   update_status: string;
+  update_requested_at: Date | null;
   update_error: string | null;
   update_started_at: Date | null;
   update_finished_at: Date | null;
@@ -207,11 +215,16 @@ function agentDto(row: AgentRow) {
     enabled: row.enabled,
     labels: row.labels ?? {},
     agentLabels: Array.isArray(row.agent_labels) ? row.agent_labels : [],
+    reportedName: row.reported_name,
     version: row.version,
     hostname: row.hostname,
     os: row.os_name,
     osVersion: row.os_version,
     architecture: row.architecture,
+    hostNetworks: row.host_networks ?? [],
+    configuredVersion: row.configured_version,
+    containerState: row.container_state,
+    selfUpdateSupported: row.self_update_supported ?? false,
     lastIp: row.last_ip,
     localIp: row.local_ip,
     sourceIp: row.source_ip,
@@ -221,8 +234,10 @@ function agentDto(row: AgentRow) {
     heartbeatTimeoutSeconds: row.heartbeat_timeout_seconds,
     configRevision: Number(row.config_revision),
     desiredVersion: row.desired_version,
-    updateStatus: row.update_status ?? "READY",
+    previousVersion: row.previous_version,
+    updateStatus: row.update_status ?? "IDLE",
     updateError: row.update_error,
+    updateRequestedAt: row.update_requested_at?.toISOString() ?? null,
     updateStartedAt: row.update_started_at?.toISOString() ?? null,
     updateFinishedAt: row.update_finished_at?.toISOString() ?? null,
     lastSuccessfulUpdateAt: row.last_successful_update_at?.toISOString() ?? null,
@@ -567,7 +582,7 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
     const connection = requestConnection(request);
     const result = await pool.query<AgentRow>(
       `UPDATE monitoring_agents SET last_seen_at=NOW(), last_ip=$2, version=COALESCE($3,version),
-              hostname=COALESCE($4,hostname), agent_labels=COALESCE($5::jsonb,agent_labels),
+              reported_name=COALESCE($13,$4,reported_name), hostname=COALESCE($4,hostname), agent_labels=COALESCE($5::jsonb,agent_labels),
               local_ip=COALESCE($6,local_ip), source_ip=$7, x_forwarded_for=$8, x_real_ip=$9,
               os_name=COALESCE($10,os_name), os_version=COALESCE($11,os_version), architecture=COALESCE($12,architecture),
               update_status=CASE
@@ -597,7 +612,7 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
               updated_at=NOW() WHERE id=$1 RETURNING *`,
       [agent.id, connection.effectiveIp, input.version ?? null, input.hostname ?? null, reportedLabels == null ? null : JSON.stringify(reportedLabels),
        input.localIp ?? null, connection.sourceIp, connection.xForwardedFor, connection.xRealIp,
-       input.systemInfo?.os ?? null, input.systemInfo?.osVersion ?? null, input.systemInfo?.architecture ?? null]
+       input.systemInfo?.os ?? null, input.systemInfo?.osVersion ?? null, input.systemInfo?.architecture ?? null, input.reportedName ?? null]
     );
     return { agentId: agent.id, configRevision: Number(result.rows[0]!.config_revision), serverTime: new Date().toISOString() };
   });

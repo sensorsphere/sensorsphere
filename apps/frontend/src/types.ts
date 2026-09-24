@@ -972,37 +972,53 @@ export type MonitoringTargetMode = "PRIMARY_IP" | "PRIMARY_FQDN" | "PRIMARY_ADDR
 export type MonitoringExecutionMode = "FAILOVER" | "ALL";
 export type MonitoringResultStatus = "UP" | "DOWN" | "UNKNOWN";
 
-export interface MonitoringAgent {
-  id: string;
-  name: string;
-  enabled: boolean;
-  labels: Record<string, string>;
-  agentLabels: string[];
+export type AgentUpdateStatus = "IDLE" | "REQUESTED" | "UPDATE_REQUESTED" | "UPDATING" | "VERIFYING" | "UPDATED" | "FAILED" | "ROLLED_BACK";
+
+export interface AgentTechnicalModel {
+  reportedName: string | null;
   version: string | null;
   hostname: string | null;
   os: string | null;
   osVersion: string | null;
   architecture: string | null;
+  hostNetworks: Array<{
+    interface: string;
+    mac: string | null;
+    addresses: Array<{ family: "IPv4" | "IPv6"; address: string; prefixLength: number; cidr: string; network: string | null }>;
+  }>;
+  configuredVersion: string | null;
+  containerState: string | null;
+  selfUpdateSupported: boolean;
+  desiredVersion: string | null;
+  previousVersion: string | null;
+  updateStatus: AgentUpdateStatus;
+  updateRequestedAt: string | null;
+  updateStartedAt: string | null;
+  updateFinishedAt: string | null;
+  updateError: string | null;
+  lastSuccessfulUpdateAt: string | null;
+  lastSuccessfulUpdateVersion: string | null;
+  lastSeenAt: string | null;
+  heartbeatTimeoutSeconds: number;
+  online: boolean;
+}
+
+export interface MonitoringAgent extends AgentTechnicalModel {
+  id: string;
+  name: string;
+  enabled: boolean;
+  labels: Record<string, string>;
+  agentLabels: string[];
   lastIp: string | null;
   localIp: string | null;
   sourceIp: string | null;
   xForwardedFor: string | null;
   xRealIp: string | null;
-  lastSeenAt: string | null;
-  heartbeatTimeoutSeconds: number;
   configRevision: number;
-  desiredVersion: string | null;
-  updateStatus: string;
-  updateError: string | null;
-  updateStartedAt: string | null;
-  updateFinishedAt: string | null;
-  lastSuccessfulUpdateAt: string | null;
-  lastSuccessfulUpdateVersion: string | null;
   managedAssociationId: string | null;
   managedBySupervisorId: string | null;
   managedBySupervisorName: string | null;
   managedInstance: string | null;
-  online: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -1094,18 +1110,12 @@ export interface DeviceAgentCapability {
   discovery?: boolean;
 }
 
-export interface DeviceAgent {
+export interface DeviceAgent extends AgentTechnicalModel {
   id: string;
   name: string;
   enabled: boolean;
   labels: Record<string, string>;
   agentLabels: string[];
-  reportedName: string | null;
-  version: string | null;
-  hostname: string | null;
-  os: string | null;
-  osVersion: string | null;
-  architecture: string | null;
   capabilities: DeviceAgentCapability[];
   supervisorAvailable: boolean;
   supervisorVersion: string | null;
@@ -1119,22 +1129,11 @@ export interface DeviceAgent {
   supervisorUpdateStartedAt: string | null;
   supervisorUpdateFinishedAt: string | null;
   supervisorUpdateError: string | null;
-  desiredVersion: string | null;
-  previousVersion: string | null;
-  updateStatus: "IDLE" | "UPDATE_REQUESTED" | "UPDATING" | "VERIFYING" | "UPDATED" | "FAILED" | "ROLLED_BACK";
-  updateRequestedAt: string | null;
-  updateStartedAt: string | null;
-  updateFinishedAt: string | null;
-  updateError: string | null;
-  lastSuccessfulUpdateAt: string | null;
-  lastSuccessfulUpdateVersion: string | null;
+
   managedAssociationId: string | null;
   managedBySupervisorId: string | null;
   managedBySupervisorName: string | null;
   managedInstance: string | null;
-  lastSeenAt: string | null;
-  heartbeatTimeoutSeconds: number;
-  online: boolean;
   createdAt: string;
   updatedAt: string;
 }

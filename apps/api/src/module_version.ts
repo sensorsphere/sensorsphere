@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.40.2";
+export const MODULE_VERSION = "1.41.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.41.0": {
+    releasedAt: "2026-09-24T15:45:00+02:00",
+    patch: "PR-262-agent-technical-model-unification-v1.patch",
+    changes: [
+      { type: "changed", description: "Unify Device, Monitoring and Supervisor Agent technical/runtime lifecycle fields while keeping functional data type-specific" },
+      { type: "changed", description: "Supervisor-managed runtime reports populate the common configured version, container state and host network fields on managed agents" },
+      { type: "fixed", description: "Supervisor update targets use desiredVersion independently from the configured runtime version" }
+    ]
+  },
   "1.40.2": {
     releasedAt: "2026-09-24T09:10:00+02:00",
     patch: "PR-259-installation-environment-v5.patch",

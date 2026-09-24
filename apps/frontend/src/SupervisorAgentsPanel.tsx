@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AgentVersionFreshnessBadge, getAgentVersionAvailability, UpdateLifecycleAge } from "./AgentVersionAvailability";
 import { DeleteActionIcon, EditActionIcon } from "./TableActionIcons";
 import { createMonitoringAgent, getDeviceAgents, getMonitoringAgents, regenerateDeviceAgentToken, regenerateMonitoringAgentToken } from "./api";
+import type { AgentTechnicalModel } from "./types";
 import { AgentTypeIcon, agentTypeLabel } from "./AgentTypeIcon";
 import { HostNetworkCell, type HostNetworkInterface } from "./HostNetworkCell";
 import { hasAgentUpdate } from "./AgentBulkUpdate";
@@ -14,12 +15,9 @@ import { activeFilterStyles } from "./ActiveFilterStyles";
 import { FilterClearAction } from "./FilterClearAction";
 
 
-export interface AutonomousSupervisorAgent {
-  id: string; name: string; enabled: boolean; labels: Record<string, string>; agentLabels: string[]; reportedName: string | null; version: string | null; hostname: string | null;
-  os: string | null; osVersion: string | null; architecture: string | null; hostNetworks: HostNetworkInterface[]; managedAgents: Array<Record<string, unknown>>;
-  configuredVersion: string | null; containerState: string | null; selfUpdateSupported: boolean; updateStatus: string; updateError: string | null;
-  lastSuccessfulUpdateAt: string | null; lastSuccessfulUpdateVersion: string | null;
-  lastSeenAt: string | null; heartbeatTimeoutSeconds: number; online: boolean; createdAt: string; updatedAt: string;
+export interface AutonomousSupervisorAgent extends AgentTechnicalModel {
+  id: string; name: string; enabled: boolean; labels: Record<string, string>; agentLabels: string[]; hostNetworks: HostNetworkInterface[]; managedAgents: Array<Record<string, unknown>>;
+  createdAt: string; updatedAt: string;
 }
 
 export async function getAutonomousSupervisors(): Promise<AutonomousSupervisorAgent[]> {
@@ -521,7 +519,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
               <Table.Td><Text fw={600} size="sm">{agent.name}</Text></Table.Td>
               <Table.Td><Badge size="sm" variant="light" color={!agent.enabled ? "red" : agent.online ? "green" : "gray"}>{!agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE"}</Badge></Table.Td>
               <Table.Td><Text size="sm">{agent.reportedName ?? "—"}{agent.hostname ? ` [${agent.hostname}]` : ""}</Text></Table.Td>
-              <Table.Td><Text size="sm">{agent.version ?? "—"}</Text>{["REQUESTED", "UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? <><Tooltip label={agent.updateError ?? `Supervisor update lifecycle: ${lifecycle.label}`}><Badge size="xs" variant="light" color={lifecycle.color}>{lifecycle.label}</Badge></Tooltip><UpdateLifecycleAge status={agent.updateStatus} timestamp={agent.lastSeenAt} label="reported" />{agent.configuredVersion && <Text size="xs" c="dimmed">Target {agent.configuredVersion}</Text>}</> : <><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents?.supervisorAgent} />{agent.updateStatus === "FAILED" && <Tooltip label={agent.updateError ?? "Supervisor update failed"}><Badge size="xs" variant="light" color="red">FAILED</Badge></Tooltip>}{agent.lastSuccessfulUpdateAt && <Text size="xs" c="dimmed" title={agent.lastSuccessfulUpdateAt}>Updated {relativeAge(agent.lastSuccessfulUpdateAt)}</Text>}</>}</Table.Td>
+              <Table.Td><Text size="sm">{agent.version ?? "—"}</Text>{["REQUESTED", "UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? <><Tooltip label={agent.updateError ?? `Supervisor update lifecycle: ${lifecycle.label}`}><Badge size="xs" variant="light" color={lifecycle.color}>{lifecycle.label}</Badge></Tooltip><UpdateLifecycleAge status={agent.updateStatus} timestamp={agent.updateStartedAt ?? agent.updateRequestedAt} />{agent.desiredVersion && <Text size="xs" c="dimmed">Target {agent.desiredVersion}</Text>}</> : <><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents?.supervisorAgent} />{agent.updateStatus === "FAILED" && <Tooltip label={agent.updateError ?? "Supervisor update failed"}><Badge size="xs" variant="light" color="red">FAILED</Badge></Tooltip>}{agent.lastSuccessfulUpdateAt && <Text size="xs" c="dimmed" title={agent.lastSuccessfulUpdateAt}>Updated {relativeAge(agent.lastSuccessfulUpdateAt)}</Text>}</>}</Table.Td>
               <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td><Table.Td><HostNetworkCell networks={agent.hostNetworks} /></Table.Td>
               <Table.Td title={agent.lastSeenAt ?? undefined}><Text size="sm">{relativeAge(agent.lastSeenAt)}</Text></Table.Td>
               <Table.Td>{agent.managedAgents.length > 0 ? <Group gap={6} wrap="nowrap">{agent.managedAgents.filter(entry => entry.installed !== false).map(managedAgentIcon)}<Tooltip label="Managed Runtime Inspector"><ActionIcon size="sm" variant="subtle" color="blue" aria-label="Managed Runtime Inspector" onClick={() => setManagedRuntimeTarget(agent)}><ManagedRuntimeIcon /></ActionIcon></Tooltip></Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>

@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.79.1";
+export const MODULE_VERSION = "1.80.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.80.0": {
+    releasedAt: "2026-09-24T15:45:00+02:00",
+    patch: "PR-262-agent-technical-model-unification-v1.patch",
+    changes: [
+      { type: "changed", description: "Device, Monitoring and Supervisor Agent views share the same technical model for reported identity, version, system, host network and update lifecycle" },
+      { type: "changed", description: "Agent-specific functionality remains separate: capabilities, checks and managed agents" }
+    ]
+  },
   "1.79.1": {
     releasedAt: "2026-09-24T08:30:00+02:00",
     patch: "PR-259-installation-environment-v5.patch",

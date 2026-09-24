@@ -194,6 +194,10 @@ interface AgentRow {
   os_name: string | null;
   os_version: string | null;
   architecture: string | null;
+  host_networks: Array<Record<string, unknown>>;
+  configured_version: string | null;
+  container_state: string | null;
+  self_update_supported: boolean;
   capabilities: Array<{ provider: string; actions: string[]; discovery?: boolean }>;
   supervisor_available: boolean;
   supervisor_version: string | null;
@@ -343,6 +347,10 @@ function agentDto(row: AgentRow, connected: boolean) {
     os: row.os_name,
     osVersion: row.os_version,
     architecture: row.architecture,
+    hostNetworks: row.host_networks ?? [],
+    configuredVersion: row.configured_version,
+    containerState: row.container_state,
+    selfUpdateSupported: row.self_update_supported ?? false,
     capabilities: Array.isArray(row.capabilities) ? row.capabilities : [],
     supervisorAvailable: row.supervisor_available ?? false,
     supervisorVersion: row.supervisor_version,
@@ -537,8 +545,8 @@ function supervisorSelfStatusFields(selfStatus: Record<string, unknown> | undefi
 interface SupervisorAgentRow {
   id: string; name: string; enabled: boolean; labels: Record<string, string>; agent_labels: string[]; reported_name: string | null; version: string | null; hostname: string | null;
   os_name: string | null; os_version: string | null; architecture: string | null; host_networks: Array<Record<string, unknown>>; managed_agents: Array<Record<string, unknown>>;
-  configured_version: string | null; container_state: string | null; self_update_supported: boolean; update_status: string;
-  update_error: string | null; last_successful_update_at: Date | null; last_successful_update_version: string | null; last_seen_at: Date | null; heartbeat_timeout_seconds: number; created_at: Date; updated_at: Date;
+  configured_version: string | null; container_state: string | null; self_update_supported: boolean; desired_version: string | null; previous_version: string | null; update_status: string;
+  update_requested_at: Date | null; update_started_at: Date | null; update_finished_at: Date | null; update_error: string | null; last_successful_update_at: Date | null; last_successful_update_version: string | null; last_seen_at: Date | null; heartbeat_timeout_seconds: number; created_at: Date; updated_at: Date;
 }
 
 
@@ -589,7 +597,9 @@ function supervisorAgentDto(row: SupervisorAgentRow, connected: boolean) {
     id: row.id, name: row.name, enabled: row.enabled, labels: row.labels ?? {}, agentLabels: Array.isArray(row.agent_labels) ? row.agent_labels : [], reportedName: row.reported_name, version: row.version, hostname: row.hostname,
     os: row.os_name, osVersion: row.os_version, architecture: row.architecture, hostNetworks: row.host_networks ?? [], managedAgents: row.managed_agents ?? [],
     configuredVersion: row.configured_version, containerState: row.container_state, selfUpdateSupported: row.self_update_supported ?? false,
-    updateStatus: row.update_status ?? "IDLE", updateError: row.update_error, lastSuccessfulUpdateAt: row.last_successful_update_at?.toISOString() ?? null, lastSuccessfulUpdateVersion: row.last_successful_update_version, lastSeenAt: row.last_seen_at?.toISOString() ?? null,
+    desiredVersion: row.desired_version, previousVersion: row.previous_version, updateStatus: row.update_status ?? "IDLE",
+    updateRequestedAt: row.update_requested_at?.toISOString() ?? null, updateStartedAt: row.update_started_at?.toISOString() ?? null, updateFinishedAt: row.update_finished_at?.toISOString() ?? null,
+    updateError: row.update_error, lastSuccessfulUpdateAt: row.last_successful_update_at?.toISOString() ?? null, lastSuccessfulUpdateVersion: row.last_successful_update_version, lastSeenAt: row.last_seen_at?.toISOString() ?? null,
     heartbeatTimeoutSeconds: row.heartbeat_timeout_seconds, online: row.enabled && connected && recent,
     createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString()
   };
@@ -732,6 +742,19 @@ export async function registerDeviceControlFeature(
         WHERE id=$1 AND supervisor_agent_id=$2`,
         [managementId, supervisorId, installDir, composeProject, version, localState, installed]
       );
+      const assignment = await pool.query<{ agent_type: "device-agent" | "monitor-agent"; device_agent_id: string | null; monitoring_agent_id: string | null }>(
+        `SELECT agent_type,device_agent_id,monitoring_agent_id FROM supervisor_managed_agents WHERE id=$1 AND supervisor_agent_id=$2`,
+        [managementId, supervisorId]
+      );
+      const association = assignment.rows[0];
+      const agentId = association?.agent_type === "device-agent" ? association.device_agent_id : association?.monitoring_agent_id;
+      if (association && agentId) {
+        const table = association.agent_type === "device-agent" ? "device_agents" : "monitoring_agents";
+        await pool.query(`UPDATE ${table} SET
+          configured_version=COALESCE($2,configured_version),container_state=COALESCE($3,container_state),
+          self_update_supported=TRUE,host_networks=COALESCE((SELECT host_networks FROM supervisor_agents WHERE id=$4),'[]'::jsonb),updated_at=NOW()
+          WHERE id=$1`, [agentId, version, localState, supervisorId]);
+      }
     }
   };
 
@@ -1473,7 +1496,11 @@ export async function registerDeviceControlFeature(
             return;
           }
           const nextStatus = message.status === "FAILED" ? "FAILED" : "UPDATING";
-          await pool.query("UPDATE supervisor_agents SET update_status=$2,update_error=$3,last_seen_at=NOW(),updated_at=NOW() WHERE id=$1",
+          await pool.query(`UPDATE supervisor_agents SET
+            update_status=$2,update_error=$3,
+            update_started_at=CASE WHEN $2='UPDATING' AND update_started_at IS NULL THEN NOW() ELSE update_started_at END,
+            update_finished_at=CASE WHEN $2='FAILED' THEN NOW() ELSE update_finished_at END,
+            last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
             [supervisor.id,nextStatus,message.status === "FAILED" ? message.error ?? "Supervisor command failed" : null]);
           return;
         }
@@ -1494,13 +1521,15 @@ export async function registerDeviceControlFeature(
             update_status=CASE
               WHEN COALESCE($13,'')='FAILED' THEN 'FAILED'
               WHEN COALESCE($13,'')='ROLLED_BACK' THEN 'ROLLED_BACK'
-              WHEN COALESCE($13,'')='UPDATED' AND configured_version IS NOT NULL AND COALESCE($3,version)=configured_version THEN 'UPDATED'
-              WHEN COALESCE($13,'')='UPDATED' AND configured_version IS NOT NULL AND COALESCE($3,version)<>configured_version THEN 'UPDATING'
+              WHEN COALESCE($13,'')='UPDATED' AND desired_version IS NOT NULL AND COALESCE($3,version)=desired_version THEN 'UPDATED'
+              WHEN COALESCE($13,'')='UPDATED' AND desired_version IS NOT NULL AND COALESCE($3,version)<>desired_version THEN 'UPDATING'
               WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND COALESCE($13,'')='IDLE' THEN update_status
               WHEN COALESCE($13,'') IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') THEN COALESCE($13,update_status)
               ELSE update_status
             END,
             update_error=CASE WHEN COALESCE($13,'')='FAILED' THEN $14 WHEN COALESCE($13,'') IN ('UPDATED','ROLLED_BACK') THEN NULL ELSE update_error END,
+            update_started_at=CASE WHEN COALESCE($13,'') IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND update_started_at IS NULL THEN NOW() ELSE update_started_at END,
+            update_finished_at=CASE WHEN COALESCE($13,'') IN ('UPDATED','FAILED','ROLLED_BACK') THEN NOW() ELSE update_finished_at END,
             last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
             [supervisor.id,message.supervisorName ?? null,message.version ?? null,message.hostname ?? null,message.systemInfo?.os ?? null,
              message.systemInfo?.osVersion ?? null,message.systemInfo?.architecture ?? null,JSON.stringify(message.hostNetworks ?? []),JSON.stringify(message.managedAgents ?? []),
@@ -1508,8 +1537,8 @@ export async function registerDeviceControlFeature(
           if (self.updateStatus === "UPDATED") {
             await pool.query(`UPDATE supervisor_agents SET
               last_successful_update_at=CASE WHEN last_successful_update_version IS DISTINCT FROM version OR last_successful_update_at IS NULL THEN NOW() ELSE last_successful_update_at END,
-              last_successful_update_version=version
-              WHERE id=$1 AND configured_version IS NOT NULL AND version=configured_version`, [supervisor.id]);
+              last_successful_update_version=version, desired_version=NULL
+              WHERE id=$1 AND desired_version IS NOT NULL AND version=desired_version`, [supervisor.id]);
           }
           await reconcileSupervisorReportedAgents(supervisor.id, message.managedAgents ?? []);
           const assignments = await loadSupervisorAssignments(supervisor.id);
@@ -1528,20 +1557,22 @@ export async function registerDeviceControlFeature(
           update_status=CASE
             WHEN COALESCE($6,'')='FAILED' THEN 'FAILED'
             WHEN COALESCE($6,'')='ROLLED_BACK' THEN 'ROLLED_BACK'
-            WHEN COALESCE($6,'')='UPDATED' AND configured_version IS NOT NULL AND version=configured_version THEN 'UPDATED'
-            WHEN COALESCE($6,'')='UPDATED' AND configured_version IS NOT NULL AND version<>configured_version THEN 'UPDATING'
+            WHEN COALESCE($6,'')='UPDATED' AND desired_version IS NOT NULL AND version=desired_version THEN 'UPDATED'
+            WHEN COALESCE($6,'')='UPDATED' AND desired_version IS NOT NULL AND version<>desired_version THEN 'UPDATING'
             WHEN update_status IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND COALESCE($6,'')='IDLE' THEN update_status
             WHEN COALESCE($6,'') IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') THEN COALESCE($6,update_status)
             ELSE update_status
           END,
           update_error=CASE WHEN COALESCE($6,'')='FAILED' THEN $7 WHEN COALESCE($6,'') IN ('UPDATED','ROLLED_BACK') THEN NULL ELSE update_error END,
+          update_started_at=CASE WHEN COALESCE($6,'') IN ('REQUESTED','UPDATE_REQUESTED','UPDATING','VERIFYING') AND update_started_at IS NULL THEN NOW() ELSE update_started_at END,
+          update_finished_at=CASE WHEN COALESCE($6,'') IN ('UPDATED','FAILED','ROLLED_BACK') THEN NOW() ELSE update_finished_at END,
           last_seen_at=NOW(),updated_at=NOW() WHERE id=$1`,
           [supervisor.id,JSON.stringify(message.hostNetworks ?? []),JSON.stringify(message.managedAgents ?? []),self.configuredVersion,self.containerState,self.updateStatus,self.updateError]);
         if (self.updateStatus === "UPDATED") {
           await pool.query(`UPDATE supervisor_agents SET
             last_successful_update_at=CASE WHEN last_successful_update_version IS DISTINCT FROM version OR last_successful_update_at IS NULL THEN NOW() ELSE last_successful_update_at END,
-            last_successful_update_version=version
-            WHERE id=$1 AND configured_version IS NOT NULL AND version=configured_version`, [supervisor.id]);
+            last_successful_update_version=version, desired_version=NULL
+            WHERE id=$1 AND desired_version IS NOT NULL AND version=desired_version`, [supervisor.id]);
         }
         await reconcileSupervisorReportedAgents(supervisor.id, message.managedAgents ?? []);
         socket.send(JSON.stringify({ type: "HEARTBEAT_ACK", serverTime: new Date().toISOString() }));
@@ -1694,8 +1725,9 @@ export async function registerDeviceControlFeature(
     // Persist the requested lifecycle before sending the command. A fast Supervisor can
     // otherwise answer UPDATING before this handler writes REQUESTED, causing the UI
     // to momentarily regress to the previous stable/freshness state.
-    await pool.query("UPDATE supervisor_agents SET configured_version=$2,update_status='REQUESTED',update_error=NULL,updated_at=NOW() WHERE id=$1",
-      [supervisor.id,parsed.data.version]);
+    await pool.query(`UPDATE supervisor_agents SET
+      previous_version=version,desired_version=$2,update_status='REQUESTED',update_requested_at=NOW(),update_started_at=NULL,update_finished_at=NULL,update_error=NULL,updated_at=NOW()
+      WHERE id=$1`, [supervisor.id,parsed.data.version]);
     socket.send(JSON.stringify({ type: "SUPERVISOR_COMMAND", commandId, operation: "UPDATE_SELF", version: parsed.data.version }));
     return reply.code(202).send({ commandId, status: "REQUESTED", version: parsed.data.version });
   });
@@ -1759,8 +1791,8 @@ export async function registerDeviceControlFeature(
     }
     if (parsed.data.operation === "UPDATE" && monitoringAgentId) {
       await pool.query(`UPDATE monitoring_agents SET
-        desired_version=$2,update_status='UPDATE_REQUESTED',update_error=NULL,
-        update_started_at=NOW(),update_finished_at=NULL,updated_at=NOW()
+        previous_version=version,desired_version=$2,update_status='UPDATE_REQUESTED',update_error=NULL,
+        update_requested_at=NOW(),update_started_at=NOW(),update_finished_at=NULL,updated_at=NOW()
         WHERE id=$1`, [monitoringAgentId, parsed.data.version ?? null]);
     }
 
