@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.80.0";
+export const MODULE_VERSION = "1.80.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.80.1": {
+    releasedAt: "2026-09-24T20:50:00+02:00",
+    patch: "PR-263-agent-ui-runtime-consistency-v2.patch",
+    changes: [
+      { type: "changed", description: "Unify Reported and System cell rendering across Device, Monitoring and Supervisor Agents" },
+      { type: "changed", description: "Add explicit reinstall-command actions for existing agents and an optional instance-name color override" },
+      { type: "changed", description: "Replace the Supervisor Agent name example placeholder with ss-agent" }
+    ]
+  },
   "1.80.0": {
     releasedAt: "2026-09-24T15:45:00+02:00",
     patch: "PR-262-agent-technical-model-unification-v1.patch",

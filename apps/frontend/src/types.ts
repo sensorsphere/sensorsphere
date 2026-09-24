@@ -25,6 +25,7 @@ export interface ModuleVersionInfo {
 
 export interface RuntimeConfig {
   instanceName: string;
+  instanceNameColor: string | null;
   builds?: {
     api: string | null;
     ingestion: string | null;

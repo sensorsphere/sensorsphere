@@ -656,6 +656,8 @@ function Dashboard() {
       ?.trim()
     || "SensorSphere";
 
+  const instanceNameColor = runtimeConfigQuery.data?.instanceNameColor?.trim() || undefined;
+
   const apiBuildDate =
     runtimeConfigQuery.data
       ?.builds
@@ -1971,7 +1973,7 @@ function Dashboard() {
               />
 
               <div>
-                <Title order={2}>
+                <Title order={2} style={instanceNameColor ? { color: instanceNameColor } : undefined}>
                   {instanceName}
                 </Title>
 

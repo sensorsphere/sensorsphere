@@ -113,6 +113,8 @@ const instanceName =
   process.env.INSTANCE_NAME?.trim()
   || "SensorSphere";
 
+const instanceNameColor = process.env.INSTANCE_NAME_COLOR?.trim() || null;
+
 const readBuildDate = async (
   path: string
 ): Promise<string | null> => {
@@ -164,6 +166,7 @@ app.get("/api/v1/config", async () => {
 
   return {
     instanceName,
+    instanceNameColor,
     builds: {
       api: apiBuildDate,
       ingestion: ingestionBuildDate

@@ -5,7 +5,7 @@ import { createDeviceAgent, deleteDeviceAgent, deleteSupervisorManagedAgentAssig
 import { ResolvedIconGlyph, resolveProviderIcon } from "./ResolvedDeviceIcon";
 import { DeviceGlyph } from "./DeviceGlyph";
 import type { AgentTokenCheckResult, DeviceAgent, DeviceDiscovery, DeviceRegistryDevice, DiscoveredDeviceAction, ManagedAgentStatus } from "./types";
-import { DeleteActionIcon, EditActionIcon } from "./TableActionIcons";
+import { DeleteActionIcon, EditActionIcon, ReinstallCommandActionIcon } from "./TableActionIcons";
 import { AgentVersionFreshnessBadge, getAgentVersionAvailability, UpdateLifecycleAge } from "./AgentVersionAvailability";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import { usePersistentState } from "./preferences/usePersistentState";
@@ -14,6 +14,7 @@ import { activeFilterStyles } from "./ActiveFilterStyles";
 import { FilterClearAction } from "./FilterClearAction";
 import { getAutonomousSupervisors } from "./SupervisorAgentsPanel";
 import { HostNetworkCell } from "./HostNetworkCell";
+import { AgentReportedCell, AgentSystemCell } from "./AgentTechnicalCells";
 import { hasAgentUpdate } from "./AgentBulkUpdate";
 
 
@@ -292,7 +293,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
   const [editing, setEditing] = React.useState<DeviceAgent | null>(null);
   const [form, setForm] = React.useState<AgentFormState>(emptyForm());
   const [deleteTarget, setDeleteTarget] = React.useState<DeviceAgent | null>(null);
-  const [tokenInfo, setTokenInfo] = React.useState<{ name: string; token: string } | null>(null);
+  const [tokenInfo, setTokenInfo] = React.useState<{ name: string; token: string; reinstall?: boolean } | null>(null);
   const [tokenCheckResult, setTokenCheckResult] = React.useState<{ name: string; result: AgentTokenCheckResult } | null>(null);
   const [discoveryAgent, setDiscoveryAgent] = React.useState<DeviceAgent | null>(null);
   const [discoveryProvider, setDiscoveryProvider] = React.useState<string | null>(null);
@@ -348,6 +349,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
     onSuccess: async () => { setDeleteTarget(null); await refresh(); }
   });
   const regenerate = useMutation({ mutationFn: (agent: DeviceAgent) => regenerateDeviceAgentToken(agent.id), onSuccess: async result => { setTokenInfo({ name: result.agent.name, token: result.token }); await refresh(); } });
+  const reinstall = useMutation({ mutationFn: (agent: DeviceAgent) => regenerateDeviceAgentToken(agent.id), onSuccess: async result => { setTokenInfo({ name: result.agent.name, token: result.token, reinstall: true }); await refresh(); } });
   const checkToken = useMutation({ mutationFn: (agent: DeviceAgent) => checkDeviceAgentToken(agent.id), onSuccess: (result, agent) => setTokenCheckResult({ name: agent.name, result }) });
   const agentUpdateMutation = useMutation({
     mutationFn: ({ agentId, version, closeOnSuccess = false }: { agentId: string; version: string; closeOnSuccess?: boolean }) => requestDeviceAgentUpdate(agentId, version).then(result => ({ result, closeOnSuccess })),
@@ -507,6 +509,11 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
   const agentEnvironment = tokenInfo
     ? `SENSORSPHERE_URL=${sensorsphereUrl}\nSENSORSPHERE_DEVICE_AGENT_TOKEN=${tokenInfo.token}`
     : "";
+  const deviceReinstallCommand = tokenInfo ? ` SENSORSPHERE_URL='${sensorsphereUrl}' \
+SENSORSPHERE_DEVICE_AGENT_TOKEN='${tokenInfo.token}' \
+AGENT_NAME='${tokenInfo.name}' \
+VERSION=${versionsQuery.data?.agents.deviceAgent.latestVersion ?? "latest"} \
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere-device-agent/master/scripts/install.sh)"` : "";
 
 
   const openManagedAgents = (agent: DeviceAgent) => {
@@ -699,15 +706,15 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
         <Table.Tbody>{filteredAgents.map(agent => <Table.Tr key={agent.id}>
           <Table.Td><Text size="sm" fw={600}>{agent.name}</Text>{agent.managedBySupervisorName ? <Text size="xs" c="dimmed">Supervisor: {agent.managedBySupervisorName}{agent.managedInstance && agent.managedInstance !== "main" ? ` / ${agent.managedInstance}` : ""}</Text> : <Text size="xs" c="orange">[No supervisor]</Text>}</Table.Td>
           <Table.Td><Badge color={agent.online ? "green" : agent.enabled ? "gray" : "red"} variant="light">{agent.online ? "ONLINE" : agent.enabled ? "OFFLINE" : "DISABLED"}</Badge></Table.Td>
-          <Table.Td><Text size="sm">{agent.reportedName ?? "—"}</Text>{agent.hostname && <Text size="xs" c="dimmed">{agent.hostname}</Text>}</Table.Td>
+          <Table.Td><AgentReportedCell reportedName={agent.reportedName} hostname={agent.hostname} /></Table.Td>
           <Table.Td><Text size="sm">{agent.version ?? "—"}</Text>{ACTIVE_UPDATE_STATES.includes(agent.updateStatus) ? <><Badge size="xs" variant="light" color="blue">{agent.updateStatus}</Badge><UpdateLifecycleAge status={agent.updateStatus} timestamp={agent.updateStatus === "UPDATE_REQUESTED" || agent.updateStatus === "REQUESTED" ? agent.updateRequestedAt ?? agent.updateStartedAt : agent.updateStartedAt ?? agent.updateRequestedAt} />{agent.desiredVersion && <Text size="xs" c="dimmed">Target {agent.desiredVersion}</Text>}</> : <><AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.deviceAgent} />{agent.updateStatus === "FAILED" && <><Tooltip label={agent.updateError ?? "Device Agent update failed"}><Badge size="xs" variant="light" color="red">FAILED</Badge></Tooltip><UpdateLifecycleAge status="FAILED" timestamp={agent.updateFinishedAt} label="failed" /></>}{agent.lastSuccessfulUpdateAt && <Text size="xs" c="dimmed" title={agent.lastSuccessfulUpdateAt}>Updated {updateAge(agent.lastSuccessfulUpdateAt)}</Text>}</>}</Table.Td>
           {showSupervisorControls && <Table.Td><Text size="sm">{agent.supervisorVersion ?? "—"}</Text><Tooltip label={agent.supervisorUpdateError ?? (agent.supervisorAvailable ? `Supervisor ${agent.supervisorContainerState ?? "available"}` : "Supervisor Agent unavailable")}><Badge size="xs" variant="light" color={!agent.supervisorAvailable ? "gray" : agent.supervisorUpdateStatus === "FAILED" ? "red" : agent.supervisorUpdateStatus === "UPDATED" ? "green" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus) ? "blue" : agent.supervisorSelfUpdateSupported ? "teal" : "gray"}>{agent.supervisorUpdateStatus === "IDLE" ? (agent.supervisorSelfUpdateSupported ? "READY" : agent.supervisorAvailable ? "NO SELF-UPDATE" : "OFFLINE") : agent.supervisorUpdateStatus}</Badge></Tooltip>{agent.supervisorDesiredVersion && agent.supervisorDesiredVersion !== agent.supervisorVersion && agent.supervisorUpdateStatus !== "UPDATED" && <Text size="xs" c="dimmed">Target {agent.supervisorDesiredVersion}</Text>}</Table.Td>}
-          <Table.Td><Text size="sm">{agent.os ?? "—"}{agent.osVersion ? ` ${agent.osVersion}` : ""}</Text><Text size="xs" c="dimmed">{agent.architecture ?? "—"}</Text></Table.Td><Table.Td><HostNetworkCell networks={agent.hostNetworks.length > 0 ? agent.hostNetworks : agent.managedBySupervisorId ? supervisorById.get(agent.managedBySupervisorId)?.hostNetworks : undefined} /></Table.Td>
+          <Table.Td><AgentSystemCell os={agent.os} osVersion={agent.osVersion} architecture={agent.architecture} /></Table.Td><Table.Td><HostNetworkCell networks={agent.hostNetworks.length > 0 ? agent.hostNetworks : agent.managedBySupervisorId ? supervisorById.get(agent.managedBySupervisorId)?.hostNetworks : undefined} /></Table.Td>
           <Table.Td title={agent.lastSeenAt ?? undefined}><Text size="sm">{compactDate(agent.lastSeenAt)}</Text></Table.Td>
           <Table.Td><Group gap={8}>{agent.capabilities.map(item => { const resolved=resolveProviderIcon(item.provider); return <Tooltip key={item.provider} label={`${item.provider} · ${item.actions.join(", ") || "No actions reported"}${item.discovery ? " · discovery" : ""}`}><span style={{ display: "inline-flex" }}><DeviceGlyph icon={resolved.icon} color={resolved.color} size={22} /></span></Tooltip>; })}{!agent.capabilities.some(item => item.provider.toLowerCase() === "proxmox") && (() => { const resolved=resolveProviderIcon("proxmox"); return <Tooltip label="No Proxmox server configured on this agent"><span style={{ display: "inline-flex", filter: "grayscale(1)", opacity: 0.35 }}><DeviceGlyph icon={resolved.icon} color={resolved.color} size={22} /></span></Tooltip>; })()}</Group></Table.Td>
 
           <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
-          <Table.Td><Group gap={10} wrap="nowrap" justify="flex-end"><Tooltip label={agent.managedBySupervisorId ? "Configure Proxmox" : "Proxmox configuration requires a Supervisor-managed Device Agent"}><ActionIcon size="sm" variant="light" color="orange" aria-label="Configure Proxmox" disabled={!agent.managedBySupervisorId} onClick={() => openProxmoxConfig(agent)}><ProxmoxConfigIcon /></ActionIcon></Tooltip><Tooltip label={agent.online ? "Discover devices" : "Device Agent must be online to discover"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Discover devices" disabled={!agent.online || !agent.capabilities.some(capability => capability.discovery)} onClick={() => openDiscovery(agent)}><RadarIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online to update" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? "An update is already in progress" : "Update Device Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Device Agent" disabled={!agent.online || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => openAgentUpdate(agent)}><AgentUpdateIcon size={16} /></ActionIcon></Tooltip>{showSupervisorControls && <><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : !agent.supervisorSelfUpdateSupported ? "Supervisor Agent does not support self-update" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus) ? "Supervisor update already in progress" : "Update Supervisor Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.supervisorAvailable || !agent.supervisorSelfUpdateSupported || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus)} onClick={() => openSupervisorUpdate(agent)}><SupervisorUpdateIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : "Managed agents"}><ActionIcon size="sm" variant="light" color="indigo" aria-label="Managed agents" disabled={!agent.online || !agent.supervisorAvailable} onClick={() => openManagedAgents(agent)}>M</ActionIcon></Tooltip></>}<Group gap={4} wrap="nowrap"><EditActionIcon onClick={() => openEdit(agent)} /><Tooltip label="Copy device agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy device agent" onClick={() => openCopy(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check deployed token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check deployed token" onClick={() => checkToken.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerate.mutate(agent)}>↻</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Group></Table.Td>
+          <Table.Td><Group gap={10} wrap="nowrap" justify="flex-end"><Tooltip label={agent.managedBySupervisorId ? "Configure Proxmox" : "Proxmox configuration requires a Supervisor-managed Device Agent"}><ActionIcon size="sm" variant="light" color="orange" aria-label="Configure Proxmox" disabled={!agent.managedBySupervisorId} onClick={() => openProxmoxConfig(agent)}><ProxmoxConfigIcon /></ActionIcon></Tooltip><Tooltip label={agent.online ? "Discover devices" : "Device Agent must be online to discover"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Discover devices" disabled={!agent.online || !agent.capabilities.some(capability => capability.discovery)} onClick={() => openDiscovery(agent)}><RadarIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online to update" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? "An update is already in progress" : "Update Device Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Device Agent" disabled={!agent.online || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => openAgentUpdate(agent)}><AgentUpdateIcon size={16} /></ActionIcon></Tooltip>{showSupervisorControls && <><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : !agent.supervisorSelfUpdateSupported ? "Supervisor Agent does not support self-update" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus) ? "Supervisor update already in progress" : "Update Supervisor Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.supervisorAvailable || !agent.supervisorSelfUpdateSupported || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus)} onClick={() => openSupervisorUpdate(agent)}><SupervisorUpdateIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : "Managed agents"}><ActionIcon size="sm" variant="light" color="indigo" aria-label="Managed agents" disabled={!agent.online || !agent.supervisorAvailable} onClick={() => openManagedAgents(agent)}>M</ActionIcon></Tooltip></>}<Group gap={4} wrap="nowrap"><EditActionIcon onClick={() => openEdit(agent)} /><Tooltip label="Copy device agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy device agent" onClick={() => openCopy(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check deployed token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check deployed token" onClick={() => checkToken.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerate.mutate(agent)}>↻</ActionIcon></Tooltip><ReinstallCommandActionIcon onClick={() => reinstall.mutate(agent)} loading={reinstall.isPending && reinstall.variables?.id === agent.id} /><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Group></Table.Td>
         </Table.Tr>)}{filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={showSupervisorControls ? 11 : 10}><Text ta="center" c="dimmed" py="xl">No Device Agents yet.</Text></Table.Td></Table.Tr>}</Table.Tbody>
       </Table></div>
     </Card>
@@ -996,7 +1003,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
       </Stack>
     </Modal>
 
-    <Modal opened={!!tokenInfo} onClose={() => setTokenInfo(null)} title="Device Agent token" size="lg">
+    <Modal opened={!!tokenInfo} onClose={() => setTokenInfo(null)} title={tokenInfo?.reinstall ? "Device Agent reinstall command" : "Device Agent token"} size="lg">
       <Stack>
         <Text size="sm">Copy this token now. SensorSphere stores only its hash and cannot display it again.</Text>
         <TextInput
@@ -1033,6 +1040,11 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
           </Group>
           <Code block>{agentEnvironment}</Code>
         </Stack>
+        {tokenInfo?.reinstall && <>
+          <Text size="xs" fw={600}>Complete reinstall command</Text>
+          <Group gap="xs" align="flex-start" wrap="nowrap"><Code block style={{ flex: 1, whiteSpace: "pre-wrap" }}>{deviceReinstallCommand}</Code><Tooltip label="Copy reinstall command"><ActionIcon variant="light" color="violet" aria-label="Copy reinstall command" onClick={() => void writeClipboardText(deviceReinstallCommand).then(() => showCopyNotice("Reinstall command copied to clipboard"))}>⤓</ActionIcon></Tooltip></Group>
+          <Text size="xs" c="orange">Generating this command regenerated the agent token. Run the command on the target host to reconnect the agent.</Text>
+        </>}
         <Group justify="flex-end"><Button onClick={() => setTokenInfo(null)}>Close</Button></Group>
       </Stack>
     </Modal>

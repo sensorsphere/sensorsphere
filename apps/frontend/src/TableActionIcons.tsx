@@ -81,6 +81,17 @@ function BanIcon() {
   );
 }
 
+
+function ReinstallIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M12 3v12" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M5 21h14" />
+    </svg>
+  );
+}
+
 function ReactivateIcon() {
   return (
     <svg {...iconProps}>
@@ -153,4 +164,8 @@ export function ReactivateActionIcon({
       icon={<ReactivateIcon />}
     />
   );
+}
+
+export function ReinstallCommandActionIcon({ onClick, loading = false }: { onClick: () => void; loading?: boolean }) {
+  return <TableActionIcon label="Reinstall command" color="violet" onClick={onClick} loading={loading} icon={<ReinstallIcon />} />;
 }
