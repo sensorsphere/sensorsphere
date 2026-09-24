@@ -437,6 +437,45 @@ function upsertDiscoveredIdentity(
   return next;
 }
 
+function normalizedIdentityKey(identityType: string, value: string): string {
+  const type = identityType.trim().toUpperCase();
+  const normalizedType = ["MAC_ADDRESS", "MAC_WIFI", "MAC_ETHERNET"].includes(type) ? "MAC"
+    : type === "IP_ADDRESS" ? "IP"
+      : ["IEEE_ADDRESS", "ZIGBEE_IEEE"].includes(type) ? "IEEE"
+        : type === "HOSTNAME" ? "FQDN"
+          : type;
+  const trimmed = value.trim();
+  const normalizedValue = normalizedType === "MAC" || normalizedType === "IEEE"
+    ? trimmed.toUpperCase().replace(/[^0-9A-F]/g, "")
+    : normalizedType === "FQDN" || normalizedType === "IP"
+      ? trimmed.toLowerCase()
+      : trimmed;
+  return `${normalizedType}:${normalizedValue}`;
+}
+
+function dedupeDeviceIdentities(identities: DeviceIdentity[]): DeviceIdentity[] {
+  const byKey = new Map<string, DeviceIdentity>();
+  const order: string[] = [];
+  for (const identity of identities) {
+    const key = normalizedIdentityKey(identity.identityType, identity.value);
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, { ...identity });
+      order.push(key);
+      continue;
+    }
+    byKey.set(key, {
+      ...existing,
+      isPrimary: existing.isPrimary === true || identity.isPrimary === true,
+      sortOrder: Math.min(existing.sortOrder ?? Number.MAX_SAFE_INTEGER, identity.sortOrder ?? Number.MAX_SAFE_INTEGER),
+      source: existing.source ?? identity.source,
+      labelCode: existing.labelCode ?? identity.labelCode,
+      label: existing.label ?? identity.label
+    });
+  }
+  return order.map(key => byKey.get(key)!);
+}
+
 function discoveredValues(device: Record<string, unknown>, key: string, primary: string): string[] {
   const raw = device[key];
   const values = Array.isArray(raw)
@@ -445,7 +484,15 @@ function discoveredValues(device: Record<string, unknown>, key: string, primary:
       ? raw.split(/[,;\n]+/).map(item => item.trim()).filter(Boolean)
       : [];
   const ordered = [primary, ...values].filter(Boolean);
-  return [...new Set(ordered)];
+  const seen = new Set<string>();
+  return ordered.filter(value => {
+    const normalized = key.toLowerCase().includes("mac")
+      ? value.toUpperCase().replace(/[^0-9A-F]/g, "")
+      : value.toLowerCase();
+    if (seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
 }
 
 function upsertDiscoveredIdentities(
@@ -1053,6 +1100,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       identities = upsertDiscoveredIdentity(identities, "PROXMOX_ID", proxmoxId, 20);
       identities = upsertDiscoveredIdentity(identities, "HOSTNAME", hostname, 30);
     }
+    identities = dedupeDeviceIdentities(identities);
 
     const form = deviceToForm(registered);
     form.identities = identities;

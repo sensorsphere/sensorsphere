@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.78.2";
+export const MODULE_VERSION = "1.78.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.78.3": {
+    releasedAt: "2026-09-24T02:35:00+02:00",
+    patch: "PR-258-device-registry-identity-deduplication-v1.patch",
+    changes: [
+      { type: "fixed", description: "Discovery reconciliation deduplicates canonical MAC/IP identities before updating Device Registry so repeated provider addresses cannot abort the update" }
+    ]
+  },
   "1.78.2": {
     releasedAt: "2026-09-24T02:20:00+02:00",
     patch: "PR-257-discovery-control-provider-persistence-v1.patch",

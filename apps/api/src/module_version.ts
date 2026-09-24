@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.39.4";
+export const MODULE_VERSION = "1.39.5";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.39.5": {
+    releasedAt: "2026-09-24T02:35:00+02:00",
+    patch: "PR-258-device-registry-identity-deduplication-v1.patch",
+    changes: [
+      { type: "fixed", description: "Device Registry canonicalizes and deduplicates identities inside create/update payloads before enforcing cross-device uniqueness" }
+    ]
+  },
   "1.39.4": {
     releasedAt: "2026-09-24T02:20:00+02:00",
     patch: "PR-257-discovery-control-provider-persistence-v1.patch",

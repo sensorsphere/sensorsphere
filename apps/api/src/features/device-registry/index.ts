@@ -562,7 +562,7 @@ async function prepareIdentities(
   deviceId: string,
   identities: z.infer<typeof identitySchema>[]
 ) {
-  const prepared = identities.map((identity, index) => {
+  const normalizedIdentities = identities.map((identity, index) => {
     const identityType = canonicalIdentityType(identity.identityType);
     const normalized = normalizeIdentityValue(identityType, identity.value);
     return {
@@ -571,6 +571,28 @@ async function prepareIdentities(
       isPrimary: identity.isPrimary ?? false, sortOrder: identity.sortOrder ?? (index + 1) * 10
     };
   });
+
+  // A Discovery refresh can encounter the same identity through both the existing
+  // Registry row and the provider's current address list. Deduplicate on the same
+  // canonical type/value pair used by the database uniqueness constraints before
+  // replacing child rows, while preserving primary status and the earliest order.
+  const prepared = Array.from(normalizedIdentities.reduce((items, identity) => {
+    const key = `${identity.identityType}:${identity.normalizedValue}`;
+    const existing = items.get(key);
+    if (!existing) {
+      items.set(key, identity);
+      return items;
+    }
+    items.set(key, {
+      ...existing,
+      isPrimary: existing.isPrimary || identity.isPrimary,
+      sortOrder: Math.min(existing.sortOrder, identity.sortOrder),
+      source: existing.source ?? identity.source,
+      labelCode: existing.labelCode ?? identity.labelCode,
+      label: existing.label ?? identity.label
+    });
+    return items;
+  }, new Map<string, typeof normalizedIdentities[number]>()).values());
 
   for (const type of new Set(prepared.map(item => item.identityType))) {
     const sameType = prepared.filter(item => item.identityType === type);
