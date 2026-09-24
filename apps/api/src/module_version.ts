@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.39.5";
+export const MODULE_VERSION = "1.40.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.40.0": {
+    releasedAt: "2026-09-24T07:55:00+02:00",
+    patch: "PR-259-supervisor-environment-isolation-v1.patch",
+    changes: [
+      { type: "added", description: "Supervisor identities carry an immutable deployment environment used to validate environment-isolated Supervisor connections" }
+    ]
+  },
   "1.39.5": {
     releasedAt: "2026-09-24T02:35:00+02:00",
     patch: "PR-258-device-registry-identity-deduplication-v1.patch",

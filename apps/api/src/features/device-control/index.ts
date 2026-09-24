@@ -444,8 +444,11 @@ async function fetchGhcrLatestVersion(repository: string): Promise<string> {
 }
 
 
+const supervisorEnvironmentSchema = z.string().trim().min(1).max(32).regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/).transform(value => value.toUpperCase());
+
 const supervisorCreateSchema = z.object({
   name: z.string().trim().min(1).max(200),
+  environment: supervisorEnvironmentSchema.optional(),
   labels: z.record(z.string(), z.string()).optional(),
   heartbeatTimeoutSeconds: z.number().int().min(15).max(3600).optional()
 }).strict();
@@ -472,6 +475,8 @@ const supervisorHostNetworksSchema = z.array(z.object({
 const supervisorHelloSchema = z.object({
   type: z.literal("HELLO"),
   supervisorName: z.string().trim().min(1).max(200).optional(),
+  environment: supervisorEnvironmentSchema.optional(),
+  namespace: z.string().trim().min(1).max(64).regex(/^[a-z0-9][a-z0-9_-]{0,63}$/).optional(),
   version: z.string().trim().max(100).nullable().optional(),
   hostname: z.string().trim().max(500).nullable().optional(),
   systemInfo: z.object({
@@ -531,7 +536,7 @@ function supervisorSelfStatusFields(selfStatus: Record<string, unknown> | undefi
 }
 
 interface SupervisorAgentRow {
-  id: string; name: string; enabled: boolean; labels: Record<string, string>; agent_labels: string[]; reported_name: string | null; version: string | null; hostname: string | null;
+  id: string; name: string; environment: string; enabled: boolean; labels: Record<string, string>; agent_labels: string[]; reported_name: string | null; version: string | null; hostname: string | null;
   os_name: string | null; os_version: string | null; architecture: string | null; host_networks: Array<Record<string, unknown>>; managed_agents: Array<Record<string, unknown>>;
   configured_version: string | null; container_state: string | null; self_update_supported: boolean; update_status: string;
   update_error: string | null; last_successful_update_at: Date | null; last_successful_update_version: string | null; last_seen_at: Date | null; heartbeat_timeout_seconds: number; created_at: Date; updated_at: Date;
@@ -582,7 +587,7 @@ function generateSupervisorToken(): string {
 function supervisorAgentDto(row: SupervisorAgentRow, connected: boolean) {
   const recent = row.last_seen_at != null && Date.now() - row.last_seen_at.getTime() <= row.heartbeat_timeout_seconds * 1000;
   return {
-    id: row.id, name: row.name, enabled: row.enabled, labels: row.labels ?? {}, agentLabels: Array.isArray(row.agent_labels) ? row.agent_labels : [], reportedName: row.reported_name, version: row.version, hostname: row.hostname,
+    id: row.id, name: row.name, environment: row.environment ?? "DEFAULT", enabled: row.enabled, labels: row.labels ?? {}, agentLabels: Array.isArray(row.agent_labels) ? row.agent_labels : [], reportedName: row.reported_name, version: row.version, hostname: row.hostname,
     os: row.os_name, osVersion: row.os_version, architecture: row.architecture, hostNetworks: row.host_networks ?? [], managedAgents: row.managed_agents ?? [],
     configuredVersion: row.configured_version, containerState: row.container_state, selfUpdateSupported: row.self_update_supported ?? false,
     updateStatus: row.update_status ?? "IDLE", updateError: row.update_error, lastSuccessfulUpdateAt: row.last_successful_update_at?.toISOString() ?? null, lastSuccessfulUpdateVersion: row.last_successful_update_version, lastSeenAt: row.last_seen_at?.toISOString() ?? null,
@@ -719,12 +724,13 @@ export async function registerDeviceControlFeature(
       const version = typeof item.configured_version === "string" ? item.configured_version : null;
       const localState = typeof item.container_state === "string" ? item.container_state : null;
       const installDir = typeof item.install_dir === "string" ? item.install_dir : null;
+      const composeProject = typeof item.compose_project === "string" ? item.compose_project : null;
       const installed = item.installed === true;
       await pool.query(`UPDATE supervisor_managed_agents SET
-        install_dir=COALESCE($3,install_dir),reported_version=$4,local_state=$5,
-        reconciliation_status=CASE WHEN $6 THEN 'MANAGED' ELSE 'MISSING' END,updated_at=NOW()
+        install_dir=COALESCE($3,install_dir),compose_project=COALESCE($4,compose_project),reported_version=$5,local_state=$6,
+        reconciliation_status=CASE WHEN $7 THEN 'MANAGED' ELSE 'MISSING' END,updated_at=NOW()
         WHERE id=$1 AND supervisor_agent_id=$2`,
-        [managementId, supervisorId, installDir, version, localState, installed]
+        [managementId, supervisorId, installDir, composeProject, version, localState, installed]
       );
     }
   };
@@ -1472,6 +1478,12 @@ export async function registerDeviceControlFeature(
           return;
         }
         if (message.type === "HELLO") {
+          const reportedEnvironment = message.environment ?? "DEFAULT";
+          if (reportedEnvironment !== (supervisor.environment ?? "DEFAULT")) {
+            socket.send(JSON.stringify({ type: "ERROR", error: `Supervisor environment mismatch: expected ${supervisor.environment ?? "DEFAULT"}, reported ${reportedEnvironment}` }));
+            socket.close(4003, "Supervisor environment mismatch");
+            return;
+          }
           const self = supervisorSelfStatusFields(message.selfStatus);
           await pool.query(`UPDATE supervisor_agents SET
             reported_name=COALESCE($2,reported_name),version=COALESCE($3,version),hostname=COALESCE($4,hostname),
@@ -1647,8 +1659,8 @@ export async function registerDeviceControlFeature(
     const parsed = supervisorCreateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid Supervisor Agent" });
     const token = generateSupervisorToken();
-    const result = await pool.query<SupervisorAgentRow>(`INSERT INTO supervisor_agents(name,token_hash,labels,heartbeat_timeout_seconds) VALUES($1,$2,$3::jsonb,$4) RETURNING *`,
-      [parsed.data.name,hashToken(token),JSON.stringify(parsed.data.labels ?? {}),parsed.data.heartbeatTimeoutSeconds ?? 60]);
+    const result = await pool.query<SupervisorAgentRow>(`INSERT INTO supervisor_agents(name,environment,token_hash,labels,heartbeat_timeout_seconds) VALUES($1,$2,$3,$4::jsonb,$5) RETURNING *`,
+      [parsed.data.name,parsed.data.environment ?? "DEFAULT",hashToken(token),JSON.stringify(parsed.data.labels ?? {}),parsed.data.heartbeatTimeoutSeconds ?? 60]);
     return reply.code(201).send({ supervisor: supervisorAgentDto(result.rows[0]!, false), token });
   });
 

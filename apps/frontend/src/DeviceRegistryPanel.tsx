@@ -68,6 +68,7 @@ import type {
 
 import { EditActionIcon, DeleteActionIcon } from "./TableActionIcons";
 import { DEVICE_ICON_OPTIONS, DeviceGlyph } from "./DeviceGlyph";
+import { NavigationIcon } from "./NavigationIcon";
 import { ResolvedIconGlyph, resolveDeviceIcon } from "./ResolvedDeviceIcon";
 import { DeviceTaxonomyPanel } from "./DeviceTaxonomyPanel";
 import { DeviceAccessGlyph, DeviceAccessLinksEditor, openDeviceAccessUrl, resolveDeviceAccessUrl } from "./DeviceAccessLinksEditor";
@@ -1241,7 +1242,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     <Stack gap="md" className="device-registry-panel">
       <Group justify="space-between" align="flex-start">
         <div>
-          <Title order={2}>Device Registry</Title>
+          <Group gap="xs" wrap="nowrap"><NavigationIcon page="devices" size={24} /><Title order={2}>Device Registry</Title></Group>
           <Text c="dimmed" size="sm">Technical inventory and health for IoT, network, compute and virtual devices.</Text>
         </div>
       </Group>

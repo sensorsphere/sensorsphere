@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.78.3";
+export const MODULE_VERSION = "1.79.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.79.0": {
+    releasedAt: "2026-09-24T07:55:00+02:00",
+    patch: "PR-259-supervisor-environment-isolation-v1.patch",
+    changes: [
+      { type: "added", description: "Supervisor Agents expose and filter by DIT/IAT/PROD-style deployment environments and bootstrap with SENSORSPHERE_ENVIRONMENT" },
+      { type: "changed", description: "Device Registry and Service Registry page titles now display the same navigation icons as the sidebar" }
+    ]
+  },
   "1.78.3": {
     releasedAt: "2026-09-24T02:35:00+02:00",
     patch: "PR-258-device-registry-identity-deduplication-v1.patch",
