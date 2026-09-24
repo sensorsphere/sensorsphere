@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.41.1";
+export const MODULE_VERSION = "1.41.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.41.2": {
+    releasedAt: "2026-09-24T23:10:00+02:00",
+    patch: "PR-263-agent-operation-timeout-status-hotfix-v2.patch",
+    changes: [
+      { type: "fixed", description: "Extend Supervisor managed-agent operations to ten minutes so slow image pulls and Raspberry Pi deployments are not marked timed out after three minutes" },
+      { type: "fixed", description: "Recover stale FAILED agent update lifecycle state when the target version is subsequently reported by the running agent" }
+    ]
+  },
   "1.41.1": {
     releasedAt: "2026-09-24T20:50:00+02:00",
     patch: "PR-263-agent-ui-runtime-consistency-v2.patch",

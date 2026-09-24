@@ -586,27 +586,27 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
               local_ip=COALESCE($6,local_ip), source_ip=$7, x_forwarded_for=$8, x_real_ip=$9,
               os_name=COALESCE($10,os_name), os_version=COALESCE($11,os_version), architecture=COALESCE($12,architecture),
               update_status=CASE
-                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING') THEN 'UPDATED'
+                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING','FAILED') THEN 'UPDATED'
                 ELSE update_status
               END,
               update_finished_at=CASE
-                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING') THEN NOW()
+                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING','FAILED') THEN NOW()
                 ELSE update_finished_at
               END,
               last_successful_update_at=CASE
-                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING') THEN NOW()
+                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING','FAILED') THEN NOW()
                 ELSE last_successful_update_at
               END,
               last_successful_update_version=CASE
-                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING') THEN $3
+                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING','FAILED') THEN $3
                 ELSE last_successful_update_version
               END,
               update_error=CASE
-                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING') THEN NULL
+                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING','FAILED') THEN NULL
                 ELSE update_error
               END,
               desired_version=CASE
-                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING') THEN NULL
+                WHEN desired_version IS NOT NULL AND $3=desired_version AND update_status IN ('UPDATE_REQUESTED','REQUESTED','UPDATING','VERIFYING','FAILED') THEN NULL
                 ELSE desired_version
               END,
               updated_at=NOW() WHERE id=$1 RETURNING *`,

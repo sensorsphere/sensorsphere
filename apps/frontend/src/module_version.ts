@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.80.2";
+export const MODULE_VERSION = "1.80.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.80.3": {
+    releasedAt: "2026-09-24T23:10:00+02:00",
+    patch: "PR-263-agent-operation-timeout-status-hotfix-v2.patch",
+    changes: [
+      { type: "fixed", description: "Wait for the extended server-side managed-agent operation window instead of failing the UI after three minutes" },
+      { type: "fixed", description: "Do not display UP TO DATE together with FAILED; failure lifecycle state takes precedence until runtime confirmation clears it" }
+    ]
+  },
   "1.80.2": {
     releasedAt: "2026-09-24T22:55:00+02:00",
     patch: "PR-263-agent-runtime-missing-reinstall-hotfix-v1.patch",

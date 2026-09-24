@@ -897,7 +897,7 @@ export async function registerDeviceControlFeature(
         if (record.operation === "UPDATE" && record.deviceAgentId) {
           void pool.query(`UPDATE device_agents SET
             update_status='FAILED',update_finished_at=NOW(),update_error=$3,updated_at=NOW()
-            WHERE id=$1 AND update_command_id=$2 AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING')`,
+            WHERE id=$1 AND update_command_id=$2 AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING','FAILED')`,
             [record.deviceAgentId, record.id, record.error]
           ).catch(error => app.log.error({ err: error, commandId: record.id }, "Unable to persist timed-out Device Agent update"));
         }
@@ -1095,44 +1095,44 @@ export async function registerDeviceControlFeature(
               supervisor_version=$11, supervisor_configured_version=$12, supervisor_container_state=$13,
               supervisor_self_update_supported=$14,
               supervisor_update_status=CASE
-                WHEN supervisor_desired_version IS NOT NULL AND $11 = supervisor_desired_version AND supervisor_update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN 'UPDATED'
+                WHEN supervisor_desired_version IS NOT NULL AND $11 = supervisor_desired_version AND supervisor_update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING','FAILED') THEN 'UPDATED'
                 ELSE COALESCE(NULLIF($15,''), supervisor_update_status)
               END,
               supervisor_desired_version=CASE
-                WHEN supervisor_desired_version IS NOT NULL AND $11 = supervisor_desired_version AND supervisor_update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NULL
+                WHEN supervisor_desired_version IS NOT NULL AND $11 = supervisor_desired_version AND supervisor_update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING','FAILED') THEN NULL
                 ELSE supervisor_desired_version
               END,
               supervisor_update_finished_at=CASE
-                WHEN supervisor_desired_version IS NOT NULL AND $11 = supervisor_desired_version AND supervisor_update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NOW()
+                WHEN supervisor_desired_version IS NOT NULL AND $11 = supervisor_desired_version AND supervisor_update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING','FAILED') THEN NOW()
                 ELSE supervisor_update_finished_at
               END,
               supervisor_update_error=CASE
-                WHEN supervisor_desired_version IS NOT NULL AND $11 = supervisor_desired_version AND supervisor_update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NULL
+                WHEN supervisor_desired_version IS NOT NULL AND $11 = supervisor_desired_version AND supervisor_update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING','FAILED') THEN NULL
                 WHEN $16::text IS NOT NULL THEN $16::text
                 ELSE supervisor_update_error
               END,
               update_status=CASE
-                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN 'UPDATED'
+                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING','FAILED') THEN 'UPDATED'
                 ELSE update_status
               END,
               desired_version=CASE
-                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NULL
+                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING','FAILED') THEN NULL
                 ELSE desired_version
               END,
               update_finished_at=CASE
-                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NOW()
+                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING','FAILED') THEN NOW()
                 ELSE update_finished_at
               END,
               update_error=CASE
-                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NULL
+                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING','FAILED') THEN NULL
                 ELSE update_error
               END,
               last_successful_update_at=CASE
-                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN NOW()
+                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING','FAILED') THEN NOW()
                 ELSE last_successful_update_at
               END,
               last_successful_update_version=CASE
-                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING') THEN $3
+                WHEN desired_version IS NOT NULL AND $3 = desired_version AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING','FAILED') THEN $3
                 ELSE last_successful_update_version
               END,
               last_seen_at=NOW(), updated_at=NOW()
@@ -1776,7 +1776,7 @@ export async function registerDeviceControlFeature(
     }
 
     const commandId = randomUUID();
-    const expiresAt = new Date(Date.now() + 3 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     let expectedTokenHash: string | undefined;
     let deviceAgentId: string | undefined;
     let monitoringAgentId: string | undefined;
@@ -2002,7 +2002,7 @@ export async function registerDeviceControlFeature(
       last_successful_update_at=COALESCE(last_successful_update_at,NOW()),
       last_successful_update_version=version,updated_at=NOW()
       WHERE desired_version IS NOT NULL AND version=desired_version
-        AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING')`);
+        AND update_status IN ('UPDATE_REQUESTED','UPDATING','VERIFYING','FAILED')`);
     const result = await pool.query<AgentRow>(`SELECT a.*,
       sma.id AS managed_association_id,
       sma.supervisor_agent_id AS managed_by_supervisor_id,
@@ -2207,7 +2207,7 @@ export async function registerDeviceControlFeature(
     if (socket?.readyState !== WebSocket.OPEN) return reply.code(409).send({ error: "Device Agent is offline" });
 
     const commandId = randomUUID();
-    const expiresAt = new Date(Date.now() + 3 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     const record: ManagedAgentOperationRecord = { id: commandId, agentId: agent.id, operation: parsed.data.operation, status: "SENT", result: null, error: null, createdAt: new Date(), expiresAt, finishedAt: null };
     managedAgentOperations.set(commandId, record);
     socket.send(JSON.stringify({

@@ -1750,7 +1750,7 @@ export async function getManagedAgentOperation(commandId: string): Promise<Manag
 
 export async function runManagedAgentOperation(id: string, input: ManagedAgentOperationInput): Promise<ManagedAgentOperation> {
   let operation = await startManagedAgentOperation(id, input);
-  const deadline = Date.now() + 185000;
+  const deadline = Date.now() + 615000;
   while (operation.status === "SENT" && Date.now() < deadline) {
     await new Promise(resolve => window.setTimeout(resolve, 400));
     operation = await getManagedAgentOperation(operation.commandId);
@@ -1784,7 +1784,7 @@ export async function runSupervisorManagedAgentOperation(supervisorId: string, i
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input)
   }));
-  const deadline = Date.now() + 185000;
+  const deadline = Date.now() + 615000;
   while (operation.status === "SENT" && Date.now() < deadline) {
     await new Promise(resolve => window.setTimeout(resolve, 400));
     operation = await readJson<ManagedAgentOperation>(await fetch(`/api/v1/device-control/supervisor-managed-agents/${operation.commandId}`));
