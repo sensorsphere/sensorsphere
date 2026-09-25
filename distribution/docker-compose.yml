@@ -28,7 +28,7 @@ services:
       - "${MQTT_BIND_ADDRESS:-0.0.0.0}:${MQTT_PORT:-1883}:1883"
 
     volumes:
-      - ./infrastructure/mosquitto/config:/mosquitto/config:ro
+      - ./config/mosquitto:/mosquitto/config:ro
       - ${DATA_ROOT:-./data}/mosquitto/data:/mosquitto/data
       - ${DATA_ROOT:-./data}/mosquitto/log:/mosquitto/log
 
@@ -47,7 +47,7 @@ services:
 
     volumes:
       - ${DATA_ROOT:-./data}/timescaledb:/var/lib/postgresql/data
-      - ./infrastructure/timescaledb/init:/docker-entrypoint-initdb.d:ro
+      - ./init/timescaledb:/docker-entrypoint-initdb.d:ro
 
     healthcheck:
       test:

@@ -65,15 +65,18 @@ Audit date: 2026-09-25
 - [x] Commit and push PR2.
 ## PR3 — Stack installation and lifecycle
 
-- [ ] Define minimal non-DEV distribution bundle.
-- [ ] Add `install.sh`.
-- [ ] Add Stack Release download/selection.
-- [ ] Add generated/managed `.env`.
-- [ ] Add pull -> migrations -> up workflow.
-- [ ] Add application health checks.
-- [ ] Add update workflow.
-- [ ] Add `.env.previous` rollback state.
-- [ ] Block unsafe rollback when DB compatibility is not guaranteed.
+- [x] Define minimal non-DEV distribution bundle.
+- [x] Add `install.sh`.
+- [x] Add Stack Release download/selection.
+- [x] Add generated/managed `.env`.
+- [x] Add pull -> migrations -> up lifecycle.
+- [x] Add application health checks.
+- [x] Add update workflow.
+- [x] Add `.env.previous` rollback state.
+- [x] Block unsafe rollback when migration level changed.
+- [x] Validate isolated install, update, safe rollback, and rollback guard.
+- [x] Produce and verify Git patch.
+- [x] Commit and push PR3.
 
 ## PR4 — Compatibility contracts and release hardening
 
@@ -86,13 +89,17 @@ Audit date: 2026-09-25
 - [ ] Evaluate image signing/attestations.
 - [ ] Finalize CI/release automation and distribution artifacts.
 
+## Follow-up UI
+
+- [ ] In the next UI patch, extend **Build information** at the bottom of the sidebar to show the released versions of `sensorsphere-nginx` and `sensorsphere-migrations` in addition to the existing application modules.
+
 ## Open decisions
 
 - [ ] Final Stack Release publication location.
 - [ ] Final Stack Release naming/version convention after the date-based v1 format.
 - [ ] Whether Stack Releases are also attached to GitHub Releases.
-- [ ] Final install path for non-DEV environments.
-- [ ] Exact update/rollback command interface.
+- [x] Final install path for non-DEV environments: `/opt/sensorsphere` by default, overridable with `--install-dir`.
+- [x] Update/rollback command interface defined by `distribution/install.sh`.
 
 ## Plan changes
 
@@ -103,3 +110,4 @@ Audit date: 2026-09-25
 - 2026-09-25: The repository-wide pnpm test command still fails on baseline packages with Vitest test scripts but no test files; ingestion-service tests pass (3/3).
 - 2026-09-25: PR2 preserves Stack Release 2026.09.25.1 and introduces schema v2 release 2026.09.25.2 with nginx 1.0.0 and migrations 72.
 - 2026-09-25: The migrations image was validated from a fresh initialized TimescaleDB through level 72 and a second no-op run.
+- 2026-09-25: PR3 standardizes non-DEV installs under `/opt/sensorsphere` by default and validates install/update/rollback on an isolated stack without Node.js or source-tree application builds.

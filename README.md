@@ -50,6 +50,7 @@ curl -fsS http://127.0.0.1:8080/api/health
 ## Release documentation
 
 - `docs/containerized-releases/PLAN.md`
+- `docs/containerized-releases/INSTALLATION.md`
 - `docs/containerized-releases/GHCR-PUBLISHING.md`
 - Stack Release manifests: `releases/stacks/`
 

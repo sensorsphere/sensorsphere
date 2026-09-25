@@ -50,5 +50,7 @@ docker compose logs --tail=100 api frontend ingestion-service
 curl -fsS http://127.0.0.1:8080/api/health
 ```
 
-See `docs/containerized-releases/PLAN.md` for rollout status and
-`docs/containerized-releases/GHCR-PUBLISHING.md` for registry preparation.
+See `docs/containerized-releases/INSTALLATION.md` for the non-DEV
+install/update/rollback workflow, `docs/containerized-releases/PLAN.md` for
+rollout status, and `docs/containerized-releases/GHCR-PUBLISHING.md` for
+registry preparation.
