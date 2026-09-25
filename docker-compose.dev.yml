@@ -1,4 +1,11 @@
 services:
+  migrations:
+    build:
+      context: .
+      dockerfile: infrastructure/timescaledb/migrations/Dockerfile
+      args:
+        TIMESCALEDB_BASE_IMAGE: timescale/timescaledb:${TIMESCALEDB_IMAGE_TAG:-2.21.3-pg17}
+
   ingestion-service:
     build:
       context: .
@@ -13,3 +20,10 @@ services:
     build:
       context: .
       dockerfile: apps/frontend/Dockerfile
+
+  nginx:
+    build:
+      context: .
+      dockerfile: infrastructure/nginx/Dockerfile
+      args:
+        NGINX_BASE_IMAGE: nginx:${NGINX_BASE_IMAGE_TAG:-1.28-alpine}

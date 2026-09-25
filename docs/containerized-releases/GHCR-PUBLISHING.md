@@ -54,8 +54,8 @@ A newly published container package may be private. After the first publication,
 - `sensorsphere-api`
 - `sensorsphere-frontend`
 - `sensorsphere-ingestion-service`
-- later: `sensorsphere-nginx`
-- later: `sensorsphere-migrations`
+- `sensorsphere-nginx`
+- `sensorsphere-migrations`
 
 For each package, open **Package settings** and check **Danger Zone -> Change visibility**. Select **Public** when anonymous DIT/PROD pulls are required.
 
@@ -63,12 +63,12 @@ Public GHCR container packages can be pulled anonymously. Do not assume that mak
 
 ## 6. Tagging policy
 
-PR1 publishes:
+The release script publishes:
 
-- module version tag, for example `1.43.0`;
-- immutable source tag, for example `sha-2fc38c0`.
+- the explicit component version tag, for example `1.43.0` or migration level `72`;
+- an immutable source tag, for example `sha-2fc38c0`.
 
-The Stack Release uses explicit module version tags. PR1 does not require a `latest` tag.
+The Stack Release uses explicit component version tags. No `latest` tag is required.
 
 Initial target platforms:
 

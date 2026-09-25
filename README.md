@@ -36,8 +36,9 @@ docker compose up -d
 docker compose ps
 ```
 
-During PR1, nginx configuration and migrations still come from the repository.
-PR2 will containerize those remaining runtime dependencies.
+Nginx configuration and database migrations are packaged in dedicated SensorSphere
+images. The remaining static runtime assets needed outside the application images are
+handled by the minimal non-DEV distribution work in PR3.
 
 ## Health and logs
 

@@ -49,7 +49,7 @@ fail() {
 STACK_VERSION="$(yaml_top_value stackVersion)"
 SCHEMA_VERSION="$(yaml_top_value schemaVersion)"
 [[ -n "$STACK_VERSION" ]] || fail "stackVersion is missing"
-[[ "$SCHEMA_VERSION" == "1" ]] || fail "schemaVersion must be 1"
+[[ "$SCHEMA_VERSION" == "1" || "$SCHEMA_VERSION" == "2" ]]   || fail "schemaVersion must be 1 or 2"
 
 API_VERSION="$(component_value api)"
 FRONTEND_VERSION="$(component_value frontend)"
@@ -62,6 +62,16 @@ EXPECTED_INGESTION="$(module_version apps/ingestion-service/src/module_version.t
 [[ "$FRONTEND_VERSION" == "$EXPECTED_FRONTEND" ]] || fail "Frontend version $FRONTEND_VERSION != $EXPECTED_FRONTEND"
 [[ "$INGESTION_VERSION" == "$EXPECTED_INGESTION" ]] || fail "Ingestion version $INGESTION_VERSION != $EXPECTED_INGESTION"
 
+if [[ "$SCHEMA_VERSION" == "2" ]]; then
+  NGINX_VERSION="$(component_value nginx)"
+  MIGRATIONS_VERSION="$(component_value migrations)"
+  EXPECTED_NGINX="$(tr -d '[:space:]' < infrastructure/nginx/VERSION)"
+  EXPECTED_MIGRATIONS="$(tr -d '[:space:]' < infrastructure/timescaledb/migrations/VERSION)"
+
+  [[ "$NGINX_VERSION" == "$EXPECTED_NGINX" ]]     || fail "nginx version $NGINX_VERSION != $EXPECTED_NGINX"
+  [[ "$MIGRATIONS_VERSION" == "$EXPECTED_MIGRATIONS" ]]     || fail "migrations version $MIGRATIONS_VERSION != $EXPECTED_MIGRATIONS"
+fi
+
 MIGRATION_LEVEL="$(awk '$1 == "migrationLevel:" { print $2; exit }' "$MANIFEST")"
 LATEST_MIGRATION="$(
   find infrastructure/timescaledb/migrations -maxdepth 1 -type f -name '[0-9][0-9][0-9]-*.sql'     -printf '%f\n' | sort | tail -1 | cut -c1-3 | sed 's/^0*//'
@@ -73,8 +83,18 @@ grep -Fq "ghcr.io/sensorsphere/sensorsphere-api:$API_VERSION" "$MANIFEST"   || f
 grep -Fq "ghcr.io/sensorsphere/sensorsphere-frontend:$FRONTEND_VERSION" "$MANIFEST"   || fail "Frontend image/version mismatch"
 grep -Fq "ghcr.io/sensorsphere/sensorsphere-ingestion-service:$INGESTION_VERSION" "$MANIFEST"   || fail "Ingestion image/version mismatch"
 
+if [[ "$SCHEMA_VERSION" == "2" ]]; then
+  grep -Fq "ghcr.io/sensorsphere/sensorsphere-nginx:$NGINX_VERSION" "$MANIFEST"     || fail "nginx image/version mismatch"
+  grep -Fq "ghcr.io/sensorsphere/sensorsphere-migrations:$MIGRATIONS_VERSION" "$MANIFEST"     || fail "migrations image/version mismatch"
+  [[ "$MIGRATIONS_VERSION" == "$MIGRATION_LEVEL" ]]     || fail "migrations image version $MIGRATIONS_VERSION != migrationLevel $MIGRATION_LEVEL"
+fi
+
 echo "Stack Release $STACK_VERSION is valid"
-echo "  API:       $API_VERSION"
-echo "  Frontend:  $FRONTEND_VERSION"
-echo "  Ingestion: $INGESTION_VERSION"
-echo "  DB level:  $MIGRATION_LEVEL"
+echo "  API:        $API_VERSION"
+echo "  Frontend:   $FRONTEND_VERSION"
+echo "  Ingestion:  $INGESTION_VERSION"
+if [[ "$SCHEMA_VERSION" == "2" ]]; then
+  echo "  nginx:      $NGINX_VERSION"
+  echo "  migrations: $MIGRATIONS_VERSION"
+fi
+echo "  DB level:   $MIGRATION_LEVEL"

@@ -50,11 +50,19 @@ Audit date: 2026-09-25
 
 ## PR2 — Containerized nginx and migrations
 
-- [ ] Add `sensorsphere-nginx` image containing SensorSphere nginx configuration.
-- [ ] Add `sensorsphere-migrations` image containing runner and migrations.
-- [ ] Remove non-DEV repository bind mounts for nginx and migrations.
-- [ ] Add nginx and migrations versions to Stack Release.
-- [ ] Validate migration-level compatibility metadata.
+- [x] Add `sensorsphere-nginx` image containing SensorSphere nginx configuration.
+- [x] Add `sensorsphere-migrations` image containing runner and migrations.
+- [x] Remove non-DEV repository bind mounts for nginx and migrations.
+- [x] Add nginx and migrations versions to Stack Release `2026.09.25.2`.
+- [x] Keep Stack Release schema v1 validation compatible with PR1.
+- [x] Validate migration-level compatibility metadata.
+- [x] Build nginx and migrations images on native ARM64.
+- [x] Validate nginx configuration from the packaged image.
+- [x] Apply all 71 migrations to an isolated database through the image.
+- [x] Re-run migration image idempotently: 0 applied, 71 skipped.
+- [x] Smoke-test the full DEV stack with containerized nginx/migrations.
+- [x] Produce and verify Git patch.
+- [x] Commit and push PR2.
 ## PR3 — Stack installation and lifecycle
 
 - [ ] Define minimal non-DEV distribution bundle.
@@ -93,3 +101,5 @@ Audit date: 2026-09-25
 - 2026-09-25: Lockfile validation exposed and repaired pre-existing API zod and ingestion shared-logger drift.
 - 2026-09-25: Native ARM64 application image builds pass; local amd64 emulation was stopped after becoming excessively slow during TypeScript compilation.
 - 2026-09-25: The repository-wide pnpm test command still fails on baseline packages with Vitest test scripts but no test files; ingestion-service tests pass (3/3).
+- 2026-09-25: PR2 preserves Stack Release 2026.09.25.1 and introduces schema v2 release 2026.09.25.2 with nginx 1.0.0 and migrations 72.
+- 2026-09-25: The migrations image was validated from a fresh initialized TimescaleDB through level 72 and a second no-op run.

@@ -1,7 +1,7 @@
 services:
 
   migrations:
-    image: timescale/timescaledb:${TIMESCALEDB_IMAGE_TAG:-2.21.3-pg17}
+    image: ${SENSORSPHERE_IMAGE_REGISTRY:-ghcr.io}/${SENSORSPHERE_IMAGE_NAMESPACE:-sensorsphere}/sensorsphere-migrations:${SENSORSPHERE_MIGRATIONS_VERSION:-72}
     restart: "no"
 
     environment:
@@ -11,14 +11,6 @@ services:
       DB_USER: ${POSTGRES_USER:-sensorsphere}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be defined}
       MIGRATIONS_DIR: /migrations
-
-    volumes:
-      - ./infrastructure/timescaledb/migrations:/migrations:ro
-      - ./tools/database/sensorsphere-migrate.sh:/usr/local/bin/sensorsphere-migrate:ro
-
-    entrypoint:
-      - /bin/sh
-      - /usr/local/bin/sensorsphere-migrate
 
     depends_on:
       timescaledb:
@@ -144,14 +136,11 @@ services:
 
 
   nginx:
-    image: nginx:${NGINX_IMAGE_TAG:-1.28-alpine}
+    image: ${SENSORSPHERE_IMAGE_REGISTRY:-ghcr.io}/${SENSORSPHERE_IMAGE_NAMESPACE:-sensorsphere}/sensorsphere-nginx:${SENSORSPHERE_NGINX_VERSION:-1.0.0}
     restart: unless-stopped
 
     ports:
       - "${WEB_BIND_ADDRESS:-0.0.0.0}:${WEB_PORT:-8080}:80"
-
-    volumes:
-      - ./infrastructure/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
 
     depends_on:
       - api

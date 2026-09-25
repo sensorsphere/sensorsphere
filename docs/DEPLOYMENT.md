@@ -34,8 +34,13 @@ docker compose pull
 docker compose up -d
 ```
 
-PR1 still requires the repository for nginx configuration and database
-migrations. PR2 removes those remaining non-DEV source-tree dependencies.
+Nginx configuration and database migrations are packaged in dedicated
+SensorSphere images. The runtime stack no longer bind-mounts those files from
+the source tree.
+
+The current runtime Compose still references repository-provided Mosquitto
+configuration and TimescaleDB initialization SQL. PR3 will define the minimal
+non-DEV distribution bundle around those remaining static runtime assets.
 
 ## Verification
 

@@ -17,7 +17,7 @@ fi
 if [[ $# -gt 0 ]]; then
   MODULES=("$@")
 else
-  MODULES=(api frontend ingestion-service)
+  MODULES=(api frontend ingestion-service nginx migrations)
 fi
 
 command -v docker >/dev/null 2>&1 || { echo "docker is required" >&2; exit 1; }
@@ -42,22 +42,41 @@ module_version() {
   sed -n 's/^export const MODULE_VERSION = "\([^"]*\)";/\1/p' "$file"
 }
 
+plain_version() {
+  tr -d '[:space:]' < "$1"
+}
+
 for module in "${MODULES[@]}"; do
   case "$module" in
     api)
       dockerfile="apps/api/Dockerfile"
       version_file="apps/api/src/module_version.ts"
       image_name="sensorsphere-api"
+      version_kind="module"
       ;;
     frontend)
       dockerfile="apps/frontend/Dockerfile"
       version_file="apps/frontend/src/module_version.ts"
       image_name="sensorsphere-frontend"
+      version_kind="module"
       ;;
     ingestion-service|ingestion)
       dockerfile="apps/ingestion-service/Dockerfile"
       version_file="apps/ingestion-service/src/module_version.ts"
       image_name="sensorsphere-ingestion-service"
+      version_kind="module"
+      ;;
+    nginx)
+      dockerfile="infrastructure/nginx/Dockerfile"
+      version_file="infrastructure/nginx/VERSION"
+      image_name="sensorsphere-nginx"
+      version_kind="semver"
+      ;;
+    migrations)
+      dockerfile="infrastructure/timescaledb/migrations/Dockerfile"
+      version_file="infrastructure/timescaledb/migrations/VERSION"
+      image_name="sensorsphere-migrations"
+      version_kind="integer"
       ;;
     *)
       echo "Unknown module: $module" >&2
@@ -65,8 +84,20 @@ for module in "${MODULES[@]}"; do
       ;;
   esac
 
-  version="$(module_version "$version_file")"
-  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]     || { echo "Invalid version for $module: $version" >&2; exit 1; }
+  case "$version_kind" in
+    module)
+      version="$(module_version "$version_file")"
+      ;;
+    semver|integer)
+      version="$(plain_version "$version_file")"
+      ;;
+  esac
+
+  if [[ "$version_kind" == "integer" ]]; then
+    [[ "$version" =~ ^[0-9]+$ ]]       || { echo "Invalid version for $module: $version" >&2; exit 1; }
+  else
+    [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]       || { echo "Invalid version for $module: $version" >&2; exit 1; }
+  fi
 
   image="$REGISTRY/$NAMESPACE/$image_name"
   args=(

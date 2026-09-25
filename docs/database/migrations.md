@@ -23,6 +23,18 @@ Example:
 
 Versions are strictly numeric and unique.
 
+## Containerized runtime
+
+For Stack Release schema v2 and later, the migration runner and SQL files are
+packaged together in the versioned `sensorsphere-migrations` image.
+
+The image tag equals the highest migration level it contains. For example,
+`sensorsphere-migrations:72` contains migrations through `072-...`.
+
+DEV builds this image from the local repository through `docker-compose.dev.yml`.
+DIT/PROD use the version selected by the Stack Release and do not mount the
+migration directory or runner script from the source tree.
+
 ## Commands
 
 ### Status
