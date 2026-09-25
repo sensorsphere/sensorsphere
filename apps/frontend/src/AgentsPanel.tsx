@@ -55,9 +55,13 @@ export function AgentsPanel({ devices, onImportDiscoveredDevice, onUpdateDiscove
       <SimpleGrid cols={{ base: 1, sm: 3 }}>
         {stats.map(([label, total, online, toUpdate, color, releaseKind, iconType]) => {
           const release = versionsQuery.data?.agents[releaseKind];
+          const offline = Math.max(0, total - online);
           return <Card key={label} withBorder p="sm" style={{ borderLeft: `4px solid var(--mantine-color-${color}-6)` }}>
             <Group gap={6}><AgentTypeIcon type={iconType} size={17} /><Text size="sm" fw={700}>{label}</Text></Group>
-            <Text fw={700} size="xl" c={color}>{online}<Text component="span" size="sm" c="dimmed" fw={400}> online / {total} total</Text>{toUpdate > 0 && <Text component="span" size="sm" c="orange" fw={700}>  [{toUpdate} to be updated]</Text>}</Text>
+            <Text component="div" size="sm" c="dimmed">
+              <Text component="span" fw={700} size="xl" c={color}>{online}</Text> online / {offline > 0 && <><Text component="span" fw={700} size="xl" c="red">{offline}</Text> offline / </>}<Text component="span" fw={700} size="xl" c={color}>{total}</Text> total
+              {toUpdate > 0 && <Text component="span" size="sm" c="orange" fw={700}>  [{toUpdate} to be updated]</Text>}
+            </Text>
             <Text size="xs" c="dimmed">Latest available: {release?.status === "OK" ? release.latestVersion ?? "—" : "unknown"}</Text>
           </Card>;
         })}

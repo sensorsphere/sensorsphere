@@ -513,7 +513,18 @@ const supervisorCommandResultSchema = z.object({
   error: z.string().max(2000).optional()
 }).strict();
 
-const supervisorRemoteMessageSchema = z.discriminatedUnion("type", [supervisorHelloSchema, supervisorHeartbeatSchema, supervisorCommandResultSchema]);
+const supervisorCommandProgressSchema = z.object({
+  type: z.literal("SUPERVISOR_COMMAND_PROGRESS"),
+  commandId: z.string().trim().min(1).max(200),
+  operation: z.enum(["DEPLOY", "UPDATE", "REMOVE"]),
+  agentType: z.enum(["device-agent", "monitor-agent"]).nullable().optional(),
+  instance: z.string().trim().min(1).max(64),
+  step: z.string().trim().min(1).max(100),
+  elapsedMs: z.number().int().nonnegative(),
+  details: z.record(z.string(), z.unknown()).optional()
+}).strict();
+
+const supervisorRemoteMessageSchema = z.discriminatedUnion("type", [supervisorHelloSchema, supervisorHeartbeatSchema, supervisorCommandResultSchema, supervisorCommandProgressSchema]);
 
 const supervisorSelfUpdateSchema = z.object({
   version: z.string().trim().regex(/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/)
@@ -716,6 +727,7 @@ export async function registerDeviceControlFeature(
     assignmentId?: string;
     expectedTokenHash?: string;
     targetVersion?: string;
+    progress?: Array<{ step: string; elapsedMs: number; receivedAt: Date; details: Record<string, unknown> }>;
   }
   const supervisorManagedAgentOperations = new Map<string, SupervisorManagedAgentOperationRecord>();
 
@@ -876,7 +888,8 @@ export async function registerDeviceControlFeature(
     error: record.error,
     createdAt: record.createdAt.toISOString(),
     expiresAt: record.expiresAt.toISOString(),
-    finishedAt: record.finishedAt?.toISOString() ?? null
+    finishedAt: record.finishedAt?.toISOString() ?? null,
+    progress: (record.progress ?? []).map(item => ({ step: item.step, elapsedMs: item.elapsedMs, receivedAt: item.receivedAt.toISOString(), details: item.details }))
   });
 
   const expireManagedAgentOperations = () => {
@@ -894,6 +907,7 @@ export async function registerDeviceControlFeature(
         record.status = "TIMEOUT";
         record.error = "Supervisor managed-agent operation timed out";
         record.finishedAt = new Date();
+        app.log.warn({ supervisorId: record.supervisorId, commandId: record.id, operation: record.operation, progressSteps: record.progress?.length ?? 0, lastProgress: record.progress?.at(-1)?.step ?? null }, "Supervisor managed command timed out");
         if (record.operation === "UPDATE" && record.deviceAgentId) {
           void pool.query(`UPDATE device_agents SET
             update_status='FAILED',update_finished_at=NOW(),update_error=$3,updated_at=NOW()
@@ -1352,10 +1366,30 @@ export async function registerDeviceControlFeature(
         const parsed = supervisorRemoteMessageSchema.safeParse(raw);
         if (!parsed.success) { socket.send(JSON.stringify({ type: "ERROR", error: parsed.error.issues[0]?.message ?? "Invalid message" })); return; }
         const message = parsed.data;
+        if (message.type === "SUPERVISOR_COMMAND_PROGRESS") {
+          const operation = supervisorManagedAgentOperations.get(message.commandId);
+          if (!operation || operation.supervisorId !== supervisor.id) {
+            app.log.warn({ supervisorId: supervisor.id, commandId: message.commandId, operation: message.operation, step: message.step }, "Ignoring Supervisor managed command progress for unknown operation");
+            return;
+          }
+          if (operation.operation !== message.operation) {
+            app.log.warn({ supervisorId: supervisor.id, commandId: message.commandId, expectedOperation: operation.operation, receivedOperation: message.operation, step: message.step }, "Ignoring mismatched Supervisor managed command progress");
+            return;
+          }
+          const progress = operation.progress ?? (operation.progress = []);
+          progress.push({ step: message.step, elapsedMs: message.elapsedMs, receivedAt: new Date(), details: message.details ?? {} });
+          if (progress.length > 100) progress.splice(0, progress.length - 100);
+          app.log.info({ supervisorId: supervisor.id, commandId: message.commandId, operation: message.operation, agentType: message.agentType ?? null, instance: message.instance, step: message.step, elapsedMs: message.elapsedMs }, "Supervisor managed command progress");
+          return;
+        }
         if (message.type === "SUPERVISOR_COMMAND_RESULT") {
           if (message.operation !== "UPDATE_SELF") {
             const operation = supervisorManagedAgentOperations.get(message.commandId);
-            if (!operation || operation.supervisorId !== supervisor.id) return;
+            if (!operation || operation.supervisorId !== supervisor.id) {
+              app.log.warn({ supervisorId: supervisor.id, commandId: message.commandId, operation: message.operation, status: message.status }, "Ignoring Supervisor managed command result for unknown operation");
+              return;
+            }
+            app.log.info({ supervisorId: supervisor.id, commandId: message.commandId, operation: message.operation, status: message.status, progressSteps: operation.progress?.length ?? 0 }, "Supervisor managed command result received");
             if (operation.operation !== message.operation) {
               operation.status = "FAILED";
               operation.error = `Supervisor managed-agent operation mismatch: expected ${operation.operation}, received ${message.operation}`;
@@ -1802,6 +1836,7 @@ export async function registerDeviceControlFeature(
       deviceAgentId, monitoringAgentId, targetVersion: parsed.data.version
     };
     supervisorManagedAgentOperations.set(commandId, record);
+    app.log.info({ supervisorId: supervisor.id, commandId, operation: parsed.data.operation, agentType: parsed.data.agentType ?? null, instance, targetVersion: parsed.data.version ?? null, expiresAt: expiresAt.toISOString() }, "Supervisor managed command queued");
     socket.send(JSON.stringify({
       type: "SUPERVISOR_COMMAND",
       commandId,

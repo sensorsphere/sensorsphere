@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.41.2";
+export const MODULE_VERSION = "1.42.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.42.0": {
+    releasedAt: "2026-09-25T08:00:00+02:00",
+    patch: "PR-265-agent-action-details-reconciliation-v1.patch",
+    changes: [
+      { type: "added", description: "Accept and expose structured Supervisor managed-agent progress events with command correlation and elapsed time" },
+      { type: "added", description: "Log managed-agent command queue, progress, result and timeout lifecycle in the API for end-to-end diagnostics" }
+    ]
+  },
   "1.41.2": {
     releasedAt: "2026-09-24T23:10:00+02:00",
     patch: "PR-263-agent-operation-timeout-status-hotfix-v2.patch",

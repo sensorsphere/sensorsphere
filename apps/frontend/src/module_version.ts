@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.80.3";
+export const MODULE_VERSION = "1.81.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.81.0": {
+    releasedAt: "2026-09-25T08:00:00+02:00",
+    patch: "PR-265-agent-action-details-reconciliation-v1.patch",
+    changes: [
+      { type: "added", description: "Add collapsed Actions details controls for managed-agent deploy, update and deprovision operations with live step and elapsed-time reporting" },
+      { type: "fixed", description: "Deprovision completes immediately after Supervisor success and reconciles managed runtime state without requiring a browser refresh" },
+      { type: "changed", description: "Agent statistic cards show online, offline and total counts with consistent emphasis and red offline counts" }
+    ]
+  },
   "1.80.3": {
     releasedAt: "2026-09-24T23:10:00+02:00",
     patch: "PR-263-agent-operation-timeout-status-hotfix-v2.patch",

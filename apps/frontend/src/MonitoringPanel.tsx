@@ -50,9 +50,11 @@ import type {
   MonitoringExecutionMode,
   MonitoringTargetMode,
   DeviceIdentity,
-  DeviceRegistryDevice
+  DeviceRegistryDevice,
+  ManagedAgentOperation
 } from "./types";
 import { EditActionIcon, DeleteActionIcon, ReinstallCommandActionIcon } from "./TableActionIcons";
+import { AgentActionDetails } from "./AgentActionDetails";
 import { DeviceGlyph } from "./DeviceGlyph";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import { usePersistentState } from "./preferences/usePersistentState";
@@ -98,11 +100,7 @@ interface MonitoringSupervisorAgent {
   hostNetworks: HostNetworkInterface[];
 }
 
-interface MonitoringManagedOperation {
-  commandId: string;
-  status: "SENT" | "SUCCESS" | "FAILED" | "TIMEOUT";
-  error: string | null;
-}
+type MonitoringManagedOperation = ManagedAgentOperation;
 
 async function getMonitoringSupervisors(): Promise<MonitoringSupervisorAgent[]> {
   const response = await fetch("/api/v1/device-control/supervisors");
@@ -120,13 +118,14 @@ async function requestMonitoringAgentUpdate(supervisorId: string, agentId: strin
   return payload;
 }
 
-async function waitMonitoringAgentUpdate(commandId: string): Promise<MonitoringManagedOperation> {
+async function waitMonitoringAgentUpdate(commandId: string, onProgress?: (operation: MonitoringManagedOperation) => void): Promise<MonitoringManagedOperation> {
   const deadline = Date.now() + 615_000;
   while (Date.now() < deadline) {
     await new Promise(resolve => window.setTimeout(resolve, 1000));
     const response = await fetch(`/api/v1/device-control/supervisor-managed-agents/${commandId}`);
-    const payload = await response.json();
+    const payload = await response.json() as MonitoringManagedOperation;
     if (!response.ok) throw new Error(payload.error ?? `Unable to read Monitoring Agent update (${response.status})`);
+    onProgress?.(payload);
     if (["SUCCESS", "FAILED", "TIMEOUT"].includes(payload.status)) return payload;
   }
   throw new Error("Monitoring Agent update timed out");
@@ -352,6 +351,7 @@ export function MonitoringPanel({
   const [agentUpdateVersion, setAgentUpdateVersion] = React.useState("");
   const [agentUpdateStatus, setAgentUpdateStatus] = React.useState<"IDLE" | "UPDATING" | "VERIFYING" | "UPDATED" | "FAILED">("IDLE");
   const [agentUpdateError, setAgentUpdateError] = React.useState<string | null>(null);
+  const [agentUpdateOperation, setAgentUpdateOperation] = React.useState<ManagedAgentOperation | null>(null);
 
   const [agentModalOpen, setAgentModalOpen] = React.useState(false);
   const [editingAgent, setEditingAgent] = React.useState<MonitoringAgent | null>(null);
@@ -415,13 +415,26 @@ export function MonitoringPanel({
       setAgentUpdateStatus("UPDATING");
       setAgentUpdateError(null);
       const requested = await requestMonitoringAgentUpdate(supervisorId, agentId, instance, version);
-      if (closeOnSuccess) return { ...requested, closeOnSuccess };
-      const completed = await waitMonitoringAgentUpdate(requested.commandId);
+      setAgentUpdateOperation(requested);
+      const completed = await waitMonitoringAgentUpdate(requested.commandId, setAgentUpdateOperation);
       if (completed.status !== "SUCCESS") throw new Error(completed.error ?? `Monitoring Agent update ${completed.status.toLowerCase()}`);
       return { ...completed, closeOnSuccess };
     },
-    onSuccess: async result => { if (result.closeOnSuccess) { setAgentUpdateTarget(null); setAgentUpdateStatus("IDLE"); setAgentUpdateError(null); } else setAgentUpdateStatus("VERIFYING"); await Promise.all([queryClient.invalidateQueries({ queryKey: ["monitoring", "agents"] }), queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] })]); },
-    onError: error => { setAgentUpdateStatus("FAILED"); setAgentUpdateError(error instanceof Error ? error.message : "Unable to update Monitoring Agent"); }
+    onSuccess: result => {
+      if (result.closeOnSuccess) { setAgentUpdateTarget(null); setAgentUpdateStatus("IDLE"); setAgentUpdateError(null); } else setAgentUpdateStatus("VERIFYING");
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["monitoring", "agents"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"], refetchType: "active" })
+      ]);
+    },
+    onError: error => {
+      setAgentUpdateStatus("FAILED");
+      setAgentUpdateError(error instanceof Error ? error.message : "Unable to update Monitoring Agent");
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["monitoring", "agents"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"], refetchType: "active" })
+      ]);
+    }
   });
 
   const bulkMonitoringUpdateMutation = useMutation({
@@ -441,6 +454,7 @@ export function MonitoringPanel({
     setAgentUpdateVersion(versionsQuery.data?.agents.monitorAgent.latestVersion ?? agent.version ?? "");
     setAgentUpdateStatus("IDLE");
     setAgentUpdateError(null);
+    setAgentUpdateOperation(null);
     monitoringAgentUpdateMutation.reset();
   };
 
@@ -834,6 +848,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
           <TextInput label="Managed instance" value={agentUpdateInstance ?? ""} readOnly />
           <TextInput label="Target version" value={agentUpdateVersion} onChange={event => setAgentUpdateVersion(event.currentTarget.value)} disabled={monitoringAgentUpdateMutation.isPending || agentUpdateStatus === "UPDATED"} />
           <Card withBorder p="sm"><Group justify="space-between"><Text size="xs" c="dimmed">Status</Text><Badge size="sm" variant="light" color={agentUpdateStatus === "UPDATED" ? "green" : agentUpdateStatus === "FAILED" ? "red" : ["UPDATING", "VERIFYING"].includes(agentUpdateStatus) ? "blue" : "teal"}>{agentUpdateStatus === "IDLE" ? "READY" : agentUpdateStatus}</Badge></Group></Card>
+          <AgentActionDetails label={`Update Monitoring Agent / ${agentUpdateInstance ?? "main"}`} operation={agentUpdateOperation} />
           {agentUpdateError && <Text size="sm" c="red">{agentUpdateError}</Text>}
           <Group justify="flex-end"><Button variant="default" disabled={monitoringAgentUpdateMutation.isPending} onClick={() => { setAgentUpdateTarget(null); setAgentUpdateStatus("IDLE"); setAgentUpdateError(null); }}>Close</Button><Button color="teal" variant="light" loading={monitoringAgentUpdateMutation.isPending} disabled={!agentUpdateSupervisorId || !agentUpdateInstance || !/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(agentUpdateVersion.trim()) || monitoringAgentUpdateMutation.isPending} onClick={() => agentUpdateTarget && agentUpdateSupervisorId && agentUpdateInstance && monitoringAgentUpdateMutation.mutate({ supervisorId: agentUpdateSupervisorId, agentId: agentUpdateTarget.id, instance: agentUpdateInstance, version: agentUpdateVersion.trim(), closeOnSuccess: true })}>Update and Close</Button><Button color="teal" loading={monitoringAgentUpdateMutation.isPending} disabled={!agentUpdateSupervisorId || !agentUpdateInstance || !/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(agentUpdateVersion.trim()) || monitoringAgentUpdateMutation.isPending} onClick={() => agentUpdateTarget && agentUpdateSupervisorId && agentUpdateInstance && monitoringAgentUpdateMutation.mutate({ supervisorId: agentUpdateSupervisorId, agentId: agentUpdateTarget.id, instance: agentUpdateInstance, version: agentUpdateVersion.trim(), closeOnSuccess: false })}>Update</Button></Group>
         </Stack>

@@ -1169,16 +1169,25 @@ export interface ManagedAgentStatus {
   running_image: string | null;
 }
 
+export interface ManagedAgentOperationProgress {
+  step: string;
+  elapsedMs: number;
+  receivedAt: string;
+  details: Record<string, unknown>;
+}
+
 export interface ManagedAgentOperation {
   commandId: string;
-  agentId: string;
-  operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE" | "CHECK_TOKEN";
+  agentId?: string;
+  supervisorId?: string;
+  operation: "LIST" | "DEPLOY" | "UPDATE" | "REMOVE" | "CHECK_TOKEN" | "GET_PROXMOX_CONFIG" | "SET_PROXMOX_CONFIG" | "DELETE_PROXMOX_CONFIG";
   status: "SENT" | "SUCCESS" | "FAILED" | "TIMEOUT";
   result: unknown;
   error: string | null;
   createdAt: string;
   expiresAt: string;
   finishedAt: string | null;
+  progress?: ManagedAgentOperationProgress[];
 }
 
 export interface ManagedAgentOperationInput {
