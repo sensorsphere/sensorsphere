@@ -171,6 +171,10 @@ import {
   MODULE_VERSION as FRONTEND_MODULE_VERSION
 } from "./module_version";
 
+import {
+  getApiCompatibilityError
+} from "./compatibility";
+
 import "./styles.css";
 
 const queryClient =
@@ -657,6 +661,13 @@ function Dashboard() {
     || "SensorSphere";
 
   const instanceNameColor = runtimeConfigQuery.data?.instanceNameColor?.trim() || undefined;
+
+  const compatibilityError =
+    runtimeConfigQuery.data
+      ? getApiCompatibilityError(
+          runtimeConfigQuery.data
+        )
+      : null;
 
   const apiBuildDate =
     runtimeConfigQuery.data
@@ -1912,6 +1923,21 @@ function Dashboard() {
               )
           )
       : null;
+
+  if (compatibilityError) {
+    return (
+      <Container size="sm" py="xl">
+        <Alert
+          color="red"
+          title="Incompatible SensorSphere release"
+        >
+          <Text size="sm">
+            {compatibilityError}
+          </Text>
+        </Alert>
+      </Container>
+    );
+  }
 
   return (
     <AppShell

@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.82.0";
+export const MODULE_VERSION = "1.83.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.83.0": {
+    releasedAt: "2026-09-25T15:45:00+02:00",
+    patch: "PR-270-compatibility-release-hardening-v1.patch",
+    changes: [
+      { type: "added", description: "Require an explicit API contract version and stop with a clear incompatibility message when frontend and API contracts differ" }
+    ]
+  },
   "1.82.0": {
     releasedAt: "2026-09-25T08:30:00+02:00",
     patch: "PR-266-agent-operation-history-detached-deploy-v1.patch",

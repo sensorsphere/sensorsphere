@@ -40,13 +40,18 @@ For GitHub Actions, prefer the repository's `GITHUB_TOKEN` and grant the workflo
 
 ## 4. Package/repository association
 
-Published images must carry the OCI source label pointing to the SensorSphere repository:
+Published images carry the OCI source label pointing to the repository that
+built them. The release script derives it from `remote.origin.url`.
 
-```text
-org.opencontainers.image.source=https://github.com/sensorsphere/sensorsphere
-```
+This allows GitHub to associate a container package with its source repository.
+Publishing from GitHub Actions can use `GITHUB_TOKEN` when the package is
+published in a namespace the workflow repository is authorized to write.
 
-This allows GitHub to associate the container package with its source repository. Publishing from a GitHub Actions workflow with `GITHUB_TOKEN` also links the workflow repository automatically when permissions are correctly configured.
+The current Git remote is under the `fareg` owner while the target image
+namespace is `ghcr.io/sensorsphere`. Until the repository/package ownership is
+aligned, configure repository secrets `GHCR_USERNAME` and `GHCR_TOKEN` with
+write access to the `sensorsphere` package namespace. The workflow fails
+explicitly rather than silently trying the repository token across namespaces.
 ## 5. Package visibility
 
 A newly published container package may be private. After the first publication, verify each package:
@@ -65,12 +70,14 @@ Public GHCR container packages can be pulled anonymously. Do not assume that mak
 
 The release script publishes:
 
-- the explicit component version tag, for example `1.43.0` or migration level `72`;
-- an immutable source tag, for example `sha-2fc38c0`.
+- the explicit component version tag, for example `1.44.0` or migration level `72`;
+- an immutable full-commit tag, for example `sha-<40-character-git-sha>`.
 
-The Stack Release uses explicit component version tags. No `latest` tag is required.
+Before publication, the release script rejects an existing version or SHA tag;
+release tags are never overwritten. The Stack Release uses explicit component
+version tags. SensorSphere intentionally publishes no moving `latest` tag.
 
-Initial target platforms:
+Official image platforms are:
 
 ```text
 linux/amd64
@@ -87,6 +94,36 @@ docker pull ghcr.io/sensorsphere/<image>:<version>
 ```
 
 Verify that both target architectures are present and that the OCI source/revision labels match the release source.
+
+Published images include BuildKit provenance and SBOM attestations
+(`--provenance=mode=max --sbom=true`). Cryptographic image signing is not
+enabled in this first release workflow; adding keyless signing later requires a
+separate trust/identity policy and is not needed for Stack Release integrity.
+
+## 8. GitHub Actions and Stack Release publication
+
+The manual workflow is:
+
+```text
+.github/workflows/container-release.yml
+```
+
+It validates the selected manifest against the checked-out source, configures
+QEMU/Buildx, authenticates to GHCR, publishes only the modules supplied in the
+workflow input, builds the minimal distribution bundle, and creates an immutable
+GitHub Release tagged:
+
+```text
+stack-<stackVersion>
+```
+
+The GitHub Release contains the Stack Release manifest, the distribution
+`.tar.gz`, and its SHA-256 checksum. Reusing an existing Stack Release tag is
+rejected.
+
+The workflow grants `contents: write` to create the GitHub Release and
+`packages: write` to publish GHCR images. No application secret is stored in
+the repository.
 
 ## References
 

@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_INSTALL_DIR="/opt/sensorsphere"
-DEFAULT_RELEASE_BASE_URL="https://raw.githubusercontent.com/fareg/sensorsphere/dev/releases/stacks"
+DEFAULT_RELEASE_BASE_URL="https://github.com/fareg/sensorsphere/releases/download"
 
 COMMAND="${1:-}"
 [[ -n "$COMMAND" ]] || { echo "Usage: $0 <install|update|rollback|status> [options]" >&2; exit 2; }
@@ -58,6 +58,15 @@ component_value() {
     current == wanted && /^    version:/ { print $2; exit }
   ' "$manifest"
 }
+
+compatibility_value() {
+  local manifest="$1" key="$2"
+  awk -v key="$key" '
+    /^compatibility:$/ { inside=1; next }
+    inside && /^[^ ]/ { exit }
+    inside && $1 == key ":" { print $2; exit }
+  ' "$manifest"
+}
 manifest_top_value() {
   local manifest="$1" key="$2"
   awk -v key="$key" '$1 == key ":" { print $2; exit }' "$manifest"
@@ -91,8 +100,13 @@ fetch_manifest() {
     return
   fi
 
+  if [[ -z "$STACK_VERSION" && -f "$SCRIPT_DIR/stack-release.yaml" ]]; then
+    cp "$SCRIPT_DIR/stack-release.yaml" "$destination"
+    return
+  fi
+
   [[ -n "$STACK_VERSION" ]] || {
-    echo "ERROR: --stack is required when --manifest is not supplied" >&2
+    echo "ERROR: --stack is required when no manifest is bundled or supplied" >&2
     exit 2
   }
 
@@ -101,7 +115,7 @@ fetch_manifest() {
     exit 1
   }
 
-  curl -fsSL "$RELEASE_BASE_URL/$STACK_VERSION.yaml" -o "$destination"
+  curl -fsSL "$RELEASE_BASE_URL/stack-$STACK_VERSION/$STACK_VERSION.yaml" -o "$destination"
 }
 
 apply_manifest() {
@@ -117,7 +131,10 @@ apply_manifest() {
   migrations="$(component_value "$manifest" migrations)"
   db_level="$(awk '$1 == "migrationLevel:" { print $2; exit }' "$manifest")"
 
-  [[ "$schema" == "2" ]] || { echo "ERROR: installation requires Stack Release schemaVersion 2" >&2; exit 1; }
+  [[ "$schema" == "2" || "$schema" == "3" ]] || {
+    echo "ERROR: installation requires Stack Release schemaVersion 2 or 3" >&2
+    exit 1
+  }
   [[ -n "$stack" && -n "$api" && -n "$frontend" && -n "$ingestion" && -n "$nginx" && -n "$migrations" ]]     || { echo "ERROR: incomplete Stack Release manifest" >&2; exit 1; }
   [[ "$migrations" == "$db_level" ]]     || { echo "ERROR: migrations version and database migrationLevel differ" >&2; exit 1; }
 
@@ -132,6 +149,20 @@ apply_manifest() {
   set_env "$INSTALL_DIR/.env" SENSORSPHERE_INGESTION_VERSION "$ingestion"
   set_env "$INSTALL_DIR/.env" SENSORSPHERE_NGINX_VERSION "$nginx"
   set_env "$INSTALL_DIR/.env" SENSORSPHERE_MIGRATIONS_VERSION "$migrations"
+
+  if [[ "$schema" == "3" ]]; then
+    local api_contract db_min db_max
+    api_contract="$(compatibility_value "$manifest" apiContractVersion)"
+    db_min="$(compatibility_value "$manifest" databaseMinMigrationLevel)"
+    db_max="$(compatibility_value "$manifest" databaseMaxMigrationLevel)"
+
+    [[ "$api_contract" =~ ^[0-9]+$ && "$db_min" =~ ^[0-9]+$ && "$db_max" =~ ^[0-9]+$ ]]       || { echo "ERROR: invalid compatibility metadata" >&2; exit 1; }
+    (( db_min <= migrations && migrations <= db_max ))       || { echo "ERROR: migration level $migrations is outside API DB compatibility range $db_min..$db_max" >&2; exit 1; }
+
+    set_env "$INSTALL_DIR/.env" SENSORSPHERE_API_CONTRACT_VERSION "$api_contract"
+    set_env "$INSTALL_DIR/.env" SENSORSPHERE_DB_MIN_MIGRATION_LEVEL "$db_min"
+    set_env "$INSTALL_DIR/.env" SENSORSPHERE_DB_MAX_MIGRATION_LEVEL "$db_max"
+  fi
 }
 wait_for_health() {
   local deadline=$((SECONDS + 180))
@@ -207,12 +238,29 @@ rollback_command() {
   require_tools
   [[ -f "$INSTALL_DIR/.env.previous" ]] || { echo "ERROR: no .env.previous rollback state" >&2; exit 1; }
 
-  local current_migrations previous_migrations
+  local current_migrations previous_migrations rollback_compatible
   current_migrations="$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_MIGRATIONS_VERSION)"
   previous_migrations="$(get_env "$INSTALL_DIR/.env.previous" SENSORSPHERE_MIGRATIONS_VERSION)"
+  rollback_compatible=0
 
-  if [[ "$current_migrations" != "$previous_migrations" && "$FORCE_ROLLBACK" -ne 1 ]]; then
-    echo "ERROR: rollback blocked because migration level changed: $previous_migrations -> $current_migrations" >&2
+  if [[ "$current_migrations" == "$previous_migrations" ]]; then
+    rollback_compatible=1
+  elif [[ -f "$INSTALL_DIR/.stack-release.previous.yaml" ]]; then
+    local previous_schema previous_db_min previous_db_max
+    previous_schema="$(manifest_top_value "$INSTALL_DIR/.stack-release.previous.yaml" schemaVersion)"
+
+    if [[ "$previous_schema" == "3" ]]; then
+      previous_db_min="$(compatibility_value "$INSTALL_DIR/.stack-release.previous.yaml" databaseMinMigrationLevel)"
+      previous_db_max="$(compatibility_value "$INSTALL_DIR/.stack-release.previous.yaml" databaseMaxMigrationLevel)"
+
+      if [[ "$previous_db_min" =~ ^[0-9]+$ && "$previous_db_max" =~ ^[0-9]+$ ]]         && (( previous_db_min <= current_migrations && current_migrations <= previous_db_max )); then
+        rollback_compatible=1
+      fi
+    fi
+  fi
+
+  if [[ "$rollback_compatible" -ne 1 && "$FORCE_ROLLBACK" -ne 1 ]]; then
+    echo "ERROR: rollback blocked: previous stack does not declare compatibility with database migration level $current_migrations" >&2
     echo "Database migrations are not rolled back automatically. Re-run with --force only after verifying application/database compatibility." >&2
     exit 1
   fi
@@ -234,6 +282,10 @@ status_command() {
   echo "Ingestion: $(get_env "$INSTALL_DIR/.env" SENSORSPHERE_INGESTION_VERSION)"
   echo "nginx: $(get_env "$INSTALL_DIR/.env" SENSORSPHERE_NGINX_VERSION)"
   echo "Migrations: $(get_env "$INSTALL_DIR/.env" SENSORSPHERE_MIGRATIONS_VERSION)"
+  if [[ -n "$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_API_CONTRACT_VERSION)" ]]; then
+    echo "API contract: $(get_env "$INSTALL_DIR/.env" SENSORSPHERE_API_CONTRACT_VERSION)"
+    echo "DB compatibility: $(get_env "$INSTALL_DIR/.env" SENSORSPHERE_DB_MIN_MIGRATION_LEVEL)..$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_DB_MAX_MIGRATION_LEVEL)"
+  fi
   compose ps -a
 }
 

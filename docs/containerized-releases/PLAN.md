@@ -80,14 +80,22 @@ Audit date: 2026-09-25
 
 ## PR4 — Compatibility contracts and release hardening
 
-- [ ] Add explicit frontend/API contract version.
-- [ ] Add Stack Release compatibility checks.
-- [ ] Define database compatibility policy.
-- [ ] Finalize immutable SHA tag policy.
-- [ ] Finalize multi-architecture policy.
-- [ ] Decide whether any moving tag is published.
-- [ ] Evaluate image signing/attestations.
-- [ ] Finalize CI/release automation and distribution artifacts.
+- [x] Add explicit frontend/API contract version.
+- [x] Expose API version, contract version, and database migration level at runtime.
+- [x] Stop normal frontend rendering on an incompatible API contract with a clear error.
+- [x] Add Stack Release schema v3 compatibility checks.
+- [x] Define database compatibility range and rollback policy.
+- [x] Finalize immutable SHA tag policy using the full Git commit SHA.
+- [x] Finalize official multi-architecture policy: `linux/amd64,linux/arm64`.
+- [x] Decide moving-tag policy: no `latest` tag.
+- [x] Add BuildKit provenance and SBOM attestations.
+- [x] Evaluate cryptographic signing: deferred until a trust/identity policy is defined.
+- [x] Add immutable distribution bundle and SHA-256 checksum generation.
+- [x] Add manual GitHub Actions release workflow.
+- [x] Define immutable GitHub Stack Release publication.
+- [x] Validate frontend compatibility tests, Docker builds, runtime contract, bundle install, rollback guard, and workflow syntax.
+- [x] Produce and verify Git patch.
+- [x] Commit and push PR4.
 
 ## Follow-up UI
 
@@ -95,9 +103,9 @@ Audit date: 2026-09-25
 
 ## Open decisions
 
-- [ ] Final Stack Release publication location.
-- [ ] Final Stack Release naming/version convention after the date-based v1 format.
-- [ ] Whether Stack Releases are also attached to GitHub Releases.
+- [x] Stack Release publication location: source manifests in `releases/stacks/`, published bundles/manifests as immutable GitHub Releases.
+- [x] Stack Release naming/version convention: `YYYY.MM.DD.N`, published under Git tag/release `stack-<stackVersion>`.
+- [x] Stack Releases are attached to GitHub Releases with the distribution archive and SHA-256 checksum.
 - [x] Final install path for non-DEV environments: `/opt/sensorsphere` by default, overridable with `--install-dir`.
 - [x] Update/rollback command interface defined by `distribution/install.sh`.
 
@@ -111,3 +119,5 @@ Audit date: 2026-09-25
 - 2026-09-25: PR2 preserves Stack Release 2026.09.25.1 and introduces schema v2 release 2026.09.25.2 with nginx 1.0.0 and migrations 72.
 - 2026-09-25: The migrations image was validated from a fresh initialized TimescaleDB through level 72 and a second no-op run.
 - 2026-09-25: PR3 standardizes non-DEV installs under `/opt/sensorsphere` by default and validates install/update/rollback on an isolated stack without Node.js or source-tree application builds.
+- 2026-09-25: PR4 introduces Stack Release schema v3, API contract version 1, database compatibility range metadata, immutable full-SHA image tags, amd64+arm64 official releases, provenance/SBOM attestations, no `latest` tag, and immutable GitHub Stack Releases with checksummed distribution bundles.
+- 2026-09-25: Cryptographic image signing is intentionally deferred until a trust/identity policy is defined; registry attestations and immutable Stack Release artifacts are enabled now.

@@ -6,8 +6,13 @@ cd "$ROOT_DIR"
 
 REGISTRY="${SENSORSPHERE_IMAGE_REGISTRY:-ghcr.io}"
 NAMESPACE="${SENSORSPHERE_IMAGE_NAMESPACE:-sensorsphere}"
-PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
+PLATFORMS="linux/amd64,linux/arm64"
 PUSH=1
+
+if [[ -n "${PLATFORMS_OVERRIDE:-}" && "${PLATFORMS_OVERRIDE}" != "$PLATFORMS" ]]; then
+  echo "ERROR: official releases require platforms: $PLATFORMS" >&2
+  exit 2
+fi
 
 if [[ "${1:-}" == "--dry-run" ]]; then
   PUSH=0
@@ -25,7 +30,7 @@ docker buildx version >/dev/null 2>&1 || { echo "docker buildx is required" >&2;
 command -v git >/dev/null 2>&1 || { echo "git is required" >&2; exit 1; }
 
 REVISION="$(git rev-parse HEAD)"
-SHORT_REVISION="$(git rev-parse --short=7 HEAD)"
+SHA_TAG="sha-$REVISION"
 SOURCE="${OCI_SOURCE:-}"
 if [[ -z "$SOURCE" ]]; then
   remote="$(git config --get remote.origin.url 2>/dev/null || true)"
@@ -44,6 +49,15 @@ module_version() {
 
 plain_version() {
   tr -d '[:space:]' < "$1"
+}
+
+assert_tag_available() {
+  local tag="$1"
+
+  if docker buildx imagetools inspect "$tag" >/dev/null 2>&1; then
+    echo "ERROR: immutable release tag already exists: $tag" >&2
+    exit 1
+  fi
 }
 
 for module in "${MODULES[@]}"; do
@@ -105,14 +119,16 @@ for module in "${MODULES[@]}"; do
     --platform "$PLATFORMS"
     --file "$dockerfile"
     --tag "$image:$version"
-    --tag "$image:sha-$SHORT_REVISION"
+    --tag "$image:$SHA_TAG"
     --label "org.opencontainers.image.source=$SOURCE"
     --label "org.opencontainers.image.revision=$REVISION"
     --label "org.opencontainers.image.version=$version"
   )
 
   if [[ "$PUSH" -eq 1 ]]; then
-    args+=(--push)
+    assert_tag_available "$image:$version"
+    assert_tag_available "$image:$SHA_TAG"
+    args+=(--provenance=mode=max --sbom=true --push)
   else
     args+=(--output type=cacheonly)
   fi
@@ -133,5 +149,5 @@ for module in "${MODULES[@]}"; do
 
   docker "${args[@]}"
   docker buildx imagetools inspect "$image:$version"
-  docker buildx imagetools inspect "$image:sha-$SHORT_REVISION"
+  docker buildx imagetools inspect "$image:$SHA_TAG"
 done

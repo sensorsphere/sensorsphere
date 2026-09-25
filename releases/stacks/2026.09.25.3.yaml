@@ -1,0 +1,28 @@
+stackVersion: 2026.09.25.3
+schemaVersion: 3
+
+components:
+  api:
+    version: 1.44.0
+    image: ghcr.io/sensorsphere/sensorsphere-api:1.44.0
+  frontend:
+    version: 1.83.0
+    image: ghcr.io/sensorsphere/sensorsphere-frontend:1.83.0
+  ingestion:
+    version: 1.0.0
+    image: ghcr.io/sensorsphere/sensorsphere-ingestion-service:1.0.0
+  nginx:
+    version: 1.0.0
+    image: ghcr.io/sensorsphere/sensorsphere-nginx:1.0.0
+  migrations:
+    version: 72
+    image: ghcr.io/sensorsphere/sensorsphere-migrations:72
+
+database:
+  migrationLevel: 72
+
+compatibility:
+  apiContractVersion: 1
+  frontendRequiredApiContractVersion: 1
+  databaseMinMigrationLevel: 72
+  databaseMaxMigrationLevel: 72

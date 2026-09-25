@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.43.0";
+export const MODULE_VERSION = "1.44.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.44.0": {
+    releasedAt: "2026-09-25T15:45:00+02:00",
+    patch: "PR-270-compatibility-release-hardening-v1.patch",
+    changes: [
+      { type: "added", description: "Expose API contract version, API module version and current database migration level through runtime configuration" },
+      { type: "added", description: "Define explicit API/database compatibility bounds for validated Stack Releases" }
+    ]
+  },
   "1.43.0": {
     releasedAt: "2026-09-25T08:30:00+02:00",
     patch: "PR-266-agent-operation-history-detached-deploy-v1.patch",

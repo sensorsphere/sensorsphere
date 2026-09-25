@@ -26,6 +26,9 @@ export interface ModuleVersionInfo {
 export interface RuntimeConfig {
   instanceName: string;
   instanceNameColor: string | null;
+  apiVersion: string;
+  contractVersion: number;
+  databaseMigrationLevel: number | null;
   builds?: {
     api: string | null;
     ingestion: string | null;

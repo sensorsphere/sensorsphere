@@ -1,0 +1,97 @@
+name: Publish SensorSphere Stack Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest:
+        description: Stack Release manifest path
+        required: true
+        default: releases/stacks/2026.09.25.3.yaml
+      modules:
+        description: Space-separated modules to publish
+        required: true
+        default: api frontend ingestion-service nginx migrations
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      SENSORSPHERE_IMAGE_REGISTRY: ghcr.io
+      SENSORSPHERE_IMAGE_NAMESPACE: sensorsphere
+      GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+      GITHUB_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate Stack Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/validate-stack-release.sh --source "${{ inputs.manifest }}"
+
+      - name: Authenticate to GHCR
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          user="${GHCR_USERNAME:-${GITHUB_ACTOR}}"
+          token="${GHCR_TOKEN:-${GITHUB_TOKEN}}"
+
+          if [[ "${SENSORSPHERE_IMAGE_NAMESPACE}" != "${GITHUB_REPOSITORY_OWNER,,}" && -z "${GHCR_TOKEN}" ]]; then
+            echo "GHCR_TOKEN is required when publishing outside the repository owner namespace." >&2
+            exit 1
+          fi
+
+          printf '%s' "$token" | docker login ghcr.io -u "$user" --password-stdin
+
+      - name: Publish changed module images
+        shell: bash
+        run: |
+          set -euo pipefail
+          read -r -a modules <<< "${{ inputs.modules }}"
+          [[ "${#modules[@]}" -gt 0 ]] || {
+            echo "At least one module must be supplied." >&2
+            exit 1
+          }
+          scripts/release-module-images.sh "${modules[@]}"
+
+      - name: Build distribution bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/build-distribution.sh "${{ inputs.manifest }}"
+
+      - name: Publish immutable GitHub Stack Release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          manifest="${{ inputs.manifest }}"
+          stack_version="$(awk '$1 == "stackVersion:" { print $2; exit }' "$manifest")"
+          tag="stack-$stack_version"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release already exists and is immutable: $tag" >&2
+            exit 1
+          fi
+
+          gh release create "$tag" \
+            "$manifest" \
+            "dist/sensorsphere-$stack_version.tar.gz" \
+            "dist/sensorsphere-$stack_version.tar.gz.sha256" \
+            --title "SensorSphere Stack $stack_version" \
+            --notes "Validated SensorSphere Stack Release $stack_version."

@@ -77,6 +77,10 @@ import {
   MODULE_VERSION
 } from "./module_version.js";
 
+import {
+  API_CONTRACT_VERSION
+} from "./compatibility.js";
+
 const config =
   loadApiConfig();
 
@@ -140,7 +144,8 @@ const readBuildDate = async (
 app.get("/api/v1/config", async () => {
   const [
     apiBuildDate,
-    componentBuildResult
+    componentBuildResult,
+    migrationLevelResult
   ] = await Promise.all([
     readBuildDate(
       "/app/apps/api/build-date.txt"
@@ -156,6 +161,15 @@ app.get("/api/v1/config", async () => {
       FROM component_build_info
       WHERE component = 'ingestion-service'
       `
+    ),
+    pool.query<{
+      migrationLevel: number | null;
+    }>(
+      `
+      SELECT
+        MAX(version)::integer AS "migrationLevel"
+      FROM schema_migrations
+      `
     )
   ]);
 
@@ -167,6 +181,11 @@ app.get("/api/v1/config", async () => {
   return {
     instanceName,
     instanceNameColor,
+    apiVersion: MODULE_VERSION,
+    contractVersion: API_CONTRACT_VERSION,
+    databaseMigrationLevel:
+      migrationLevelResult.rows[0]?.migrationLevel
+      ?? null,
     builds: {
       api: apiBuildDate,
       ingestion: ingestionBuildDate
