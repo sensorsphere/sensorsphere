@@ -1,21 +1,21 @@
 ## Remote Desktop Commander
 
+Use `run-rdc.sh` from this directory to build and run the dedicated RDC image.
+
 ```sh
-docker run --rm -it \
-  --name remote-desktop-commander \
-  --hostname $(hostname) \
-  --user $(id -u):$(id -g) \
-  -e HOME=$HOME \
-  -v $HOME:/home/ubuntu \
-  -w /home/ubuntu \
-  node:22-bookworm-slim \
-  npx -y @wonderwhy-er/desktop-commander@latest remote
-  
+cd /home/ubuntu/sensorsphere/tools/rdc
+./run-rdc.sh
 ```
 
-##
+The launcher:
 
-```txt
-C’est normal ici : le conteneur connaît l’UID/GID 1001 mais n’a pas d’entrée correspondante dans /etc/passwd. Ça ne gêne pas Git ni les écritures. Si besoin plus tard, on pourra créer une image RDC dédiée avec un utilisateur ubuntu explicite, mais ce n’est pas nécessaire pour commencer.
+- builds `sensorsphere-rdc` with the current user's UID/GID;
+- mounts `$HOME` read-write at `/home/ubuntu`;
+- exposes the host Docker socket and Docker Compose/Buildx CLI;
+- forwards the current SSH agent when available;
+- falls back to `$HOME/.ssh/ssh_auth_sock` for forwarded-agent sessions;
+- runs RDC as the `ubuntu` user inside the container.
 
-```
+When SSH agent forwarding is active, commands such as `git push` can use the
+same forwarded credentials as the host SSH session without copying private keys
+into the container.
