@@ -119,6 +119,14 @@ const instanceName =
 
 const instanceNameColor = process.env.INSTANCE_NAME_COLOR?.trim() || null;
 
+const nginxVersion =
+  process.env.SENSORSPHERE_NGINX_VERSION?.trim()
+  || null;
+
+const migrationsVersion =
+  process.env.SENSORSPHERE_MIGRATIONS_VERSION?.trim()
+  || null;
+
 const readBuildDate = async (
   path: string
 ): Promise<string | null> => {
@@ -186,6 +194,8 @@ app.get("/api/v1/config", async () => {
     databaseMigrationLevel:
       migrationLevelResult.rows[0]?.migrationLevel
       ?? null,
+    nginxVersion,
+    migrationsVersion,
     builds: {
       api: apiBuildDate,
       ingestion: ingestionBuildDate

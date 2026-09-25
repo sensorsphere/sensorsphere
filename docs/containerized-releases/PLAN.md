@@ -99,7 +99,7 @@ Audit date: 2026-09-25
 
 ## Follow-up UI
 
-- [ ] In the next UI patch, extend **Build information** at the bottom of the sidebar to show the released versions of `sensorsphere-nginx` and `sensorsphere-migrations` in addition to the existing application modules.
+- [x] Extend **Build information** at the bottom of the sidebar to show the released versions of `sensorsphere-nginx` and `sensorsphere-migrations` in addition to the existing application modules (PR-271).
 
 ## Open decisions
 
@@ -121,3 +121,4 @@ Audit date: 2026-09-25
 - 2026-09-25: PR3 standardizes non-DEV installs under `/opt/sensorsphere` by default and validates install/update/rollback on an isolated stack without Node.js or source-tree application builds.
 - 2026-09-25: PR4 introduces Stack Release schema v3, API contract version 1, database compatibility range metadata, immutable full-SHA image tags, amd64+arm64 official releases, provenance/SBOM attestations, no `latest` tag, and immutable GitHub Stack Releases with checksummed distribution bundles.
 - 2026-09-25: Cryptographic image signing is intentionally deferred until a trust/identity policy is defined; registry attestations and immutable Stack Release artifacts are enabled now.
+- 2026-09-25: PR-271 adds nginx and migrations release versions to sidebar Build information through runtime configuration and Stack Release 2026.09.25.4.

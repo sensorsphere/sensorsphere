@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.44.0";
+export const MODULE_VERSION = "1.45.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.45.0": {
+    releasedAt: "2026-09-25T16:36:00+02:00",
+    patch: "PR-271-build-info-container-releases-v1.patch",
+    changes: [
+      { type: "added", description: "Expose the running SensorSphere nginx and migrations container release versions through runtime configuration" }
+    ]
+  },
   "1.44.0": {
     releasedAt: "2026-09-25T15:45:00+02:00",
     patch: "PR-270-compatibility-release-hardening-v1.patch",

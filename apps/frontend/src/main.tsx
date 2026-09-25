@@ -694,6 +694,16 @@ function Dashboard() {
       ?.version
     ?? null;
 
+  const nginxModuleVersion =
+    runtimeConfigQuery.data
+      ?.nginxVersion
+    ?? null;
+
+  const migrationsModuleVersion =
+    runtimeConfigQuery.data
+      ?.migrationsVersion
+    ?? null;
+
   const [
     activePage,
     setActivePage
@@ -2578,6 +2588,20 @@ function Dashboard() {
                 <Text size="xs" c="dimmed">Ingestion</Text>
                 <Text size="xs" c="dimmed" ta="right">
                   {ingestionModuleVersion ?? "—"} · {formatBuildDate(ingestionBuildDate)}
+                </Text>
+              </Group>
+
+              <Group className="build-info-row" justify="space-between" gap="xs" wrap="nowrap">
+                <Text size="xs" c="dimmed">Nginx</Text>
+                <Text size="xs" c="dimmed" ta="right">
+                  {nginxModuleVersion ?? "—"}
+                </Text>
+              </Group>
+
+              <Group className="build-info-row" justify="space-between" gap="xs" wrap="nowrap">
+                <Text size="xs" c="dimmed">Migrations</Text>
+                <Text size="xs" c="dimmed" ta="right">
+                  {migrationsModuleVersion ?? "—"}
                 </Text>
               </Group>
             </Stack>
