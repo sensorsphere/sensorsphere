@@ -2,16 +2,16 @@
 
 ```bash
 # Build Frontend and Restart w/ new build
-docker compose build frontend && docker compose up -d frontend
+docker compose -f docker-compose.yml -f docker-compose.dev.yml build frontend && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d frontend
 
 
 # Build API
-docker compose build api
+docker compose -f docker-compose.yml -f docker-compose.dev.yml build api
 # Restart w/ new build
-docker compose up -d api
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d api
 
 # Build Service
-docker compose build ingestion-service
+docker compose -f docker-compose.yml -f docker-compose.dev.yml build ingestion-service
 
 ```
 
@@ -27,18 +27,18 @@ printf "\033]81;L=:8080::8080#Proxy on 8080 for IOT-Platform Dashboard\007"
 
 ```sh
 # cp .env.example .env
-docker compose build --no-cache --pull
-docker compose up -d
-docker compose logs --no-color \
+docker compose -f docker-compose.yml -f docker-compose.dev.yml build --no-cache --pull
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml logs --no-color \
   | grep -Ei \
   'error|fatal|panic|exception|failed' \
   || true
 
 # Re exec migrations
-docker compose run --rm migrations
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm migrations
 
 # Check
-docker compose exec -T timescaledb \
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec -T timescaledb \
   psql \
     -U iot_app \
     -d iot \
@@ -48,7 +48,7 @@ docker compose exec -T timescaledb \
       ORDER BY version;
     "
 
-docker compose exec -T timescaledb \
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec -T timescaledb \
   psql \
     -U iot_app \
     -d iot \
@@ -67,7 +67,7 @@ docker compose exec -T timescaledb \
 ## Diags / Logs
 
 ```sh
-docker compose logs --since 2m --no-color   | grep -Ei   'error|fatal|panic|exception|failed'   || true
+docker compose -f docker-compose.yml -f docker-compose.dev.yml logs --since 2m --no-color   | grep -Ei   'error|fatal|panic|exception|failed'   || true
 ```
 
 # Patch commands

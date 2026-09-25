@@ -1,21 +1,49 @@
-# Déploiement VPS
+# Deployment
+
+SensorSphere uses two Compose modes.
+
+## DEV
+
+DEV builds application modules from the local source tree:
 
 ```bash
-git clone <repo> /opt/iot-platform
-cd /opt/iot-platform
-
 cp .env.example .env
-nano .env
+
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.dev.yml \
+  config
+
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.dev.yml \
+  up -d --build
+```
+
+## DIT / PROD
+
+The base `docker-compose.yml` is the runtime stack. API, frontend and ingestion
+use versioned GHCR images selected through environment variables / Stack Release.
+
+```bash
+cp .env.example .env
+# Set SENSORSPHERE_*_VERSION values from the selected Stack Release.
 
 docker compose config
-docker compose build
+docker compose pull
 docker compose up -d
 ```
 
-## Vérification
+PR1 still requires the repository for nginx configuration and database
+migrations. PR2 removes those remaining non-DEV source-tree dependencies.
+
+## Verification
 
 ```bash
 docker compose ps
-docker compose logs -f mqtt-ingestor
-curl http://127.0.0.1:8080/api/health
+docker compose logs --tail=100 api frontend ingestion-service
+curl -fsS http://127.0.0.1:8080/api/health
 ```
+
+See `docs/containerized-releases/PLAN.md` for rollout status and
+`docs/containerized-releases/GHCR-PUBLISHING.md` for registry preparation.

@@ -72,9 +72,7 @@ services:
 
 
   ingestion-service:
-    build:
-      context: .
-      dockerfile: apps/ingestion-service/Dockerfile
+    image: ${SENSORSPHERE_IMAGE_REGISTRY:-ghcr.io}/${SENSORSPHERE_IMAGE_NAMESPACE:-sensorsphere}/sensorsphere-ingestion-service:${SENSORSPHERE_INGESTION_VERSION:-1.0.0}
 
     restart: unless-stopped
 
@@ -104,9 +102,7 @@ services:
 
 
   api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    image: ${SENSORSPHERE_IMAGE_REGISTRY:-ghcr.io}/${SENSORSPHERE_IMAGE_NAMESPACE:-sensorsphere}/sensorsphere-api:${SENSORSPHERE_API_VERSION:-1.43.0}
 
     restart: unless-stopped
 
@@ -139,9 +135,7 @@ services:
 
 
   frontend:
-    build:
-      context: .
-      dockerfile: apps/frontend/Dockerfile
+    image: ${SENSORSPHERE_IMAGE_REGISTRY:-ghcr.io}/${SENSORSPHERE_IMAGE_NAMESPACE:-sensorsphere}/sensorsphere-frontend:${SENSORSPHERE_FRONTEND_VERSION:-1.82.0}
 
     restart: unless-stopped
 

@@ -1,15 +1,17 @@
 FROM node:22-alpine AS build
 
-WORKDIR /workspace/apps/frontend
+RUN corepack enable
+WORKDIR /workspace
 
-COPY apps/frontend/package.json ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY apps/frontend/package.json apps/frontend/package.json
 
-RUN npm install
+RUN pnpm install --frozen-lockfile --filter @sensorsphere/frontend...
 
-COPY tsconfig.base.json /workspace/tsconfig.base.json
-COPY apps/frontend ./
+COPY tsconfig.base.json tsconfig.base.json
+COPY apps/frontend apps/frontend
 
-RUN npm run build
+RUN pnpm --filter @sensorsphere/frontend build
 
 
 FROM nginx:1.28-alpine

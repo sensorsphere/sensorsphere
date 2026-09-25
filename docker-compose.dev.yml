@@ -1,0 +1,15 @@
+services:
+  ingestion-service:
+    build:
+      context: .
+      dockerfile: apps/ingestion-service/Dockerfile
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile

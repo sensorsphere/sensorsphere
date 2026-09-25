@@ -35,6 +35,9 @@ importers:
       ws:
         specifier: ^8.21.0
         version: 8.21.3
+      zod:
+        specifier: ^4
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^22.18.0
@@ -91,6 +94,9 @@ importers:
       '@sensorsphere/shared-config':
         specifier: workspace:*
         version: link:../../packages/shared-config
+      '@sensorsphere/shared-logger':
+        specifier: workspace:*
+        version: link:../../packages/shared-logger
       '@sensorsphere/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types

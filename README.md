@@ -1,64 +1,55 @@
+# SensorSphere
+
 ## Prerequisites
 
 - Docker
 - Docker Compose plugin
-- Git (optionnel)
+- Git for source-based development/release work
 
-Node.js et pnpm are not needed on the dev machine
+Node.js and pnpm are not required on the host. Application builds run in Docker.
 
-## Getting started
+## DEV
+
+Create the local environment file:
 
 ```bash
-## Getting started for Production
-
-```sh
-
-# Create your own env
 cp .env.example .env
-
-# edit the necssary env. vars. according to your context
-
-docker compose config \
-    && docker compose build \
-    && docker compose up -d \
-    && docker compose ps
-
-# all containers should be "Up"
-docker compose logs
-
-./infos.sh
-
 ```
 
-## Logs
+Build and start from local sources:
 
 ```bash
-docker compose logs -f mosquitto
-docker compose logs -f mqtt-ingestor
-docker compose logs -f api
-
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.dev.yml \
+  up -d --build
 ```
+## Runtime / DIT / PROD
 
-## Check health
+The base `docker-compose.yml` references versioned application images from
+GHCR. Select versions from a validated Stack Release, then run:
 
 ```bash
-# check if received MQTT messages are properly parsed and inserted in DB
-docker compose logs -f mqtt-ingestor
-
-# Check if API server is available
-curl http://127.0.0.1:8080/api/health
-
-curl http://127.0.0.1:8080/api/sensors
-
-
-
+docker compose config
+docker compose pull
+docker compose up -d
+docker compose ps
 ```
 
-## Stop all
+During PR1, nginx configuration and migrations still come from the repository.
+PR2 will containerize those remaining runtime dependencies.
+
+## Health and logs
 
 ```bash
-docker compose down
-
+docker compose logs --tail=100 api frontend ingestion-service
+curl -fsS http://127.0.0.1:8080/api/health
 ```
 
-TimescaleDB and Mosquitto data are persited in `data/*`.
+## Release documentation
+
+- `docs/containerized-releases/PLAN.md`
+- `docs/containerized-releases/GHCR-PUBLISHING.md`
+- Stack Release manifests: `releases/stacks/`
+
+See `docs/DEPLOYMENT.md` for deployment details.
