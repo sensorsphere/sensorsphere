@@ -1,5 +1,5 @@
 import React from "react";
-import { Badge, Code, Group, Stack, Text } from "@mantine/core";
+import { Badge, Button, Code, Group, Stack, Text } from "@mantine/core";
 import type { ManagedAgentOperation, ManagedAgentOperationProgress } from "./types";
 
 function duration(ms: number): string {
@@ -53,7 +53,7 @@ function stepDuration(progress: ManagedAgentOperationProgress[], index: number, 
   return Math.max(0, (typeof next === "number" ? next : totalElapsed) - current);
 }
 
-export function AgentActionDetails({ label, operation }: { label: string; operation: ManagedAgentOperation | null }) {
+export function AgentActionDetails({ label, operation, title = "Actions details" }: { label: string; operation: ManagedAgentOperation | null; title?: string }) {
   const [now, setNow] = React.useState(Date.now());
 
   React.useEffect(() => {
@@ -70,7 +70,7 @@ export function AgentActionDetails({ label, operation }: { label: string; operat
     <details key={operation.commandId} style={{ border: "1px solid var(--mantine-color-default-border)", borderRadius: 6, padding: "6px 10px" }}>
       <summary style={{ cursor: "pointer", userSelect: "none" }}>
         <Group component="span" gap={8} wrap="nowrap">
-          <Text component="span" size="sm" fw={600}>Actions details</Text>
+          <Text component="span" size="sm" fw={600}>{title}</Text>
           <Text component="span" size="xs" c="dimmed">{label}</Text>
           <Badge component="span" size="xs" variant="light" color={statusColor(operation.status)}>{operation.status}</Badge>
           <Text component="span" size="xs" c="dimmed">{duration(totalElapsed)}</Text>
@@ -86,6 +86,38 @@ export function AgentActionDetails({ label, operation }: { label: string; operat
           </Group>
         ))}
         {operation.error && <Text size="xs" c="red">{operation.error}</Text>}
+      </Stack>
+    </details>
+  );
+}
+
+
+function historyLabel(operation: ManagedAgentOperation): string {
+  const verb = operation.operation === "DEPLOY" ? "Install" : operation.operation === "REMOVE" ? "Deprovision" : "Update";
+  const kind = operation.agentType === "monitor-agent" ? "Monitoring Agent" : operation.agentType === "device-agent" ? "Device Agent" : "Agent";
+  const instance = operation.instance ?? "main";
+  return `${verb} ${kind} / ${instance}`;
+}
+
+export function AgentActionHistory({ operations, onClear, clearing = false }: { operations: ManagedAgentOperation[]; onClear?: () => void; clearing?: boolean }) {
+  const active = operations.filter(item => item.status === "SENT").length;
+  const latest = operations[0] ?? null;
+  return (
+    <details style={{ border: "1px solid var(--mantine-color-default-border)", borderRadius: 6, padding: "6px 10px" }}>
+      <summary style={{ cursor: "pointer", userSelect: "none" }}>
+        <Group component="span" gap={8} wrap="nowrap">
+          <Text component="span" size="sm" fw={600}>Actions details</Text>
+          <Text component="span" size="xs" c="dimmed">{active > 0 ? `${active} running` : operations.length > 0 ? `${operations.length} recorded` : "No recorded actions"}</Text>
+          {latest && <Badge component="span" size="xs" variant="light" color={statusColor(latest.status)}>{latest.status}</Badge>}
+        </Group>
+      </summary>
+      <Stack gap="xs" mt="xs">
+        {onClear && operations.some(item => item.status !== "SENT") && <Group justify="flex-end"><Button size="compact-xs" variant="subtle" color="gray" loading={clearing} onClick={onClear}>Clear completed history</Button></Group>}
+        {operations.length === 0 ? <Text size="xs" c="dimmed">No managed-agent action has been recorded yet.</Text> : operations.map(operation => {
+          const when = new Date(operation.createdAt).toLocaleString();
+          const subject = operation.agentName || operation.supervisorName || "—";
+          return <AgentActionDetails key={operation.commandId} title={subject} label={`${historyLabel(operation)} · ${when}`} operation={operation} />;
+        })}
       </Stack>
     </details>
   );

@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.42.0";
+export const MODULE_VERSION = "1.43.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.43.0": {
+    releasedAt: "2026-09-25T08:30:00+02:00",
+    patch: "PR-266-agent-operation-history-detached-deploy-v1.patch",
+    changes: [
+      { type: "added", description: "Persist Supervisor managed-agent deploy, update and remove operation history with progress details" },
+      { type: "added", description: "Expose managed-agent operation history and completed-history cleanup endpoints for the Agents UI" }
+    ]
+  },
   "1.42.0": {
     releasedAt: "2026-09-25T08:00:00+02:00",
     patch: "PR-265-agent-action-details-reconciliation-v1.patch",

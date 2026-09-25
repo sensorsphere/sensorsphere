@@ -1187,6 +1187,11 @@ export interface ManagedAgentOperation {
   createdAt: string;
   expiresAt: string;
   finishedAt: string | null;
+  agentType?: "device-agent" | "monitor-agent" | null;
+  instance?: string;
+  targetVersion?: string | null;
+  supervisorName?: string;
+  agentName?: string | null;
   progress?: ManagedAgentOperationProgress[];
 }
 

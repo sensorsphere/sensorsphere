@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.81.0";
+export const MODULE_VERSION = "1.82.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.82.0": {
+    releasedAt: "2026-09-25T08:30:00+02:00",
+    patch: "PR-266-agent-operation-history-detached-deploy-v1.patch",
+    changes: [
+      { type: "added", description: "Persist and browse managed-agent action history with expandable progress details and completed-history cleanup" },
+      { type: "added", description: "Add Deploy and Close for Supervisor-managed Device and Monitoring Agent deployment while progress continues in the global action history" },
+      { type: "fixed", description: "Opening a new deploy or reinstall dialog starts with empty action details instead of showing the previous operation" }
+    ]
+  },
   "1.81.0": {
     releasedAt: "2026-09-25T08:00:00+02:00",
     patch: "PR-265-agent-action-details-reconciliation-v1.patch",

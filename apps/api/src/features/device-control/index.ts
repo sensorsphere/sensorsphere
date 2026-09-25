@@ -727,6 +727,8 @@ export async function registerDeviceControlFeature(
     assignmentId?: string;
     expectedTokenHash?: string;
     targetVersion?: string;
+    agentType?: "device-agent" | "monitor-agent";
+    instance?: string;
     progress?: Array<{ step: string; elapsedMs: number; receivedAt: Date; details: Record<string, unknown> }>;
   }
   const supervisorManagedAgentOperations = new Map<string, SupervisorManagedAgentOperationRecord>();
@@ -889,8 +891,25 @@ export async function registerDeviceControlFeature(
     createdAt: record.createdAt.toISOString(),
     expiresAt: record.expiresAt.toISOString(),
     finishedAt: record.finishedAt?.toISOString() ?? null,
+    agentType: record.agentType ?? null,
+    instance: record.instance ?? "main",
+    targetVersion: record.targetVersion ?? null,
     progress: (record.progress ?? []).map(item => ({ step: item.step, elapsedMs: item.elapsedMs, receivedAt: item.receivedAt.toISOString(), details: item.details }))
   });
+
+  const persistSupervisorManagedAgentOperation = async (record: SupervisorManagedAgentOperationRecord): Promise<void> => {
+    if (!["DEPLOY", "UPDATE", "REMOVE"].includes(record.operation)) return;
+    await pool.query(`INSERT INTO supervisor_managed_agent_operations(
+      command_id,supervisor_agent_id,operation,agent_type,instance,device_agent_id,monitoring_agent_id,target_version,status,error,progress,created_at,expires_at,finished_at,updated_at
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,NOW())
+    ON CONFLICT (command_id) DO UPDATE SET
+      status=EXCLUDED.status,error=EXCLUDED.error,progress=EXCLUDED.progress,finished_at=EXCLUDED.finished_at,updated_at=NOW()`, [
+      record.id, record.supervisorId, record.operation, record.agentType ?? null, record.instance ?? "main",
+      record.deviceAgentId ?? null, record.monitoringAgentId ?? null, record.targetVersion ?? null, record.status, record.error,
+      JSON.stringify((record.progress ?? []).map(item => ({ step: item.step, elapsedMs: item.elapsedMs, receivedAt: item.receivedAt.toISOString(), details: item.details }))),
+      record.createdAt, record.expiresAt, record.finishedAt
+    ]);
+  };
 
   const expireManagedAgentOperations = () => {
     const now = Date.now();
@@ -908,6 +927,7 @@ export async function registerDeviceControlFeature(
         record.error = "Supervisor managed-agent operation timed out";
         record.finishedAt = new Date();
         app.log.warn({ supervisorId: record.supervisorId, commandId: record.id, operation: record.operation, progressSteps: record.progress?.length ?? 0, lastProgress: record.progress?.at(-1)?.step ?? null }, "Supervisor managed command timed out");
+        void persistSupervisorManagedAgentOperation(record).catch(error => app.log.error({ err: error, commandId: record.id }, "Unable to persist timed-out managed-agent operation"));
         if (record.operation === "UPDATE" && record.deviceAgentId) {
           void pool.query(`UPDATE device_agents SET
             update_status='FAILED',update_finished_at=NOW(),update_error=$3,updated_at=NOW()
@@ -1380,6 +1400,7 @@ export async function registerDeviceControlFeature(
           progress.push({ step: message.step, elapsedMs: message.elapsedMs, receivedAt: new Date(), details: message.details ?? {} });
           if (progress.length > 100) progress.splice(0, progress.length - 100);
           app.log.info({ supervisorId: supervisor.id, commandId: message.commandId, operation: message.operation, agentType: message.agentType ?? null, instance: message.instance, step: message.step, elapsedMs: message.elapsedMs }, "Supervisor managed command progress");
+          await persistSupervisorManagedAgentOperation(operation);
           return;
         }
         if (message.type === "SUPERVISOR_COMMAND_RESULT") {
@@ -1527,6 +1548,7 @@ export async function registerDeviceControlFeature(
                 WHERE id=$1`, [operation.monitoringAgentId, monitoringStatus, operation.error]);
             }
             await pool.query("UPDATE supervisor_agents SET last_seen_at=NOW(),updated_at=NOW() WHERE id=$1", [supervisor.id]);
+            await persistSupervisorManagedAgentOperation(operation);
             return;
           }
           const nextStatus = message.status === "FAILED" ? "FAILED" : "UPDATING";
@@ -1833,9 +1855,11 @@ export async function registerDeviceControlFeature(
     const record: SupervisorManagedAgentOperationRecord = {
       id: commandId, supervisorId: supervisor.id, operation: parsed.data.operation, status: "SENT", result: null, error: null,
       createdAt: new Date(), expiresAt, finishedAt: null, assignmentId: assignment?.id, expectedTokenHash,
-      deviceAgentId, monitoringAgentId, targetVersion: parsed.data.version
+      deviceAgentId: deviceAgentId ?? assignment?.device_agent_id ?? undefined, monitoringAgentId: monitoringAgentId ?? assignment?.monitoring_agent_id ?? undefined,
+      targetVersion: parsed.data.version, agentType: parsed.data.agentType, instance
     };
     supervisorManagedAgentOperations.set(commandId, record);
+    await persistSupervisorManagedAgentOperation(record);
     app.log.info({ supervisorId: supervisor.id, commandId, operation: parsed.data.operation, agentType: parsed.data.agentType ?? null, instance, targetVersion: parsed.data.version ?? null, expiresAt: expiresAt.toISOString() }, "Supervisor managed command queued");
     socket.send(JSON.stringify({
       type: "SUPERVISOR_COMMAND",
@@ -1950,6 +1974,30 @@ export async function registerDeviceControlFeature(
   app.delete("/api/v1/device-control/agents/:id/proxmox-config", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
     try { return reply.code(202).send(supervisorManagedAgentOperationDto(await startProxmoxConfigOperation(request.params.id, "DELETE_PROXMOX_CONFIG"))); }
     catch (error) { const e = error as Error & { statusCode?: number }; return reply.code(e.statusCode ?? 500).send({ error: e.message }); }
+  });
+
+  app.get("/api/v1/device-control/supervisor-managed-agent-operations", async (request: FastifyRequest<{ Querystring: { limit?: string } }>, reply) => {
+    const requested = Number.parseInt(request.query.limit ?? "50", 10);
+    const limit = Number.isFinite(requested) ? Math.max(1, Math.min(200, requested)) : 50;
+    const result = await pool.query(`SELECT
+      o.command_id,o.supervisor_agent_id,o.operation,o.agent_type,o.instance,o.target_version,o.status,o.error,o.progress,o.created_at,o.expires_at,o.finished_at,
+      s.name AS supervisor_name,COALESCE(d.name,m.name) AS agent_name
+      FROM supervisor_managed_agent_operations o
+      JOIN supervisor_agents s ON s.id=o.supervisor_agent_id
+      LEFT JOIN device_agents d ON d.id=o.device_agent_id
+      LEFT JOIN monitoring_agents m ON m.id=o.monitoring_agent_id
+      ORDER BY o.created_at DESC LIMIT $1`, [limit]);
+    return reply.send(result.rows.map(row => ({
+      commandId: row.command_id, supervisorId: row.supervisor_agent_id, supervisorName: row.supervisor_name, operation: row.operation,
+      agentType: row.agent_type, instance: row.instance, agentName: row.agent_name, targetVersion: row.target_version, status: row.status, error: row.error,
+      progress: Array.isArray(row.progress) ? row.progress : [], createdAt: new Date(row.created_at).toISOString(), expiresAt: new Date(row.expires_at).toISOString(),
+      finishedAt: row.finished_at ? new Date(row.finished_at).toISOString() : null, result: null
+    })));
+  });
+
+  app.delete("/api/v1/device-control/supervisor-managed-agent-operations", async (_request, reply) => {
+    const result = await pool.query("DELETE FROM supervisor_managed_agent_operations WHERE status <> 'SENT'");
+    return reply.send({ deleted: result.rowCount ?? 0 });
   });
 
   app.get("/api/v1/device-control/supervisor-managed-agents/:id", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
@@ -2130,9 +2178,10 @@ export async function registerDeviceControlFeature(
         const operation: SupervisorManagedAgentOperationRecord = {
           id: commandId, supervisorId: explicitAssignment.supervisor_agent_id, operation: "UPDATE", status: "SENT", result: null, error: null,
           createdAt: new Date(), expiresAt, finishedAt: null, deviceAgentId: agent.id, assignmentId: explicitAssignment.id,
-          targetVersion: parsed.data.version
+          targetVersion: parsed.data.version, agentType: "device-agent", instance: explicitAssignment.instance
         };
         supervisorManagedAgentOperations.set(commandId, operation);
+        await persistSupervisorManagedAgentOperation(operation);
         explicitSupervisorSocket.send(JSON.stringify({
           type: "SUPERVISOR_COMMAND",
           commandId,
@@ -2179,9 +2228,11 @@ export async function registerDeviceControlFeature(
     const supervisorSocket = supervisorSockets.get(autonomousSupervisor.id)!;
     const operation: SupervisorManagedAgentOperationRecord = {
       id: commandId, supervisorId: autonomousSupervisor.id, operation: "UPDATE", status: "SENT", result: null, error: null,
-      createdAt: new Date(), expiresAt, finishedAt: null, deviceAgentId: agent.id, targetVersion: parsed.data.version
+      createdAt: new Date(), expiresAt, finishedAt: null, deviceAgentId: agent.id, targetVersion: parsed.data.version,
+      agentType: "device-agent", instance: "main"
     };
     supervisorManagedAgentOperations.set(commandId, operation);
+    await persistSupervisorManagedAgentOperation(operation);
     supervisorSocket.send(JSON.stringify({
       type: "SUPERVISOR_COMMAND",
       commandId,
