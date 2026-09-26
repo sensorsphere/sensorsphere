@@ -44,14 +44,16 @@ Published images carry the OCI source label pointing to the repository that
 built them. The release script derives it from `remote.origin.url`.
 
 This allows GitHub to associate a container package with its source repository.
-Publishing from GitHub Actions can use `GITHUB_TOKEN` when the package is
-published in a namespace the workflow repository is authorized to write.
+The main repository and container namespace are both owned by the
+`sensorsphere` organization:
 
-The current Git remote is under the `fareg` owner while the target image
-namespace is `ghcr.io/sensorsphere`. Until the repository/package ownership is
-aligned, configure repository secrets `GHCR_USERNAME` and `GHCR_TOKEN` with
-write access to the `sensorsphere` package namespace. The workflow fails
-explicitly rather than silently trying the repository token across namespaces.
+- source: `https://github.com/sensorsphere/sensorsphere`
+- registry namespace: `ghcr.io/sensorsphere`
+
+The release workflow authenticates to GHCR with the repository `GITHUB_TOKEN`
+and requests `packages: write`. Existing packages must be connected to
+`sensorsphere/sensorsphere` and grant that repository GitHub Actions write
+access before the workflow can publish a new version.
 ## 5. Package visibility
 
 A newly published container package may be private. After the first publication, verify each package:

@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_INSTALL_DIR="/opt/sensorsphere"
-DEFAULT_RELEASE_BASE_URL="https://github.com/fareg/sensorsphere/releases/download"
+DEFAULT_RELEASE_BASE_URL="https://github.com/sensorsphere/sensorsphere/releases/download"
 
 COMMAND="${1:-}"
 [[ -n "$COMMAND" ]] || { echo "Usage: $0 <install|update|rollback|status> [options]" >&2; exit 2; }

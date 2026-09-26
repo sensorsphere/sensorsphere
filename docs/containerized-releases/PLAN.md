@@ -126,3 +126,5 @@ Audit date: 2026-09-25
 - 2026-09-26: Git tag and GitHub Release `stack-2026.09.25.4` were published with manifest, distribution bundle and SHA-256 checksum.
 - 2026-09-26: Published-artifact DIT smoke install passed using an empty Docker credential store; API 1.45.0, frontend 1.84.0, ingestion 1.0.0, nginx 1.0.0 and migrations 72 were pulled from public registries.
 - 2026-09-26: PR-272 hardens release tooling after the first real publication: portable checksum filenames, deterministic tar/gzip metadata, and RDC GitHub release tooling.
+- 2026-09-26: The main repository was transferred from `fareg/sensorsphere` to `sensorsphere/sensorsphere`; branches, Stack Release tag and GitHub Release 2026.09.25.4 were preserved.
+- 2026-09-26: All five public GHCR application packages were connected to `sensorsphere/sensorsphere`; PR-273 aligns release/bootstrap URLs and switches GitHub Actions GHCR authentication to the repository `GITHUB_TOKEN`.

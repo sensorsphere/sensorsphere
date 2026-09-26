@@ -22,8 +22,6 @@ jobs:
     env:
       SENSORSPHERE_IMAGE_REGISTRY: ghcr.io
       SENSORSPHERE_IMAGE_NAMESPACE: sensorsphere
-      GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
       GITHUB_TOKEN: ${{ github.token }}
       GH_TOKEN: ${{ github.token }}
 
@@ -48,15 +46,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          user="${GHCR_USERNAME:-${GITHUB_ACTOR}}"
-          token="${GHCR_TOKEN:-${GITHUB_TOKEN}}"
-
-          if [[ "${SENSORSPHERE_IMAGE_NAMESPACE}" != "${GITHUB_REPOSITORY_OWNER,,}" && -z "${GHCR_TOKEN}" ]]; then
-            echo "GHCR_TOKEN is required when publishing outside the repository owner namespace." >&2
+          [[ "${SENSORSPHERE_IMAGE_NAMESPACE}" == "${GITHUB_REPOSITORY_OWNER,,}" ]] || {
+            echo "Image namespace must match the GitHub repository owner when using GITHUB_TOKEN." >&2
             exit 1
-          fi
+          }
 
-          printf '%s' "$token" | docker login ghcr.io -u "$user" --password-stdin
+          printf '%s' "$GITHUB_TOKEN" \
+            | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
       - name: Publish changed module images
         shell: bash
