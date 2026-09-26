@@ -137,6 +137,18 @@ const migrationsVersion =
   process.env.SENSORSPHERE_MIGRATIONS_VERSION?.trim()
   || null;
 
+const stackVersion =
+  process.env.SENSORSPHERE_STACK_VERSION?.trim()
+  || null;
+
+const nginxReleasedAt =
+  process.env.SENSORSPHERE_NGINX_RELEASED_AT?.trim()
+  || null;
+
+const migrationsReleasedAt =
+  process.env.SENSORSPHERE_MIGRATIONS_RELEASED_AT?.trim()
+  || null;
+
 const readBuildDate = async (
   path: string
 ): Promise<string | null> => {
@@ -208,11 +220,14 @@ app.get("/api/v1/config", async () => {
     databaseMigrationLevel:
       migrationLevelResult.rows[0]?.migrationLevel
       ?? null,
+    stackVersion,
     nginxVersion,
     migrationsVersion,
     builds: {
       api: apiBuildDate,
-      ingestion: ingestionBuildDate
+      ingestion: ingestionBuildDate,
+      nginx: nginxReleasedAt,
+      migrations: migrationsReleasedAt
     }
   };
 });

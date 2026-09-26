@@ -33,11 +33,14 @@ export interface RuntimeConfig {
   apiVersion: string;
   contractVersion: number;
   databaseMigrationLevel: number | null;
+  stackVersion: string | null;
   nginxVersion: string | null;
   migrationsVersion: string | null;
   builds?: {
     api: string | null;
     ingestion: string | null;
+    nginx: string | null;
+    migrations: string | null;
   };
 }
 

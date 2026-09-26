@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.46.0";
+export const MODULE_VERSION = "1.47.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.47.0": {
+    releasedAt: "2026-09-26T07:50:00+02:00",
+    patch: "PR-275-installer-lifecycle-build-info-v1.patch",
+    changes: [
+      { type: "added", description: "Expose Stack Release and nginx/migrations release dates through runtime configuration" }
+    ]
+  },
   "1.46.0": {
     releasedAt: "2026-09-26T05:45:00+02:00",
     patch: "PR-274-global-environment-project-todos-v1.patch",

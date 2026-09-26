@@ -31,7 +31,7 @@ Application, nginx, and migration code comes from versioned container images.
 
 - Docker Engine
 - Docker Compose plugin
-- `curl` only when downloading a Stack Release manifest from a remote URL
+- `curl` or `wget` when downloading a Stack Release manifest from a remote URL
 - write access to the selected installation directory
 
 No host Node.js/npm/pnpm toolchain is required.
@@ -50,7 +50,7 @@ To select a published Stack Release explicitly:
 
 ```bash
 ./install.sh install \
-  --stack 2026.09.26.1 \
+  --stack 2026.09.26.2 \
   --install-dir /opt/sensorsphere
 ```
 
@@ -61,7 +61,7 @@ For an offline/local manifest:
 
 ```bash
 ./install.sh install \
-  --manifest ./2026.09.26.1.yaml \
+  --manifest ./2026.09.26.2.yaml \
   --install-dir /opt/sensorsphere
 ```
 
@@ -120,3 +120,29 @@ This prints the selected Stack Release/component versions and Compose state.
 
 `--skip-pull` skips registry pulls. It is intended for local validation using
 images that already exist on the Docker host, not normal DIT/PROD operation.
+
+## Public bootstrap installer
+
+For normal user-facing installations, updates, rollbacks, status checks and removals,
+use the public bootstrap entry point documented in the repository `README.md`:
+
+```text
+https://raw.githubusercontent.com/sensorsphere/sensorsphere/master/scripts/install.sh
+```
+
+The bootstrap downloads the target Stack Release bundle and invokes the lifecycle
+script from that target release. This ensures lifecycle files are upgraded together
+with application component versions.
+
+## Remove
+
+The low-level lifecycle can remove the running stack while preserving persistent data
+and configuration:
+
+```bash
+/opt/sensorsphere/install.sh remove --install-dir /opt/sensorsphere
+```
+
+Permanent data deletion is intentionally handled only by the public bootstrap with
+`ACTION=remove PURGE_DATA=true`, which includes safety checks before deleting the
+installation directory.

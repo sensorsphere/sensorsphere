@@ -6,7 +6,7 @@ DEFAULT_INSTALL_DIR="/opt/sensorsphere"
 DEFAULT_RELEASE_BASE_URL="https://github.com/sensorsphere/sensorsphere/releases/download"
 
 COMMAND="${1:-}"
-[[ -n "$COMMAND" ]] || { echo "Usage: $0 <install|update|rollback|status> [options]" >&2; exit 2; }
+[[ -n "$COMMAND" ]] || { echo "Usage: $0 <install|update|rollback|remove|status> [options]" >&2; exit 2; }
 shift || true
 
 INSTALL_DIR="${SENSORSPHERE_INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
@@ -38,12 +38,32 @@ compose() {
 }
 
 set_env() {
-  local file="$1" key="$2" value="$3"
-  if grep -q "^$key=" "$file"; then
-    sed -i "s#^$key=.*#$key=$value#" "$file"
-  else
-    printf '%s=%s\n' "$key" "$value" >> "$file"
-  fi
+  local file="$1" key="$2" value="$3" tmp
+  tmp="$(mktemp)"
+  grep -v "^${key}=" "$file" > "$tmp" || true
+  printf '%s=%s\n' "$key" "$value" >> "$tmp"
+  cat "$tmp" > "$file"
+  rm -f "$tmp"
+}
+
+apply_environment_overrides() {
+  local key
+  for key in \
+    SENSORSPHERE_ENVIRONMENT \
+    INSTANCE_NAME \
+    INSTANCE_NAME_COLOR \
+    WEB_PORT \
+    MQTT_PORT \
+    SENSORSPHERE_PROJECT_TODOS_ENABLED \
+    SENSORSPHERE_AUTH_ENABLED \
+    SENSORSPHERE_AUTH_PROVIDER \
+    SENSORSPHERE_AUTH_BOOTSTRAP_ADMIN_EMAIL \
+    SENSORSPHERE_GOOGLE_CLIENT_ID \
+    SENSORSPHERE_GOOGLE_CLIENT_SECRET; do
+    if [[ -n "${!key+x}" ]]; then
+      set_env "$INSTALL_DIR/.env" "$key" "${!key}"
+    fi
+  done
 }
 
 get_env() {
@@ -56,6 +76,14 @@ component_value() {
   awk -v wanted="$component" '
     /^  [A-Za-z0-9_-]+:$/ { current=$1; sub(/:$/, "", current) }
     current == wanted && /^    version:/ { print $2; exit }
+  ' "$manifest"
+}
+
+component_metadata_value() {
+  local manifest="$1" component="$2" field="$3"
+  awk -v wanted="$component" -v field="$field" '
+    /^  [A-Za-z0-9_-]+:$/ { current=$1; sub(/:$/, "", current) }
+    current == wanted && $1 == field ":" { print $2; exit }
   ' "$manifest"
 }
 
@@ -90,6 +118,46 @@ prepare_bundle() {
     password="$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')"
     set_env "$INSTALL_DIR/.env" POSTGRES_PASSWORD "$password"
   fi
+
+  apply_environment_overrides
+}
+
+snapshot_bundle() {
+  local destination="$1"
+  rm -rf "$destination"
+  mkdir -p "$destination"
+
+  local file
+  for file in docker-compose.yml install.sh .env.example; do
+    if [[ -f "$INSTALL_DIR/$file" ]]; then
+      cp "$INSTALL_DIR/$file" "$destination/$file"
+    fi
+  done
+
+  [[ -d "$INSTALL_DIR/config" ]] && cp -a "$INSTALL_DIR/config" "$destination/config"
+  [[ -d "$INSTALL_DIR/init" ]] && cp -a "$INSTALL_DIR/init" "$destination/init"
+}
+
+restore_bundle() {
+  local source="$1"
+  [[ -d "$source" ]] || return 0
+
+  local file
+  for file in docker-compose.yml install.sh .env.example; do
+    if [[ -f "$source/$file" ]]; then
+      cp "$source/$file" "$INSTALL_DIR/$file"
+    fi
+  done
+
+  if [[ -d "$source/config" ]]; then
+    rm -rf "$INSTALL_DIR/config"
+    cp -a "$source/config" "$INSTALL_DIR/config"
+  fi
+  if [[ -d "$source/init" ]]; then
+    rm -rf "$INSTALL_DIR/init"
+    cp -a "$source/init" "$INSTALL_DIR/init"
+  fi
+  chmod 0755 "$INSTALL_DIR/install.sh" 2>/dev/null || true
 }
 
 fetch_manifest() {
@@ -110,17 +178,20 @@ fetch_manifest() {
     exit 2
   }
 
-  command -v curl >/dev/null 2>&1 || {
-    echo "ERROR: curl is required to download Stack Releases" >&2
+  local url="$RELEASE_BASE_URL/stack-$STACK_VERSION/$STACK_VERSION.yaml"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$url" -o "$destination"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$destination" "$url"
+  else
+    echo "ERROR: curl or wget is required to download Stack Releases" >&2
     exit 1
-  }
-
-  curl -fsSL "$RELEASE_BASE_URL/stack-$STACK_VERSION/$STACK_VERSION.yaml" -o "$destination"
+  fi
 }
 
 apply_manifest() {
   local manifest="$1"
-  local stack schema api frontend ingestion nginx migrations db_level
+  local stack schema api frontend ingestion nginx migrations db_level nginx_released_at migrations_released_at
 
   stack="$(manifest_top_value "$manifest" stackVersion)"
   schema="$(manifest_top_value "$manifest" schemaVersion)"
@@ -129,6 +200,8 @@ apply_manifest() {
   ingestion="$(component_value "$manifest" ingestion)"
   nginx="$(component_value "$manifest" nginx)"
   migrations="$(component_value "$manifest" migrations)"
+  nginx_released_at="$(component_metadata_value "$manifest" nginx releasedAt)"
+  migrations_released_at="$(component_metadata_value "$manifest" migrations releasedAt)"
   db_level="$(awk '$1 == "migrationLevel:" { print $2; exit }' "$manifest")"
 
   [[ "$schema" == "2" || "$schema" == "3" ]] || {
@@ -149,6 +222,12 @@ apply_manifest() {
   set_env "$INSTALL_DIR/.env" SENSORSPHERE_INGESTION_VERSION "$ingestion"
   set_env "$INSTALL_DIR/.env" SENSORSPHERE_NGINX_VERSION "$nginx"
   set_env "$INSTALL_DIR/.env" SENSORSPHERE_MIGRATIONS_VERSION "$migrations"
+  if [[ -n "$nginx_released_at" ]]; then
+    set_env "$INSTALL_DIR/.env" SENSORSPHERE_NGINX_RELEASED_AT "$nginx_released_at"
+  fi
+  if [[ -n "$migrations_released_at" ]]; then
+    set_env "$INSTALL_DIR/.env" SENSORSPHERE_MIGRATIONS_RELEASED_AT "$migrations_released_at"
+  fi
 
   if [[ "$schema" == "3" ]]; then
     local api_contract db_min db_max
@@ -225,10 +304,11 @@ update_command() {
   require_tools
   [[ -f "$INSTALL_DIR/.env" ]] || { echo "ERROR: installation not found: $INSTALL_DIR" >&2; exit 1; }
 
-  prepare_bundle
   cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.env.previous"
   [[ -f "$INSTALL_DIR/.stack-release.yaml" ]]     && cp "$INSTALL_DIR/.stack-release.yaml" "$INSTALL_DIR/.stack-release.previous.yaml"
+  snapshot_bundle "$INSTALL_DIR/.bundle.previous"
 
+  prepare_bundle
   fetch_manifest "$INSTALL_DIR/.stack-release.yaml"
   apply_manifest "$INSTALL_DIR/.stack-release.yaml"
   run_stack
@@ -266,11 +346,21 @@ rollback_command() {
   fi
 
   cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.env.failed"
+  snapshot_bundle "$INSTALL_DIR/.bundle.failed"
   cp "$INSTALL_DIR/.env.previous" "$INSTALL_DIR/.env"
   [[ -f "$INSTALL_DIR/.stack-release.previous.yaml" ]]     && cp "$INSTALL_DIR/.stack-release.previous.yaml" "$INSTALL_DIR/.stack-release.yaml"
+  restore_bundle "$INSTALL_DIR/.bundle.previous"
 
   run_stack
   echo "Rolled back to Stack Release $(get_env "$INSTALL_DIR/.env" SENSORSPHERE_STACK_VERSION)"
+}
+
+remove_command() {
+  require_tools
+  [[ -f "$INSTALL_DIR/.env" ]] || { echo "ERROR: installation not found: $INSTALL_DIR" >&2; exit 1; }
+  compose down --remove-orphans
+  rm -f "$INSTALL_DIR/.installed"
+  echo "SensorSphere runtime removed. Data and configuration are preserved in $INSTALL_DIR"
 }
 
 status_command() {
@@ -293,6 +383,7 @@ case "$COMMAND" in
   install) install_command ;;
   update) update_command ;;
   rollback) rollback_command ;;
+  remove) remove_command ;;
   status) status_command ;;
   *) echo "Unknown command: $COMMAND" >&2; exit 2 ;;
 esac

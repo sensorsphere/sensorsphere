@@ -707,6 +707,21 @@ function Dashboard() {
       ?.builds
       ?.ingestion;
 
+  const nginxReleaseDate =
+    runtimeConfigQuery.data
+      ?.builds
+      ?.nginx;
+
+  const migrationsReleaseDate =
+    runtimeConfigQuery.data
+      ?.builds
+      ?.migrations;
+
+  const stackVersion =
+    runtimeConfigQuery.data
+      ?.stackVersion
+    ?? null;
+
 
   const apiModuleVersion =
     moduleVersionsQuery.data
@@ -2052,10 +2067,11 @@ function Dashboard() {
               />
 
               <div>
+                <Title order={2} style={instanceNameColor ? { color: instanceNameColor } : undefined}>
+                  {instanceName}
+                </Title>
+
                 <Group gap="xs" wrap="nowrap">
-                  <Title order={2} style={instanceNameColor ? { color: instanceNameColor } : undefined}>
-                    {instanceName}
-                  </Title>
                   <Badge
                     size="sm"
                     variant="light"
@@ -2064,20 +2080,19 @@ function Dashboard() {
                   >
                     Environment: {installationEnvironment}
                   </Badge>
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                  >
+                    {
+                      templateHistoryActive
+                        ? "Template History"
+                        : PAGE_LABELS[
+                            activePage
+                          ]
+                    }
+                  </Text>
                 </Group>
-
-                <Text
-                  size="xs"
-                  c="dimmed"
-                >
-                  {
-                    templateHistoryActive
-                      ? "Template History"
-                      : PAGE_LABELS[
-                          activePage
-                        ]
-                  }
-                </Text>
               </div>
 
             </Group>
@@ -2621,9 +2636,14 @@ function Dashboard() {
                   "1px solid var(--mantine-color-default-border)"
               }}
             >
-              <Text size="xs" fw={600} c="dimmed">
-                Build information
-              </Text>
+              <Group justify="space-between" gap="xs" wrap="nowrap">
+                <Text size="xs" fw={600} c="dimmed">
+                  Build information
+                </Text>
+                <Text size="xs" fw={600} c="dimmed" ta="right">
+                  {stackVersion ? `Stack ${stackVersion}` : "Stack —"}
+                </Text>
+              </Group>
 
               <Group className="build-info-row" justify="space-between" gap="xs" wrap="nowrap">
                 <Text size="xs" c="dimmed">Frontend</Text>
@@ -2649,14 +2669,14 @@ function Dashboard() {
               <Group className="build-info-row" justify="space-between" gap="xs" wrap="nowrap">
                 <Text size="xs" c="dimmed">Nginx</Text>
                 <Text size="xs" c="dimmed" ta="right">
-                  {nginxModuleVersion ?? "—"}
+                  {nginxModuleVersion ?? "—"} · {formatBuildDate(nginxReleaseDate)}
                 </Text>
               </Group>
 
               <Group className="build-info-row" justify="space-between" gap="xs" wrap="nowrap">
                 <Text size="xs" c="dimmed">Migrations</Text>
                 <Text size="xs" c="dimmed" ta="right">
-                  {migrationsModuleVersion ?? "—"}
+                  {migrationsModuleVersion ?? "—"} · {formatBuildDate(migrationsReleaseDate)}
                 </Text>
               </Group>
             </Stack>

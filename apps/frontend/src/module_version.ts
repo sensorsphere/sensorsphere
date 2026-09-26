@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.85.0";
+export const MODULE_VERSION = "1.86.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.86.0": {
+    releasedAt: "2026-09-26T07:50:00+02:00",
+    patch: "PR-275-installer-lifecycle-build-info-v1.patch",
+    changes: [
+      { type: "changed", description: "Move the environment badge to the page-name line under the instance title" },
+      { type: "added", description: "Show Stack Release plus nginx and migrations release dates in Build information" }
+    ]
+  },
   "1.85.0": {
     releasedAt: "2026-09-26T05:45:00+02:00",
     patch: "PR-274-global-environment-project-todos-v1.patch",
