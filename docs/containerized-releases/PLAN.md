@@ -122,3 +122,7 @@ Audit date: 2026-09-25
 - 2026-09-25: PR4 introduces Stack Release schema v3, API contract version 1, database compatibility range metadata, immutable full-SHA image tags, amd64+arm64 official releases, provenance/SBOM attestations, no `latest` tag, and immutable GitHub Stack Releases with checksummed distribution bundles.
 - 2026-09-25: Cryptographic image signing is intentionally deferred until a trust/identity policy is defined; registry attestations and immutable Stack Release artifacts are enabled now.
 - 2026-09-25: PR-271 adds nginx and migrations release versions to sidebar Build information through runtime configuration and Stack Release 2026.09.25.4.
+- 2026-09-26: Stack Release 2026.09.25.4 is the first release published for all five SensorSphere images in GHCR with public anonymous pulls, amd64+arm64 manifests, immutable full-SHA tags, provenance and SBOM attestations.
+- 2026-09-26: Git tag and GitHub Release `stack-2026.09.25.4` were published with manifest, distribution bundle and SHA-256 checksum.
+- 2026-09-26: Published-artifact DIT smoke install passed using an empty Docker credential store; API 1.45.0, frontend 1.84.0, ingestion 1.0.0, nginx 1.0.0 and migrations 72 were pulled from public registries.
+- 2026-09-26: PR-272 hardens release tooling after the first real publication: portable checksum filenames, deterministic tar/gzip metadata, and RDC GitHub release tooling.

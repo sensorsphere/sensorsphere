@@ -10,6 +10,9 @@ ENV GID=${GID:-1001}
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        git \
+       gh \
+       curl \
+       jq \
        ca-certificates \
        bash \
        openssh-client \

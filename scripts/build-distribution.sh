@@ -27,8 +27,22 @@ cp "$MANIFEST" "$STAGE_DIR/stack-release.yaml"
 cp "$MANIFEST" "$STAGE_DIR/$STACK_VERSION.yaml"
 
 rm -f "$ARCHIVE" "$ARCHIVE.sha256"
-tar -C "$DIST_DIR" -czf "$ARCHIVE" "sensorsphere-$STACK_VERSION"
-sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
+
+SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git show -s --format=%ct HEAD)}"
+tar \
+  -C "$DIST_DIR" \
+  --sort=name \
+  --mtime="@${SOURCE_DATE_EPOCH}" \
+  --owner=0 \
+  --group=0 \
+  --numeric-owner \
+  -cf - "sensorsphere-$STACK_VERSION" \
+  | gzip -n > "$ARCHIVE"
+
+(
+  cd "$DIST_DIR"
+  sha256sum "$(basename "$ARCHIVE")" > "$(basename "$ARCHIVE").sha256"
+)
 
 echo "Distribution: $ARCHIVE"
 echo "Checksum:     $ARCHIVE.sha256"

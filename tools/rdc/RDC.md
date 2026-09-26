@@ -12,6 +12,7 @@ The launcher:
 - builds `sensorsphere-rdc` with the current user's UID/GID;
 - mounts `$HOME` read-write at `/home/ubuntu`;
 - exposes the host Docker socket and Docker Compose/Buildx CLI;
+- includes Git, GitHub CLI (`gh`), curl and jq for release/registry workflows;
 - forwards the current SSH agent when available;
 - falls back to `$HOME/.ssh/ssh_auth_sock` for forwarded-agent sessions;
 - runs RDC as the `ubuntu` user inside the container.
