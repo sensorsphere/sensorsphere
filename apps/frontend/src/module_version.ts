@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.84.0";
+export const MODULE_VERSION = "1.85.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.85.0": {
+    releasedAt: "2026-09-26T05:45:00+02:00",
+    patch: "PR-274-global-environment-project-todos-v1.patch",
+    changes: [
+      { type: "changed", description: "Show the SensorSphere installation environment globally beside the instance name instead of only in Supervisor Agents" },
+      { type: "changed", description: "Hide Project Todos navigation and content unless the runtime Project Todos feature flag is enabled" }
+    ]
+  },
   "1.84.0": {
     releasedAt: "2026-09-25T16:36:00+02:00",
     patch: "PR-271-build-info-container-releases-v1.patch",

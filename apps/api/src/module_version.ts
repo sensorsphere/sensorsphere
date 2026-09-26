@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.45.0";
+export const MODULE_VERSION = "1.46.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.46.0": {
+    releasedAt: "2026-09-26T05:45:00+02:00",
+    patch: "PR-274-global-environment-project-todos-v1.patch",
+    changes: [
+      { type: "added", description: "Expose the installation environment and runtime feature flags through /api/v1/config" },
+      { type: "added", description: "Add SENSORSPHERE_PROJECT_TODOS_ENABLED as an installation-level feature flag, disabled by default" }
+    ]
+  },
   "1.45.0": {
     releasedAt: "2026-09-25T16:36:00+02:00",
     patch: "PR-271-build-info-container-releases-v1.patch",

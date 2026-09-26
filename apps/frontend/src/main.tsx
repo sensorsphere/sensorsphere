@@ -650,6 +650,9 @@ function Dashboard() {
       queryFn:
         getProjectTodos,
 
+      enabled:
+        runtimeConfigQuery.data?.features?.projectTodos === true,
+
       refetchInterval:
         30_000
     });
@@ -661,6 +664,31 @@ function Dashboard() {
     || "SensorSphere";
 
   const instanceNameColor = runtimeConfigQuery.data?.instanceNameColor?.trim() || undefined;
+
+  const installationEnvironment =
+    runtimeConfigQuery.data
+      ?.environment
+      ?.trim()
+    || "DEFAULT";
+
+  const projectTodosEnabled =
+    runtimeConfigQuery.data
+      ?.features
+      ?.projectTodos
+    === true;
+
+  const environmentBadgeColor =
+    installationEnvironment.toUpperCase() === "PROD"
+      ? "red"
+      : installationEnvironment.toUpperCase() === "DIT"
+        ? "yellow"
+        : installationEnvironment.toUpperCase() === "IAT"
+          ? "grape"
+          : installationEnvironment.toUpperCase().startsWith("TEST")
+            ? "blue"
+            : installationEnvironment.toUpperCase() === "DEV"
+              ? "cyan"
+              : "gray";
 
   const compatibilityError =
     runtimeConfigQuery.data
@@ -713,6 +741,21 @@ function Dashboard() {
       "dashboard",
       isPageKey
     );
+
+  React.useEffect(() => {
+    if (
+      runtimeConfigQuery.data &&
+      !projectTodosEnabled &&
+      activePage === "todos"
+    ) {
+      setActivePage("dashboard");
+    }
+  }, [
+    activePage,
+    projectTodosEnabled,
+    runtimeConfigQuery.data,
+    setActivePage
+  ]);
 
   const [deviceRegistryOpenId, setDeviceRegistryOpenId] = React.useState<string | null>(null);
   const [deviceRegistryOpenAccessLinkId, setDeviceRegistryOpenAccessLinkId] = React.useState<string | null>(null);
@@ -2009,9 +2052,19 @@ function Dashboard() {
               />
 
               <div>
-                <Title order={2} style={instanceNameColor ? { color: instanceNameColor } : undefined}>
-                  {instanceName}
-                </Title>
+                <Group gap="xs" wrap="nowrap">
+                  <Title order={2} style={instanceNameColor ? { color: instanceNameColor } : undefined}>
+                    {instanceName}
+                  </Title>
+                  <Badge
+                    size="sm"
+                    variant="light"
+                    color={environmentBadgeColor}
+                    style={{ flexShrink: 0 }}
+                  >
+                    Environment: {installationEnvironment}
+                  </Badge>
+                </Group>
 
                 <Text
                   size="xs"
@@ -2497,40 +2550,42 @@ function Dashboard() {
         </Stack>
 
         <Stack gap="xs" mt="auto" pt="md">
-          <NavLink
-            label={
-              navbarCollapsed
-                ? null
-                : "Project Todos"
-            }
-            leftSection={
-              <NavigationIcon
-                page="todos"
-              />
-            }
-            rightSection={
-              !navbarCollapsed &&
-              ((projectTodosQuery.data?.summary.open ?? 0) + (projectTodosQuery.data?.summary.inProgress ?? 0)) > 0
-                ? (
-                  <Badge size="xs" color="pink" variant="light">
-                    {(projectTodosQuery.data?.summary.open ?? 0) + (projectTodosQuery.data?.summary.inProgress ?? 0)}
-                  </Badge>
-                )
-                : null
-            }
-            title="Project Todos"
-            aria-label="Project Todos"
-            active={
-              activePage ===
-              "todos"
-            }
-            onClick={
-              () =>
-                navigateTo(
-                  "todos"
-                )
-            }
-          />
+          {projectTodosEnabled && (
+            <NavLink
+              label={
+                navbarCollapsed
+                  ? null
+                  : "Project Todos"
+              }
+              leftSection={
+                <NavigationIcon
+                  page="todos"
+                />
+              }
+              rightSection={
+                !navbarCollapsed &&
+                ((projectTodosQuery.data?.summary.open ?? 0) + (projectTodosQuery.data?.summary.inProgress ?? 0)) > 0
+                  ? (
+                    <Badge size="xs" color="pink" variant="light">
+                      {(projectTodosQuery.data?.summary.open ?? 0) + (projectTodosQuery.data?.summary.inProgress ?? 0)}
+                    </Badge>
+                  )
+                  : null
+              }
+              title="Project Todos"
+              aria-label="Project Todos"
+              active={
+                activePage ===
+                "todos"
+              }
+              onClick={
+                () =>
+                  navigateTo(
+                    "todos"
+                  )
+              }
+            />
+          )}
 
           <NavLink
             label={
@@ -5169,6 +5224,7 @@ function Dashboard() {
             }
 
             {
+              projectTodosEnabled &&
               activePage ===
                 "todos" && (
                 <ProjectTodosPanel />

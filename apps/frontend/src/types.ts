@@ -26,6 +26,10 @@ export interface ModuleVersionInfo {
 export interface RuntimeConfig {
   instanceName: string;
   instanceNameColor: string | null;
+  environment: string;
+  features: {
+    projectTodos: boolean;
+  };
   apiVersion: string;
   contractVersion: number;
   databaseMigrationLevel: number | null;

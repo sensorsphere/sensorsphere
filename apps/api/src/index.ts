@@ -119,6 +119,16 @@ const instanceName =
 
 const instanceNameColor = process.env.INSTANCE_NAME_COLOR?.trim() || null;
 
+const installationEnvironment =
+  process.env.SENSORSPHERE_ENVIRONMENT?.trim()
+  || "DEFAULT";
+
+const projectTodosEnabled =
+  /^(1|true|yes|on)$/i.test(
+    process.env.SENSORSPHERE_PROJECT_TODOS_ENABLED?.trim()
+    ?? ""
+  );
+
 const nginxVersion =
   process.env.SENSORSPHERE_NGINX_VERSION?.trim()
   || null;
@@ -189,6 +199,10 @@ app.get("/api/v1/config", async () => {
   return {
     instanceName,
     instanceNameColor,
+    environment: installationEnvironment,
+    features: {
+      projectTodos: projectTodosEnabled
+    },
     apiVersion: MODULE_VERSION,
     contractVersion: API_CONTRACT_VERSION,
     databaseMigrationLevel:

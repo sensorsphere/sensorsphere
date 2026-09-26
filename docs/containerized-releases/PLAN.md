@@ -128,3 +128,4 @@ Audit date: 2026-09-25
 - 2026-09-26: PR-272 hardens release tooling after the first real publication: portable checksum filenames, deterministic tar/gzip metadata, and RDC GitHub release tooling.
 - 2026-09-26: The main repository was transferred from `fareg/sensorsphere` to `sensorsphere/sensorsphere`; branches, Stack Release tag and GitHub Release 2026.09.25.4 were preserved.
 - 2026-09-26: All five public GHCR application packages were connected to `sensorsphere/sensorsphere`; PR-273 aligns release/bootstrap URLs and switches GitHub Actions GHCR authentication to the repository `GITHUB_TOKEN`.
+- 2026-09-26: PR-274 promotes the installation environment to the global application header and gates Project Todos behind `SENSORSPHERE_PROJECT_TODOS_ENABLED`; DEV enables it explicitly while normal/non-DEV installations default to disabled.
