@@ -79,7 +79,10 @@ import type {
   RealtimeEntityRecord,
   DeviceDiscovery,
   DiscardedDeviceDiscovery,
-  DiscoveredDeviceAction
+  DiscoveredDeviceAction,
+  AuthContext,
+  SensorSphereUser,
+  SensorSphereRole
 } from "./types";
 
 async function readJson<T>(
@@ -104,6 +107,75 @@ async function readJson<T>(
   }
 
   return response.json();
+}
+
+function devAuthHeaders(): HeadersInit {
+  const role =
+    window.localStorage.getItem("sensorsphere.auth.devRole");
+
+  return role === "admin" || role === "user"
+    ? { "X-SensorSphere-Dev-Role": role }
+    : {};
+}
+
+export function setDevAuthRole(role: SensorSphereRole): void {
+  window.localStorage.setItem(
+    "sensorsphere.auth.devRole",
+    role
+  );
+}
+
+export async function getAuthContext():
+Promise<AuthContext> {
+  return readJson<AuthContext>(
+    await fetch(
+      "/api/v1/auth/context",
+      { headers: devAuthHeaders() }
+    )
+  );
+}
+
+export async function getUsers():
+Promise<SensorSphereUser[]> {
+  return readJson<SensorSphereUser[]>(
+    await fetch(
+      "/api/v1/admin/users",
+      { headers: devAuthHeaders() }
+    )
+  );
+}
+
+export async function approveUser(
+  id: string
+): Promise<SensorSphereUser> {
+  return readJson<SensorSphereUser>(
+    await fetch(
+      `/api/v1/admin/users/${id}/approve`,
+      {
+        method: "POST",
+        headers: devAuthHeaders()
+      }
+    )
+  );
+}
+
+export async function createDevPendingUser(
+  email: string,
+  displayName?: string
+): Promise<SensorSphereUser> {
+  return readJson<SensorSphereUser>(
+    await fetch(
+      "/api/v1/auth/dev/users",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...devAuthHeaders()
+        },
+        body: JSON.stringify({ email, displayName })
+      }
+    )
+  );
 }
 
 export async function getRuntimeConfig():

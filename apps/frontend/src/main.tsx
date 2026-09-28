@@ -57,6 +57,8 @@ import {
   getLatestObservations,
   getMetricDisplaySettings,
   getRuntimeConfig,
+  getAuthContext,
+  setDevAuthRole,
   getModuleVersions,
   getFrontendBuildDate,
   getSimpleDashboards,
@@ -166,6 +168,10 @@ import {
 import {
   VersionsPanel
 } from "./VersionsPanel";
+
+import {
+  UsersPanel
+} from "./UsersPanel";
 
 import {
   MODULE_VERSION as FRONTEND_MODULE_VERSION
@@ -286,6 +292,9 @@ Record<PageKey, string> = {
   "gateway-coverage":
     "Gateway Coverage",
 
+  users:
+    "Administration · Users",
+
   versions:
     "Versions",
 
@@ -311,6 +320,7 @@ function isPageKey(
     value === "gateways" ||
     value === "metric-routing" ||
     value === "gateway-coverage" ||
+    value === "users" ||
     value === "versions" ||
     value === "todos"
   );
@@ -618,6 +628,18 @@ function Dashboard() {
         Infinity
     });
 
+  const authContextQuery =
+    useQuery({
+      queryKey:
+        ["auth-context"],
+
+      queryFn:
+        getAuthContext,
+
+      refetchOnWindowFocus:
+        false
+    });
+
   const frontendBuildQuery =
     useQuery({
       queryKey:
@@ -769,6 +791,20 @@ function Dashboard() {
     activePage,
     projectTodosEnabled,
     runtimeConfigQuery.data,
+    setActivePage
+  ]);
+
+  React.useEffect(() => {
+    if (
+      authContextQuery.data &&
+      !authContextQuery.data.isAdmin &&
+      activePage === "users"
+    ) {
+      setActivePage("dashboard");
+    }
+  }, [
+    activePage,
+    authContextQuery.data,
     setActivePage
   ]);
 
@@ -2098,6 +2134,23 @@ function Dashboard() {
             </Group>
 
             <Group gap="sm">
+              {authContextQuery.data?.devRoleSwitchEnabled && (
+                <SegmentedControl
+                  size="xs"
+                  aria-label="Development identity role"
+                  value={authContextQuery.data.role ?? authContextQuery.data.devDefaultRole}
+                  data={[
+                    { value: "admin", label: "Admin" },
+                    { value: "user", label: "User" }
+                  ]}
+                  onChange={value => {
+                    if (value !== "admin" && value !== "user") return;
+                    setDevAuthRole(value);
+                    void queryClient.invalidateQueries({ queryKey: ["auth-context"] });
+                    void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+                  }}
+                />
+              )}
               <ThemeSelector />
             </Group>
 
@@ -2597,6 +2650,33 @@ function Dashboard() {
                 () =>
                   navigateTo(
                     "todos"
+                  )
+              }
+            />
+          )}
+
+          {authContextQuery.data?.isAdmin && (
+            <NavLink
+              label={
+                navbarCollapsed
+                  ? null
+                  : "Administration · Users"
+              }
+              leftSection={
+                <NavigationIcon
+                  page="users"
+                />
+              }
+              title="Administration · Users"
+              aria-label="Administration · Users"
+              active={
+                activePage ===
+                "users"
+              }
+              onClick={
+                () =>
+                  navigateTo(
+                    "users"
                   )
               }
             />
@@ -5233,6 +5313,18 @@ function Dashboard() {
               activePage ===
                 "gateway-coverage" && (
                 <GatewayCoveragePanel />
+              )
+            }
+
+            {
+              authContextQuery.data?.isAdmin &&
+              activePage ===
+                "users" && (
+                <UsersPanel
+                  devMode={
+                    authContextQuery.data.devRoleSwitchEnabled
+                  }
+                />
               )
             }
 

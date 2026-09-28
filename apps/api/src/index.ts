@@ -44,6 +44,10 @@ import {
 } from "./features/project-todos/index.js";
 
 import {
+  registerAuthFeature
+} from "./features/auth/index.js";
+
+import {
   registerSimpleDashboardFeature
 } from "./features/simple-dashboards/index.js";
 
@@ -214,6 +218,20 @@ app.get("/api/v1/config", async () => {
     environment: installationEnvironment,
     features: {
       projectTodos: projectTodosEnabled
+    },
+    auth: {
+      enabled:
+        /^(1|true|yes|on)$/i.test(
+          process.env.SENSORSPHERE_AUTH_ENABLED?.trim() ?? ""
+        ),
+      devRoleSwitchEnabled:
+        installationEnvironment.toUpperCase() === "DEV" &&
+        !/^(1|true|yes|on)$/i.test(
+          process.env.SENSORSPHERE_AUTH_ENABLED?.trim() ?? ""
+        ) &&
+        /^(1|true|yes|on)$/i.test(
+          process.env.SENSORSPHERE_AUTH_DEV_ROLE_SWITCH_ENABLED?.trim() ?? ""
+        )
     },
     apiVersion: MODULE_VERSION,
     contractVersion: API_CONTRACT_VERSION,
@@ -1090,6 +1108,13 @@ await registerSimpleDashboardFeature(
 );
 
 await registerDeviceRegistryFeature(
+  app,
+  {
+    pool
+  }
+);
+
+await registerAuthFeature(
   app,
   {
     pool

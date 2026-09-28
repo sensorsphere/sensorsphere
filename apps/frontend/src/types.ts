@@ -30,6 +30,10 @@ export interface RuntimeConfig {
   features: {
     projectTodos: boolean;
   };
+  auth: {
+    enabled: boolean;
+    devRoleSwitchEnabled: boolean;
+  };
   apiVersion: string;
   contractVersion: number;
   databaseMigrationLevel: number | null;
@@ -42,6 +46,28 @@ export interface RuntimeConfig {
     nginx: string | null;
     migrations: string | null;
   };
+}
+
+export type SensorSphereRole = "admin" | "user";
+
+export interface AuthContext {
+  enabled: boolean;
+  devRoleSwitchEnabled: boolean;
+  devDefaultRole: SensorSphereRole;
+  role: SensorSphereRole | null;
+  isAdmin: boolean;
+}
+
+export interface SensorSphereUser {
+  id: string;
+  email: string;
+  displayName: string | null;
+  role: SensorSphereRole;
+  status: "pending" | "active" | "disabled" | "rejected";
+  createdAt: string;
+  approvedAt: string | null;
+  approvedBy: string | null;
+  lastLoginAt: string | null;
 }
 
 export type MetricQualityStatus =

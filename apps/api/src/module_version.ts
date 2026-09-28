@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.47.0";
+export const MODULE_VERSION = "1.48.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.48.0": {
+    releasedAt: "2026-09-28T03:59:50+02:00",
+    patch: "PR-276-auth-foundation-dev-role-switch-v1.patch",
+    changes: [
+      { type: "added", description: "Add Admin/User authorization foundation with database-backed users and identities" },
+      { type: "security", description: "Require the administrator role for user approval endpoints" },
+      { type: "added", description: "Add a strictly DEV-only backend role switch when authentication is disabled" }
+    ]
+  },
   "1.47.0": {
     releasedAt: "2026-09-26T07:50:00+02:00",
     patch: "PR-275-installer-lifecycle-build-info-v1.patch",

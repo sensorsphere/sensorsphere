@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.86.0";
+export const MODULE_VERSION = "1.87.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.87.0": {
+    releasedAt: "2026-09-28T03:59:50+02:00",
+    patch: "PR-276-auth-foundation-dev-role-switch-v1.patch",
+    changes: [
+      { type: "added", description: "Add DEV Admin/User identity switching backed by the API authorization context" },
+      { type: "added", description: "Add Administration Users UI for pending-user creation and administrator approval testing" },
+      { type: "changed", description: "Hide Administration Users from non-admin users and redirect stale admin navigation on role change" }
+    ]
+  },
   "1.86.0": {
     releasedAt: "2026-09-26T07:50:00+02:00",
     patch: "PR-275-installer-lifecycle-build-info-v1.patch",
