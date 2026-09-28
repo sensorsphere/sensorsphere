@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.91.2";
+export const MODULE_VERSION = "1.91.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.91.3": {
+    releasedAt: "2026-09-28T19:39:00+02:00",
+    patch: "PR-282-device-check-no-slots-filter-and-auto-refresh-v1.patch",
+    changes: [
+      { type: "fixed", description: "Apply the Device Checks No slots filter to the rendered check list" },
+      { type: "added", description: "Detect new frontend builds every 30 seconds and on focus or tab visibility changes" },
+      { type: "added", description: "Auto-reload idle sessions and defer reload with a Reload now notification while a dialog or form field is active" }
+    ]
+  },
   "1.91.2": {
     releasedAt: "2026-09-28T19:31:00+02:00",
     patch: "PR-281-device-check-no-slots-identity-target-fix-v1.patch",

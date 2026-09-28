@@ -700,6 +700,7 @@ export function MonitoringPanel({
       && (!checkTechnologyFilter || device?.technologies.some(item => item.code === checkTechnologyFilter))
       && (!checkNameFilter.trim() || `${check.name} ${check.checkType}`.toLowerCase().includes(checkNameFilter.trim().toLowerCase()))
       && (!checkSlotFilter.trim() || slotText.includes(checkSlotFilter.trim().toLowerCase()))
+      && (!checkNoSlotsFilter || check.assignments.length === 0)
       && (!checkStatusFilter || status === checkStatusFilter);
   }).sort((left, right) => {
     const leftDevice = deviceById.get(left.deviceId);

@@ -18,6 +18,7 @@ import {
   MantineProvider,
   Modal,
   MultiSelect,
+  Notification,
   NavLink,
   NumberInput,
   SegmentedControl,
@@ -669,6 +670,95 @@ function Dashboard() {
       staleTime:
         Infinity
     });
+
+  const loadedFrontendBuildRef =
+    React.useRef<string | null>(null);
+
+  const [frontendUpdateAvailable, setFrontendUpdateAvailable] =
+    React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (
+      frontendBuildQuery.data &&
+      loadedFrontendBuildRef.current == null
+    ) {
+      loadedFrontendBuildRef.current =
+        frontendBuildQuery.data;
+    }
+  }, [frontendBuildQuery.data]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const frontendCanReload = () => {
+      if (document.hidden) return false;
+      if (document.querySelector('[role="dialog"]')) return false;
+
+      const active = document.activeElement as HTMLElement | null;
+      if (!active) return true;
+
+      const tag = active.tagName.toLowerCase();
+      if (["input", "textarea", "select"].includes(tag)) return false;
+      if (active.isContentEditable) return false;
+
+      return true;
+    };
+
+    const checkFrontendBuild = async () => {
+      try {
+        const latest = await getFrontendBuildDate();
+        if (cancelled || !latest) return;
+
+        if (loadedFrontendBuildRef.current == null) {
+          loadedFrontendBuildRef.current = latest;
+          return;
+        }
+
+        if (latest === loadedFrontendBuildRef.current) {
+          return;
+        }
+
+        setFrontendUpdateAvailable(latest);
+
+        if (frontendCanReload()) {
+          window.location.reload();
+        }
+      } catch {
+        // Update detection must never interfere with the running UI.
+      }
+    };
+
+    const interval = window.setInterval(
+      checkFrontendBuild,
+      30_000
+    );
+
+    const onFocus = () => {
+      void checkFrontendBuild();
+    };
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        void checkFrontendBuild();
+      }
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener(
+      "visibilitychange",
+      onVisibilityChange
+    );
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener(
+        "visibilitychange",
+        onVisibilityChange
+      );
+    };
+  }, []);
 
   const moduleVersionsQuery =
     useQuery({
