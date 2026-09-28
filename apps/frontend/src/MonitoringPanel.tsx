@@ -761,11 +761,12 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
 
   return (
     <Stack gap="md" className="monitoring-panel">
-      {view !== "agents" && <SimpleGrid cols={{ base: 2, sm: 3, lg: 6 }}>
+      {view !== "agents" && <SimpleGrid cols={{ base: 2, sm: 4, lg: 7 }}>
         {[
           ["Agents", agents.length, "blue"],
           ["Agents online", onlineAgents, "green"],
           ["Checks", checks.length, "violet"],
+          ["No slots", noSlotChecks, "orange"],
           ["Up", upChecks, "green"],
           ["Down", downChecks, "red"],
           ["Unknown", unknownChecks, "gray"]

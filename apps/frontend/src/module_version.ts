@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.90.0";
+export const MODULE_VERSION = "1.91.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.91.0": {
+    releasedAt: "2026-09-28T13:42:00+02:00",
+    patch: "PR-280-no-slots-cards-v1.patch",
+    changes: [
+      { type: "added", description: "Add No slots summary card to Device Checks" },
+      { type: "added", description: "Add a clickable No slots card to Devices to filter devices without any Monitoring Slot" }
+    ]
+  },
   "1.90.0": {
     releasedAt: "2026-09-28T11:11:26+02:00",
     patch: "PR-279-monitoring-agent-slots-v1.patch",

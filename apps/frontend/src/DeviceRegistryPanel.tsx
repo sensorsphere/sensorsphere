@@ -534,6 +534,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const [typeFilter, setTypeFilter] = usePersistentState<string | null>("device-registry.filter.type", null);
   const [technologyFilter, setTechnologyFilter] = usePersistentState<string | null>("device-registry.filter.technology", null);
   const [healthFilter, setHealthFilter] = usePersistentState<string | null>("device-registry.filter.health", null);
+  const [noSlotsFilter, setNoSlotsFilter] = usePersistentState("device-registry.filter.no-slots", false);
   const [editingDevice, setEditingDevice] = React.useState<DeviceRegistryDevice | null>(null);
   const [deviceModalOpen, setDeviceModalOpen] = React.useState(false);
   const [deleteDeviceTarget, setDeleteDeviceTarget] = React.useState<DeviceRegistryDevice | null>(null);
@@ -913,6 +914,13 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const deviceCheckCount = (deviceId: string): number =>
     (monitoringChecksQuery.data ?? []).filter(check => check.deviceId === deviceId).length;
 
+  const deviceHasMonitoringSlot = (deviceId: string): boolean =>
+    (monitoringChecksQuery.data ?? []).some(check =>
+      check.deviceId === deviceId && check.assignments.length > 0
+    );
+
+  const noSlotDevices = devices.filter(device => !deviceHasMonitoringSlot(device.id)).length;
+
   const filteredDevices = devices.filter(device => {
     const nameNeedle = nameFilter.trim().toLowerCase();
     const addressNeedle = addressFilter.trim().toLowerCase();
@@ -922,7 +930,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       (!classFilter || device.deviceClass === classFilter) &&
       (!typeFilter || device.deviceType === typeFilter) &&
       (!technologyFilter || device.technologies.some(item => item.code === technologyFilter)) &&
-      (!healthFilter || device.health.status === healthFilter);
+      (!healthFilter || device.health.status === healthFilter) &&
+      (!noSlotsFilter || !deviceHasMonitoringSlot(device.id));
   }).sort((left, right) => {
     const leftValue = sortKey === "name" ? left.name
       : sortKey === "address" ? deviceAddress(left)
@@ -1261,17 +1270,32 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         <Tabs.Panel value="devices" pt="md" className="device-registry-devices-panel">
           <Stack gap="sm" className="device-registry-devices-stack">
             <Group justify="flex-end"><Button size="compact-sm" onClick={openCreateDevice}>+ Add device</Button></Group>
-            <SimpleGrid cols={{ base: 2, sm: 3, lg: 6 }} spacing="sm">
+            <SimpleGrid cols={{ base: 2, sm: 4, lg: 7 }} spacing="sm">
               <Card
                 withBorder
                 radius="md"
                 padding="lg"
                 style={{ cursor: "pointer", borderLeft: "4px solid var(--mantine-color-blue-6)" }}
-                onClick={() => setHealthFilter(null)}
+                onClick={() => { setHealthFilter(null); setNoSlotsFilter(false); }}
               >
                 <Badge size="xs" color="blue" variant="light">Total devices</Badge>
                 <Text fw={700} size="xl" c="blue.6">{devices.length}</Text>
                 <Text size="xs" c="dimmed">Registered devices</Text>
+              </Card>
+              <Card
+                withBorder
+                radius="md"
+                padding="lg"
+                style={{
+                  cursor: "pointer",
+                  borderLeft: "4px solid var(--mantine-color-orange-6)",
+                  outline: noSlotsFilter ? "2px solid var(--mantine-color-orange-6)" : undefined
+                }}
+                onClick={() => setNoSlotsFilter(current => !current)}
+              >
+                <Badge size="xs" color="orange" variant="light">No slots</Badge>
+                <Text fw={700} size="xl" c="orange.6">{noSlotDevices}</Text>
+                <Text size="xs" c="dimmed">Devices without a Monitoring Slot</Text>
               </Card>
               {([
                 ["ONLINE", "green", "Healthy devices"],
@@ -1297,7 +1321,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
 
             <Group gap="sm" align="center" wrap="nowrap">
               <ResetFiltersAction
-                active={Boolean(nameFilter.trim() || addressFilter.trim() || classFilter || typeFilter || technologyFilter || healthFilter)}
+                active={Boolean(nameFilter.trim() || addressFilter.trim() || classFilter || typeFilter || technologyFilter || healthFilter || noSlotsFilter)}
                 onReset={() => {
                   setNameFilter("");
                   setAddressFilter("");
@@ -1305,6 +1329,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                   setTypeFilter(null);
                   setTechnologyFilter(null);
                   setHealthFilter(null);
+                  setNoSlotsFilter(false);
                 }}
               />
               <TextInput placeholder="Name" value={nameFilter} onChange={event => setNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(nameFilter.trim()))} rightSection={<FilterClearAction active={Boolean(nameFilter.trim())} onClear={() => setNameFilter("")} />} style={{ flex: 1, minWidth: 180 }} />
