@@ -29,15 +29,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createMonitoringAgent,
   createMonitoringCheck,
+  createMonitoringSlot,
+  bulkAssignMonitoringSlots,
+  deleteMonitoringSlot,
   deleteMonitoringAgent,
   deleteSupervisorManagedAgentAssignment,
   deleteMonitoringCheck,
   getDeviceRegistryDevices,
   getMonitoringAgents,
+  getMonitoringSlots,
   getMonitoringChecks,
   regenerateMonitoringAgentToken,
   checkMonitoringAgentToken,
   updateMonitoringAgent,
+  updateMonitoringSlot,
   updateMonitoringCheck,
   runSupervisorManagedAgentOperation
 } from "./api";
@@ -45,6 +50,7 @@ import type {
   AgentTokenCheckResult,
   CreateMonitoringCheckInput,
   MonitoringAgent,
+  MonitoringSlot,
   MonitoringCheck,
   MonitoringCheckType,
   MonitoringExecutionMode,
@@ -249,7 +255,7 @@ interface CheckFormState {
   failureThreshold: number | string;
   recoveryThreshold: number | string;
   executionMode: MonitoringExecutionMode;
-  agentIds: string[];
+  slotIds: string[];
 }
 
 function emptyCheckForm(): CheckFormState {
@@ -267,7 +273,7 @@ function emptyCheckForm(): CheckFormState {
     failureThreshold: 3,
     recoveryThreshold: 2,
     executionMode: "FAILOVER",
-    agentIds: []
+    slotIds: []
   };
 }
 
@@ -287,7 +293,7 @@ function checkToForm(check: MonitoringCheck): CheckFormState {
     failureThreshold: check.failureThreshold,
     recoveryThreshold: check.recoveryThreshold,
     executionMode: check.executionMode,
-    agentIds: [...check.assignments].sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100)).map(item => item.agentId)
+    slotIds: [...check.assignments].sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100)).map(item => item.slotId)
   };
 }
 
@@ -297,7 +303,7 @@ function numeric(value: number | string, fallback: number): number {
 
 function checkPayload(form: CheckFormState): CreateMonitoringCheckInput {
   if (!form.deviceId) throw new Error("Device is required");
-  if (form.agentIds.length === 0) throw new Error("At least one monitoring agent is required");
+  if (form.slotIds.length === 0) throw new Error("At least one monitoring slot is required");
   return {
     deviceId: form.deviceId,
     name: form.name.trim(),
@@ -312,7 +318,7 @@ function checkPayload(form: CheckFormState): CreateMonitoringCheckInput {
     failureThreshold: numeric(form.failureThreshold, 3),
     recoveryThreshold: numeric(form.recoveryThreshold, 2),
     executionMode: form.executionMode,
-    assignments: form.agentIds.map((agentId, index) => ({ agentId, priority: (index + 1) * 10, enabled: true }))
+    assignments: form.slotIds.map((slotId, index) => ({ slotId, priority: (index + 1) * 10, enabled: true }))
   };
 }
 
@@ -340,6 +346,7 @@ export function MonitoringPanel({
 
   const queryClient = useQueryClient();
   const agentsQuery = useQuery({ queryKey: ["monitoring", "agents"], queryFn: getMonitoringAgents, refetchInterval: 15000 });
+  const slotsQuery = useQuery({ queryKey: ["monitoring", "slots"], queryFn: getMonitoringSlots, refetchInterval: 15000 });
   const versionsQuery = useQuery({ queryKey: ["agent-version-availability"], queryFn: getAgentVersionAvailability, refetchInterval: 300000 });
   const supervisorsQuery = useQuery({ queryKey: ["device-control", "supervisors"], queryFn: getMonitoringSupervisors, refetchInterval: 10000 });
   const checksQuery = useQuery({ queryKey: ["monitoring", "checks"], queryFn: getMonitoringChecks, refetchInterval: 15000 });
@@ -359,8 +366,15 @@ export function MonitoringPanel({
   const [agentDeleteTarget, setAgentDeleteTarget] = React.useState<MonitoringAgent | null>(null);
   const [tokenInfo, setTokenInfo] = React.useState<{ agentName: string; token: string; reinstall?: boolean } | null>(null);
   const [tokenCheckResult, setTokenCheckResult] = React.useState<{ name: string; result: AgentTokenCheckResult } | null>(null);
+  const [slotManagerOpen, setSlotManagerOpen] = React.useState(false);
+  const [newSlotName, setNewSlotName] = React.useState("");
+  const [newSlotDescription, setNewSlotDescription] = React.useState("");
 
   const [checkModalOpen, setCheckModalOpen] = React.useState(false);
+  const [selectedCheckIds, setSelectedCheckIds] = React.useState<string[]>([]);
+  const [bulkSlotsOpen, setBulkSlotsOpen] = React.useState(false);
+  const [bulkSlotMode, setBulkSlotMode] = React.useState<"ADD" | "REMOVE" | "REPLACE">("REPLACE");
+  const [bulkSlotIds, setBulkSlotIds] = React.useState<string[]>([]);
   const [editingCheck, setEditingCheck] = React.useState<MonitoringCheck | null>(null);
   const [checkForm, setCheckForm] = React.useState<CheckFormState>(emptyCheckForm());
   const [checkDeleteTarget, setCheckDeleteTarget] = React.useState<MonitoringCheck | null>(null);
@@ -372,6 +386,7 @@ export function MonitoringPanel({
   const [agentStatusFilter, setAgentStatusFilter] = usePersistentState<string | null>("device-registry.monitoring.agents.filter.status", null);
   const [agentHostFilter, setAgentHostFilter] = usePersistentState("device-registry.monitoring.agents.filter.host", "");
   const [agentLabelsFilter, setAgentLabelsFilter] = usePersistentState("device-registry.monitoring.agents.filter.labels", "");
+  const [agentSlotFilter, setAgentSlotFilter] = usePersistentState<string | null>("device-registry.monitoring.agents.filter.slot", null);
   const [agentSortKey, setAgentSortKey] = usePersistentState<AgentSortKey>("device-registry.monitoring.agents.sort.key", "name");
   const [agentSortDirection, setAgentSortDirection] = usePersistentState<SortDirection>("device-registry.monitoring.agents.sort.direction", "asc");
 
@@ -380,7 +395,7 @@ export function MonitoringPanel({
   const [checkTypeFilter, setCheckTypeFilter] = usePersistentState<string | null>("device-registry.monitoring.checks.filter.type", null);
   const [checkTechnologyFilter, setCheckTechnologyFilter] = usePersistentState<string | null>("device-registry.monitoring.checks.filter.technology", null);
   const [checkNameFilter, setCheckNameFilter] = usePersistentState("device-registry.monitoring.checks.filter.name", "");
-  const [checkAgentFilter, setCheckAgentFilter] = usePersistentState("device-registry.monitoring.checks.filter.agent", "");
+  const [checkSlotFilter, setCheckSlotFilter] = usePersistentState("device-registry.monitoring.checks.filter.slot", "");
   const [checkStatusFilter, setCheckStatusFilter] = usePersistentState<string | null>("device-registry.monitoring.checks.filter.status", null);
   const [checkSortKey, setCheckSortKey] = usePersistentState<CheckSortKey>("device-registry.monitoring.checks.sort.key", "device");
   const [checkSortDirection, setCheckSortDirection] = usePersistentState<SortDirection>("device-registry.monitoring.checks.sort.direction", "asc");
@@ -406,6 +421,7 @@ export function MonitoringPanel({
   const refresh = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["monitoring", "agents"] }),
+      queryClient.invalidateQueries({ queryKey: ["monitoring", "slots"] }),
       queryClient.invalidateQueries({ queryKey: ["monitoring", "checks"] })
     ]);
   };
@@ -501,6 +517,49 @@ export function MonitoringPanel({
     onError: cause => setError(cause instanceof Error ? cause.message : "Unable to delete monitoring agent")
   });
 
+  const createSlotMutation = useMutation({
+    mutationFn: () => createMonitoringSlot({
+      name: newSlotName.trim(),
+      description: newSlotDescription.trim() || null
+    }),
+    onSuccess: async () => {
+      setNewSlotName("");
+      setNewSlotDescription("");
+      await refresh();
+    },
+    onError: cause => setError(cause instanceof Error ? cause.message : "Unable to create monitoring slot")
+  });
+
+  const updateSlotMutation = useMutation({
+    mutationFn: ({ slotId, input }: {
+      slotId: string;
+      input: { name?: string; description?: string | null; enabled?: boolean; agentId?: string | null };
+    }) => updateMonitoringSlot(slotId, input),
+    onSuccess: refresh,
+    onError: cause => setError(cause instanceof Error ? cause.message : "Unable to update monitoring slot")
+  });
+
+  const removeSlotMutation = useMutation({
+    mutationFn: deleteMonitoringSlot,
+    onSuccess: refresh,
+    onError: cause => setError(cause instanceof Error ? cause.message : "Unable to delete monitoring slot")
+  });
+
+  const bulkSlotsMutation = useMutation({
+    mutationFn: () => bulkAssignMonitoringSlots({
+      checkIds: selectedCheckIds,
+      mode: bulkSlotMode,
+      slotIds: bulkSlotIds
+    }),
+    onSuccess: async () => {
+      setBulkSlotsOpen(false);
+      setSelectedCheckIds([]);
+      setBulkSlotIds([]);
+      await refresh();
+    },
+    onError: cause => setError(cause instanceof Error ? cause.message : "Unable to update monitoring slots")
+  });
+
   const regenerateToken = useMutation({
     mutationFn: regenerateMonitoringAgentToken,
     onSuccess: result => setTokenInfo({ agentName: result.agent.name, token: result.token }),
@@ -526,7 +585,7 @@ export function MonitoringPanel({
       if (checkForm.targetMode === "CUSTOM" && checkForm.targetValue.trim().startsWith("{{identity:") && !identityTargetPattern.test(checkForm.targetValue.trim())) {
         throw new Error("Invalid identity target. Expected {{identity:TYPE:LABEL}}");
       }
-      if (checkForm.agentIds.length === 0) throw new Error("At least one monitoring agent is required");
+      if (checkForm.slotIds.length === 0) throw new Error("At least one monitoring slot is required");
       const payload = checkPayload(checkForm);
       return editingCheck ? updateMonitoringCheck(editingCheck.id, payload) : createMonitoringCheck(payload);
     },
@@ -549,6 +608,7 @@ export function MonitoringPanel({
   });
 
   const agents = agentsQuery.data ?? [];
+  const slots = slotsQuery.data ?? [];
   const checks = checksQuery.data ?? [];
   const devices = devicesQuery.data ?? [];
   const deviceById = new Map(devices.map(device => [device.id, device]));
@@ -579,12 +639,13 @@ export function MonitoringPanel({
     return (!agentNameFilter.trim() || agent.name.toLowerCase().includes(agentNameFilter.trim().toLowerCase()))
       && (!agentStatusFilter || status === agentStatusFilter)
       && (!agentHostFilter.trim() || `${agent.hostname ?? ""} ${agent.lastIp ?? ""} ${agent.localIp ?? ""} ${agent.sourceIp ?? ""} ${agent.xForwardedFor ?? ""} ${agent.xRealIp ?? ""}`.toLowerCase().includes(agentHostFilter.trim().toLowerCase()))
-      && (!agentLabelsFilter.trim() || labels.includes(agentLabelsFilter.trim().toLowerCase()));
+      && (!agentLabelsFilter.trim() || labels.includes(agentLabelsFilter.trim().toLowerCase()))
+      && (!agentSlotFilter || (agentSlotFilter === "__UNBOUND__" ? !agent.slotId : agent.slotId === agentSlotFilter));
   }).sort((left, right) => {
     const status = (agent: MonitoringAgent) => !agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE";
     const value = (agent: MonitoringAgent) => agentSortKey === "name" ? agent.name
       : agentSortKey === "status" ? status(agent)
-      : agentSortKey === "checks" ? checks.filter(check => check.assignments.some(item => item.agentId === agent.id)).length
+      : agentSortKey === "checks" ? (agent.slotId ? checks.filter(check => check.assignments.some(item => item.slotId === agent.slotId)).length : 0)
       : agentSortKey === "host" ? `${agent.hostname ?? ""} ${agent.localIp ?? ""} ${agent.sourceIp ?? ""} ${agent.xForwardedFor ?? ""}`
       : agentSortKey === "version" ? agent.version
       : agentSortKey === "lastSeen" ? agent.lastSeenAt
@@ -592,7 +653,7 @@ export function MonitoringPanel({
       : agent.agentLabels.join(",");
     return compareTableValues(value(left), value(right), agentSortDirection);
   });
-  const agentFiltersActive = Boolean(agentNameFilter || agentStatusFilter || agentHostFilter || agentLabelsFilter);
+  const agentFiltersActive = Boolean(agentNameFilter || agentStatusFilter || agentHostFilter || agentLabelsFilter || agentSlotFilter);
 
   const toggleCheckSort = (key: CheckSortKey) => {
     if (checkSortKey === key) setCheckSortDirection(current => current === "asc" ? "desc" : "asc");
@@ -601,13 +662,13 @@ export function MonitoringPanel({
   const filteredChecks = checks.filter(check => {
     const device = deviceById.get(check.deviceId);
     const status = overallCheckStatus(check);
-    const agentText = check.assignments.map(item => item.agentName ?? item.agentId).join(" ").toLowerCase();
+    const slotText = check.assignments.map(item => `${item.slotName} ${item.agentName ?? ""}`).join(" ").toLowerCase();
     return (!checkDeviceFilter.trim() || check.deviceName.toLowerCase().includes(checkDeviceFilter.trim().toLowerCase()))
       && (!checkClassFilter || device?.deviceClass === checkClassFilter)
       && (!checkTypeFilter || device?.deviceType === checkTypeFilter)
       && (!checkTechnologyFilter || device?.technologies.some(item => item.code === checkTechnologyFilter))
       && (!checkNameFilter.trim() || `${check.name} ${check.checkType}`.toLowerCase().includes(checkNameFilter.trim().toLowerCase()))
-      && (!checkAgentFilter.trim() || agentText.includes(checkAgentFilter.trim().toLowerCase()))
+      && (!checkSlotFilter.trim() || slotText.includes(checkSlotFilter.trim().toLowerCase()))
       && (!checkStatusFilter || status === checkStatusFilter);
   }).sort((left, right) => {
     const leftDevice = deviceById.get(left.deviceId);
@@ -618,12 +679,12 @@ export function MonitoringPanel({
       : checkSortKey === "technology" ? device?.technologies.map(item => item.label).join(",")
       : checkSortKey === "check" ? `${check.name} ${check.checkType}`
       : checkSortKey === "target" ? `${check.targetMode} ${check.targetValue ?? ""} ${check.port ?? ""}`
-      : checkSortKey === "agents" ? check.assignments.map(item => item.agentName ?? item.agentId).join(",")
+      : checkSortKey === "agents" ? check.assignments.map(item => item.slotName).join(",")
       : checkSortKey === "mode" ? check.executionMode
       : overallCheckStatus(check);
     return compareTableValues(value(left, leftDevice), value(right, rightDevice), checkSortDirection);
   });
-  const checkFiltersActive = Boolean(checkDeviceFilter || checkClassFilter || checkTypeFilter || checkTechnologyFilter || checkNameFilter || checkAgentFilter || checkStatusFilter);
+  const checkFiltersActive = Boolean(checkDeviceFilter || checkClassFilter || checkTypeFilter || checkTechnologyFilter || checkNameFilter || checkSlotFilter || checkStatusFilter);
 
   const onlineAgents = agents.filter(item => item.online).length;
   const statuses = checks.map(overallCheckStatus);
@@ -727,30 +788,48 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
         <Tabs.Panel value="checks" className="monitoring-tab-panel">
       <Card withBorder className="monitoring-table-card">
                   <Group justify="space-between" mb="sm">
-                    <div><Title order={4}>Device checks</Title><Text size="xs" c="dimmed">PING is the first executable check. TCP/HTTP/HTTPS are already represented by the generic contract for future agents.</Text></div>
-                    <Button size="xs" onClick={openCreateCheck} disabled={agents.length === 0}>+ Add check</Button>
+                    <div><Title order={4}>Device checks</Title><Text size="xs" c="dimmed">Checks are assigned to persistent Monitoring Slots; the physical Monitoring Agent behind a Slot can be replaced without changing the Check.</Text></div>
+                    <Group gap="xs">
+                      <Button size="xs" variant="light" disabled={selectedCheckIds.length === 0} onClick={() => setBulkSlotsOpen(true)}>
+                        Slots for selected ({selectedCheckIds.length})
+                      </Button>
+                      <Button size="xs" onClick={openCreateCheck} disabled={slots.length === 0}>+ Add check</Button>
+                    </Group>
                   </Group>
                   <Group gap="xs" mb="sm" wrap="wrap">
-                    <ResetFiltersAction active={checkFiltersActive} onReset={() => { setCheckDeviceFilter(""); setCheckClassFilter(null); setCheckTypeFilter(null); setCheckTechnologyFilter(null); setCheckNameFilter(""); setCheckAgentFilter(""); setCheckStatusFilter(null); }} />
+                    <ResetFiltersAction active={checkFiltersActive} onReset={() => { setCheckDeviceFilter(""); setCheckClassFilter(null); setCheckTypeFilter(null); setCheckTechnologyFilter(null); setCheckNameFilter(""); setCheckSlotFilter(""); setCheckStatusFilter(null); }} />
                     <TextInput size="xs" placeholder="Device name" value={checkDeviceFilter} onChange={event => setCheckDeviceFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkDeviceFilter.trim()))} rightSection={<FilterClearAction active={Boolean(checkDeviceFilter.trim())} onClear={() => setCheckDeviceFilter("")} />} w={170} />
                     <Select size="xs" clearable searchable placeholder="Class" data={[...new Map(devices.map(device => [device.deviceClass, { value: device.deviceClass, label: device.deviceClassInfo.label }])).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkClassFilter} onChange={setCheckClassFilter} styles={activeFilterStyles(Boolean(checkClassFilter))} w={150} />
                     <Select size="xs" clearable searchable placeholder="Type" data={[...new Map(devices.map(device => [device.deviceType, { value: device.deviceType, label: device.deviceTypeInfo.label }])).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkTypeFilter} onChange={setCheckTypeFilter} styles={activeFilterStyles(Boolean(checkTypeFilter))} w={160} />
                     <Select size="xs" clearable searchable placeholder="Technology" data={[...new Map(devices.flatMap(device => device.technologies.map(item => [item.code, { value:item.code, label:item.label }] as const))).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkTechnologyFilter} onChange={setCheckTechnologyFilter} styles={activeFilterStyles(Boolean(checkTechnologyFilter))} w={170} />
                     <TextInput size="xs" placeholder="Check / type" value={checkNameFilter} onChange={event => setCheckNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkNameFilter.trim()))} rightSection={<FilterClearAction active={Boolean(checkNameFilter.trim())} onClear={() => setCheckNameFilter("")} />} w={160} />
-                    <TextInput size="xs" placeholder="Agent" value={checkAgentFilter} onChange={event => setCheckAgentFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkAgentFilter.trim()))} rightSection={<FilterClearAction active={Boolean(checkAgentFilter.trim())} onClear={() => setCheckAgentFilter("")} />} w={150} />
+                    <TextInput size="xs" placeholder="Slot" value={checkSlotFilter} onChange={event => setCheckSlotFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkSlotFilter.trim()))} rightSection={<FilterClearAction active={Boolean(checkSlotFilter.trim())} onClear={() => setCheckSlotFilter("")} />} w={150} />
                     <Select size="xs" clearable placeholder="Status" data={["UP","DOWN","UNKNOWN"]} value={checkStatusFilter} onChange={setCheckStatusFilter} styles={activeFilterStyles(Boolean(checkStatusFilter))} w={135} />
                     <Text size="xs" c="dimmed">{filteredChecks.length}/{checks.length}</Text>
                   </Group>
                   <div className="monitoring-table-scroll">
                       <Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
                     <Table.Thead><Table.Tr>
+                      <Table.Th style={{ width: 36 }}>
+                        <Checkbox
+                          aria-label="Select all visible checks"
+                          checked={filteredChecks.length > 0 && filteredChecks.every(check => selectedCheckIds.includes(check.id))}
+                          indeterminate={filteredChecks.some(check => selectedCheckIds.includes(check.id)) && !filteredChecks.every(check => selectedCheckIds.includes(check.id))}
+                          onChange={event => {
+                            const visibleIds = filteredChecks.map(check => check.id);
+                            setSelectedCheckIds(current => event.currentTarget.checked
+                              ? [...new Set([...current, ...visibleIds])]
+                              : current.filter(id => !visibleIds.includes(id)));
+                          }}
+                        />
+                      </Table.Th>
                       <SortableTableHeader active={checkSortKey === "device"} direction={checkSortDirection} onClick={() => toggleCheckSort("device")}>Device</SortableTableHeader>
                       <SortableTableHeader active={checkSortKey === "class"} direction={checkSortDirection} onClick={() => toggleCheckSort("class")}>Class</SortableTableHeader>
                       <SortableTableHeader active={checkSortKey === "type"} direction={checkSortDirection} onClick={() => toggleCheckSort("type")}>Type</SortableTableHeader>
                       <SortableTableHeader active={checkSortKey === "technology"} direction={checkSortDirection} onClick={() => toggleCheckSort("technology")}>Technology</SortableTableHeader>
                       <SortableTableHeader active={checkSortKey === "check"} direction={checkSortDirection} onClick={() => toggleCheckSort("check")}>Check</SortableTableHeader>
                       <SortableTableHeader active={checkSortKey === "target"} direction={checkSortDirection} onClick={() => toggleCheckSort("target")}>Target</SortableTableHeader>
-                      <SortableTableHeader active={checkSortKey === "agents"} direction={checkSortDirection} onClick={() => toggleCheckSort("agents")}>Agents</SortableTableHeader>
+                      <SortableTableHeader active={checkSortKey === "agents"} direction={checkSortDirection} onClick={() => toggleCheckSort("agents")}>Slots</SortableTableHeader>
                       <SortableTableHeader active={checkSortKey === "mode"} direction={checkSortDirection} onClick={() => toggleCheckSort("mode")}>Mode</SortableTableHeader>
                       <SortableTableHeader active={checkSortKey === "status"} direction={checkSortDirection} onClick={() => toggleCheckSort("status")}>Status</SortableTableHeader>
                       <Table.Th style={{ width: 116, textAlign: "right" }}>Actions</Table.Th>
@@ -761,6 +840,17 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
                         const target = check.targetMode === "CUSTOM" ? check.targetValue : check.targetMode.replaceAll("_", " ");
                         const device = deviceById.get(check.deviceId);
                         return <Table.Tr key={check.id}>
+                          <Table.Td>
+                            <Checkbox
+                              aria-label={`Select ${check.name}`}
+                              checked={selectedCheckIds.includes(check.id)}
+                              onChange={event => setSelectedCheckIds(current =>
+                                event.currentTarget.checked
+                                  ? [...new Set([...current, check.id])]
+                                  : current.filter(id => id !== check.id)
+                              )}
+                            />
+                          </Table.Td>
                           <Table.Td><Text fw={600} size="sm">{check.deviceName}</Text></Table.Td>
                           <Table.Td>{device ? <Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceClassInfo.icon} color={device.deviceClassInfo.color} /><Text size="sm">{device.deviceClassInfo.label}</Text></Group> : "—"}</Table.Td>
                           <Table.Td>{device ? <Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceTypeInfo.icon} color={device.deviceTypeInfo.color} /><Text size="sm">{device.deviceTypeInfo.label}</Text></Group> : "—"}</Table.Td>
@@ -770,13 +860,27 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
                             const resolvedTarget = resolveCheckTarget(check, device);
                             return <Stack gap={2}><Code>{target ?? "—"}{check.port ? `:${check.port}` : ""}</Code>{resolvedTarget && <Text size="xs" c="dimmed">→ {resolvedTarget}{check.port ? `:${check.port}` : ""}</Text>}</Stack>;
                           })()}</Table.Td>
-                          <Table.Td><Text size="xs">{check.assignments.map(item => item.agentName ?? item.agentId).join(" → ")}</Text></Table.Td>
+                          <Table.Td>
+                            <Group gap={4} wrap="wrap">
+                              {check.assignments.map(item => (
+                                <Badge
+                                  key={item.slotId}
+                                  size="xs"
+                                  variant="light"
+                                  color={item.bound ? "teal" : "orange"}
+                                  title={item.agentName ?? "No Monitoring Agent bound"}
+                                >
+                                  {item.slotName}{item.bound ? "" : " · UNBOUND"}
+                                </Badge>
+                              ))}
+                            </Group>
+                          </Table.Td>
                           <Table.Td><Badge size="sm" variant="light">{check.executionMode}</Badge></Table.Td>
                           <Table.Td><Badge size="sm" color={STATUS_COLORS[status]}>{status}</Badge></Table.Td>
                           <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><EditActionIcon onClick={() => openEditCheck(check)} /><Tooltip label="Copy monitoring check"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring check" onClick={() => openCopyCheck(check)}>⧉</ActionIcon></Tooltip><DeleteActionIcon onClick={() => setCheckDeleteTarget(check)} /></Group></Table.Td>
                         </Table.Tr>;
                       })}
-                      {filteredChecks.length === 0 && <Table.Tr><Table.Td colSpan={10}><Text ta="center" c="dimmed" py="xl">{checks.length === 0 ? "No monitoring checks yet." : "No monitoring checks match the active filters."}</Text></Table.Td></Table.Tr>}
+                      {filteredChecks.length === 0 && <Table.Tr><Table.Td colSpan={11}><Text ta="center" c="dimmed" py="xl">{checks.length === 0 ? "No monitoring checks yet." : "No monitoring checks match the active filters."}</Text></Table.Td></Table.Tr>}
                     </Table.Tbody>
                       </Table>
                   </div>
@@ -787,14 +891,28 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
       <Card withBorder className="monitoring-table-card">
                   <Group justify="space-between" mb="sm">
                     <div><Title order={4}>Monitoring agents</Title><Text size="xs" c="dimmed">Independent pull agents authenticate with a SensorSphere-generated token.</Text></div>
-                    <Group gap="xs"><Button size="xs" variant="light" color="teal" disabled={bulkMonitoringCandidates.length === 0} onClick={() => setBulkUpdateOpen(true)}>Update All ({bulkMonitoringCandidates.length})</Button><Button size="xs" onClick={openCreateAgent}>Add Monitoring Agent</Button></Group>
+                    <Group gap="xs"><Button size="xs" variant="light" color="violet" onClick={() => setSlotManagerOpen(true)}>Manage Slots</Button><Button size="xs" variant="light" color="teal" disabled={bulkMonitoringCandidates.length === 0} onClick={() => setBulkUpdateOpen(true)}>Update All ({bulkMonitoringCandidates.length})</Button><Button size="xs" onClick={openCreateAgent}>Add Monitoring Agent</Button></Group>
                   </Group>
                   <Group gap="xs" mb="sm" wrap="wrap">
-                    <ResetFiltersAction active={agentFiltersActive} onReset={() => { setAgentNameFilter(""); setAgentStatusFilter(null); setAgentHostFilter(""); setAgentLabelsFilter(""); }} />
+                    <ResetFiltersAction active={agentFiltersActive} onReset={() => { setAgentNameFilter(""); setAgentStatusFilter(null); setAgentHostFilter(""); setAgentLabelsFilter(""); setAgentSlotFilter(null); }} />
                     <TextInput size="xs" placeholder="Filter name" value={agentNameFilter} onChange={event => setAgentNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentNameFilter.trim()))} rightSection={<FilterClearAction active={Boolean(agentNameFilter.trim())} onClear={() => setAgentNameFilter("")} />} w={180} />
                     <Select size="xs" clearable placeholder="Status" data={["ONLINE","OFFLINE","DISABLED"]} value={agentStatusFilter} onChange={setAgentStatusFilter} styles={activeFilterStyles(Boolean(agentStatusFilter))} w={140} />
                     <TextInput size="xs" placeholder="Host / IP" value={agentHostFilter} onChange={event => setAgentHostFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentHostFilter.trim()))} rightSection={<FilterClearAction active={Boolean(agentHostFilter.trim())} onClear={() => setAgentHostFilter("")} />} w={180} />
                     <TextInput size="xs" placeholder="Agent labels" value={agentLabelsFilter} onChange={event => setAgentLabelsFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentLabelsFilter.trim()))} rightSection={<FilterClearAction active={Boolean(agentLabelsFilter.trim())} onClear={() => setAgentLabelsFilter("")} />} w={220} />
+                    <Select
+                      size="xs"
+                      clearable
+                      searchable
+                      placeholder="Slot"
+                      data={[
+                        { value: "__UNBOUND__", label: "Unbound / no Slot" },
+                        ...slots.map(slot => ({ value: slot.id, label: slot.name }))
+                      ]}
+                      value={agentSlotFilter}
+                      onChange={setAgentSlotFilter}
+                      styles={activeFilterStyles(Boolean(agentSlotFilter))}
+                      w={180}
+                    />
                     <Text size="xs" c="dimmed">{filteredAgents.length}/{agents.length}</Text>
                   </Group>
                   <div className="monitoring-table-scroll">
@@ -802,6 +920,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
                     <Table.Thead><Table.Tr>
                       <SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader>
                       <SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader>
+                      <Table.Th>Slot</Table.Th>
                       <SortableTableHeader active={agentSortKey === "host"} direction={agentSortDirection} onClick={() => toggleAgentSort("host")}>Reported</SortableTableHeader>
                       <SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>
                       <Table.Th>System</Table.Th>
@@ -817,24 +936,161 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
                         <Table.Tr key={agent.id}>
                           <Table.Td><Text fw={600} size="sm">{agent.name}</Text>{agent.managedBySupervisorName ? <Text size="xs" c="dimmed">Supervisor: {agent.managedBySupervisorName}{agent.managedInstance && agent.managedInstance !== "main" ? ` / ${agent.managedInstance}` : ""}</Text> : <Text size="xs" c="orange">[No supervisor]</Text>}</Table.Td>
                           <Table.Td><Badge size="sm" variant="light" color={agent.online ? "green" : agent.enabled ? "gray" : "red"}>{agent.online ? "ONLINE" : agent.enabled ? "OFFLINE" : "DISABLED"}</Badge></Table.Td>
+                          <Table.Td>{agent.slotName ? <Badge size="sm" variant="light" color="violet">{agent.slotName}</Badge> : <Badge size="sm" variant="light" color="orange">NO SLOT</Badge>}</Table.Td>
                           <Table.Td><AgentReportedCell reportedName={agent.reportedName} hostname={agent.hostname} /></Table.Td>
                           <Table.Td><Text size="sm">{agent.version ?? "—"}</Text>{["UPDATE_REQUESTED", "REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? <><Badge size="xs" variant="light" color="blue">{agent.updateStatus}</Badge><UpdateLifecycleAge status={agent.updateStatus} timestamp={agent.updateStartedAt} />{agent.desiredVersion && <Text size="xs" c="dimmed">Target {agent.desiredVersion}</Text>}</> : <>{agent.updateStatus !== "FAILED" && <AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.monitorAgent} />}{agent.updateStatus === "FAILED" && <><Tooltip label={agent.updateError ?? "Monitoring Agent update failed"}><Badge size="xs" variant="light" color="red">FAILED</Badge></Tooltip><UpdateLifecycleAge status="FAILED" timestamp={agent.updateFinishedAt} label="failed" /></>}{agent.lastSuccessfulUpdateAt && <Text size="xs" c="dimmed" title={agent.lastSuccessfulUpdateAt}>Updated {relativeAge(agent.lastSuccessfulUpdateAt)}</Text>}</>}</Table.Td>
                           <Table.Td><AgentSystemCell os={agent.os} osVersion={agent.osVersion} architecture={agent.architecture} /></Table.Td>
                           <Table.Td><HostNetworkCell networks={agent.hostNetworks.length > 0 ? agent.hostNetworks : agent.managedBySupervisorId ? supervisorById.get(agent.managedBySupervisorId)?.hostNetworks : undefined} /></Table.Td>
                           <Table.Td title={agent.lastSeenAt ?? undefined}>{relativeAge(agent.lastSeenAt)}</Table.Td>
-                          <Table.Td>{(() => { const count = checks.filter(check => check.assignments.some(item => item.agentId === agent.id)).length; return <Text size="sm" fw={700} c={count > 0 ? "green.6" : "dimmed"}>{count}</Text>; })()}</Table.Td>
+                          <Table.Td>{(() => { const count = agent.slotId ? checks.filter(check => check.assignments.some(item => item.slotId === agent.slotId)).length : 0; return <Text size="sm" fw={700} c={count > 0 ? "green.6" : "dimmed"}>{count}</Text>; })()}</Table.Td>
 
                           <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
                           <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end"><Tooltip label={managedRuntimeInstalled(agent) ? "Update Monitoring Agent" : agent.managedBySupervisorId ? "Monitoring Agent runtime is missing; reinstall it from Supervisor Agents" : "No online Supervisor manages this Monitoring Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Monitoring Agent" disabled={!managedRuntimeInstalled(agent)} onClick={() => openMonitoringAgentUpdate(agent)}><AgentUpdateIcon /></ActionIcon></Tooltip><EditActionIcon onClick={() => openEditAgent(agent)} /><Tooltip label="Copy monitoring agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy monitoring agent" onClick={() => openCopyAgent(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check deployed token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check deployed token" onClick={() => checkToken.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerateToken.mutate(agent.id)}>↻</ActionIcon></Tooltip><ReinstallCommandActionIcon onClick={() => reinstallToken.mutate(agent)} loading={reinstallToken.isPending && reinstallToken.variables?.id === agent.id} /><DeleteActionIcon onClick={() => setAgentDeleteTarget(agent)} /></Group></Table.Td>
                         </Table.Tr>
                       ))}
-                      {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={11}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
+                      {filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={12}><Text ta="center" c="dimmed" py="xl">{agents.length === 0 ? "No monitoring agents. Create an agent before assigning checks." : "No monitoring agents match the active filters."}</Text></Table.Td></Table.Tr>}
                     </Table.Tbody>
                       </Table>
                   </div>
                 </Card>
         </Tabs.Panel>
       </Tabs>
+
+      <Modal opened={slotManagerOpen} onClose={() => setSlotManagerOpen(false)} title="Monitoring Slots" size="xl">
+        <Stack gap="md">
+          <Card withBorder>
+            <Stack gap="sm">
+              <Text fw={600}>Create Slot</Text>
+              <Group align="end">
+                <TextInput label="Name" placeholder="LAN" value={newSlotName} onChange={event => setNewSlotName(event.currentTarget.value)} style={{ flex: 1 }} />
+                <TextInput label="Description" placeholder="Optional description" value={newSlotDescription} onChange={event => setNewSlotDescription(event.currentTarget.value)} style={{ flex: 2 }} />
+                <Button loading={createSlotMutation.isPending} disabled={!newSlotName.trim()} onClick={() => createSlotMutation.mutate()}>Create</Button>
+              </Group>
+            </Stack>
+          </Card>
+
+          <Table striped highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Slot</Table.Th>
+                <Table.Th>Monitoring Agent</Table.Th>
+                <Table.Th>Checks</Table.Th>
+                <Table.Th>Status</Table.Th>
+                <Table.Th style={{ textAlign: "right" }}>Actions</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {slots.map(slot => {
+                const checkCount = checks.filter(check => check.assignments.some(item => item.slotId === slot.id)).length;
+                return (
+                  <Table.Tr key={slot.id}>
+                    <Table.Td>
+                      <TextInput
+                        defaultValue={slot.name}
+                        aria-label={`Slot name ${slot.name}`}
+                        onBlur={event => {
+                          const name = event.currentTarget.value.trim();
+                          if (name && name !== slot.name) updateSlotMutation.mutate({ slotId: slot.id, input: { name } });
+                        }}
+                      />
+                    </Table.Td>
+                    <Table.Td>
+                      <Select
+                        clearable
+                        searchable
+                        placeholder="Unbound"
+                        value={slot.agentId}
+                        data={agents.map(agent => ({
+                          value: agent.id,
+                          label: agent.slotId && agent.slotId !== slot.id
+                            ? `${agent.name} · currently ${agent.slotName ?? "bound"}`
+                            : agent.name
+                        })).sort((a, b) => a.label.localeCompare(b.label))}
+                        onChange={agentId => updateSlotMutation.mutate({ slotId: slot.id, input: { agentId: agentId ?? null } })}
+                      />
+                    </Table.Td>
+                    <Table.Td><Text fw={700}>{checkCount}</Text></Table.Td>
+                    <Table.Td>
+                      <Badge color={slot.bound ? "green" : "orange"} variant="light">
+                        {slot.bound ? "BOUND" : "UNBOUND"}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group justify="flex-end">
+                        <Button
+                          size="compact-xs"
+                          variant="light"
+                          color={slot.enabled ? "gray" : "green"}
+                          onClick={() => updateSlotMutation.mutate({ slotId: slot.id, input: { enabled: !slot.enabled } })}
+                        >
+                          {slot.enabled ? "Disable" : "Enable"}
+                        </Button>
+                        <Button
+                          size="compact-xs"
+                          variant="light"
+                          color="red"
+                          disabled={checkCount > 0}
+                          title={checkCount > 0 ? "Remove this Slot from all Checks before deleting it" : "Delete Slot"}
+                          loading={removeSlotMutation.isPending && removeSlotMutation.variables === slot.id}
+                          onClick={() => removeSlotMutation.mutate(slot.id)}
+                        >
+                          Delete
+                        </Button>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+              {slots.length === 0 && (
+                <Table.Tr>
+                  <Table.Td colSpan={5}><Text ta="center" c="dimmed" py="md">No Monitoring Slots.</Text></Table.Td>
+                </Table.Tr>
+              )}
+            </Table.Tbody>
+          </Table>
+        </Stack>
+      </Modal>
+
+      <Modal opened={bulkSlotsOpen} onClose={() => !bulkSlotsMutation.isPending && setBulkSlotsOpen(false)} title="Update Monitoring Slots in bulk" centered size="lg">
+        <Stack>
+          <Text size="sm">{selectedCheckIds.length} Device Check{selectedCheckIds.length === 1 ? "" : "s"} selected.</Text>
+          <Select
+            label="Operation"
+            value={bulkSlotMode}
+            allowDeselect={false}
+            data={[
+              { value: "REPLACE", label: "Replace Slots" },
+              { value: "ADD", label: "Add Slots" },
+              { value: "REMOVE", label: "Remove Slots" }
+            ]}
+            onChange={value => value && setBulkSlotMode(value as "ADD" | "REMOVE" | "REPLACE")}
+          />
+          <MultiSelect
+            label="Slots"
+            searchable
+            data={slots.map(slot => ({
+              value: slot.id,
+              label: slot.bound ? `${slot.name} → ${slot.agentName ?? "agent"}` : `${slot.name} · UNBOUND`
+            })).sort((a, b) => a.label.localeCompare(b.label))}
+            value={bulkSlotIds}
+            onChange={setBulkSlotIds}
+          />
+          <Text size="xs" c="dimmed">
+            Replace overwrites the Slot assignments of every selected Check. Add preserves existing Slots. Remove removes only the selected Slots.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" disabled={bulkSlotsMutation.isPending} onClick={() => setBulkSlotsOpen(false)}>Cancel</Button>
+            <Button
+              color="violet"
+              loading={bulkSlotsMutation.isPending}
+              disabled={selectedCheckIds.length === 0 || bulkSlotIds.length === 0}
+              onClick={() => bulkSlotsMutation.mutate()}
+            >
+              Apply to {selectedCheckIds.length} Check{selectedCheckIds.length === 1 ? "" : "s"}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal opened={bulkUpdateOpen} onClose={() => !bulkMonitoringUpdateMutation.isPending && setBulkUpdateOpen(false)} title="Update all Monitoring Agents" centered>
         <Stack><Text size="sm">Update {bulkMonitoringCandidates.length} Monitoring Agent{bulkMonitoringCandidates.length === 1 ? "" : "s"} to <strong>{latestMonitoringVersion ?? "—"}</strong>?</Text>{bulkMonitoringCandidates.map(({ agent }) => <Text size="sm" key={agent.id}>{agent.name}: {agent.version ?? "—"} → {latestMonitoringVersion}</Text>)}{bulkMonitoringUpdateMutation.isError && <Text size="sm" c="red">{bulkMonitoringUpdateMutation.error instanceof Error ? bulkMonitoringUpdateMutation.error.message : "Unable to update all Monitoring Agents"}</Text>}<Group justify="flex-end"><Button variant="default" disabled={bulkMonitoringUpdateMutation.isPending} onClick={() => setBulkUpdateOpen(false)}>Cancel</Button><Button color="teal" loading={bulkMonitoringUpdateMutation.isPending} disabled={bulkMonitoringCandidates.length === 0} onClick={() => bulkMonitoringUpdateMutation.mutate(bulkMonitoringCandidates)}>Update All</Button></Group></Stack>
@@ -963,9 +1219,9 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
             <NumberInput label="Timeout (seconds)" min={1} value={checkForm.timeoutSeconds} onChange={value => setCheckForm(current => ({ ...current, timeoutSeconds: value }))} />
             <NumberInput label="Failures before DOWN" min={1} value={checkForm.failureThreshold} onChange={value => setCheckForm(current => ({ ...current, failureThreshold: value }))} />
             <NumberInput label="Successes before recovery" min={1} value={checkForm.recoveryThreshold} onChange={value => setCheckForm(current => ({ ...current, recoveryThreshold: value }))} />
-            <Select label="Execution mode" required data={[{ value: "FAILOVER", label: "Failover (first healthy agent)" }, { value: "ALL", label: "All assigned agents" }]} value={checkForm.executionMode} onChange={value => value && setCheckForm(current => ({ ...current, executionMode: value as MonitoringExecutionMode }))} allowDeselect={false} />
+            <Select label="Execution mode" required data={[{ value: "FAILOVER", label: "Failover (first healthy Slot)" }, { value: "ALL", label: "All bound assigned Slots" }]} value={checkForm.executionMode} onChange={value => value && setCheckForm(current => ({ ...current, executionMode: value as MonitoringExecutionMode }))} allowDeselect={false} />
           </SimpleGrid>
-          <MultiSelect label="Monitoring agents" description={checkForm.executionMode === "FAILOVER" ? "Selection order defines failover priority." : "All selected agents execute this check."} required searchable data={agents.filter(agent => agent.enabled).map(agent => ({ value: agent.id, label: agent.name })).sort((a, b) => a.label.localeCompare(b.label))} value={checkForm.agentIds} onChange={value => setCheckForm(current => ({ ...current, agentIds: value }))} />
+          <MultiSelect label="Monitoring slots" description={checkForm.executionMode === "FAILOVER" ? "Selection order defines slot failover priority. Unbound slots remain assigned but cannot execute checks." : "All bound selected slots execute this check."} required searchable data={slots.filter(slot => slot.enabled).map(slot => ({ value: slot.id, label: slot.bound ? `${slot.name} → ${slot.agentName ?? "agent"}` : `${slot.name} · UNBOUND` })).sort((a, b) => a.label.localeCompare(b.label))} value={checkForm.slotIds} onChange={value => setCheckForm(current => ({ ...current, slotIds: value }))} />
           <Checkbox label="Enabled" checked={checkForm.enabled} onChange={event => { const checked = event.currentTarget.checked; setCheckForm(current => ({ ...current, enabled: checked })); }} />
           {checkError && <Text c="red" size="sm">{checkError}</Text>}
           <Group justify="flex-end"><Button variant="light" color="gray" onClick={closeCheckModal}>Cancel</Button><Button loading={saveCheck.isPending} onClick={() => saveCheck.mutate()}>Save</Button></Group>
@@ -973,7 +1229,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
       </Modal>
 
       <Modal opened={agentDeleteTarget !== null} onClose={() => setAgentDeleteTarget(null)} title="Delete monitoring agent" centered>
-        <Stack><Text>Delete monitoring agent <b>{agentDeleteTarget?.name}</b>? Its check assignments and current results will also be removed.{agentDeleteTarget?.managedBySupervisorId ? " Its local installation will first be removed by the associated Supervisor Agent." : ""}</Text><Group justify="flex-end"><Button variant="light" color="gray" onClick={() => setAgentDeleteTarget(null)}>Cancel</Button><Button color="red" variant="light" loading={removeAgent.isPending} onClick={() => agentDeleteTarget && removeAgent.mutate(agentDeleteTarget)}>Delete</Button></Group></Stack>
+        <Stack><Text>Delete monitoring agent <b>{agentDeleteTarget?.name}</b>? Its Monitoring Slot and all Device Check assignments will be preserved. The Slot will become <b>UNBOUND</b> until another Monitoring Agent is assigned.{agentDeleteTarget?.managedBySupervisorId ? " Its local installation will first be removed by the associated Supervisor Agent." : ""}</Text><Group justify="flex-end"><Button variant="light" color="gray" onClick={() => setAgentDeleteTarget(null)}>Cancel</Button><Button color="red" variant="light" loading={removeAgent.isPending} onClick={() => agentDeleteTarget && removeAgent.mutate(agentDeleteTarget)}>Delete</Button></Group></Stack>
       </Modal>
 
       <Modal opened={checkDeleteTarget !== null} onClose={() => setCheckDeleteTarget(null)} title="Delete monitoring check" centered>

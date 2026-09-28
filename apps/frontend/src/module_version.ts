@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.89.0";
+export const MODULE_VERSION = "1.90.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.90.0": {
+    releasedAt: "2026-09-28T11:11:26+02:00",
+    patch: "PR-279-monitoring-agent-slots-v1.patch",
+    changes: [
+      { type: "added", description: "Add Monitoring Slot management with Bound/Unbound status and agent rebinding" },
+      { type: "added", description: "Add bulk Slot assignment for selected Device Checks with Add, Remove and Replace operations" },
+      { type: "changed", description: "Display and configure persistent Slots instead of physical Monitoring Agents on Device Checks" }
+    ]
+  },
   "1.89.0": {
     releasedAt: "2026-09-28T05:28:55+02:00",
     patch: "PR-278-https-oidc-foundation-v1.patch",

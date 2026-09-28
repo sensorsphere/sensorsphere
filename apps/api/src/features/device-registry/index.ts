@@ -410,8 +410,9 @@ async function listDeviceRows(pool: Pool): Promise<DeviceRow[]> {
       LEFT JOIN LATERAL (
         SELECT s.status
         FROM monitoring_check_states s
-        JOIN monitoring_check_agents ca ON ca.check_id = s.check_id AND ca.agent_id = s.agent_id AND ca.enabled = TRUE
-        JOIN monitoring_agents a ON a.id = s.agent_id AND a.enabled = TRUE
+        JOIN monitoring_check_slots cs ON cs.check_id = s.check_id AND cs.slot_id = s.slot_id AND cs.enabled = TRUE
+        JOIN monitoring_agent_slots mas ON mas.id = cs.slot_id AND mas.enabled = TRUE
+        JOIN monitoring_agents a ON a.id = s.agent_id AND a.enabled = TRUE AND mas.agent_id = a.id
         WHERE s.check_id = c.id
         ORDER BY s.last_check_at DESC NULLS LAST, s.updated_at DESC
         LIMIT 1

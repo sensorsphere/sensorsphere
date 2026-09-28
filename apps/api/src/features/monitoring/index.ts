@@ -27,7 +27,7 @@ const agentUpdateSchema = z.object({
 }).strict().refine(value => Object.keys(value).length > 0, "At least one field is required");
 
 const assignmentSchema = z.object({
-  agentId: z.string().uuid(),
+  slotId: z.string().uuid(),
   priority: z.number().int().min(0).max(100000).optional(),
   enabled: z.boolean().optional()
 }).strict();
@@ -58,9 +58,9 @@ const checkBaseSchema = z.object({
   if ((value.checkType === "TCP" || value.checkType === "HTTP" || value.checkType === "HTTPS") && value.port == null) {
     context.addIssue({ code: "custom", message: "Port is required for this check type", path: ["port"] });
   }
-  const ids = value.assignments.map(item => item.agentId);
+  const ids = value.assignments.map(item => item.slotId);
   if (new Set(ids).size !== ids.length) {
-    context.addIssue({ code: "custom", message: "An agent can only be assigned once", path: ["assignments"] });
+    context.addIssue({ code: "custom", message: "A slot can only be assigned once", path: ["assignments"] });
   }
 });
 
@@ -148,6 +148,8 @@ interface AgentRow {
   managed_by_supervisor_id?: string | null;
   managed_by_supervisor_name?: string | null;
   managed_instance?: string | null;
+  slot_id?: string | null;
+  slot_name?: string | null;
 }
 
 interface CheckRow {
@@ -173,13 +175,27 @@ interface CheckRow {
 
 interface AssignmentRow {
   check_id: string;
-  agent_id: string;
-  agent_name: string;
+  slot_id: string;
+  slot_name: string;
+  agent_id: string | null;
+  agent_name: string | null;
   enabled: boolean;
   priority: number;
-  agent_enabled: boolean;
+  slot_enabled: boolean;
+  agent_enabled: boolean | null;
   agent_last_seen_at: Date | null;
-  heartbeat_timeout_seconds: number;
+  heartbeat_timeout_seconds: number | null;
+}
+
+interface SlotRow {
+  id: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  agent_id: string | null;
+  agent_name?: string | null;
+  created_at: Date;
+  updated_at: Date;
 }
 
 function hashToken(token: string): string {
@@ -246,6 +262,8 @@ function agentDto(row: AgentRow) {
     managedBySupervisorId: row.managed_by_supervisor_id ?? null,
     managedBySupervisorName: row.managed_by_supervisor_name ?? null,
     managedInstance: row.managed_instance ?? null,
+    slotId: row.slot_id ?? null,
+    slotName: row.slot_name ?? null,
     online,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString()
@@ -277,13 +295,16 @@ async function loadAssignments(pool: Pool, checkIds: string[]): Promise<Map<stri
   const map = new Map<string, AssignmentRow[]>();
   if (checkIds.length === 0) return map;
   const result = await pool.query<AssignmentRow>(
-    `SELECT ca.check_id, ca.agent_id, a.name AS agent_name, ca.enabled, ca.priority,
-            a.enabled AS agent_enabled, a.last_seen_at AS agent_last_seen_at,
+    `SELECT cs.check_id, cs.slot_id, s.name AS slot_name, s.agent_id,
+            a.name AS agent_name, cs.enabled, cs.priority,
+            s.enabled AS slot_enabled, a.enabled AS agent_enabled,
+            a.last_seen_at AS agent_last_seen_at,
             a.heartbeat_timeout_seconds
-       FROM monitoring_check_agents ca
-       JOIN monitoring_agents a ON a.id = ca.agent_id
-      WHERE ca.check_id = ANY($1::uuid[])
-      ORDER BY ca.check_id, ca.priority, a.name`,
+       FROM monitoring_check_slots cs
+       JOIN monitoring_agent_slots s ON s.id = cs.slot_id
+       LEFT JOIN monitoring_agents a ON a.id = s.agent_id
+      WHERE cs.check_id = ANY($1::uuid[])
+      ORDER BY cs.check_id, cs.priority, s.name`,
     [checkIds]
   );
   for (const row of result.rows) {
@@ -345,6 +366,10 @@ function checkDto(row: CheckRow, assignments: AssignmentRow[], states: Array<Rec
     executionMode: row.execution_mode,
     config: row.config ?? {},
     assignments: assignments.map(item => ({
+      slotId: item.slot_id,
+      slotName: item.slot_name,
+      slotEnabled: item.slot_enabled,
+      bound: item.agent_id != null,
       agentId: item.agent_id,
       agentName: item.agent_name,
       enabled: item.enabled,
@@ -385,31 +410,269 @@ async function resolveTarget(pool: Pool, check: CheckRow): Promise<string | null
 }
 
 async function replaceAssignments(client: PoolClient, checkId: string, assignments: z.infer<typeof assignmentSchema>[]): Promise<string[]> {
-  const old = await client.query<{ agent_id: string }>(`SELECT agent_id FROM monitoring_check_agents WHERE check_id = $1`, [checkId]);
-  await client.query(`DELETE FROM monitoring_check_agents WHERE check_id = $1`, [checkId]);
+  const old = await client.query<{ agent_id: string | null }>(
+    `SELECT s.agent_id FROM monitoring_check_slots cs
+     JOIN monitoring_agent_slots s ON s.id=cs.slot_id
+     WHERE cs.check_id=$1`, [checkId]
+  );
+  await client.query(`DELETE FROM monitoring_check_slots WHERE check_id = $1`, [checkId]);
   for (let index = 0; index < assignments.length; index += 1) {
     const assignment = assignments[index]!;
     await client.query(
-      `INSERT INTO monitoring_check_agents (check_id, agent_id, enabled, priority)
+      `INSERT INTO monitoring_check_slots (check_id, slot_id, enabled, priority)
        VALUES ($1, $2, $3, $4)`,
-      [checkId, assignment.agentId, assignment.enabled ?? true, assignment.priority ?? ((index + 1) * 10)]
+      [checkId, assignment.slotId, assignment.enabled ?? true, assignment.priority ?? ((index + 1) * 10)]
     );
   }
-  return [...old.rows.map(row => row.agent_id), ...assignments.map(item => item.agentId)];
+  const current = await client.query<{ agent_id: string | null }>(
+    `SELECT s.agent_id FROM monitoring_agent_slots s WHERE s.id = ANY($1::uuid[])`,
+    [assignments.map(item => item.slotId)]
+  );
+  return [...old.rows, ...current.rows].map(row => row.agent_id).filter((id): id is string => Boolean(id));
 }
 
 export async function registerMonitoringFeature(app: FastifyInstance, options: MonitoringFeatureOptions): Promise<void> {
   const { pool } = options;
+
+  app.get("/api/v1/monitoring/slots", async () => {
+    const result = await pool.query<SlotRow>(
+      `SELECT s.*, a.name AS agent_name
+       FROM monitoring_agent_slots s
+       LEFT JOIN monitoring_agents a ON a.id=s.agent_id
+       ORDER BY s.name`
+    );
+    return result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      enabled: row.enabled,
+      agentId: row.agent_id,
+      agentName: row.agent_name ?? null,
+      bound: row.agent_id != null,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString()
+    }));
+  });
+
+  app.post("/api/v1/monitoring/slots", async (request, reply) => {
+    const input = z.object({
+      name: z.string().trim().min(1).max(200),
+      description: z.string().trim().max(1000).nullable().optional(),
+      enabled: z.boolean().optional(),
+      agentId: z.string().uuid().nullable().optional()
+    }).strict().parse(request.body);
+
+    try {
+      const result = await pool.query<SlotRow>(
+        `INSERT INTO monitoring_agent_slots (name,description,enabled,agent_id)
+         VALUES ($1,$2,$3,$4)
+         RETURNING *`,
+        [input.name, input.description ?? null, input.enabled ?? true, input.agentId ?? null]
+      );
+      reply.code(201);
+      const row = result.rows[0]!;
+      return {
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        enabled: row.enabled,
+        agentId: row.agent_id,
+        agentName: null,
+        bound: row.agent_id != null,
+        createdAt: row.created_at.toISOString(),
+        updatedAt: row.updated_at.toISOString()
+      };
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505") {
+        return reply.code(409).send({ error: "Slot name or Monitoring Agent is already assigned" });
+      }
+      throw error;
+    }
+  });
+
+  app.patch("/api/v1/monitoring/slots/:id", async (request, reply) => {
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const input = z.object({
+      name: z.string().trim().min(1).max(200).optional(),
+      description: z.string().trim().max(1000).nullable().optional(),
+      enabled: z.boolean().optional(),
+      agentId: z.string().uuid().nullable().optional()
+    }).strict().refine(value => Object.keys(value).length > 0).parse(request.body);
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const current = await client.query<SlotRow>(
+        "SELECT * FROM monitoring_agent_slots WHERE id=$1 FOR UPDATE",
+        [params.id]
+      );
+      if (!current.rows[0]) {
+        await client.query("ROLLBACK");
+        return reply.code(404).send({ error: "Monitoring slot not found" });
+      }
+
+      const beforeAgentId = current.rows[0].agent_id;
+      const nextAgentId = input.agentId !== undefined ? input.agentId : current.rows[0].agent_id;
+
+      if (nextAgentId) {
+        await client.query(
+          `UPDATE monitoring_agent_slots
+           SET agent_id=NULL, updated_at=NOW()
+           WHERE agent_id=$1 AND id<>$2`,
+          [nextAgentId, params.id]
+        );
+      }
+
+      const result = await client.query<SlotRow>(
+        `UPDATE monitoring_agent_slots
+         SET name=$2, description=$3, enabled=$4, agent_id=$5, updated_at=NOW()
+         WHERE id=$1 RETURNING *`,
+        [
+          params.id,
+          input.name ?? current.rows[0].name,
+          input.description !== undefined ? input.description : current.rows[0].description,
+          input.enabled ?? current.rows[0].enabled,
+          nextAgentId
+        ]
+      );
+      const afterAgentId = result.rows[0]!.agent_id;
+      await bumpAgentRevisions(
+        client,
+        [beforeAgentId, afterAgentId].filter((id): id is string => Boolean(id))
+      );
+      await client.query("COMMIT");
+
+      return {
+        id: result.rows[0]!.id,
+        name: result.rows[0]!.name,
+        description: result.rows[0]!.description,
+        enabled: result.rows[0]!.enabled,
+        agentId: result.rows[0]!.agent_id,
+        agentName: null,
+        bound: result.rows[0]!.agent_id != null,
+        createdAt: result.rows[0]!.created_at.toISOString(),
+        updatedAt: result.rows[0]!.updated_at.toISOString()
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      if ((error as { code?: string }).code === "23505") {
+        return reply.code(409).send({ error: "Slot name is already in use" });
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+
+  app.delete("/api/v1/monitoring/slots/:id", async (request, reply) => {
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const count = await pool.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM monitoring_check_slots WHERE slot_id=$1",
+      [params.id]
+    );
+    if (Number(count.rows[0]?.count ?? "0") > 0) {
+      return reply.code(409).send({ error: "Slot is still assigned to monitoring checks" });
+    }
+    const result = await pool.query("DELETE FROM monitoring_agent_slots WHERE id=$1", [params.id]);
+    if (result.rowCount === 0) return reply.code(404).send({ error: "Monitoring slot not found" });
+    return reply.code(204).send();
+  });
+
+  app.post("/api/v1/monitoring/checks/bulk-slots", async (request) => {
+    const input = z.object({
+      checkIds: z.array(z.string().uuid()).min(1).max(1000),
+      mode: z.enum(["ADD", "REMOVE", "REPLACE"]),
+      slotIds: z.array(z.string().uuid()).min(1).max(100)
+    }).strict().parse(request.body);
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const oldAgents = await client.query<{ agent_id: string | null }>(
+        `SELECT DISTINCT s.agent_id
+         FROM monitoring_check_slots cs
+         JOIN monitoring_agent_slots s ON s.id=cs.slot_id
+         WHERE cs.check_id = ANY($1::uuid[])`,
+        [input.checkIds]
+      );
+
+      if (input.mode === "REPLACE") {
+        await client.query(
+          "DELETE FROM monitoring_check_slots WHERE check_id = ANY($1::uuid[])",
+          [input.checkIds]
+        );
+      } else if (input.mode === "REMOVE" && input.slotIds.length > 0) {
+        await client.query(
+          `DELETE FROM monitoring_check_slots
+           WHERE check_id = ANY($1::uuid[]) AND slot_id = ANY($2::uuid[])`,
+          [input.checkIds, input.slotIds]
+        );
+      }
+
+      if (input.mode !== "REMOVE") {
+        for (const checkId of input.checkIds) {
+          const maxPriority = input.mode === "ADD"
+            ? Number((await client.query<{ max_priority: number | null }>(
+                "SELECT MAX(priority) AS max_priority FROM monitoring_check_slots WHERE check_id=$1",
+                [checkId]
+              )).rows[0]?.max_priority ?? 0)
+            : 0;
+
+          for (let index = 0; index < input.slotIds.length; index += 1) {
+            const priority = maxPriority + ((index + 1) * 10);
+            if (input.mode === "ADD") {
+              await client.query(
+                `INSERT INTO monitoring_check_slots (check_id,slot_id,enabled,priority)
+                 VALUES ($1,$2,TRUE,$3)
+                 ON CONFLICT (check_id,slot_id) DO NOTHING`,
+                [checkId, input.slotIds[index], priority]
+              );
+            } else {
+              await client.query(
+                `INSERT INTO monitoring_check_slots (check_id,slot_id,enabled,priority)
+                 VALUES ($1,$2,TRUE,$3)
+                 ON CONFLICT (check_id,slot_id)
+                 DO UPDATE SET enabled=TRUE, priority=EXCLUDED.priority, updated_at=NOW()`,
+                [checkId, input.slotIds[index], priority]
+              );
+            }
+          }
+        }
+      }
+
+      const newAgents = await client.query<{ agent_id: string | null }>(
+        `SELECT DISTINCT s.agent_id
+         FROM monitoring_check_slots cs
+         JOIN monitoring_agent_slots s ON s.id=cs.slot_id
+         WHERE cs.check_id = ANY($1::uuid[])`,
+        [input.checkIds]
+      );
+      const affected = [...oldAgents.rows, ...newAgents.rows]
+        .map(row => row.agent_id)
+        .filter((id): id is string => Boolean(id));
+      await bumpAgentRevisions(client, affected);
+      await client.query("COMMIT");
+      return { updatedChecks: input.checkIds.length };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
 
   app.get("/api/v1/monitoring/agents", async () => {
     const result = await pool.query<AgentRow>(`SELECT a.*,
       sma.id AS managed_association_id,
       sma.supervisor_agent_id AS managed_by_supervisor_id,
       s.name AS managed_by_supervisor_name,
-      sma.instance AS managed_instance
+      sma.instance AS managed_instance,
+      mas.id AS slot_id,
+      mas.name AS slot_name
       FROM monitoring_agents a
       LEFT JOIN supervisor_managed_agents sma ON sma.monitoring_agent_id=a.id
       LEFT JOIN supervisor_agents s ON s.id=sma.supervisor_agent_id
+      LEFT JOIN monitoring_agent_slots mas ON mas.agent_id=a.id
       ORDER BY a.name`);
     return result.rows.map(agentDto);
   });
@@ -417,18 +680,43 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
   app.post("/api/v1/monitoring/agents", async (request, reply) => {
     const input = agentCreateSchema.parse(request.body);
     const token = generateToken();
+    const client = await pool.connect();
     try {
-      const result = await pool.query<AgentRow>(
+      await client.query("BEGIN");
+      const result = await client.query<AgentRow>(
         `INSERT INTO monitoring_agents (name, token_hash, labels, heartbeat_timeout_seconds)
          VALUES ($1, $2, $3::jsonb, $4)
          RETURNING *`,
         [input.name, hashToken(token), JSON.stringify(input.labels ?? {}), input.heartbeatTimeoutSeconds ?? 90]
       );
+      const agent = result.rows[0]!;
+      const rebound = await client.query<SlotRow>(
+        `UPDATE monitoring_agent_slots
+         SET agent_id=$2, updated_at=NOW()
+         WHERE name=$1 AND agent_id IS NULL
+         RETURNING *`,
+        [input.name, agent.id]
+      );
+      const slot = rebound.rows[0] ?? (await client.query<SlotRow>(
+        `INSERT INTO monitoring_agent_slots (name, agent_id)
+         VALUES ($1,$2)
+         RETURNING *`,
+        [input.name, agent.id]
+      )).rows[0]!;
+      await client.query("COMMIT");
       reply.code(201);
-      return { agent: agentDto(result.rows[0]!), token };
+      return {
+        agent: agentDto({ ...agent, slot_id: slot.id, slot_name: slot.name }),
+        token
+      };
     } catch (error) {
-      if ((error as { code?: string }).code === "23505") return reply.code(409).send({ error: `Monitoring Agent '${input.name}' already exists` });
+      await client.query("ROLLBACK");
+      if ((error as { code?: string }).code === "23505") {
+        return reply.code(409).send({ error: `Monitoring Agent '${input.name}' or its slot already exists` });
+      }
       throw error;
+    } finally {
+      client.release();
     }
   });
 
@@ -543,8 +831,11 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
       let affected: string[] = [];
       if (input.assignments) affected = await replaceAssignments(client, params.id, input.assignments);
       else {
-        const assigned = await client.query<{ agent_id: string }>(`SELECT agent_id FROM monitoring_check_agents WHERE check_id=$1`, [params.id]);
-        affected = assigned.rows.map(item => item.agent_id);
+        const assigned = await client.query<{ agent_id: string | null }>(
+        `SELECT s.agent_id FROM monitoring_check_slots cs
+         JOIN monitoring_agent_slots s ON s.id=cs.slot_id
+         WHERE cs.check_id=$1`, [params.id]);
+        affected = assigned.rows.map(item => item.agent_id).filter((id): id is string => Boolean(id));
       }
       await bumpAgentRevisions(client, affected);
       await client.query("COMMIT");
@@ -561,10 +852,13 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      const assigned = await client.query<{ agent_id: string }>(`SELECT agent_id FROM monitoring_check_agents WHERE check_id=$1`, [params.id]);
+      const assigned = await client.query<{ agent_id: string | null }>(
+        `SELECT s.agent_id FROM monitoring_check_slots cs
+         JOIN monitoring_agent_slots s ON s.id=cs.slot_id
+         WHERE cs.check_id=$1`, [params.id]);
       const result = await client.query(`DELETE FROM monitoring_checks WHERE id=$1`, [params.id]);
       if (result.rowCount === 0) { await client.query("ROLLBACK"); return reply.code(404).send({ error: "Monitoring check not found" }); }
-      await bumpAgentRevisions(client, assigned.rows.map(item => item.agent_id));
+      await bumpAgentRevisions(client, assigned.rows.map(item => item.agent_id).filter((id): id is string => Boolean(id)));
       await client.query("COMMIT");
       return reply.code(204).send();
     } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
@@ -631,8 +925,11 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
       `SELECT c.*, d.name AS device_name
          FROM monitoring_checks c
          JOIN device_registry_devices d ON d.id=c.device_id
-         JOIN monitoring_check_agents own ON own.check_id=c.id AND own.agent_id=$1 AND own.enabled=TRUE
+         JOIN monitoring_check_slots own ON own.check_id=c.id AND own.enabled=TRUE
+         JOIN monitoring_agent_slots own_slot ON own_slot.id=own.slot_id
         WHERE c.enabled=TRUE
+          AND own_slot.enabled=TRUE
+          AND own_slot.agent_id=$1
         ORDER BY c.name`,
       [agent.id]
     );
@@ -640,10 +937,19 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
     const checks: Array<Record<string, unknown>> = [];
     const now = Date.now();
     for (const check of result.rows) {
-      const assignments = (assignmentMap.get(check.id) ?? []).filter(item => item.enabled && item.agent_enabled);
+      const assignments = (assignmentMap.get(check.id) ?? []).filter(item =>
+        item.enabled &&
+        item.slot_enabled &&
+        item.agent_id != null &&
+        item.agent_enabled === true
+      );
       let selected = check.execution_mode === "ALL";
       if (check.execution_mode === "FAILOVER") {
-        const active = assignments.find(item => item.agent_last_seen_at != null && now - item.agent_last_seen_at.getTime() <= item.heartbeat_timeout_seconds * 1000);
+        const active = assignments.find(item =>
+          item.agent_last_seen_at != null &&
+          item.heartbeat_timeout_seconds != null &&
+          now - item.agent_last_seen_at.getTime() <= item.heartbeat_timeout_seconds * 1000
+        );
         selected = active?.agent_id === agent.id;
       }
       if (!selected) continue;
@@ -683,11 +989,16 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
       );
       let accepted = 0;
       for (const result of input.results) {
-        const assignment = await client.query<{ failure_threshold: number; recovery_threshold: number }>(
-          `SELECT c.failure_threshold, c.recovery_threshold
-             FROM monitoring_check_agents ca
-             JOIN monitoring_checks c ON c.id=ca.check_id
-            WHERE ca.check_id=$1 AND ca.agent_id=$2 AND ca.enabled=TRUE AND c.enabled=TRUE`,
+        const assignment = await client.query<{ failure_threshold: number; recovery_threshold: number; slot_id: string }>(
+          `SELECT c.failure_threshold, c.recovery_threshold, cs.slot_id
+             FROM monitoring_check_slots cs
+             JOIN monitoring_agent_slots s ON s.id=cs.slot_id
+             JOIN monitoring_checks c ON c.id=cs.check_id
+            WHERE cs.check_id=$1
+              AND s.agent_id=$2
+              AND cs.enabled=TRUE
+              AND s.enabled=TRUE
+              AND c.enabled=TRUE`,
           [result.checkId, agent.id]
         );
         if (assignment.rowCount === 0) continue;
@@ -707,21 +1018,21 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
         const checkedAt = result.finishedAt ?? result.startedAt ?? new Date().toISOString();
         await client.query(
           `INSERT INTO monitoring_check_states
-             (check_id,agent_id,status,latency_ms,message,last_check_at,last_success_at,last_failure_at,consecutive_successes,consecutive_failures)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+             (check_id,agent_id,slot_id,status,latency_ms,message,last_check_at,last_success_at,last_failure_at,consecutive_successes,consecutive_failures)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
            ON CONFLICT (check_id,agent_id) DO UPDATE SET
-             status=EXCLUDED.status,latency_ms=EXCLUDED.latency_ms,message=EXCLUDED.message,last_check_at=EXCLUDED.last_check_at,
+             slot_id=EXCLUDED.slot_id,status=EXCLUDED.status,latency_ms=EXCLUDED.latency_ms,message=EXCLUDED.message,last_check_at=EXCLUDED.last_check_at,
              last_success_at=COALESCE(EXCLUDED.last_success_at,monitoring_check_states.last_success_at),
              last_failure_at=COALESCE(EXCLUDED.last_failure_at,monitoring_check_states.last_failure_at),
              consecutive_successes=EXCLUDED.consecutive_successes,consecutive_failures=EXCLUDED.consecutive_failures,updated_at=NOW()`,
-          [result.checkId, agent.id, nextStatus, result.latencyMs ?? null, result.message ?? null, checkedAt,
+          [result.checkId, agent.id, thresholds.slot_id, nextStatus, result.latencyMs ?? null, result.message ?? null, checkedAt,
            result.status === "UP" ? checkedAt : null, result.status === "DOWN" ? checkedAt : null, successes, failures]
         );
         if (nextStatus !== previousStatus) {
           await client.query(
-            `INSERT INTO monitoring_state_transitions (check_id,agent_id,previous_status,status,message,latency_ms,occurred_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [result.checkId, agent.id, previousStatus, nextStatus, result.message ?? null, result.latencyMs ?? null, checkedAt]
+            `INSERT INTO monitoring_state_transitions (check_id,agent_id,agent_name,slot_id,previous_status,status,message,latency_ms,occurred_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+            [result.checkId, agent.id, agent.name, thresholds.slot_id, previousStatus, nextStatus, result.message ?? null, result.latencyMs ?? null, checkedAt]
           );
         }
         accepted += 1;

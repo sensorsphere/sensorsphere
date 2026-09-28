@@ -1086,6 +1086,8 @@ export interface AgentTechnicalModel {
 export interface MonitoringAgent extends AgentTechnicalModel {
   id: string;
   name: string;
+  slotId: string | null;
+  slotName: string | null;
   enabled: boolean;
   labels: Record<string, string>;
   agentLabels: string[];
@@ -1108,9 +1110,25 @@ export interface MonitoringAgentTokenResponse {
   token: string;
 }
 
+export interface MonitoringSlot {
+  id: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  agentId: string | null;
+  agentName: string | null;
+  bound: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MonitoringCheckAssignment {
-  agentId: string;
-  agentName?: string;
+  slotId: string;
+  slotName: string;
+  slotEnabled: boolean;
+  bound: boolean;
+  agentId: string | null;
+  agentName: string | null;
   enabled?: boolean;
   priority?: number;
 }
@@ -1178,7 +1196,11 @@ export interface CreateMonitoringCheckInput {
   failureThreshold: number;
   recoveryThreshold: number;
   executionMode: MonitoringExecutionMode;
-  assignments: MonitoringCheckAssignment[];
+  assignments: Array<{
+    slotId: string;
+    enabled?: boolean;
+    priority?: number;
+  }>;
   config?: Record<string, unknown>;
 }
 

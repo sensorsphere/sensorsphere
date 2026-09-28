@@ -64,6 +64,7 @@ import type {
   UpdateServiceRegistryServiceInput,
   MonitoringAgent,
   MonitoringAgentTokenResponse,
+  MonitoringSlot,
   MonitoringCheck,
   CreateMonitoringAgentInput,
   UpdateMonitoringAgentInput,
@@ -2117,6 +2118,53 @@ export async function getRealtimeEntities(): Promise<RealtimeEntityRecord[]> {
 
 export async function getMonitoringAgents(): Promise<MonitoringAgent[]> {
   return readJson<MonitoringAgent[]>(await fetch("/api/v1/monitoring/agents"));
+}
+
+export async function getMonitoringSlots(): Promise<MonitoringSlot[]> {
+  return readJson<MonitoringSlot[]>(await fetch("/api/v1/monitoring/slots"));
+}
+
+export async function createMonitoringSlot(input: {
+  name: string;
+  description?: string | null;
+  enabled?: boolean;
+  agentId?: string | null;
+}): Promise<MonitoringSlot> {
+  return readJson<MonitoringSlot>(await fetch("/api/v1/monitoring/slots", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  }));
+}
+
+export async function updateMonitoringSlot(id: string, input: {
+  name?: string;
+  description?: string | null;
+  enabled?: boolean;
+  agentId?: string | null;
+}): Promise<MonitoringSlot> {
+  return readJson<MonitoringSlot>(await fetch(`/api/v1/monitoring/slots/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  }));
+}
+
+export async function deleteMonitoringSlot(id: string): Promise<void> {
+  const response = await fetch(`/api/v1/monitoring/slots/${id}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
+}
+
+export async function bulkAssignMonitoringSlots(input: {
+  checkIds: string[];
+  mode: "ADD" | "REMOVE" | "REPLACE";
+  slotIds: string[];
+}): Promise<{ updatedChecks: number }> {
+  return readJson<{ updatedChecks: number }>(await fetch("/api/v1/monitoring/checks/bulk-slots", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  }));
 }
 
 export async function createMonitoringAgent(input: CreateMonitoringAgentInput): Promise<MonitoringAgentTokenResponse> {

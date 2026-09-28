@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.50.0";
+export const MODULE_VERSION = "1.51.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.51.0": {
+    releasedAt: "2026-09-28T11:11:26+02:00",
+    patch: "PR-279-monitoring-agent-slots-v1.patch",
+    changes: [
+      { type: "added", description: "Introduce persistent Monitoring Slots between Device Checks and physical Monitoring Agents" },
+      { type: "changed", description: "Preserve Device Check assignments when a Monitoring Agent is deleted and allow automatic Slot rebinding on reprovisioning" },
+      { type: "added", description: "Add bulk Add/Remove/Replace Slot assignment API and durable Slot plus physical-agent execution history" }
+    ]
+  },
   "1.50.0": {
     releasedAt: "2026-09-28T05:28:55+02:00",
     patch: "PR-278-https-oidc-foundation-v1.patch",
