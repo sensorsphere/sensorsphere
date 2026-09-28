@@ -50,7 +50,7 @@ To select a published Stack Release explicitly:
 
 ```bash
 ./install.sh install \
-  --stack 2026.09.26.2 \
+  --stack 2026.09.28.1 \
   --install-dir /opt/sensorsphere
 ```
 
@@ -61,13 +61,45 @@ For an offline/local manifest:
 
 ```bash
 ./install.sh install \
-  --manifest ./2026.09.26.2.yaml \
+  --manifest ./2026.09.28.1.yaml \
   --install-dir /opt/sensorsphere
 ```
 
 The installer creates a database password when it creates `.env`, applies the
-Stack Release versions, pulls images, starts the stack, waits for migrations,
-and validates TimescaleDB/API/frontend/nginx health.
+Stack Release versions, validates the authentication policy, pulls images,
+starts the stack, waits for migrations, and validates
+TimescaleDB/API/frontend/nginx health.
+
+### Authentication during installation
+
+SensorSphere is fail-closed outside DEV.
+
+- `SENSORSPHERE_ENVIRONMENT=DEV`: authentication defaults to disabled.
+- any other environment: authentication defaults to enabled and cannot be
+  disabled.
+
+When authentication is enabled, installation requires:
+
+```text
+SENSORSPHERE_PUBLIC_URL=https://<public-host>
+SENSORSPHERE_AUTH_PROVIDERS=google[,microsoft]
+SENSORSPHERE_AUTH_BOOTSTRAP_ADMIN_EMAIL=admin@example.com
+
+SENSORSPHERE_GOOGLE_CLIENT_ID=...
+SENSORSPHERE_GOOGLE_CLIENT_SECRET=...
+
+SENSORSPHERE_MICROSOFT_CLIENT_ID=...
+SENSORSPHERE_MICROSOFT_CLIENT_SECRET=...
+SENSORSPHERE_MICROSOFT_TENANT=common
+```
+
+Only credentials for providers listed in `SENSORSPHERE_AUTH_PROVIDERS` are
+required. The variable is plural; `SENSORSPHERE_AUTH_PROVIDER` is not used.
+
+The installer stops before starting containers when a non-DEV installation
+would otherwise be unauthenticated or when an enabled OIDC provider is
+incomplete. See `docs/auth/OIDC-App-Registration.md` for provider-console
+registration.
 
 ## Update
 

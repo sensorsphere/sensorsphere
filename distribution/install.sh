@@ -56,10 +56,16 @@ apply_environment_overrides() {
     MQTT_PORT \
     SENSORSPHERE_PROJECT_TODOS_ENABLED \
     SENSORSPHERE_AUTH_ENABLED \
-    SENSORSPHERE_AUTH_PROVIDER \
+    SENSORSPHERE_AUTH_DEV_ROLE_SWITCH_ENABLED \
+    SENSORSPHERE_AUTH_DEV_DEFAULT_ROLE \
+    SENSORSPHERE_AUTH_PROVIDERS \
     SENSORSPHERE_AUTH_BOOTSTRAP_ADMIN_EMAIL \
+    SENSORSPHERE_PUBLIC_URL \
     SENSORSPHERE_GOOGLE_CLIENT_ID \
-    SENSORSPHERE_GOOGLE_CLIENT_SECRET; do
+    SENSORSPHERE_GOOGLE_CLIENT_SECRET \
+    SENSORSPHERE_MICROSOFT_CLIENT_ID \
+    SENSORSPHERE_MICROSOFT_CLIENT_SECRET \
+    SENSORSPHERE_MICROSOFT_TENANT; do
     if [[ -n "${!key+x}" ]]; then
       set_env "$INSTALL_DIR/.env" "$key" "${!key}"
     fi
@@ -69,6 +75,84 @@ apply_environment_overrides() {
 get_env() {
   local file="$1" key="$2"
   sed -n "s/^$key=//p" "$file" | tail -1
+}
+
+bool_true() {
+  [[ "${1,,}" =~ ^(1|true|yes|on)$ ]]
+}
+
+configure_and_validate_auth() {
+  local env_name auth_enabled providers public_url bootstrap provider
+  env_name="$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_ENVIRONMENT)"
+  env_name="${env_name:-DEFAULT}"
+  env_name="${env_name^^}"
+
+  auth_enabled="$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_AUTH_ENABLED)"
+  if [[ -z "$auth_enabled" ]]; then
+    if [[ "$env_name" == "DEV" ]]; then
+      auth_enabled="false"
+    else
+      auth_enabled="true"
+    fi
+    set_env "$INSTALL_DIR/.env" SENSORSPHERE_AUTH_ENABLED "$auth_enabled"
+  fi
+
+  if [[ "$env_name" != "DEV" ]] && ! bool_true "$auth_enabled"; then
+    echo "ERROR: authentication cannot be disabled when SENSORSPHERE_ENVIRONMENT=$env_name" >&2
+    echo "Use SENSORSPHERE_ENVIRONMENT=DEV for an explicitly unauthenticated development instance." >&2
+    exit 1
+  fi
+
+  if ! bool_true "$auth_enabled"; then
+    return 0
+  fi
+
+  public_url="$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_PUBLIC_URL)"
+  bootstrap="$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_AUTH_BOOTSTRAP_ADMIN_EMAIL)"
+  providers="$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_AUTH_PROVIDERS)"
+  if [[ -z "$providers" ]]; then
+    providers="google"
+    set_env "$INSTALL_DIR/.env" SENSORSPHERE_AUTH_PROVIDERS "$providers"
+  fi
+
+  [[ "$public_url" =~ ^https://[^/]+(:[0-9]+)?$ ]] || {
+    echo "ERROR: SENSORSPHERE_PUBLIC_URL must be the public HTTPS origin when authentication is enabled (for example https://fit.example.com)." >&2
+    exit 1
+  }
+  [[ -n "$bootstrap" ]] || {
+    echo "ERROR: SENSORSPHERE_AUTH_BOOTSTRAP_ADMIN_EMAIL is required for an auth-enabled installation." >&2
+    exit 1
+  }
+
+  IFS=',' read -r -a auth_providers <<< "$providers"
+  [[ "${#auth_providers[@]}" -gt 0 ]] || {
+    echo "ERROR: SENSORSPHERE_AUTH_PROVIDERS must contain google and/or microsoft." >&2
+    exit 1
+  }
+
+  for provider in "${auth_providers[@]}"; do
+    provider="${provider//[[:space:]]/}"
+    case "$provider" in
+      google)
+        [[ -n "$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_GOOGLE_CLIENT_ID)" &&
+           -n "$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_GOOGLE_CLIENT_SECRET)" ]] || {
+          echo "ERROR: Google is enabled but SENSORSPHERE_GOOGLE_CLIENT_ID / SENSORSPHERE_GOOGLE_CLIENT_SECRET are incomplete." >&2
+          exit 1
+        }
+        ;;
+      microsoft)
+        [[ -n "$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_MICROSOFT_CLIENT_ID)" &&
+           -n "$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_MICROSOFT_CLIENT_SECRET)" ]] || {
+          echo "ERROR: Microsoft is enabled but SENSORSPHERE_MICROSOFT_CLIENT_ID / SENSORSPHERE_MICROSOFT_CLIENT_SECRET are incomplete." >&2
+          exit 1
+        }
+        ;;
+      *)
+        echo "ERROR: unsupported OIDC provider '$provider' in SENSORSPHERE_AUTH_PROVIDERS." >&2
+        exit 1
+        ;;
+    esac
+  done
 }
 
 component_value() {
@@ -120,6 +204,7 @@ prepare_bundle() {
   fi
 
   apply_environment_overrides
+  configure_and_validate_auth
 }
 
 snapshot_bundle() {

@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.53.0";
+export const MODULE_VERSION = "1.54.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.54.0": {
+    releasedAt: "2026-09-28T22:53:01+02:00",
+    patch: "PR-285-fail-closed-auth-installation-v1.patch",
+    changes: [
+      { type: "security", description: "Reject non-DEV API startup when authentication is disabled" },
+      { type: "security", description: "Validate public HTTPS URL and configured OIDC provider credentials before serving an auth-enabled instance" }
+    ]
+  },
   "1.53.0": {
     releasedAt: "2026-09-28T21:46:07+02:00",
     patch: "PR-284-device-agent-slots-and-agent-edit-v1.patch",

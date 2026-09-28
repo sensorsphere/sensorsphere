@@ -12,7 +12,7 @@ A normal installation does **not** require cloning this repository or installing
 - `tar` and `sha256sum`
 - outbound HTTPS access to GitHub Releases and GHCR
 
-The examples below install SensorSphere under `/opt/sensorsphere`, so they use `sudo`.
+The examples below install SensorSphere under the current user's home directory, so they do not require running the whole installer with `sudo`. If you deliberately choose a system directory such as `/opt/sensorsphere`, create/chown that directory first or invoke the required privileged filesystem operation separately.
 
 ## Install
 
@@ -20,17 +20,31 @@ The public bootstrap installer downloads the requested Stack Release, verifies i
 installs the versioned runtime bundle, generates the database password, pulls the container images,
 runs migrations, starts the stack, and performs health checks.
 
-Example for a FIT instance:
+Example for a FIT instance using Google OIDC:
 
 ```bash
-sudo env \
+export SENSORSPHERE_GOOGLE_CLIENT_SECRET='<google-client-secret>'
+
+env \
   SENSORSPHERE_ENVIRONMENT=FIT \
   INSTANCE_NAME="SensorSphere [FIT]" \
   WEB_PORT=8082 \
   MQTT_PORT=1892 \
-  VERSION=2026.09.26.2 \
+  INSTALL_DIR="$HOME/sensorsphere-fit" \
+  VERSION=2026.09.28.1 \
+  SENSORSPHERE_PUBLIC_URL="https://fit.example.com" \
+  SENSORSPHERE_AUTH_PROVIDERS=google \
+  SENSORSPHERE_AUTH_BOOTSTRAP_ADMIN_EMAIL="admin@example.com" \
+  SENSORSPHERE_GOOGLE_CLIENT_ID="<google-client-id>.apps.googleusercontent.com" \
+  SENSORSPHERE_GOOGLE_CLIENT_SECRET="$SENSORSPHERE_GOOGLE_CLIENT_SECRET" \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere/master/scripts/install.sh)"
 ```
+
+For non-DEV environments, authentication is enabled by default and cannot be disabled. A fresh DIT/TEST1/FIT/PROD installation therefore requires a valid public HTTPS URL, a bootstrap admin email, and complete credentials for every provider listed in `SENSORSPHERE_AUTH_PROVIDERS`.
+
+For DEV, authentication defaults to disabled. Set `SENSORSPHERE_AUTH_ENABLED=true` explicitly when testing real OIDC in DEV.
+
+The leading `env` scopes these variables to the installer command only. Do not put a space after an assignment operator; for example use `INSTALL_DIR="$HOME/sensorsphere-fit"`, not `INSTALL_DIR= "$HOME/sensorsphere-fit"`.
 The main installation variables are:
 
 | Variable | Purpose | Default |
@@ -43,6 +57,10 @@ The main installation variables are:
 | `MQTT_PORT` | Host port for MQTT | `1883` |
 | `INSTALL_DIR` | Installation directory | `/opt/sensorsphere` |
 | `SENSORSPHERE_PROJECT_TODOS_ENABLED` | Show the development Project Todos feature | `false` |
+| `SENSORSPHERE_AUTH_ENABLED` | Enable OIDC authentication | `false` in DEV, `true` in non-DEV |
+| `SENSORSPHERE_PUBLIC_URL` | Public HTTPS origin used to build OIDC callbacks | required when auth is enabled |
+| `SENSORSPHERE_AUTH_PROVIDERS` | Comma-separated OIDC providers: `google`, `microsoft` | `google` |
+| `SENSORSPHERE_AUTH_BOOTSTRAP_ADMIN_EMAIL` | Initial protected admin email on a fresh install | required when auth is enabled |
 
 The generated runtime configuration is stored in `/opt/sensorsphere/.env` by default.
 Values not supplied on a later update are preserved.
@@ -56,19 +74,37 @@ bash -c "$(wget -qO- https://raw.githubusercontent.com/sensorsphere/sensorsphere
 
 ### Authentication variables
 
-Auth-enabled SensorSphere releases can also be configured during installation with:
+The installer is fail-closed outside DEV:
+
+- `DEV`: authentication defaults to `false` and may be disabled explicitly.
+- any non-DEV environment, including `DIT`, `TEST1`, `FIT`, and `PROD`: authentication defaults to `true` and `SENSORSPHERE_AUTH_ENABLED=false` is rejected.
+
+When authentication is enabled, the installer requires:
 
 ```text
-SENSORSPHERE_AUTH_ENABLED=true
-SENSORSPHERE_AUTH_PROVIDER=google
+SENSORSPHERE_PUBLIC_URL=https://<public-host>
+SENSORSPHERE_AUTH_PROVIDERS=google,microsoft
 SENSORSPHERE_AUTH_BOOTSTRAP_ADMIN_EMAIL=admin@example.com
+
+# Google, when listed in SENSORSPHERE_AUTH_PROVIDERS
 SENSORSPHERE_GOOGLE_CLIENT_ID=...apps.googleusercontent.com
 SENSORSPHERE_GOOGLE_CLIENT_SECRET=...
+
+# Microsoft, when listed in SENSORSPHERE_AUTH_PROVIDERS
+SENSORSPHERE_MICROSOFT_CLIENT_ID=...
+SENSORSPHERE_MICROSOFT_CLIENT_SECRET=...
+SENSORSPHERE_MICROSOFT_TENANT=common
 ```
 
-Avoid putting long-lived secrets directly in shell history. Export the Google client secret first
-or provide it through your normal secret-management mechanism, then preserve that environment
-variable when invoking the installer.
+`SENSORSPHERE_AUTH_PROVIDERS` is plural. The obsolete singular spelling
+`SENSORSPHERE_AUTH_PROVIDER` is not used.
+
+Avoid putting long-lived secrets directly in shell history. Export provider
+secrets first or inject them through your normal secret-management mechanism,
+then pass the exported variables to the installer.
+
+The complete Google and Microsoft registration walkthrough is in
+[`docs/auth/OIDC-App-Registration.md`](docs/auth/OIDC-App-Registration.md).
 ## Update
 
 Updating uses the **target Stack Release bundle**, so lifecycle files such as `install.sh`,
@@ -76,17 +112,19 @@ Updating uses the **target Stack Release bundle**, so lifecycle files such as `i
 application image versions.
 
 ```bash
-sudo env \
+env \
   ACTION=update \
-  VERSION=2026.09.26.2 \
+  INSTALL_DIR="$HOME/sensorsphere-fit" \
+  VERSION=2026.09.28.1 \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere/master/scripts/install.sh)"
 ```
 
-Before applying an update, SensorSphere stores the previous application state in:
+Before applying an update, SensorSphere stores the previous application state in the selected
+`INSTALL_DIR`, for example:
 
 ```text
-/opt/sensorsphere/.env.previous
-/opt/sensorsphere/.stack-release.previous.yaml
+$HOME/sensorsphere-fit/.env.previous
+$HOME/sensorsphere-fit/.stack-release.previous.yaml
 ```
 
 Running the default `ACTION=install` against an existing installation also detects it and switches
@@ -97,8 +135,9 @@ to update automatically.
 Rollback restores the previously saved application Stack Release:
 
 ```bash
-sudo env \
+env \
   ACTION=rollback \
+  INSTALL_DIR="$HOME/sensorsphere-fit" \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere/master/scripts/install.sh)"
 ```
 Database migrations are **never automatically reversed**. A rollback is accepted only when the
@@ -109,8 +148,9 @@ compatibility; it is intentionally not exposed as the normal bootstrap path.
 ## Status
 
 ```bash
-sudo env \
+env \
   ACTION=status \
+  INSTALL_DIR="$HOME/sensorsphere-fit" \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere/master/scripts/install.sh)"
 ```
 
@@ -122,16 +162,18 @@ The safe remove operation stops and removes SensorSphere containers and networks
 the installation directory, database files, application data and `.env` configuration:
 
 ```bash
-sudo env \
+env \
   ACTION=remove \
+  INSTALL_DIR="$HOME/sensorsphere-fit" \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere/master/scripts/install.sh)"
 ```
 
 To permanently remove the installation directory and its persistent data as well:
 ```bash
-sudo env \
+env \
   ACTION=remove \
   PURGE_DATA=true \
+  INSTALL_DIR="$HOME/sensorsphere-fit" \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere/master/scripts/install.sh)"
 ```
 
@@ -139,16 +181,18 @@ sudo env \
 
 ## Reinstall after a safe remove
 
-Because a normal remove preserves data and configuration, reinstall with the desired Stack Release:
+Because a normal remove preserves data and configuration, reinstall with the desired Stack Release
+and the same `INSTALL_DIR`:
 
 ```bash
-sudo env \
+env \
   SENSORSPHERE_ENVIRONMENT=FIT \
-  VERSION=2026.09.26.2 \
+  INSTALL_DIR="$HOME/sensorsphere-fit" \
+  VERSION=2026.09.28.1 \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere/master/scripts/install.sh)"
 ```
 
-The existing `.env` and persistent data are reused.
+The existing `.env` and persistent data are reused, including OIDC credentials.
 
 ## Advanced and development documentation
 

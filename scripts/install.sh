@@ -40,10 +40,18 @@ Environment variables:
 
 Authentication settings are forwarded when supplied, including:
   SENSORSPHERE_AUTH_ENABLED
-  SENSORSPHERE_AUTH_PROVIDER
+  SENSORSPHERE_AUTH_PROVIDERS
   SENSORSPHERE_AUTH_BOOTSTRAP_ADMIN_EMAIL
+  SENSORSPHERE_PUBLIC_URL
   SENSORSPHERE_GOOGLE_CLIENT_ID
   SENSORSPHERE_GOOGLE_CLIENT_SECRET
+  SENSORSPHERE_MICROSOFT_CLIENT_ID
+  SENSORSPHERE_MICROSOFT_CLIENT_SECRET
+  SENSORSPHERE_MICROSOFT_TENANT
+
+Authentication defaults:
+  DEV                         Authentication may be explicitly disabled
+  non-DEV                     Authentication defaults to enabled and cannot be disabled
 
 Removal:
   ACTION=remove                                 Remove containers/networks, preserve data/config

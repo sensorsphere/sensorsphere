@@ -102,6 +102,25 @@ At minimum, production credentials must never be shared with non-production.
 
 ## SensorSphere environment variables
 
+### Authentication default and fail-closed policy
+
+The installation policy is environment-sensitive:
+
+- `DEV`: authentication defaults to disabled. This preserves the development
+  role-switch workflow. Set `SENSORSPHERE_AUTH_ENABLED=true` explicitly to
+  exercise real OIDC in DEV.
+- every non-DEV environment, including `DIT`, `TEST1`, `FIT`, and
+  `PROD`: authentication defaults to enabled.
+- a non-DEV installation explicitly configured with
+  `SENSORSPHERE_AUTH_ENABLED=false` is rejected.
+- an auth-enabled installation is rejected before the stack starts when the
+  public HTTPS URL, bootstrap-admin email, or credentials for an enabled
+  provider are incomplete.
+
+This is intentionally fail-closed: missing authentication configuration must
+never silently turn a DIT/FIT/PROD installation into an unauthenticated
+application.
+
 Example with both providers enabled:
 
 ~~~dotenv

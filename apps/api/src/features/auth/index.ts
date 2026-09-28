@@ -64,6 +64,62 @@ function authSettings() {
   };
 }
 
+
+function validateAuthStartupConfiguration(): void {
+  const settings = authSettings();
+  const environment = (process.env.SENSORSPHERE_ENVIRONMENT ?? "DEFAULT")
+    .trim()
+    .toUpperCase();
+
+  if (environment !== "DEV" && !settings.enabled) {
+    throw new Error(
+      `Authentication cannot be disabled when SENSORSPHERE_ENVIRONMENT=${environment}`
+    );
+  }
+
+  if (!settings.enabled) {
+    return;
+  }
+
+  const publicUrl =
+    process.env.SENSORSPHERE_PUBLIC_URL?.trim().replace(/\/$/, "") ?? "";
+  if (!/^https:\/\/[^/]+(?::\d+)?$/.test(publicUrl)) {
+    throw new Error(
+      "SENSORSPHERE_PUBLIC_URL must be a public HTTPS origin when authentication is enabled"
+    );
+  }
+
+  if (settings.providers.length === 0) {
+    throw new Error(
+      "SENSORSPHERE_AUTH_PROVIDERS must contain google and/or microsoft"
+    );
+  }
+
+  for (const provider of settings.providers) {
+    if (provider === "google") {
+      const clientId =
+        process.env.SENSORSPHERE_GOOGLE_CLIENT_ID?.trim() ?? "";
+      const clientSecret =
+        process.env.SENSORSPHERE_GOOGLE_CLIENT_SECRET?.trim() ?? "";
+      if (!clientId || !clientSecret) {
+        throw new Error(
+          "Google OIDC is enabled but SENSORSPHERE_GOOGLE_CLIENT_ID / SENSORSPHERE_GOOGLE_CLIENT_SECRET are incomplete"
+        );
+      }
+    } else if (provider === "microsoft") {
+      const clientId =
+        process.env.SENSORSPHERE_MICROSOFT_CLIENT_ID?.trim() ?? "";
+      const clientSecret =
+        process.env.SENSORSPHERE_MICROSOFT_CLIENT_SECRET?.trim() ?? "";
+      if (!clientId || !clientSecret) {
+        throw new Error(
+          "Microsoft OIDC is enabled but SENSORSPHERE_MICROSOFT_CLIENT_ID / SENSORSPHERE_MICROSOFT_CLIENT_SECRET are incomplete"
+        );
+      }
+    }
+  }
+}
+
 function requestRole(request: FastifyRequest): SensorSphereRole | null {
   const settings = authSettings();
   if (!settings.devRoleSwitchEnabled) return null;
@@ -507,6 +563,7 @@ export async function registerAuthFeature(
   deps: { pool: Pool }
 ) {
   const { pool } = deps;
+  validateAuthStartupConfiguration();
   await ensureBootstrapAdmin(pool);
 
   app.get("/api/v1/auth/context", async request => {
