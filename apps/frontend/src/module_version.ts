@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.91.1";
+export const MODULE_VERSION = "1.91.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.91.2": {
+    releasedAt: "2026-09-28T19:31:00+02:00",
+    patch: "PR-281-device-check-no-slots-identity-target-fix-v1.patch",
+    changes: [
+      { type: "added", description: "Add a No slots checkbox filter to Device Checks" },
+      { type: "fixed", description: "Deduplicate symbolic Device identity options to prevent Mantine Select duplicate-value errors" },
+      { type: "changed", description: "Display resolved symbolic identity targets directly and flag stale symbolic references as UNRESOLVED" }
+    ]
+  },
   "1.91.1": {
     releasedAt: "2026-09-28T19:24:00+02:00",
     patch: "PR-280-fix-no-slots-card-v1.patch",

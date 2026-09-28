@@ -223,7 +223,7 @@ function resolveIdentityTarget(target: string | null | undefined, device: { iden
   const identityKey = match[2]!.toLowerCase();
   const identity = device.identities.find(item =>
     item.identityType.toUpperCase() === identityType &&
-    [item.labelCode, item.source, item.label].some(value => value?.trim().toLowerCase() === identityKey)
+    [item.labelCode, item.source].some(value => value?.trim().toLowerCase() === identityKey)
   );
   return identity?.value ?? null;
 }
@@ -396,6 +396,7 @@ export function MonitoringPanel({
   const [checkTechnologyFilter, setCheckTechnologyFilter] = usePersistentState<string | null>("device-registry.monitoring.checks.filter.technology", null);
   const [checkNameFilter, setCheckNameFilter] = usePersistentState("device-registry.monitoring.checks.filter.name", "");
   const [checkSlotFilter, setCheckSlotFilter] = usePersistentState("device-registry.monitoring.checks.filter.slot", "");
+  const [checkNoSlotsFilter, setCheckNoSlotsFilter] = usePersistentState("device-registry.monitoring.checks.filter.no-slots", false);
   const [checkStatusFilter, setCheckStatusFilter] = usePersistentState<string | null>("device-registry.monitoring.checks.filter.status", null);
   const [checkSortKey, setCheckSortKey] = usePersistentState<CheckSortKey>("device-registry.monitoring.checks.sort.key", "device");
   const [checkSortDirection, setCheckSortDirection] = usePersistentState<SortDirection>("device-registry.monitoring.checks.sort.direction", "asc");
@@ -412,11 +413,41 @@ export function MonitoringPanel({
     const key = identity.labelCode?.trim() || identity.source?.trim();
     return key ? `{{identity:${identity.identityType.toUpperCase()}:${key}}}` : identity.value;
   };
-  const identityOptions = compatibleIdentities.map(identity => {
-    const symbolic = identityTargetValue(identity);
-    const label = identity.label ?? identity.labelCode ?? identity.source ?? (identity.isPrimary ? "Primary" : "Unlabelled");
-    return { value: symbolic, label: `${identity.identityType.toUpperCase()} · ${label} · ${identity.value}` };
-  });
+  const identityOptions = React.useMemo(() => {
+    const byValue = new Map<string, { value: string; label: string }>();
+
+    for (const identity of compatibleIdentities) {
+      const symbolic = identityTargetValue(identity);
+      if (byValue.has(symbolic)) continue;
+
+      const label =
+        identity.label ??
+        identity.labelCode ??
+        identity.source ??
+        (identity.isPrimary ? "Primary" : "Unlabelled");
+
+      byValue.set(symbolic, {
+        value: symbolic,
+        label: `${identity.identityType.toUpperCase()} · ${label} · ${identity.value}`
+      });
+    }
+
+    const options = [...byValue.values()];
+
+    if (
+      checkForm.targetMode === "EXISTING_IDENTITY" &&
+      checkForm.targetValue &&
+      identityTargetPattern.test(checkForm.targetValue) &&
+      !byValue.has(checkForm.targetValue)
+    ) {
+      options.unshift({
+        value: checkForm.targetValue,
+        label: `UNRESOLVED · ${checkForm.targetValue}`
+      });
+    }
+
+    return options;
+  }, [compatibleIdentities, checkForm.targetMode, checkForm.targetValue]);
 
   const refresh = async () => {
     await Promise.all([
@@ -684,7 +715,7 @@ export function MonitoringPanel({
       : overallCheckStatus(check);
     return compareTableValues(value(left, leftDevice), value(right, rightDevice), checkSortDirection);
   });
-  const checkFiltersActive = Boolean(checkDeviceFilter || checkClassFilter || checkTypeFilter || checkTechnologyFilter || checkNameFilter || checkSlotFilter || checkStatusFilter);
+  const checkFiltersActive = Boolean(checkDeviceFilter || checkClassFilter || checkTypeFilter || checkTechnologyFilter || checkNameFilter || checkSlotFilter || checkNoSlotsFilter || checkStatusFilter);
 
   const onlineAgents = agents.filter(item => item.online).length;
   const noSlotChecks = checks.filter(check => check.assignments.length === 0).length;
@@ -799,13 +830,19 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
                     </Group>
                   </Group>
                   <Group gap="xs" mb="sm" wrap="wrap">
-                    <ResetFiltersAction active={checkFiltersActive} onReset={() => { setCheckDeviceFilter(""); setCheckClassFilter(null); setCheckTypeFilter(null); setCheckTechnologyFilter(null); setCheckNameFilter(""); setCheckSlotFilter(""); setCheckStatusFilter(null); }} />
+                    <ResetFiltersAction active={checkFiltersActive} onReset={() => { setCheckDeviceFilter(""); setCheckClassFilter(null); setCheckTypeFilter(null); setCheckTechnologyFilter(null); setCheckNameFilter(""); setCheckSlotFilter(""); setCheckNoSlotsFilter(false); setCheckStatusFilter(null); }} />
                     <TextInput size="xs" placeholder="Device name" value={checkDeviceFilter} onChange={event => setCheckDeviceFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkDeviceFilter.trim()))} rightSection={<FilterClearAction active={Boolean(checkDeviceFilter.trim())} onClear={() => setCheckDeviceFilter("")} />} w={170} />
                     <Select size="xs" clearable searchable placeholder="Class" data={[...new Map(devices.map(device => [device.deviceClass, { value: device.deviceClass, label: device.deviceClassInfo.label }])).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkClassFilter} onChange={setCheckClassFilter} styles={activeFilterStyles(Boolean(checkClassFilter))} w={150} />
                     <Select size="xs" clearable searchable placeholder="Type" data={[...new Map(devices.map(device => [device.deviceType, { value: device.deviceType, label: device.deviceTypeInfo.label }])).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkTypeFilter} onChange={setCheckTypeFilter} styles={activeFilterStyles(Boolean(checkTypeFilter))} w={160} />
                     <Select size="xs" clearable searchable placeholder="Technology" data={[...new Map(devices.flatMap(device => device.technologies.map(item => [item.code, { value:item.code, label:item.label }] as const))).values()].sort((a,b)=>a.label.localeCompare(b.label))} value={checkTechnologyFilter} onChange={setCheckTechnologyFilter} styles={activeFilterStyles(Boolean(checkTechnologyFilter))} w={170} />
                     <TextInput size="xs" placeholder="Check / type" value={checkNameFilter} onChange={event => setCheckNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkNameFilter.trim()))} rightSection={<FilterClearAction active={Boolean(checkNameFilter.trim())} onClear={() => setCheckNameFilter("")} />} w={160} />
                     <TextInput size="xs" placeholder="Slot" value={checkSlotFilter} onChange={event => setCheckSlotFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(checkSlotFilter.trim()))} rightSection={<FilterClearAction active={Boolean(checkSlotFilter.trim())} onClear={() => setCheckSlotFilter("")} />} w={150} />
+                    <Checkbox
+                      size="xs"
+                      label="No slots"
+                      checked={checkNoSlotsFilter}
+                      onChange={event => setCheckNoSlotsFilter(event.currentTarget.checked)}
+                    />
                     <Select size="xs" clearable placeholder="Status" data={["UP","DOWN","UNKNOWN"]} value={checkStatusFilter} onChange={setCheckStatusFilter} styles={activeFilterStyles(Boolean(checkStatusFilter))} w={135} />
                     <Text size="xs" c="dimmed">{filteredChecks.length}/{checks.length}</Text>
                   </Group>
@@ -860,7 +897,36 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
                           <Table.Td><Text size="sm">{check.name}</Text><Text size="xs" c="dimmed">{check.checkType} · {check.intervalSeconds}s</Text></Table.Td>
                           <Table.Td>{(() => {
                             const resolvedTarget = resolveCheckTarget(check, device);
-                            return <Stack gap={2}><Code>{target ?? "—"}{check.port ? `:${check.port}` : ""}</Code>{resolvedTarget && <Text size="xs" c="dimmed">→ {resolvedTarget}{check.port ? `:${check.port}` : ""}</Text>}</Stack>;
+                            const symbolicTarget =
+                              check.targetMode === "CUSTOM" &&
+                              identityTargetPattern.test(check.targetValue ?? "");
+
+                            if (symbolicTarget && !resolvedTarget) {
+                              return (
+                                <Stack gap={2}>
+                                  <Badge size="xs" color="red" variant="light">UNRESOLVED</Badge>
+                                  <Code>{check.targetValue ?? "—"}</Code>
+                                </Stack>
+                              );
+                            }
+
+                            if (symbolicTarget && resolvedTarget) {
+                              return (
+                                <Stack gap={2}>
+                                  <Code>{resolvedTarget}{check.port ? `:${check.port}` : ""}</Code>
+                                  <Text size="xs" c="dimmed">{check.targetValue}</Text>
+                                </Stack>
+                              );
+                            }
+
+                            return (
+                              <Stack gap={2}>
+                                <Code>{target ?? "—"}{check.port ? `:${check.port}` : ""}</Code>
+                                {resolvedTarget && resolvedTarget !== target && (
+                                  <Text size="xs" c="dimmed">→ {resolvedTarget}{check.port ? `:${check.port}` : ""}</Text>
+                                )}
+                              </Stack>
+                            );
                           })()}</Table.Td>
                           <Table.Td>
                             <Group gap={4} wrap="wrap">
