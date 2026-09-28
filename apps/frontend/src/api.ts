@@ -71,6 +71,7 @@ import type {
   CreateMonitoringCheckInput,
   UpdateMonitoringCheckInput,
   DeviceAgent,
+  DeviceAgentSlot,
   DeviceAgentTokenResponse, ManagedAgentOperation, ManagedAgentOperationInput, AgentTokenCheckResult,
   CreateDeviceAgentInput,
   UpdateDeviceAgentInput,
@@ -1897,6 +1898,41 @@ export async function deleteServiceRegistryService(id:string):Promise<void>{ con
 
 export async function getDeviceAgents(): Promise<DeviceAgent[]> {
   return readJson<DeviceAgent[]>(await fetch("/api/v1/device-control/agents"));
+}
+
+export async function getDeviceAgentSlots(): Promise<DeviceAgentSlot[]> {
+  return readJson<DeviceAgentSlot[]>(await fetch("/api/v1/device-control/slots"));
+}
+
+export async function createDeviceAgentSlot(input: {
+  name: string;
+  description?: string | null;
+  enabled?: boolean;
+  agentId?: string | null;
+}): Promise<DeviceAgentSlot> {
+  return readJson<DeviceAgentSlot>(await fetch("/api/v1/device-control/slots", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  }));
+}
+
+export async function updateDeviceAgentSlot(id: string, input: {
+  name?: string;
+  description?: string | null;
+  enabled?: boolean;
+  agentId?: string | null;
+}): Promise<DeviceAgentSlot> {
+  return readJson<DeviceAgentSlot>(await fetch(`/api/v1/device-control/slots/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  }));
+}
+
+export async function deleteDeviceAgentSlot(id: string): Promise<void> {
+  const response = await fetch(`/api/v1/device-control/slots/${id}`, { method: "DELETE" });
+  if (!response.ok) await readJson<unknown>(response);
 }
 
 export async function createDeviceAgent(input: CreateDeviceAgentInput): Promise<DeviceAgentTokenResponse> {

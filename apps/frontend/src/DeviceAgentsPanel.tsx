@@ -1,10 +1,10 @@
 import React from "react";
 import { ActionIcon, Badge, Button, Card, Checkbox, Code, Group, Modal, Notification, NumberInput, Select, Stack, Table, Text, Textarea, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createDeviceAgent, deleteDeviceAgent, deleteSupervisorManagedAgentAssignment, getDeviceAgents, getDeviceDiscovery, getDiscoveredDeviceAction, regenerateDeviceAgentToken, checkDeviceAgentToken, requestDeviceAgentUpdate, requestSupervisorAgentUpdate, runManagedAgentOperation, runSupervisorManagedAgentOperation, startDeviceDiscovery, startDiscoveredDeviceAction, updateDeviceAgent, getDeviceAgentProxmoxConfig, saveDeviceAgentProxmoxConfig, deleteDeviceAgentProxmoxConfig, type ProxmoxEndpointConfigDto } from "./api";
+import { createDeviceAgent, createDeviceAgentSlot, deleteDeviceAgent, deleteSupervisorManagedAgentAssignment, getDeviceAgents, getDeviceAgentSlots, getDeviceDiscovery, getDiscoveredDeviceAction, regenerateDeviceAgentToken, checkDeviceAgentToken, requestDeviceAgentUpdate, requestSupervisorAgentUpdate, runManagedAgentOperation, runSupervisorManagedAgentOperation, startDeviceDiscovery, startDiscoveredDeviceAction, updateDeviceAgent, updateDeviceAgentSlot, getDeviceAgentProxmoxConfig, saveDeviceAgentProxmoxConfig, deleteDeviceAgentProxmoxConfig, type ProxmoxEndpointConfigDto } from "./api";
 import { ResolvedIconGlyph, resolveProviderIcon } from "./ResolvedDeviceIcon";
 import { DeviceGlyph } from "./DeviceGlyph";
-import type { AgentTokenCheckResult, DeviceAgent, DeviceDiscovery, DeviceRegistryDevice, DiscoveredDeviceAction, ManagedAgentStatus } from "./types";
+import type { AgentTokenCheckResult, DeviceAgent, DeviceAgentSlot, DeviceDiscovery, DeviceRegistryDevice, DiscoveredDeviceAction, ManagedAgentStatus } from "./types";
 import { DeleteActionIcon, EditActionIcon, ReinstallCommandActionIcon } from "./TableActionIcons";
 import { AgentVersionFreshnessBadge, getAgentVersionAvailability, UpdateLifecycleAge } from "./AgentVersionAvailability";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
@@ -281,6 +281,7 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
   }, []);
   const queryClient = useQueryClient();
   const agentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
+  const slotsQuery = useQuery({ queryKey: ["device-control", "slots"], queryFn: getDeviceAgentSlots, refetchInterval: 10000 });
   const versionsQuery = useQuery({ queryKey: ["agent-version-availability"], queryFn: getAgentVersionAvailability, refetchInterval: 300000 });
   const supervisorsQuery = useQuery({ queryKey: ["device-control", "supervisors"], queryFn: getAutonomousSupervisors, refetchInterval: 10000 });
   const [opened, setOpened] = React.useState(false);
@@ -292,6 +293,9 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
   const [proxmoxTestResult, setProxmoxTestResult] = React.useState<string | null>(null);
   const [editing, setEditing] = React.useState<DeviceAgent | null>(null);
   const [form, setForm] = React.useState<AgentFormState>(emptyForm());
+  const [slotMode, setSlotMode] = React.useState<"current" | "existing" | "new">("current");
+  const [slotId, setSlotId] = React.useState<string | null>(null);
+  const [slotName, setSlotName] = React.useState("");
   const [deleteTarget, setDeleteTarget] = React.useState<DeviceAgent | null>(null);
   const [tokenInfo, setTokenInfo] = React.useState<{ name: string; token: string; reinstall?: boolean } | null>(null);
   const [tokenCheckResult, setTokenCheckResult] = React.useState<{ name: string; result: AgentTokenCheckResult } | null>(null);
@@ -323,14 +327,55 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
   const [agentSortKey, setAgentSortKey] = usePersistentState<DeviceAgentSortKey>("device-control.agents.sort.key", "name");
   const [agentSortDirection, setAgentSortDirection] = usePersistentState<SortDirection>("device-control.agents.sort.direction", "asc");
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["device-control", "agents"] });
+  const refresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["device-control", "agents"] }),
+      queryClient.invalidateQueries({ queryKey: ["device-control", "slots"] }),
+      queryClient.invalidateQueries({ queryKey: ["device-registry", "devices"] })
+    ]);
+  };
   const save = useMutation({
-    mutationFn: async () => editing
-      ? updateDeviceAgent(editing.id, { name: form.name.trim(), enabled: form.enabled, labels: parseLabels(form.labelsText), heartbeatTimeoutSeconds: form.heartbeatTimeoutSeconds })
-      : createDeviceAgent({ name: form.name.trim(), labels: parseLabels(form.labelsText), heartbeatTimeoutSeconds: form.heartbeatTimeoutSeconds }),
+    mutationFn: async () => {
+      if (editing) {
+        const updated = await updateDeviceAgent(editing.id, {
+          name: form.name.trim(),
+          enabled: form.enabled,
+          labels: parseLabels(form.labelsText),
+          heartbeatTimeoutSeconds: form.heartbeatTimeoutSeconds
+        });
+
+        if (slotMode === "current" && editing.slotId) {
+          if (slotName.trim() && slotName.trim() !== editing.slotName) {
+            await updateDeviceAgentSlot(editing.slotId, { name: slotName.trim() });
+          }
+        } else if (slotMode === "existing" && slotId) {
+          await updateDeviceAgentSlot(slotId, {
+            ...(slotName.trim() ? { name: slotName.trim() } : {}),
+            agentId: editing.id
+          });
+        } else if (slotMode === "new" && slotName.trim()) {
+          const createdSlot = await createDeviceAgentSlot({ name: slotName.trim() });
+          await updateDeviceAgentSlot(createdSlot.id, { agentId: editing.id });
+        }
+
+        return updated;
+      }
+
+      return createDeviceAgent({
+        name: form.name.trim(),
+        labels: parseLabels(form.labelsText),
+        heartbeatTimeoutSeconds: form.heartbeatTimeoutSeconds
+      });
+    },
     onSuccess: async result => {
       if (!editing && "token" in result) setTokenInfo({ name: result.agent.name, token: result.token });
-      setOpened(false); setEditing(null); setForm(emptyForm()); await refresh();
+      setOpened(false);
+      setEditing(null);
+      setForm(emptyForm());
+      setSlotMode("current");
+      setSlotId(null);
+      setSlotName("");
+      await refresh();
     }
   });
   const remove = useMutation({
@@ -463,9 +508,30 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
     powerMutation.reset();
   }, [discoveredActionQuery.data?.status, discoveredActionQuery.data?.commandId]);
 
-  const openCreate = () => { setEditing(null); setForm(emptyForm()); setOpened(true); };
-  const openEdit = (agent: DeviceAgent) => { setEditing(agent); setForm({ name: agent.name, enabled: agent.enabled, labelsText: labelsText(agent), heartbeatTimeoutSeconds: agent.heartbeatTimeoutSeconds }); setOpened(true); };
-  const openCopy = (agent: DeviceAgent) => { setEditing(null); setForm({ name: `${agent.name} (copy)`, enabled: true, labelsText: labelsText(agent), heartbeatTimeoutSeconds: agent.heartbeatTimeoutSeconds }); setOpened(true); };
+  const openCreate = () => {
+    setEditing(null);
+    setForm(emptyForm());
+    setSlotMode("current");
+    setSlotId(null);
+    setSlotName("");
+    setOpened(true);
+  };
+  const openEdit = (agent: DeviceAgent) => {
+    setEditing(agent);
+    setForm({ name: agent.name, enabled: agent.enabled, labelsText: labelsText(agent), heartbeatTimeoutSeconds: agent.heartbeatTimeoutSeconds });
+    setSlotMode("current");
+    setSlotId(agent.slotId);
+    setSlotName(agent.slotName ?? "");
+    setOpened(true);
+  };
+  const openCopy = (agent: DeviceAgent) => {
+    setEditing(null);
+    setForm({ name: `${agent.name} (copy)`, enabled: true, labelsText: labelsText(agent), heartbeatTimeoutSeconds: agent.heartbeatTimeoutSeconds });
+    setSlotMode("current");
+    setSlotId(null);
+    setSlotName("");
+    setOpened(true);
+  };
   const openAgentUpdate = (agent: DeviceAgent) => {
     setUpdateTarget(agent);
     setUpdateVersion(agent.desiredVersion ?? versionsQuery.data?.agents.deviceAgent.latestVersion ?? agent.version ?? "");
@@ -702,10 +768,11 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
         <Text size="xs" c="dimmed">{filteredAgents.length}/{allAgents.length}</Text>
       </Group>
       <div className="monitoring-table-scroll"><Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
-        <Table.Thead><Table.Tr><SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader><SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader><SortableTableHeader active={agentSortKey === "reported"} direction={agentSortDirection} onClick={() => toggleAgentSort("reported")}>Reported</SortableTableHeader><SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>{showSupervisorControls && <Table.Th>Supervisor</Table.Th>}<SortableTableHeader active={agentSortKey === "system"} direction={agentSortDirection} onClick={() => toggleAgentSort("system")}>System</SortableTableHeader><Table.Th>Host Network</Table.Th><SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last Seen</SortableTableHeader><SortableTableHeader active={agentSortKey === "capabilities"} direction={agentSortDirection} onClick={() => toggleAgentSort("capabilities")}>Capabilities</SortableTableHeader><SortableTableHeader active={agentSortKey === "agentLabels"} direction={agentSortDirection} onClick={() => toggleAgentSort("agentLabels")}>Agent Labels</SortableTableHeader><Table.Th style={{ width: showSupervisorControls ? 202 : 160, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
+        <Table.Thead><Table.Tr><SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader><SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader><Table.Th>Slot</Table.Th><SortableTableHeader active={agentSortKey === "reported"} direction={agentSortDirection} onClick={() => toggleAgentSort("reported")}>Reported</SortableTableHeader><SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>{showSupervisorControls && <Table.Th>Supervisor</Table.Th>}<SortableTableHeader active={agentSortKey === "system"} direction={agentSortDirection} onClick={() => toggleAgentSort("system")}>System</SortableTableHeader><Table.Th>Host Network</Table.Th><SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last Seen</SortableTableHeader><SortableTableHeader active={agentSortKey === "capabilities"} direction={agentSortDirection} onClick={() => toggleAgentSort("capabilities")}>Capabilities</SortableTableHeader><SortableTableHeader active={agentSortKey === "agentLabels"} direction={agentSortDirection} onClick={() => toggleAgentSort("agentLabels")}>Agent Labels</SortableTableHeader><Table.Th style={{ width: showSupervisorControls ? 202 : 160, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
         <Table.Tbody>{filteredAgents.map(agent => <Table.Tr key={agent.id}>
           <Table.Td><Text size="sm" fw={600}>{agent.name}</Text>{agent.managedBySupervisorName ? <Text size="xs" c="dimmed">Supervisor: {agent.managedBySupervisorName}{agent.managedInstance && agent.managedInstance !== "main" ? ` / ${agent.managedInstance}` : ""}</Text> : <Text size="xs" c="orange">[No supervisor]</Text>}</Table.Td>
           <Table.Td><Badge color={agent.online ? "green" : agent.enabled ? "gray" : "red"} variant="light">{agent.online ? "ONLINE" : agent.enabled ? "OFFLINE" : "DISABLED"}</Badge></Table.Td>
+          <Table.Td>{agent.slotName ? <Badge size="sm" variant="light" color="violet">{agent.slotName}</Badge> : <Badge size="sm" variant="light" color="orange">UNBOUND</Badge>}</Table.Td>
           <Table.Td><AgentReportedCell reportedName={agent.reportedName} hostname={agent.hostname} /></Table.Td>
           <Table.Td><Text size="sm">{agent.version ?? "—"}</Text>{ACTIVE_UPDATE_STATES.includes(agent.updateStatus) ? <><Badge size="xs" variant="light" color="blue">{agent.updateStatus}</Badge><UpdateLifecycleAge status={agent.updateStatus} timestamp={agent.updateStatus === "UPDATE_REQUESTED" || agent.updateStatus === "REQUESTED" ? agent.updateRequestedAt ?? agent.updateStartedAt : agent.updateStartedAt ?? agent.updateRequestedAt} />{agent.desiredVersion && <Text size="xs" c="dimmed">Target {agent.desiredVersion}</Text>}</> : <>{agent.updateStatus !== "FAILED" && <AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents.deviceAgent} />}{agent.updateStatus === "FAILED" && <><Tooltip label={agent.updateError ?? "Device Agent update failed"}><Badge size="xs" variant="light" color="red">FAILED</Badge></Tooltip><UpdateLifecycleAge status="FAILED" timestamp={agent.updateFinishedAt} label="failed" /></>}{agent.lastSuccessfulUpdateAt && <Text size="xs" c="dimmed" title={agent.lastSuccessfulUpdateAt}>Updated {updateAge(agent.lastSuccessfulUpdateAt)}</Text>}</>}</Table.Td>
           {showSupervisorControls && <Table.Td><Text size="sm">{agent.supervisorVersion ?? "—"}</Text><Tooltip label={agent.supervisorUpdateError ?? (agent.supervisorAvailable ? `Supervisor ${agent.supervisorContainerState ?? "available"}` : "Supervisor Agent unavailable")}><Badge size="xs" variant="light" color={!agent.supervisorAvailable ? "gray" : agent.supervisorUpdateStatus === "FAILED" ? "red" : agent.supervisorUpdateStatus === "UPDATED" ? "green" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus) ? "blue" : agent.supervisorSelfUpdateSupported ? "teal" : "gray"}>{agent.supervisorUpdateStatus === "IDLE" ? (agent.supervisorSelfUpdateSupported ? "READY" : agent.supervisorAvailable ? "NO SELF-UPDATE" : "OFFLINE") : agent.supervisorUpdateStatus}</Badge></Tooltip>{agent.supervisorDesiredVersion && agent.supervisorDesiredVersion !== agent.supervisorVersion && agent.supervisorUpdateStatus !== "UPDATED" && <Text size="xs" c="dimmed">Target {agent.supervisorDesiredVersion}</Text>}</Table.Td>}
@@ -715,7 +782,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
 
           <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
           <Table.Td><Group gap={10} wrap="nowrap" justify="flex-end"><Tooltip label={agent.managedBySupervisorId ? "Configure Proxmox" : "Proxmox configuration requires a Supervisor-managed Device Agent"}><ActionIcon size="sm" variant="light" color="orange" aria-label="Configure Proxmox" disabled={!agent.managedBySupervisorId} onClick={() => openProxmoxConfig(agent)}><ProxmoxConfigIcon /></ActionIcon></Tooltip><Tooltip label={agent.online ? "Discover devices" : "Device Agent must be online to discover"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Discover devices" disabled={!agent.online || !agent.capabilities.some(capability => capability.discovery)} onClick={() => openDiscovery(agent)}><RadarIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online to update" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? "An update is already in progress" : "Update Device Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Device Agent" disabled={!agent.online || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => openAgentUpdate(agent)}><AgentUpdateIcon size={16} /></ActionIcon></Tooltip>{showSupervisorControls && <><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : !agent.supervisorSelfUpdateSupported ? "Supervisor Agent does not support self-update" : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus) ? "Supervisor update already in progress" : "Update Supervisor Agent"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.supervisorAvailable || !agent.supervisorSelfUpdateSupported || ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.supervisorUpdateStatus)} onClick={() => openSupervisorUpdate(agent)}><SupervisorUpdateIcon size={16} /></ActionIcon></Tooltip><Tooltip label={!agent.online ? "Device Agent must be online" : !agent.supervisorAvailable ? "Supervisor Agent is unavailable" : "Managed agents"}><ActionIcon size="sm" variant="light" color="indigo" aria-label="Managed agents" disabled={!agent.online || !agent.supervisorAvailable} onClick={() => openManagedAgents(agent)}>M</ActionIcon></Tooltip></>}<Group gap={4} wrap="nowrap"><EditActionIcon onClick={() => openEdit(agent)} /><Tooltip label="Copy device agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy device agent" onClick={() => openCopy(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check deployed token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check deployed token" onClick={() => checkToken.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerate.mutate(agent)}>↻</ActionIcon></Tooltip><ReinstallCommandActionIcon onClick={() => reinstall.mutate(agent)} loading={reinstall.isPending && reinstall.variables?.id === agent.id} /><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Group></Table.Td>
-        </Table.Tr>)}{filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={showSupervisorControls ? 11 : 10}><Text ta="center" c="dimmed" py="xl">No Device Agents yet.</Text></Table.Td></Table.Tr>}</Table.Tbody>
+        </Table.Tr>)}{filteredAgents.length === 0 && <Table.Tr><Table.Td colSpan={showSupervisorControls ? 12 : 11}><Text ta="center" c="dimmed" py="xl">No Device Agents yet.</Text></Table.Td></Table.Tr>}</Table.Tbody>
       </Table></div>
     </Card>
 
@@ -744,6 +811,58 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
       <Stack><TextInput data-autofocus label="Name" required value={form.name} onChange={event => { const value = event.currentTarget.value; setForm(current => ({ ...current, name: value })); }} />
         <TextInput label="Managed labels" description="Comma separated. key=value or simple labels." value={form.labelsText} onChange={event => { const value = event.currentTarget.value; setForm(current => ({ ...current, labelsText: value })); }} />
         <NumberInput label="Heartbeat timeout (seconds)" min={15} max={3600} value={form.heartbeatTimeoutSeconds} onChange={value => setForm(current => ({ ...current, heartbeatTimeoutSeconds: Number(value) || 60 }))} />
+        {editing && (
+          <Card withBorder p="sm">
+            <Stack gap="xs">
+              <Text fw={600} size="sm">Device Agent Slot</Text>
+              <Select
+                label="Slot action"
+                value={slotMode}
+                allowDeselect={false}
+                data={[
+                  { value: "current", label: editing.slotName ? `Keep current Slot · ${editing.slotName}` : "Keep current Slot" },
+                  { value: "existing", label: "Use another unbound Slot" },
+                  { value: "new", label: "Create new Slot" }
+                ]}
+                onChange={value => {
+                  if (value === "current" || value === "existing" || value === "new") {
+                    setSlotMode(value);
+                    if (value === "current") {
+                      setSlotId(editing.slotId);
+                      setSlotName(editing.slotName ?? "");
+                    } else if (value === "existing") {
+                      setSlotId(null);
+                      setSlotName("");
+                    } else {
+                      setSlotId(null);
+                      setSlotName(editing.slotName ? `${editing.slotName}-new` : form.name.trim());
+                    }
+                  }
+                }}
+              />
+              {slotMode === "existing" && (
+                <Select
+                  label="Unbound Slot"
+                  searchable
+                  placeholder="Select a Slot"
+                  value={slotId}
+                  data={(slotsQuery.data ?? []).filter(slot => !slot.bound).map(slot => ({ value: slot.id, label: slot.name }))}
+                  onChange={value => {
+                    setSlotId(value);
+                    setSlotName((slotsQuery.data ?? []).find(slot => slot.id === value)?.name ?? "");
+                  }}
+                />
+              )}
+              <TextInput
+                label={slotMode === "new" ? "New Slot name" : "Slot name"}
+                description={slotMode === "current" ? "Renaming keeps the same Slot ID and every Device assignment." : undefined}
+                value={slotName}
+                onChange={event => setSlotName(event.currentTarget.value)}
+                disabled={slotMode === "existing" && !slotId}
+              />
+            </Stack>
+          </Card>
+        )}
         {editing && <Checkbox label="Enabled" checked={form.enabled} onChange={event => { const checked = event.currentTarget.checked; setForm(current => ({ ...current, enabled: checked })); }} />}
         <Group justify="flex-end"><Button variant="default" onClick={() => setOpened(false)}>Cancel</Button><Button disabled={!form.name.trim()} loading={save.isPending} onClick={() => save.mutate()}>Save</Button></Group>
       </Stack>
@@ -978,7 +1097,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
     </>}
 
     <Modal opened={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Device Agent?" centered>
-      <Stack><Text>Delete <strong>{deleteTarget?.name}</strong>? Devices assigned to it will keep their provider but lose the Device Agent association.{deleteTarget?.managedBySupervisorId ? " Its local installation will first be removed by the associated Supervisor Agent." : ""}</Text><Group justify="flex-end"><Button variant="default" onClick={() => setDeleteTarget(null)}>Cancel</Button><Button color="red" loading={remove.isPending} onClick={() => deleteTarget && remove.mutate(deleteTarget)}>Delete</Button></Group></Stack>
+      <Stack><Text>Delete <strong>{deleteTarget?.name}</strong>? Its Device Agent Slot and all Device assignments will be preserved. The Slot becomes <strong>UNBOUND</strong> until another Device Agent is assigned.{deleteTarget?.managedBySupervisorId ? " Its local installation will first be removed by the associated Supervisor Agent." : ""}</Text><Group justify="flex-end"><Button variant="default" onClick={() => setDeleteTarget(null)}>Cancel</Button><Button color="red" loading={remove.isPending} onClick={() => deleteTarget && remove.mutate(deleteTarget)}>Delete</Button></Group></Stack>
     </Modal>
 
     {copyNotice && (

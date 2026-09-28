@@ -1217,6 +1217,8 @@ export interface DeviceAgentCapability {
 export interface DeviceAgent extends AgentTechnicalModel {
   id: string;
   name: string;
+  slotId: string | null;
+  slotName: string | null;
   enabled: boolean;
   labels: Record<string, string>;
   agentLabels: string[];
@@ -1242,10 +1244,24 @@ export interface DeviceAgent extends AgentTechnicalModel {
   updatedAt: string;
 }
 
+export interface DeviceAgentSlot {
+  id: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  agentId: string | null;
+  agentName: string | null;
+  bound: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CreateDeviceAgentInput {
   name: string;
   labels?: Record<string, string>;
   heartbeatTimeoutSeconds?: number;
+  slotId?: string;
+  slotName?: string;
 }
 
 export interface UpdateDeviceAgentInput {

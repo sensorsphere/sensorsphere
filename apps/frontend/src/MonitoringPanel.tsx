@@ -363,6 +363,9 @@ export function MonitoringPanel({
   const [agentModalOpen, setAgentModalOpen] = React.useState(false);
   const [editingAgent, setEditingAgent] = React.useState<MonitoringAgent | null>(null);
   const [agentForm, setAgentForm] = React.useState<AgentFormState>(emptyAgentForm());
+  const [agentSlotMode, setAgentSlotMode] = React.useState<"current" | "existing" | "new">("current");
+  const [agentSlotId, setAgentSlotId] = React.useState<string | null>(null);
+  const [agentSlotName, setAgentSlotName] = React.useState("");
   const [agentDeleteTarget, setAgentDeleteTarget] = React.useState<MonitoringAgent | null>(null);
   const [tokenInfo, setTokenInfo] = React.useState<{ agentName: string; token: string; reinstall?: boolean } | null>(null);
   const [tokenCheckResult, setTokenCheckResult] = React.useState<{ name: string; result: AgentTokenCheckResult } | null>(null);
@@ -509,12 +512,36 @@ export function MonitoringPanel({
     mutationFn: async () => {
       const labels = parseLabels(agentForm.labelsText);
       if (editingAgent) {
-        return { agent: await updateMonitoringAgent(editingAgent.id, {
+        const updatedAgent = await updateMonitoringAgent(editingAgent.id, {
           name: agentForm.name.trim(),
           enabled: agentForm.enabled,
           labels,
           heartbeatTimeoutSeconds: agentForm.heartbeatTimeoutSeconds
-        }), token: null as string | null };
+        });
+
+        if (agentSlotMode === "current" && editingAgent.slotId) {
+          if (agentSlotName.trim() && agentSlotName.trim() !== editingAgent.slotName) {
+            await updateMonitoringSlot(editingAgent.slotId, { name: agentSlotName.trim() });
+          }
+        } else if (agentSlotMode === "existing" && agentSlotId) {
+          if (agentSlotName.trim()) {
+            await updateMonitoringSlot(agentSlotId, {
+              name: agentSlotName.trim(),
+              agentId: editingAgent.id
+            });
+          } else {
+            await updateMonitoringSlot(agentSlotId, { agentId: editingAgent.id });
+          }
+        } else if (agentSlotMode === "new" && agentSlotName.trim()) {
+          const createdSlot = await createMonitoringSlot({
+            name: agentSlotName.trim()
+          });
+          await updateMonitoringSlot(createdSlot.id, {
+            agentId: editingAgent.id
+          });
+        }
+
+        return { agent: updatedAgent, token: null as string | null };
       }
       const created = await createMonitoringAgent({
         name: agentForm.name.trim(), labels, heartbeatTimeoutSeconds: agentForm.heartbeatTimeoutSeconds
@@ -726,10 +753,16 @@ export function MonitoringPanel({
   const unknownChecks = statuses.filter(item => item === "UNKNOWN").length;
 
   const openCreateAgent = () => {
-    setEditingAgent(null); setAgentForm(emptyAgentForm()); setError(null); setAgentModalOpen(true);
+    setEditingAgent(null); setAgentForm(emptyAgentForm()); setAgentSlotMode("current"); setAgentSlotId(null); setAgentSlotName(""); setError(null); setAgentModalOpen(true);
   };
   const openEditAgent = (agent: MonitoringAgent) => {
-    setEditingAgent(agent); setAgentForm(agentToForm(agent)); setError(null); setAgentModalOpen(true);
+    setEditingAgent(agent);
+    setAgentForm(agentToForm(agent));
+    setAgentSlotMode("current");
+    setAgentSlotId(agent.slotId);
+    setAgentSlotName(agent.slotName ?? "");
+    setError(null);
+    setAgentModalOpen(true);
   };
   const openCopyAgent = (agent: MonitoringAgent) => {
     setEditingAgent(null);
@@ -1184,6 +1217,58 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
           <TextInput label="Name" required autoFocus value={agentForm.name} onChange={event => { const value = event.currentTarget.value; setAgentForm(current => ({ ...current, name: value })); }} />
           <NumberInput label="Heartbeat timeout (seconds)" min={15} max={3600} value={agentForm.heartbeatTimeoutSeconds} onChange={value => setAgentForm(current => ({ ...current, heartbeatTimeoutSeconds: Number(value) || 90 }))} />
           <Textarea label="Labels" description="One key=value entry per line." placeholder={'site=home\nnetwork=lan'} minRows={3} value={agentForm.labelsText} onChange={event => { const value = event.currentTarget.value; setAgentForm(current => ({ ...current, labelsText: value })); }} />
+          {editingAgent && (
+            <Card withBorder p="sm">
+              <Stack gap="xs">
+                <Text fw={600} size="sm">Monitoring Slot</Text>
+                <Select
+                  label="Slot action"
+                  value={agentSlotMode}
+                  allowDeselect={false}
+                  data={[
+                    { value: "current", label: editingAgent.slotName ? `Keep current Slot · ${editingAgent.slotName}` : "Keep current Slot" },
+                    { value: "existing", label: "Use another unbound Slot" },
+                    { value: "new", label: "Create new Slot" }
+                  ]}
+                  onChange={value => {
+                    if (value === "current" || value === "existing" || value === "new") {
+                      setAgentSlotMode(value);
+                      if (value === "current") {
+                        setAgentSlotId(editingAgent.slotId);
+                        setAgentSlotName(editingAgent.slotName ?? "");
+                      } else if (value === "existing") {
+                        setAgentSlotId(null);
+                        setAgentSlotName("");
+                      } else {
+                        setAgentSlotId(null);
+                        setAgentSlotName(editingAgent.slotName ? `${editingAgent.slotName}-new` : agentForm.name.trim());
+                      }
+                    }
+                  }}
+                />
+                {agentSlotMode === "existing" && (
+                  <Select
+                    label="Unbound Slot"
+                    searchable
+                    placeholder="Select a Slot"
+                    value={agentSlotId}
+                    data={slots.filter(slot => !slot.bound).map(slot => ({ value: slot.id, label: slot.name }))}
+                    onChange={value => {
+                      setAgentSlotId(value);
+                      setAgentSlotName(slots.find(slot => slot.id === value)?.name ?? "");
+                    }}
+                  />
+                )}
+                <TextInput
+                  label={agentSlotMode === "new" ? "New Slot name" : "Slot name"}
+                  description={agentSlotMode === "current" ? "Renaming keeps the same Slot ID and all Device Check assignments." : undefined}
+                  value={agentSlotName}
+                  onChange={event => setAgentSlotName(event.currentTarget.value)}
+                  disabled={agentSlotMode === "existing" && !agentSlotId}
+                />
+              </Stack>
+            </Card>
+          )}
           {editingAgent && <Checkbox label="Enabled" checked={agentForm.enabled} onChange={event => { const checked = event.currentTarget.checked; setAgentForm(current => ({ ...current, enabled: checked })); }} />}
           <Group justify="flex-end"><Button variant="light" color="gray" onClick={() => setAgentModalOpen(false)}>Cancel</Button><Button loading={saveAgent.isPending} onClick={() => saveAgent.mutate()}>Save</Button></Group>
         </Stack>

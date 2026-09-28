@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.52.0";
+export const MODULE_VERSION = "1.53.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.53.0": {
+    releasedAt: "2026-09-28T21:46:07+02:00",
+    patch: "PR-284-device-agent-slots-and-agent-edit-v1.patch",
+    changes: [
+      { type: "added", description: "Introduce persistent Device Agent Slots and migrate Device control assignments to Slot-backed runtime resolution" },
+      { type: "changed", description: "Preserve Device assignments when a Device Agent is deleted and reconcile runtime agent caches when Slots are rebound" },
+      { type: "added", description: "Allow explicit Device Agent Slot selection during agent creation and Supervisor provisioning" }
+    ]
+  },
   "1.52.0": {
     releasedAt: "2026-09-28T21:10:00+02:00",
     patch: "PR-283-slot-aware-monitoring-agent-provisioning-v1.patch",

@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.92.0";
+export const MODULE_VERSION = "1.93.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.93.0": {
+    releasedAt: "2026-09-28T21:46:07+02:00",
+    patch: "PR-284-device-agent-slots-and-agent-edit-v1.patch",
+    changes: [
+      { type: "added", description: "Add Device Agent Slot visibility and Slot-aware Supervisor provisioning" },
+      { type: "added", description: "Allow renaming, changing or creating a Slot directly from Edit Device Agent" },
+      { type: "added", description: "Allow renaming, changing or creating a Slot directly from Edit Monitoring Agent" },
+      { type: "changed", description: "Show both Device and Monitoring Slots in Managed Runtime Inspector" }
+    ]
+  },
   "1.92.0": {
     releasedAt: "2026-09-28T21:10:00+02:00",
     patch: "PR-283-slot-aware-monitoring-agent-provisioning-v1.patch",

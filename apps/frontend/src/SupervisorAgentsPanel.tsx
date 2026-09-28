@@ -3,7 +3,7 @@ import { ActionIcon, Badge, Button, Card, Code, Group, Modal, NumberInput, Selec
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AgentVersionFreshnessBadge, getAgentVersionAvailability, UpdateLifecycleAge } from "./AgentVersionAvailability";
 import { DeleteActionIcon, EditActionIcon, ReinstallCommandActionIcon } from "./TableActionIcons";
-import { createMonitoringAgent, getDeviceAgents, getMonitoringAgents, getMonitoringSlots, regenerateDeviceAgentToken, regenerateMonitoringAgentToken } from "./api";
+import { createMonitoringAgent, getDeviceAgents, getDeviceAgentSlots, getMonitoringAgents, getMonitoringSlots, regenerateDeviceAgentToken, regenerateMonitoringAgentToken } from "./api";
 import type { AgentTechnicalModel, ManagedAgentOperation } from "./types";
 import { AgentActionDetails, AgentActionHistory } from "./AgentActionDetails";
 import { AgentTypeIcon, agentTypeLabel } from "./AgentTypeIcon";
@@ -73,11 +73,11 @@ async function requestAutonomousSupervisorUpdate(id: string, version: string): P
 
 type SupervisorManagedOperation = ManagedAgentOperation & { supervisorId: string };
 
-async function createDeviceAgentIdentity(name: string): Promise<{ agent: { id: string }; token: string }> {
+async function createDeviceAgentIdentity(name: string, slot?: { slotId?: string; slotName?: string }): Promise<{ agent: { id: string }; token: string }> {
   const response = await fetch("/api/v1/device-control/agents", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name })
+    body: JSON.stringify({ name, ...(slot?.slotId ? { slotId: slot.slotId } : {}), ...(!slot?.slotId && slot?.slotName ? { slotName: slot.slotName } : {}) })
   });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.error ?? `Unable to create Device Agent identity (${response.status})`);
@@ -259,6 +259,7 @@ export function SupervisorAgentsPanel() {
   const queryClient = useQueryClient();
   const autonomousQuery = useQuery({ queryKey: ["device-control", "supervisors"], queryFn: getAutonomousSupervisors, refetchInterval: 10000 });
   const deviceAgentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
+  const deviceAgentSlotsQuery = useQuery({ queryKey: ["device-control", "slots"], queryFn: getDeviceAgentSlots, refetchInterval: 10000 });
   const monitoringAgentsQuery = useQuery({ queryKey: ["monitoring", "agents"], queryFn: getMonitoringAgents, refetchInterval: 15000 });
   const monitoringSlotsQuery = useQuery({ queryKey: ["monitoring", "slots"], queryFn: getMonitoringSlots, refetchInterval: 15000 });
   const versionsQuery = useQuery({ queryKey: ["agent-version-availability"], queryFn: getAgentVersionAvailability, refetchInterval: 300000 });
@@ -291,6 +292,9 @@ export function SupervisorAgentsPanel() {
   const [deployAgentName, setDeployAgentName] = React.useState("");
   const [deployInstance, setDeployInstance] = React.useState("main");
   const [deploySlotMode, setDeploySlotMode] = React.useState<"existing" | "new">("new");
+  const [deployDeviceSlotMode, setDeployDeviceSlotMode] = React.useState<"existing" | "new">("new");
+  const [deployDeviceSlotId, setDeployDeviceSlotId] = React.useState<string | null>(null);
+  const [deployDeviceSlotName, setDeployDeviceSlotName] = React.useState("");
   const [deploySlotId, setDeploySlotId] = React.useState<string | null>(null);
   const [deploySlotName, setDeploySlotName] = React.useState("");
   const [deployVersion, setDeployVersion] = React.useState("");
@@ -340,7 +344,7 @@ export function SupervisorAgentsPanel() {
   });
 
   const deployDeviceAgentMutation = useMutation({
-    mutationFn: async ({ supervisor, name, version, closeAfterStart = false }: { supervisor: AutonomousSupervisorAgent; name: string; version: string; closeAfterStart?: boolean }) => {
+    mutationFn: async ({ supervisor, name, version, slotId, slotName, closeAfterStart = false }: { supervisor: AutonomousSupervisorAgent; name: string; version: string; slotId?: string; slotName?: string; closeAfterStart?: boolean }) => {
       setDeployStatus("CREATING");
       setDeployError(null);
       setDialogActionDetails(null);
@@ -354,7 +358,9 @@ export function SupervisorAgentsPanel() {
       }
       const existing = (deviceAgentsQuery.data ?? []).find(agent => agent.name.trim().toLowerCase() === name.trim().toLowerCase());
       if (existing?.managedBySupervisorId && existing.managedBySupervisorId !== supervisor.id) throw new Error(`Device Agent '${name}' is already managed by another Supervisor`);
-      const identity = existing ? await regenerateDeviceAgentToken(existing.id) : await createDeviceAgentIdentity(name);
+      const identity = existing
+        ? await regenerateDeviceAgentToken(existing.id)
+        : await createDeviceAgentIdentity(name, { slotId, slotName });
       try {
         setDeployStatus("DEPLOYING");
         const operation = await requestSupervisorManagedOperation(supervisor.id, {
@@ -380,7 +386,7 @@ export function SupervisorAgentsPanel() {
         throw error;
       }
     },
-    onSuccess: (_result, variables) => { if (!variables.closeAfterStart) setDeployStatus("SUCCESS"); void queryClient.invalidateQueries({ queryKey: ["device-control", "managed-operation-history"] }); void Promise.all([queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"], refetchType: "active" }), queryClient.invalidateQueries({ queryKey: ["device-control", "agents"], refetchType: "active" })]); },
+    onSuccess: (_result, variables) => { if (!variables.closeAfterStart) setDeployStatus("SUCCESS"); void queryClient.invalidateQueries({ queryKey: ["device-control", "managed-operation-history"] }); void Promise.all([queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"], refetchType: "active" }), queryClient.invalidateQueries({ queryKey: ["device-control", "agents"], refetchType: "active" }), queryClient.invalidateQueries({ queryKey: ["device-control", "slots"], refetchType: "active" })]); },
     onError: (error, variables) => { if (!variables.closeAfterStart) { setDeployStatus("FAILED"); setDeployError(error instanceof Error ? error.message : "Unable to deploy Device Agent"); } void queryClient.invalidateQueries({ queryKey: ["device-control", "managed-operation-history"] }); }
   });
 
@@ -506,6 +512,7 @@ export function SupervisorAgentsPanel() {
   const latestMonitoringAgentVersion = versionsQuery.data?.agents?.monitorAgent?.latestVersion ?? "latest";
   const latestDeviceAgentVersion = versionsQuery.data?.agents?.deviceAgent?.latestVersion ?? "latest";
   const monitoringSlots = monitoringSlotsQuery.data ?? [];
+  const deviceAgentSlots = deviceAgentSlotsQuery.data ?? [];
   const deployExistingMonitoringAgent = deployAgentType === "monitor-agent"
     ? (monitoringAgentsQuery.data ?? []).find(agent => agent.name.trim().toLowerCase() === deployAgentName.trim().toLowerCase()) ?? null
     : null;
@@ -513,6 +520,24 @@ export function SupervisorAgentsPanel() {
     ? monitoringSlots.find(slot => slot.id === deployExistingMonitoringAgent.slotId) ?? null
     : null;
   const unboundMonitoringSlots = monitoringSlots.filter(slot => !slot.bound);
+  const deployExistingDeviceAgent = deployAgentType === "device-agent"
+    ? (deviceAgentsQuery.data ?? []).find(agent => agent.name.trim().toLowerCase() === deployAgentName.trim().toLowerCase()) ?? null
+    : null;
+  const deployPreservedDeviceSlot = deployExistingDeviceAgent?.slotId
+    ? deviceAgentSlots.find(slot => slot.id === deployExistingDeviceAgent.slotId) ?? null
+    : null;
+  const unboundDeviceAgentSlots = deviceAgentSlots.filter(slot => !slot.bound);
+  const deviceSlotSelectionValid = Boolean(
+    deployPreservedDeviceSlot ||
+    (deployDeviceSlotMode === "existing" ? deployDeviceSlotId : deployDeviceSlotName.trim())
+  );
+  const deviceSlotInput = deployPreservedDeviceSlot
+    ? {}
+    : deployDeviceSlotMode === "existing" && deployDeviceSlotId
+      ? { slotId: deployDeviceSlotId }
+      : deployDeviceSlotMode === "new" && deployDeviceSlotName.trim()
+        ? { slotName: deployDeviceSlotName.trim() }
+        : {};
   const monitoringSlotSelectionValid = Boolean(
     deployPreservedSlot ||
     (deploySlotMode === "existing" ? deploySlotId : deploySlotName.trim())
@@ -608,7 +633,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
               <Table.Td>{agent.managedAgents.length > 0 ? <Group gap={6} wrap="nowrap">{agent.managedAgents.filter(entry => entry.installed !== false).map(managedAgentIcon)}<Tooltip label="Managed Runtime Inspector"><ActionIcon size="sm" variant="subtle" color="blue" aria-label="Managed Runtime Inspector" onClick={() => setManagedRuntimeTarget(agent)}><ManagedRuntimeIcon /></ActionIcon></Tooltip></Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
 
               <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
-              <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">{explicitlyManaged(agent, "device-agent") ? <Tooltip label="Deprovision Device Agent"><ActionIcon size="sm" variant="light" color="red" aria-label="Deprovision Device Agent" disabled={!agent.online} onClick={() => { const entry = reportedManagedEntry(agent, "device-agent")!; setDeprovisionTarget({ supervisor: agent, agentType: "device-agent", instance: typeof entry.instance === "string" ? entry.instance : "main", name: typeof entry.agent_name === "string" ? entry.agent_name : agent.name }); }}><DeprovisionAgentIcon /></ActionIcon></Tooltip> : <Tooltip label={!agent.online ? "Supervisor Agent must be online" : discoveredUnmanaged(agent, "device-agent") ? "Replace unmanaged local Device Agent installation" : "Deploy Device Agent"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Deploy Device Agent" disabled={!agent.online} onClick={() => { setDeployTarget(agent); setDeployAgentType("device-agent"); setDeployInstance("main"); setDeployAgentName(agent.name); setDeployVersion(latestDeviceAgentVersion !== "latest" ? latestDeviceAgentVersion : ""); setDeployStatus("IDLE"); setDeployError(null); setDialogActionDetails(null); deployDeviceAgentMutation.reset(); }}><DeployAgentIcon /></ActionIcon></Tooltip>}{explicitlyManaged(agent, "monitor-agent") && <Tooltip label="Deprovision Monitoring Agent main"><ActionIcon size="sm" variant="light" color="red" aria-label="Deprovision Monitoring Agent main" disabled={!agent.online} onClick={() => { const entry = reportedManagedEntry(agent, "monitor-agent")!; setDeprovisionTarget({ supervisor: agent, agentType: "monitor-agent", instance: typeof entry.instance === "string" ? entry.instance : "main", name: typeof entry.agent_name === "string" ? entry.agent_name : `${agent.name}-monitor` }); }}><DeprovisionAgentIcon /></ActionIcon></Tooltip>}{(() => { const missing = missingManagedEntry(agent, "monitor-agent"); const missingInstance = missing && typeof missing.instance === "string" ? missing.instance : null; const instance = missingInstance ?? nextMonitoringInstance(agent); const missingName = missing && typeof missing.agent_name === "string" ? missing.agent_name : null; const label = !agent.online ? "Supervisor Agent must be online" : missingInstance ? `Reinstall missing Monitoring Agent ${missingInstance}` : "Deploy new Monitoring Agent instance"; return <Tooltip label={label}><ActionIcon size="sm" variant="light" color={missingInstance ? "orange" : "violet"} aria-label={missingInstance ? `Reinstall Monitoring Agent ${missingInstance}` : "Deploy new Monitoring Agent instance"} disabled={!agent.online} onClick={() => { setDeployTarget(agent); setDeployAgentType("monitor-agent"); setDeployInstance(instance); setDeployAgentName(missingName ?? defaultMonitoringAgentName(agent, instance)); setDeploySlotMode("new"); setDeploySlotId(null); setDeploySlotName(missingName ?? defaultMonitoringAgentName(agent, instance)); setDeployVersion(latestMonitoringAgentVersion !== "latest" ? latestMonitoringAgentVersion : ""); setDeployStatus("IDLE"); setDeployError(null); setDialogActionDetails(null); deployMonitoringAgentMutation.reset(); }}><DeployAgentIcon /></ActionIcon></Tooltip>; })()}<Tooltip label={agent.selfUpdateSupported ? "Update Supervisor Agent" : "Supervisor self-update unavailable"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.selfUpdateSupported || ["REQUESTED", "UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => { setAutonomousUpdateTarget(agent); setUpdateVersion(latestSupervisorVersion !== "latest" ? latestSupervisorVersion : agent.version ?? ""); autonomousUpdateMutation.reset(); }}><SupervisorUpdateIcon /></ActionIcon></Tooltip><EditActionIcon onClick={() => { setEditTarget(agent); setEditName(agent.name); setEditEnabled(agent.enabled); setEditHeartbeatTimeout(agent.heartbeatTimeoutSeconds); setEditLabelsText(labelsText(agent.labels)); editMutation.reset(); }} /><Tooltip label="Copy supervisor agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy supervisor agent" onClick={() => copyMutation.mutate(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check configured token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check configured token" onClick={() => checkTokenMutation.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerateMutation.mutate(agent)}>↻</ActionIcon></Tooltip><ReinstallCommandActionIcon onClick={() => reinstallMutation.mutate(agent)} loading={reinstallMutation.isPending && reinstallMutation.variables?.id === agent.id} /><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Table.Td>
+              <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">{explicitlyManaged(agent, "device-agent") ? <Tooltip label="Deprovision Device Agent"><ActionIcon size="sm" variant="light" color="red" aria-label="Deprovision Device Agent" disabled={!agent.online} onClick={() => { const entry = reportedManagedEntry(agent, "device-agent")!; setDeprovisionTarget({ supervisor: agent, agentType: "device-agent", instance: typeof entry.instance === "string" ? entry.instance : "main", name: typeof entry.agent_name === "string" ? entry.agent_name : agent.name }); }}><DeprovisionAgentIcon /></ActionIcon></Tooltip> : <Tooltip label={!agent.online ? "Supervisor Agent must be online" : discoveredUnmanaged(agent, "device-agent") ? "Replace unmanaged local Device Agent installation" : "Deploy Device Agent"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Deploy Device Agent" disabled={!agent.online} onClick={() => { setDeployTarget(agent); setDeployAgentType("device-agent"); setDeployInstance("main"); setDeployAgentName(agent.name); setDeployDeviceSlotMode("new"); setDeployDeviceSlotId(null); setDeployDeviceSlotName(agent.name); setDeployVersion(latestDeviceAgentVersion !== "latest" ? latestDeviceAgentVersion : ""); setDeployStatus("IDLE"); setDeployError(null); setDialogActionDetails(null); deployDeviceAgentMutation.reset(); }}><DeployAgentIcon /></ActionIcon></Tooltip>}{explicitlyManaged(agent, "monitor-agent") && <Tooltip label="Deprovision Monitoring Agent main"><ActionIcon size="sm" variant="light" color="red" aria-label="Deprovision Monitoring Agent main" disabled={!agent.online} onClick={() => { const entry = reportedManagedEntry(agent, "monitor-agent")!; setDeprovisionTarget({ supervisor: agent, agentType: "monitor-agent", instance: typeof entry.instance === "string" ? entry.instance : "main", name: typeof entry.agent_name === "string" ? entry.agent_name : `${agent.name}-monitor` }); }}><DeprovisionAgentIcon /></ActionIcon></Tooltip>}{(() => { const missing = missingManagedEntry(agent, "monitor-agent"); const missingInstance = missing && typeof missing.instance === "string" ? missing.instance : null; const instance = missingInstance ?? nextMonitoringInstance(agent); const missingName = missing && typeof missing.agent_name === "string" ? missing.agent_name : null; const label = !agent.online ? "Supervisor Agent must be online" : missingInstance ? `Reinstall missing Monitoring Agent ${missingInstance}` : "Deploy new Monitoring Agent instance"; return <Tooltip label={label}><ActionIcon size="sm" variant="light" color={missingInstance ? "orange" : "violet"} aria-label={missingInstance ? `Reinstall Monitoring Agent ${missingInstance}` : "Deploy new Monitoring Agent instance"} disabled={!agent.online} onClick={() => { setDeployTarget(agent); setDeployAgentType("monitor-agent"); setDeployInstance(instance); setDeployAgentName(missingName ?? defaultMonitoringAgentName(agent, instance)); setDeploySlotMode("new"); setDeploySlotId(null); setDeploySlotName(missingName ?? defaultMonitoringAgentName(agent, instance)); setDeployVersion(latestMonitoringAgentVersion !== "latest" ? latestMonitoringAgentVersion : ""); setDeployStatus("IDLE"); setDeployError(null); setDialogActionDetails(null); deployMonitoringAgentMutation.reset(); }}><DeployAgentIcon /></ActionIcon></Tooltip>; })()}<Tooltip label={agent.selfUpdateSupported ? "Update Supervisor Agent" : "Supervisor self-update unavailable"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.selfUpdateSupported || ["REQUESTED", "UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => { setAutonomousUpdateTarget(agent); setUpdateVersion(latestSupervisorVersion !== "latest" ? latestSupervisorVersion : agent.version ?? ""); autonomousUpdateMutation.reset(); }}><SupervisorUpdateIcon /></ActionIcon></Tooltip><EditActionIcon onClick={() => { setEditTarget(agent); setEditName(agent.name); setEditEnabled(agent.enabled); setEditHeartbeatTimeout(agent.heartbeatTimeoutSeconds); setEditLabelsText(labelsText(agent.labels)); editMutation.reset(); }} /><Tooltip label="Copy supervisor agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy supervisor agent" onClick={() => copyMutation.mutate(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check configured token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check configured token" onClick={() => checkTokenMutation.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerateMutation.mutate(agent)}>↻</ActionIcon></Tooltip><ReinstallCommandActionIcon onClick={() => reinstallMutation.mutate(agent)} loading={reinstallMutation.isPending && reinstallMutation.variables?.id === agent.id} /><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Table.Td>
             </Table.Tr>;
           })}{filteredAutonomous.length === 0 && <Table.Tr><Table.Td colSpan={11}><Text ta="center" c="dimmed" py="xl">No Supervisor Agents registered yet.</Text></Table.Td></Table.Tr>}</Table.Tbody>
         </Table>
@@ -646,9 +671,12 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
             const monitoringIdentity = type === "monitor-agent" && agentId
               ? (monitoringAgentsQuery.data ?? []).find(agent => agent.id === agentId) ?? null
               : null;
+            const deviceIdentity = type === "device-agent" && agentId
+              ? (deviceAgentsQuery.data ?? []).find(agent => agent.id === agentId) ?? null
+              : null;
             return <Table.Tr key={managementId ?? `${type}-${instance}-${index}`}>
               <Table.Td><Group gap={6} wrap="nowrap"><AgentTypeIcon type={type === "device-agent" ? "device" : "monitoring"} size={16} /><div><Text size="sm" fw={600}>{name}</Text><Text size="xs" c="dimmed">{agentTypeLabel(type)}</Text></div></Group></Table.Td>
-              <Table.Td>{type === "monitor-agent" ? (monitoringIdentity?.slotName ? <Badge size="xs" variant="light" color="violet">{monitoringIdentity.slotName}</Badge> : <Badge size="xs" variant="light" color="orange">UNBOUND</Badge>) : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
+              <Table.Td>{type === "monitor-agent" ? (monitoringIdentity?.slotName ? <Badge size="xs" variant="light" color="violet">{monitoringIdentity.slotName}</Badge> : <Badge size="xs" variant="light" color="orange">UNBOUND</Badge>) : type === "device-agent" ? (deviceIdentity?.slotName ? <Badge size="xs" variant="light" color="violet">{deviceIdentity.slotName}</Badge> : <Badge size="xs" variant="light" color="orange">UNBOUND</Badge>) : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
               <Table.Td><Code>{instance}</Code></Table.Td>
               <Table.Td><Stack gap={2}><Group gap={4}><Text size="xs" c="dimmed">management_id</Text>{managementId && <ActionIcon size="xs" variant="subtle" aria-label="Copy management id" onClick={() => void copyText(managementId)}><CopyIcon size={12} /></ActionIcon>}</Group><Code style={{ maxWidth: 210, overflow: "hidden", textOverflow: "ellipsis" }}>{managementId ?? "—"}</Code><Text size="xs" c="dimmed">agent {agentId ?? "—"}</Text></Stack></Table.Td>
               <Table.Td><Badge size="xs" variant="light" color={runtimeReported ? "green" : "orange"}>{runtimeReported ? "REPORTED" : "NOT REPORTED"}</Badge></Table.Td>
@@ -723,7 +751,65 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
         <Text size="sm">{deployAgentType === "monitor-agent" && deployTarget && missingManagedEntry(deployTarget, "monitor-agent", deployInstance) ? "Reinstall the missing Monitoring Agent runtime" : `Deploy a ${deployAgentType === "device-agent" ? "Device" : "Monitoring"} Agent`} directly through Supervisor Agent <strong>{deployTarget?.name}</strong>.</Text>{deployTarget && discoveredUnmanaged(deployTarget, deployAgentType, deployInstance) && <Text size="sm" c="orange">An unmanaged local installation already exists for this instance. It will be stopped and archived before the new managed agent is deployed.</Text>}
         {deployAgentType === "monitor-agent" && deployTarget && missingManagedEntry(deployTarget, "monitor-agent", deployInstance) && <Text size="sm" c="orange">The SensorSphere association is preserved, but the Supervisor reports this runtime as not installed. Reinstall will reuse the existing agent identity and regenerate its token.</Text>}
         {deployAgentType === "monitor-agent" && <TextInput label="Instance" description="Unique Supervisor-local instance, for example main, i1 or i2." value={deployInstance} onChange={event => { const next = event.currentTarget.value; const previousDefault = deployTarget ? defaultMonitoringAgentName(deployTarget, deployInstance) : ""; setDeployInstance(next); if (deployTarget && (!deployAgentName.trim() || deployAgentName === previousDefault)) setDeployAgentName(defaultMonitoringAgentName(deployTarget, next.trim() || "main")); }} disabled={deployMonitoringAgentMutation.isPending || deployStatus === "SUCCESS"} />}
-        <TextInput label={deployAgentType === "device-agent" ? "Device Agent name" : "Monitoring Agent name"} value={deployAgentName} onChange={event => { const value = event.currentTarget.value; setDeployAgentName(value); if (deployAgentType === "monitor-agent" && deploySlotMode === "new" && (!deploySlotName.trim() || deploySlotName === deployAgentName)) setDeploySlotName(value); }} disabled={deployDeviceAgentMutation.isPending || deployMonitoringAgentMutation.isPending || deployStatus === "SUCCESS"} />
+        <TextInput label={deployAgentType === "device-agent" ? "Device Agent name" : "Monitoring Agent name"} value={deployAgentName} onChange={event => { const value = event.currentTarget.value; setDeployAgentName(value); if (deployAgentType === "monitor-agent" && deploySlotMode === "new" && (!deploySlotName.trim() || deploySlotName === deployAgentName)) setDeploySlotName(value); if (deployAgentType === "device-agent" && deployDeviceSlotMode === "new" && (!deployDeviceSlotName.trim() || deployDeviceSlotName === deployAgentName)) setDeployDeviceSlotName(value); }} disabled={deployDeviceAgentMutation.isPending || deployMonitoringAgentMutation.isPending || deployStatus === "SUCCESS"} />
+        {deployAgentType === "device-agent" && (
+          deployPreservedDeviceSlot ? (
+            <Card withBorder p="sm">
+              <Group justify="space-between">
+                <div>
+                  <Text size="xs" c="dimmed">Device Agent Slot</Text>
+                  <Text fw={600}>{deployPreservedDeviceSlot.name}</Text>
+                </div>
+                <Badge color="violet" variant="light">Preserved</Badge>
+              </Group>
+              <Text size="xs" c="dimmed" mt={4}>Deploy/reinstall reuses the existing persistent Slot for this Device Agent.</Text>
+            </Card>
+          ) : (
+            <Stack gap="xs">
+              <Select
+                label="Slot assignment"
+                value={deployDeviceSlotMode}
+                allowDeselect={false}
+                data={[
+                  { value: "new", label: "Create new Slot" },
+                  { value: "existing", label: "Use existing unbound Slot" }
+                ]}
+                onChange={value => {
+                  if (value === "new" || value === "existing") {
+                    setDeployDeviceSlotMode(value);
+                    if (value === "new") {
+                      setDeployDeviceSlotId(null);
+                      if (!deployDeviceSlotName.trim()) setDeployDeviceSlotName(deployAgentName);
+                    }
+                  }
+                }}
+                disabled={deployDeviceAgentMutation.isPending || deployStatus === "SUCCESS"}
+              />
+              {deployDeviceSlotMode === "existing" ? (
+                <Select
+                  label="Device Agent Slot"
+                  description="Unbound Slots keep Device assignments while the physical agent is absent."
+                  searchable
+                  placeholder="Select an unbound Slot"
+                  data={unboundDeviceAgentSlots.map(slot => ({
+                    value: slot.id,
+                    label: slot.name + " · UNBOUND"
+                  }))}
+                  value={deployDeviceSlotId}
+                  onChange={setDeployDeviceSlotId}
+                  disabled={deployDeviceAgentMutation.isPending || deployStatus === "SUCCESS"}
+                />
+              ) : (
+                <TextInput
+                  label="New Slot name"
+                  value={deployDeviceSlotName}
+                  onChange={event => setDeployDeviceSlotName(event.currentTarget.value)}
+                  disabled={deployDeviceAgentMutation.isPending || deployStatus === "SUCCESS"}
+                />
+              )}
+            </Stack>
+          )
+        )}
         {deployAgentType === "monitor-agent" && (
           deployPreservedSlot ? (
             <Card withBorder p="sm">
@@ -786,7 +872,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
         <Card withBorder p="sm"><Group justify="space-between"><Text size="xs" c="dimmed">Status</Text><Badge size="sm" variant="light" color={deployStatus === "SUCCESS" ? "green" : deployStatus === "FAILED" ? "red" : deployStatus === "IDLE" ? "gray" : "blue"}>{deployStatus}</Badge></Group></Card>
         {dialogActionDetails && <AgentActionDetails label={dialogActionDetails.label} operation={dialogActionDetails.operation} />}
         {deployError && <Text size="sm" c="red">{deployError}</Text>}
-        <Group justify="flex-end"><Button variant="default" disabled={deployDeviceAgentMutation.isPending || deployMonitoringAgentMutation.isPending} onClick={() => { setDeployTarget(null); setDeployStatus("IDLE"); setDeployError(null); setDialogActionDetails(null); }}>{deployStatus === "SUCCESS" ? "Close" : "Cancel"}</Button>{deployStatus !== "SUCCESS" && <><Button variant="light" color={deployAgentType === "device-agent" ? "cyan" : "blue"} disabled={deployDeviceAgentMutation.isPending || deployMonitoringAgentMutation.isPending || !deployAgentName.trim() || (deployAgentType === "monitor-agent" && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(deployInstance.trim())) || !/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(deployVersion.trim())} onClick={() => { if (!deployTarget) return; const common = { supervisor: deployTarget, name: deployAgentName.trim(), version: deployVersion.trim(), closeAfterStart: true }; if (deployAgentType === "device-agent") deployDeviceAgentMutation.mutate(common); else deployMonitoringAgentMutation.mutate({ ...common, instance: deployInstance.trim(), ...monitoringSlotInput }); }}>Deploy and Close</Button><Button color={deployAgentType === "device-agent" ? "cyan" : "blue"} loading={deployDeviceAgentMutation.isPending || deployMonitoringAgentMutation.isPending} disabled={!deployAgentName.trim() || (deployAgentType === "monitor-agent" && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(deployInstance.trim())) || !/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(deployVersion.trim())} onClick={() => { if (!deployTarget) return; if (deployAgentType === "device-agent") deployDeviceAgentMutation.mutate({ supervisor: deployTarget, name: deployAgentName.trim(), version: deployVersion.trim() }); else deployMonitoringAgentMutation.mutate({ supervisor: deployTarget, name: deployAgentName.trim(), instance: deployInstance.trim(), version: deployVersion.trim(), ...monitoringSlotInput }); }}>{deployAgentType === "monitor-agent" && deployTarget && missingManagedEntry(deployTarget, "monitor-agent", deployInstance) ? "Reinstall" : "Deploy"}</Button></>}</Group>
+        <Group justify="flex-end"><Button variant="default" disabled={deployDeviceAgentMutation.isPending || deployMonitoringAgentMutation.isPending} onClick={() => { setDeployTarget(null); setDeployStatus("IDLE"); setDeployError(null); setDialogActionDetails(null); }}>{deployStatus === "SUCCESS" ? "Close" : "Cancel"}</Button>{deployStatus !== "SUCCESS" && <><Button variant="light" color={deployAgentType === "device-agent" ? "cyan" : "blue"} disabled={deployDeviceAgentMutation.isPending || deployMonitoringAgentMutation.isPending || !deployAgentName.trim() || (deployAgentType === "device-agent" && !deviceSlotSelectionValid) || (deployAgentType === "monitor-agent" && (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(deployInstance.trim()) || !monitoringSlotSelectionValid)) || !/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(deployVersion.trim())} onClick={() => { if (!deployTarget) return; const common = { supervisor: deployTarget, name: deployAgentName.trim(), version: deployVersion.trim(), closeAfterStart: true }; if (deployAgentType === "device-agent") deployDeviceAgentMutation.mutate({ ...common, ...deviceSlotInput }); else deployMonitoringAgentMutation.mutate({ ...common, instance: deployInstance.trim(), ...monitoringSlotInput }); }}>Deploy and Close</Button><Button color={deployAgentType === "device-agent" ? "cyan" : "blue"} loading={deployDeviceAgentMutation.isPending || deployMonitoringAgentMutation.isPending} disabled={!deployAgentName.trim() || (deployAgentType === "device-agent" && !deviceSlotSelectionValid) || (deployAgentType === "monitor-agent" && (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(deployInstance.trim()) || !monitoringSlotSelectionValid)) || !/^\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.-]+)?$/.test(deployVersion.trim())} onClick={() => { if (!deployTarget) return; if (deployAgentType === "device-agent") deployDeviceAgentMutation.mutate({ supervisor: deployTarget, name: deployAgentName.trim(), version: deployVersion.trim(), ...deviceSlotInput }); else deployMonitoringAgentMutation.mutate({ supervisor: deployTarget, name: deployAgentName.trim(), instance: deployInstance.trim(), version: deployVersion.trim(), ...monitoringSlotInput }); }}>{deployAgentType === "monitor-agent" && deployTarget && missingManagedEntry(deployTarget, "monitor-agent", deployInstance) ? "Reinstall" : "Deploy"}</Button></>}</Group>
       </Stack>
     </Modal>
 

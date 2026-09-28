@@ -95,6 +95,7 @@ const deviceCreateSchema = z.object({
   parentDeviceId: z.string().uuid().nullable().optional(),
   healthProfileId: z.string().uuid().nullable().optional(),
   controlAgentId: z.string().uuid().nullable().optional(),
+  controlSlotId: z.string().uuid().nullable().optional(),
   controlProvider: z.string().trim().max(100).nullable().optional(),
   enabled: z.boolean().optional(),
   lastSeenAt: z.string().datetime({ offset: true }).nullable().optional(),
@@ -197,6 +198,8 @@ interface DeviceRow {
   health_profile_name: string | null;
   control_agent_id: string | null;
   control_agent_name: string | null;
+  control_slot_id: string | null;
+  control_slot_name: string | null;
   control_provider: string | null;
   enabled: boolean;
   last_seen_at: Date | null;
@@ -366,6 +369,8 @@ async function listDeviceRows(pool: Pool): Promise<DeviceRow[]> {
       hp.name AS health_profile_name,
       d.control_agent_id,
       da.name AS control_agent_name,
+      d.control_slot_id,
+      das.name AS control_slot_name,
       d.control_provider,
       d.enabled,
       d.last_seen_at,
@@ -390,7 +395,8 @@ async function listDeviceRows(pool: Pool): Promise<DeviceRow[]> {
     LEFT JOIN locations l ON l.id = d.location_id
     LEFT JOIN device_registry_devices parent ON parent.id = d.parent_device_id
     LEFT JOIN device_health_profiles hp ON hp.id = d.health_profile_id
-    LEFT JOIN device_agents da ON da.id = d.control_agent_id
+    LEFT JOIN device_agent_slots das ON das.id = d.control_slot_id
+    LEFT JOIN device_agents da ON da.id = COALESCE(das.agent_id, d.control_agent_id)
     LEFT JOIN LATERAL (
       SELECT jsonb_agg(
         jsonb_build_object('code', t.code, 'label', t.label, 'category', t.category, 'icon', t.icon, 'color', t.color, 'enabled', t.enabled, 'sortOrder', t.sort_order)
@@ -426,6 +432,60 @@ async function listDeviceRows(pool: Pool): Promise<DeviceRow[]> {
   return result.rows;
 }
 
+async function resolveDeviceAgentSlotAssignment(
+  client: PoolClient,
+  controlSlotId: string | null | undefined,
+  controlAgentId: string | null | undefined
+): Promise<{ slotId: string | null; agentId: string | null }> {
+  if (controlSlotId !== undefined) {
+    if (controlSlotId === null) {
+      return { slotId: null, agentId: null };
+    }
+
+    const slot = await client.query<{ id: string; agent_id: string | null }>(
+      "SELECT id,agent_id FROM device_agent_slots WHERE id=$1",
+      [controlSlotId]
+    );
+    if (!slot.rows[0]) {
+      throw Object.assign(new Error("Device Agent Slot not found"), { statusCode: 400 });
+    }
+
+    if (
+      controlAgentId !== undefined &&
+      controlAgentId !== null &&
+      slot.rows[0].agent_id !== controlAgentId
+    ) {
+      throw Object.assign(new Error("Device Agent does not match selected Slot"), { statusCode: 400 });
+    }
+
+    return {
+      slotId: slot.rows[0].id,
+      agentId: slot.rows[0].agent_id
+    };
+  }
+
+  if (controlAgentId !== undefined) {
+    if (controlAgentId === null) {
+      return { slotId: null, agentId: null };
+    }
+
+    const slot = await client.query<{ id: string }>(
+      "SELECT id FROM device_agent_slots WHERE agent_id=$1",
+      [controlAgentId]
+    );
+    if (!slot.rows[0]) {
+      throw Object.assign(new Error("Device Agent has no Slot"), { statusCode: 400 });
+    }
+
+    return {
+      slotId: slot.rows[0].id,
+      agentId: controlAgentId
+    };
+  }
+
+  return { slotId: null, agentId: null };
+}
+
 async function getDeviceRow(pool: Pool, id: string): Promise<DeviceRow | null> {
   const rows = await listDeviceRows(pool);
   return rows.find(row => row.id === id) ?? null;
@@ -456,6 +516,8 @@ function mapDevice(row: DeviceRow, identities: IdentityRow[], links: LinkRow[], 
     healthProfile: row.health_profile_id ? { id: row.health_profile_id, name: row.health_profile_name ?? row.health_profile_id } : null,
     controlAgentId: row.control_agent_id,
     controlAgent: row.control_agent_id ? { id: row.control_agent_id, name: row.control_agent_name ?? row.control_agent_id } : null,
+    controlSlotId: row.control_slot_id,
+    controlSlot: row.control_slot_id ? { id: row.control_slot_id, name: row.control_slot_name ?? row.control_slot_id } : null,
     controlProvider: row.control_provider,
     enabled: row.enabled,
     lastSeenAt: row.last_seen_at?.toISOString() ?? null,
@@ -965,19 +1027,24 @@ export async function registerDeviceRegistryFeature(
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+      const controlAssignment = await resolveDeviceAgentSlotAssignment(
+        client,
+        input.controlSlotId,
+        input.controlAgentId
+      );
       const result = await client.query<{ id: string }>(`
         INSERT INTO device_registry_devices (
           name, device_class, device_type, technology, icon_override, mac_address, ip_address, ieee_address, fqdn, manufacturer, model,
           firmware_version, description, location_id, parent_device_id,
-          health_profile_id, control_agent_id, control_provider, enabled, last_seen_at, battery_percent, rssi
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7::inet,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+          health_profile_id, control_slot_id, control_agent_id, control_provider, enabled, last_seen_at, battery_percent, rssi
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7::inet,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
         RETURNING id
       `, [
         input.name, input.deviceClass, input.deviceType, input.technology ?? null, input.iconOverride ?? null,
         input.macAddress ?? null, input.ipAddress ?? null, input.ieeeAddress ?? null, input.fqdn ?? null,
         input.manufacturer ?? null, input.model ?? null, input.firmwareVersion ?? null,
         input.description ?? null, input.locationId ?? null, input.parentDeviceId ?? null,
-        input.healthProfileId ?? null, input.controlAgentId ?? null,
+        input.healthProfileId ?? null, controlAssignment.slotId, controlAssignment.agentId,
         input.controlProvider ?? controlProviderFromTechnologies(input.technologies ?? (input.technology ? [input.technology] : [])),
         input.enabled ?? true, input.lastSeenAt ?? null, input.batteryPercent ?? null, input.rssi ?? null
       ]);
@@ -1018,6 +1085,20 @@ export async function registerDeviceRegistryFeature(
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+      const controlAssignmentChanged =
+        Object.prototype.hasOwnProperty.call(input, "controlSlotId") ||
+        Object.prototype.hasOwnProperty.call(input, "controlAgentId");
+      const controlAssignment = controlAssignmentChanged
+        ? await resolveDeviceAgentSlotAssignment(
+            client,
+            input.controlSlotId,
+            input.controlAgentId
+          )
+        : {
+            slotId: existing.control_slot_id,
+            agentId: existing.control_agent_id
+          };
+
       await client.query(`
         UPDATE device_registry_devices SET
           name = COALESCE($2, name),
@@ -1036,12 +1117,13 @@ export async function registerDeviceRegistryFeature(
           location_id = CASE WHEN $25::boolean THEN $26::uuid ELSE location_id END,
           parent_device_id = CASE WHEN $27::boolean THEN $28::uuid ELSE parent_device_id END,
           health_profile_id = CASE WHEN $29::boolean THEN $30::uuid ELSE health_profile_id END,
-          control_agent_id = CASE WHEN $31::boolean THEN $32::uuid ELSE control_agent_id END,
-          control_provider = CASE WHEN $33::boolean THEN $34 ELSE control_provider END,
-          enabled = COALESCE($35::boolean, enabled),
-          last_seen_at = CASE WHEN $36::boolean THEN $37::timestamptz ELSE last_seen_at END,
-          battery_percent = CASE WHEN $38::boolean THEN $39::double precision ELSE battery_percent END,
-          rssi = CASE WHEN $40::boolean THEN $41::double precision ELSE rssi END,
+          control_slot_id = CASE WHEN $31::boolean THEN $32::uuid ELSE control_slot_id END,
+          control_agent_id = CASE WHEN $31::boolean THEN $33::uuid ELSE control_agent_id END,
+          control_provider = CASE WHEN $34::boolean THEN $35 ELSE control_provider END,
+          enabled = COALESCE($36::boolean, enabled),
+          last_seen_at = CASE WHEN $37::boolean THEN $38::timestamptz ELSE last_seen_at END,
+          battery_percent = CASE WHEN $39::boolean THEN $40::double precision ELSE battery_percent END,
+          rssi = CASE WHEN $41::boolean THEN $42::double precision ELSE rssi END,
           updated_at = NOW()
         WHERE id = $1
       `, [
@@ -1062,7 +1144,7 @@ export async function registerDeviceRegistryFeature(
         Object.prototype.hasOwnProperty.call(input, "locationId"), input.locationId ?? null,
         Object.prototype.hasOwnProperty.call(input, "parentDeviceId"), input.parentDeviceId ?? null,
         Object.prototype.hasOwnProperty.call(input, "healthProfileId"), input.healthProfileId ?? null,
-        Object.prototype.hasOwnProperty.call(input, "controlAgentId"), input.controlAgentId ?? null,
+        controlAssignmentChanged, controlAssignment.slotId, controlAssignment.agentId,
         Object.prototype.hasOwnProperty.call(input, "controlProvider") || Object.prototype.hasOwnProperty.call(input, "technologies"),
         Object.prototype.hasOwnProperty.call(input, "controlProvider")
           ? input.controlProvider ?? null

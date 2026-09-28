@@ -16,8 +16,13 @@ const actionSchema = z.string().trim().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/)
 const agentCreateSchema = z.object({
   name: z.string().trim().min(1).max(200),
   labels: z.record(z.string(), z.string()).optional(),
-  heartbeatTimeoutSeconds: z.number().int().min(15).max(3600).optional()
-}).strict();
+  heartbeatTimeoutSeconds: z.number().int().min(15).max(3600).optional(),
+  slotId: z.string().uuid().optional(),
+  slotName: z.string().trim().min(1).max(200).optional()
+}).strict().refine(
+  value => !(value.slotId && value.slotName),
+  "Provide either slotId or slotName, not both"
+);
 
 const agentUpdateSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
@@ -230,6 +235,19 @@ interface AgentRow {
   managed_by_supervisor_id?: string | null;
   managed_by_supervisor_name?: string | null;
   managed_instance?: string | null;
+  slot_id?: string | null;
+  slot_name?: string | null;
+}
+
+interface DeviceAgentSlotRow {
+  id: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  agent_id: string | null;
+  agent_name?: string | null;
+  created_at: Date;
+  updated_at: Date;
 }
 
 interface DeviceControlRow {
@@ -377,6 +395,8 @@ function agentDto(row: AgentRow, connected: boolean) {
     managedBySupervisorId: row.managed_by_supervisor_id ?? null,
     managedBySupervisorName: row.managed_by_supervisor_name ?? null,
     managedInstance: row.managed_instance ?? null,
+    slotId: row.slot_id ?? null,
+    slotName: row.slot_name ?? null,
     lastSeenAt: row.last_seen_at?.toISOString() ?? null,
     heartbeatTimeoutSeconds: row.heartbeat_timeout_seconds,
     online: row.enabled && connected && recent,
@@ -2075,6 +2095,149 @@ export async function registerDeviceControlFeature(
     return reply.send(await forceAgentReleaseRefresh());
   });
 
+  app.get("/api/v1/device-control/slots", async (_request, reply) => {
+    const result = await pool.query<DeviceAgentSlotRow>(
+      `SELECT s.*, a.name AS agent_name
+       FROM device_agent_slots s
+       LEFT JOIN device_agents a ON a.id=s.agent_id
+       ORDER BY LOWER(s.name), s.id`
+    );
+    return reply.send(result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      enabled: row.enabled,
+      agentId: row.agent_id,
+      agentName: row.agent_name ?? null,
+      bound: row.agent_id != null,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString()
+    })));
+  });
+
+  app.post("/api/v1/device-control/slots", async (request: FastifyRequest<{ Body: unknown }>, reply) => {
+    const input = z.object({
+      name: z.string().trim().min(1).max(200),
+      description: z.string().trim().max(1000).nullable().optional(),
+      enabled: z.boolean().optional(),
+      agentId: z.string().uuid().nullable().optional()
+    }).strict().parse(request.body);
+
+    try {
+      const result = await pool.query<DeviceAgentSlotRow>(
+        `INSERT INTO device_agent_slots (name,description,enabled,agent_id)
+         VALUES ($1,$2,$3,$4)
+         RETURNING *`,
+        [input.name, input.description ?? null, input.enabled ?? true, input.agentId ?? null]
+      );
+      const row = result.rows[0]!;
+      return reply.code(201).send({
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        enabled: row.enabled,
+        agentId: row.agent_id,
+        agentName: null,
+        bound: row.agent_id != null,
+        createdAt: row.created_at.toISOString(),
+        updatedAt: row.updated_at.toISOString()
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505") {
+        return reply.code(409).send({ error: "Slot name or Device Agent is already assigned" });
+      }
+      throw error;
+    }
+  });
+
+  app.patch("/api/v1/device-control/slots/:id", async (request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply) => {
+    const input = z.object({
+      name: z.string().trim().min(1).max(200).optional(),
+      description: z.string().trim().max(1000).nullable().optional(),
+      enabled: z.boolean().optional(),
+      agentId: z.string().uuid().nullable().optional()
+    }).strict().refine(value => Object.keys(value).length > 0).parse(request.body);
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const current = await client.query<DeviceAgentSlotRow>(
+        "SELECT * FROM device_agent_slots WHERE id=$1 FOR UPDATE",
+        [request.params.id]
+      );
+      if (!current.rows[0]) {
+        await client.query("ROLLBACK");
+        return reply.code(404).send({ error: "Device Agent Slot not found" });
+      }
+
+      const nextAgentId = input.agentId !== undefined ? input.agentId : current.rows[0].agent_id;
+      if (nextAgentId) {
+        await client.query(
+          `UPDATE device_agent_slots
+           SET agent_id=NULL, updated_at=NOW()
+           WHERE agent_id=$1 AND id<>$2`,
+          [nextAgentId, request.params.id]
+        );
+      }
+
+      const result = await client.query<DeviceAgentSlotRow>(
+        `UPDATE device_agent_slots
+         SET name=$2, description=$3, enabled=$4, agent_id=$5, updated_at=NOW()
+         WHERE id=$1 RETURNING *`,
+        [
+          request.params.id,
+          input.name ?? current.rows[0].name,
+          input.description !== undefined ? input.description : current.rows[0].description,
+          input.enabled ?? current.rows[0].enabled,
+          nextAgentId
+        ]
+      );
+
+      await client.query(
+        `UPDATE device_registry_devices d
+         SET control_agent_id=s.agent_id, updated_at=NOW()
+         FROM device_agent_slots s
+         WHERE d.control_slot_id=s.id
+           AND d.control_agent_id IS DISTINCT FROM s.agent_id`
+      );
+
+      await client.query("COMMIT");
+      const row = result.rows[0]!;
+      return reply.send({
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        enabled: row.enabled,
+        agentId: row.agent_id,
+        agentName: null,
+        bound: row.agent_id != null,
+        createdAt: row.created_at.toISOString(),
+        updatedAt: row.updated_at.toISOString()
+      });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      if ((error as { code?: string }).code === "23505") {
+        return reply.code(409).send({ error: "Slot name is already in use" });
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+
+  app.delete("/api/v1/device-control/slots/:id", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    const count = await pool.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM device_registry_devices WHERE control_slot_id=$1",
+      [request.params.id]
+    );
+    if (Number(count.rows[0]?.count ?? "0") > 0) {
+      return reply.code(409).send({ error: "Slot is still assigned to one or more Devices" });
+    }
+    const result = await pool.query("DELETE FROM device_agent_slots WHERE id=$1", [request.params.id]);
+    if (result.rowCount === 0) return reply.code(404).send({ error: "Device Agent Slot not found" });
+    return reply.code(204).send();
+  });
+
   app.get("/api/v1/device-control/agents", async (_request, reply) => {
     // Defensive reconciliation: if the Agent already reports the requested version,
     // a transitional lifecycle is complete even if a late Supervisor result or an
@@ -2090,10 +2253,13 @@ export async function registerDeviceControlFeature(
       sma.id AS managed_association_id,
       sma.supervisor_agent_id AS managed_by_supervisor_id,
       s.name AS managed_by_supervisor_name,
-      sma.instance AS managed_instance
+      sma.instance AS managed_instance,
+      das.id AS slot_id,
+      das.name AS slot_name
       FROM device_agents a
       LEFT JOIN supervisor_managed_agents sma ON sma.device_agent_id=a.id
       LEFT JOIN supervisor_agents s ON s.id=sma.supervisor_agent_id
+      LEFT JOIN device_agent_slots das ON das.agent_id=a.id
       ORDER BY LOWER(a.name), a.id`);
     return reply.send(result.rows.map(row => agentDto(row, sockets.has(row.id))));
   });
@@ -2103,15 +2269,75 @@ export async function registerDeviceControlFeature(
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid device agent" });
     const input = parsed.data;
     const token = generateToken();
+    const client = await pool.connect();
     try {
-      const result = await pool.query<AgentRow>(`
+      await client.query("BEGIN");
+      const result = await client.query<AgentRow>(`
         INSERT INTO device_agents (name, token_hash, labels, heartbeat_timeout_seconds)
         VALUES ($1,$2,$3::jsonb,$4) RETURNING *
       `, [input.name, hashToken(token), JSON.stringify(input.labels ?? {}), input.heartbeatTimeoutSeconds ?? 60]);
-      return reply.code(201).send({ agent: agentDto(result.rows[0]!, false), token });
+      const agent = result.rows[0]!;
+      let slot: DeviceAgentSlotRow;
+
+      if (input.slotId) {
+        const selected = await client.query<DeviceAgentSlotRow>(
+          `UPDATE device_agent_slots
+           SET agent_id=$2, updated_at=NOW()
+           WHERE id=$1 AND agent_id IS NULL
+           RETURNING *`,
+          [input.slotId, agent.id]
+        );
+        if (!selected.rows[0]) {
+          const existingSlot = await client.query<DeviceAgentSlotRow>(
+            "SELECT * FROM device_agent_slots WHERE id=$1",
+            [input.slotId]
+          );
+          if (!existingSlot.rows[0]) throw Object.assign(new Error("Device Agent Slot not found"), { statusCode: 404 });
+          throw Object.assign(new Error("Device Agent Slot is already bound"), { statusCode: 409 });
+        }
+        slot = selected.rows[0];
+      } else if (input.slotName) {
+        const rebound = await client.query<DeviceAgentSlotRow>(
+          `UPDATE device_agent_slots SET agent_id=$2, updated_at=NOW()
+           WHERE name=$1 AND agent_id IS NULL RETURNING *`,
+          [input.slotName, agent.id]
+        );
+        slot = rebound.rows[0] ?? (await client.query<DeviceAgentSlotRow>(
+          `INSERT INTO device_agent_slots (name,agent_id) VALUES ($1,$2) RETURNING *`,
+          [input.slotName, agent.id]
+        )).rows[0]!;
+      } else {
+        const rebound = await client.query<DeviceAgentSlotRow>(
+          `UPDATE device_agent_slots SET agent_id=$2, updated_at=NOW()
+           WHERE name=$1 AND agent_id IS NULL RETURNING *`,
+          [input.name, agent.id]
+        );
+        slot = rebound.rows[0] ?? (await client.query<DeviceAgentSlotRow>(
+          `INSERT INTO device_agent_slots (name,agent_id) VALUES ($1,$2) RETURNING *`,
+          [input.name, agent.id]
+        )).rows[0]!;
+      }
+
+      await client.query(
+        `UPDATE device_registry_devices
+         SET control_agent_id=$2, updated_at=NOW()
+         WHERE control_slot_id=$1`,
+        [slot.id, agent.id]
+      );
+      await client.query("COMMIT");
+      return reply.code(201).send({
+        agent: agentDto({ ...agent, slot_id: slot.id, slot_name: slot.name }, false),
+        token
+      });
     } catch (error) {
-      if ((error as { code?: string }).code === "23505") return reply.code(409).send({ error: `Device Agent '${input.name}' already exists` });
+      await client.query("ROLLBACK");
+      if ((error as { statusCode?: number }).statusCode) {
+        return reply.code((error as { statusCode: number }).statusCode).send({ error: (error as Error).message });
+      }
+      if ((error as { code?: string }).code === "23505") return reply.code(409).send({ error: `Device Agent '${input.name}' or its Slot already exists` });
       throw error;
+    } finally {
+      client.release();
     }
   });
 
