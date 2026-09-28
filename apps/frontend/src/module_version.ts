@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.91.3";
+export const MODULE_VERSION = "1.92.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.92.0": {
+    releasedAt: "2026-09-28T21:10:00+02:00",
+    patch: "PR-283-slot-aware-monitoring-agent-provisioning-v1.patch",
+    changes: [
+      { type: "added", description: "Add explicit Monitoring Slot selection to Supervisor Deploy Monitoring Agent" },
+      { type: "changed", description: "Preserve the existing Slot automatically during Monitoring Agent reinstall/deploy retries" },
+      { type: "added", description: "Display Monitoring Slots in the Managed Runtime Inspector" }
+    ]
+  },
   "1.91.3": {
     releasedAt: "2026-09-28T19:39:00+02:00",
     patch: "PR-282-device-check-no-slots-filter-and-auto-refresh-v1.patch",

@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.51.0";
+export const MODULE_VERSION = "1.52.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.52.0": {
+    releasedAt: "2026-09-28T21:10:00+02:00",
+    patch: "PR-283-slot-aware-monitoring-agent-provisioning-v1.patch",
+    changes: [
+      { type: "added", description: "Allow Monitoring Agent creation to bind explicitly to an existing unbound Slot or create a named Slot independent of the agent name" },
+      { type: "changed", description: "Keep homonymous Slot auto-rebinding as backward-compatible fallback when no explicit Slot is provided" }
+    ]
+  },
   "1.51.0": {
     releasedAt: "2026-09-28T11:11:26+02:00",
     patch: "PR-279-monitoring-agent-slots-v1.patch",

@@ -16,8 +16,13 @@ const resultStatusSchema = z.enum(["UP", "DOWN", "UNKNOWN"]);
 const agentCreateSchema = z.object({
   name: z.string().trim().min(1).max(200),
   labels: z.record(z.string(), z.string()).optional(),
-  heartbeatTimeoutSeconds: z.number().int().min(15).max(3600).optional()
-}).strict();
+  heartbeatTimeoutSeconds: z.number().int().min(15).max(3600).optional(),
+  slotId: z.string().uuid().optional(),
+  slotName: z.string().trim().min(1).max(200).optional()
+}).strict().refine(
+  value => !(value.slotId && value.slotName),
+  "Provide either slotId or slotName, not both"
+);
 
 const agentUpdateSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
@@ -690,19 +695,56 @@ export async function registerMonitoringFeature(app: FastifyInstance, options: M
         [input.name, hashToken(token), JSON.stringify(input.labels ?? {}), input.heartbeatTimeoutSeconds ?? 90]
       );
       const agent = result.rows[0]!;
-      const rebound = await client.query<SlotRow>(
-        `UPDATE monitoring_agent_slots
-         SET agent_id=$2, updated_at=NOW()
-         WHERE name=$1 AND agent_id IS NULL
-         RETURNING *`,
-        [input.name, agent.id]
-      );
-      const slot = rebound.rows[0] ?? (await client.query<SlotRow>(
-        `INSERT INTO monitoring_agent_slots (name, agent_id)
-         VALUES ($1,$2)
-         RETURNING *`,
-        [input.name, agent.id]
-      )).rows[0]!;
+      let slot: SlotRow;
+
+      if (input.slotId) {
+        const selected = await client.query<SlotRow>(
+          `UPDATE monitoring_agent_slots
+           SET agent_id=$2, updated_at=NOW()
+           WHERE id=$1 AND agent_id IS NULL
+           RETURNING *`,
+          [input.slotId, agent.id]
+        );
+        if (!selected.rows[0]) {
+          const existingSlot = await client.query<SlotRow>(
+            "SELECT * FROM monitoring_agent_slots WHERE id=$1",
+            [input.slotId]
+          );
+          if (!existingSlot.rows[0]) {
+            throw Object.assign(new Error("Monitoring Slot not found"), { statusCode: 404 });
+          }
+          throw Object.assign(new Error("Monitoring Slot is already bound"), { statusCode: 409 });
+        }
+        slot = selected.rows[0];
+      } else if (input.slotName) {
+        const rebound = await client.query<SlotRow>(
+          `UPDATE monitoring_agent_slots
+           SET agent_id=$2, updated_at=NOW()
+           WHERE name=$1 AND agent_id IS NULL
+           RETURNING *`,
+          [input.slotName, agent.id]
+        );
+        slot = rebound.rows[0] ?? (await client.query<SlotRow>(
+          `INSERT INTO monitoring_agent_slots (name, agent_id)
+           VALUES ($1,$2)
+           RETURNING *`,
+          [input.slotName, agent.id]
+        )).rows[0]!;
+      } else {
+        const rebound = await client.query<SlotRow>(
+          `UPDATE monitoring_agent_slots
+           SET agent_id=$2, updated_at=NOW()
+           WHERE name=$1 AND agent_id IS NULL
+           RETURNING *`,
+          [input.name, agent.id]
+        );
+        slot = rebound.rows[0] ?? (await client.query<SlotRow>(
+          `INSERT INTO monitoring_agent_slots (name, agent_id)
+           VALUES ($1,$2)
+           RETURNING *`,
+          [input.name, agent.id]
+        )).rows[0]!;
+      }
       await client.query("COMMIT");
       reply.code(201);
       return {

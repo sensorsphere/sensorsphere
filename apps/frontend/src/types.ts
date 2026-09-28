@@ -1173,6 +1173,8 @@ export interface CreateMonitoringAgentInput {
   name: string;
   labels?: Record<string, string>;
   heartbeatTimeoutSeconds?: number;
+  slotId?: string;
+  slotName?: string;
 }
 
 export interface UpdateMonitoringAgentInput {
