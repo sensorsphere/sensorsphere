@@ -27,6 +27,7 @@ import {
   enableUser,
   getAuthAudit,
   getUsers,
+  oidcLinkUrl,
   rejectUser,
   setUserRole,
   unlinkUserIdentity
@@ -38,9 +39,15 @@ import type {
 } from "./types";
 
 export function UsersPanel({
-  devMode
+  devMode,
+  authEnabled,
+  currentUserId,
+  enabledProviders
 }: {
   devMode: boolean;
+  authEnabled: boolean;
+  currentUserId: string | null;
+  enabledProviders: IdentityProvider[];
 }) {
   const [email, setEmail] = React.useState("");
   const [roleFilter, setRoleFilter] = React.useState<string | null>("all");
@@ -446,6 +453,38 @@ export function UsersPanel({
               <Text size="sm" c="dimmed">
                 No external login identities linked yet.
               </Text>
+            )}
+
+            {authEnabled && identityUser.id === currentUserId && (
+              <Card withBorder>
+                <Stack gap="sm">
+                  <Text fw={600}>Link another sign-in identity</Text>
+                  <Text size="sm" c="dimmed">
+                    The new provider account will be linked only after a
+                    successful OIDC sign-in while this session remains active.
+                  </Text>
+                  <Group gap="xs">
+                    {enabledProviders.includes("google") && (
+                      <Button
+                        component="a"
+                        href={oidcLinkUrl("google")}
+                        variant="light"
+                      >
+                        Link Google identity
+                      </Button>
+                    )}
+                    {enabledProviders.includes("microsoft") && (
+                      <Button
+                        component="a"
+                        href={oidcLinkUrl("microsoft")}
+                        variant="light"
+                      >
+                        Link Microsoft identity
+                      </Button>
+                    )}
+                  </Group>
+                </Stack>
+              </Card>
             )}
 
             {devMode && (

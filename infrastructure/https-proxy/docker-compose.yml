@@ -1,0 +1,23 @@
+services:
+  caddy:
+    build:
+      context: .
+    image: sensorsphere-caddy-cloudflare:2.11.4
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN must be defined}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL must be defined}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  caddy_data:
+  caddy_config:

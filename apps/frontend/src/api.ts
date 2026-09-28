@@ -138,6 +138,25 @@ Promise<AuthContext> {
   );
 }
 
+export async function logout(): Promise<void> {
+  const response = await fetch(
+    "/api/v1/auth/logout",
+    {
+      method: "POST",
+      headers: devAuthHeaders()
+    }
+  );
+  if (!response.ok) await readJson<unknown>(response);
+}
+
+export function oidcLoginUrl(provider: IdentityProvider): string {
+  return `/api/v1/auth/oidc/${provider}/start`;
+}
+
+export function oidcLinkUrl(provider: IdentityProvider): string {
+  return `/api/v1/auth/oidc/${provider}/link`;
+}
+
 export async function getUsers():
 Promise<SensorSphereUser[]> {
   return readJson<SensorSphereUser[]>(

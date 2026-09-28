@@ -54,10 +54,20 @@ export type IdentityProvider = "google" | "microsoft";
 
 export interface AuthContext {
   enabled: boolean;
+  authenticated: boolean;
   devRoleSwitchEnabled: boolean;
   devDefaultRole: SensorSphereRole;
   role: SensorSphereRole | null;
   isAdmin: boolean;
+  status: "pending" | "active" | "disabled" | "rejected" | null;
+  user: {
+    id: string;
+    email: string;
+    displayName: string | null;
+    role: SensorSphereRole;
+    status: "pending" | "active" | "disabled" | "rejected";
+    isBootstrapAdmin: boolean;
+  } | null;
   providers: IdentityProvider[];
 }
 

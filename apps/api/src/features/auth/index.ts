@@ -1,6 +1,22 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Pool, PoolClient } from "pg";
 
+import {
+  buildAuthorizationUrl,
+  exchangeAndValidateIdToken,
+  randomToken,
+  sha256,
+  type OidcProvider
+} from "./oidc.js";
+import {
+  clearSessionCookie,
+  createSession,
+  deleteSession,
+  readSessionUser,
+  setSessionCookie,
+  type SessionUser
+} from "./session.js";
+
 export type SensorSphereRole = "admin" | "user";
 export type SensorSphereUserStatus =
   | "pending"
@@ -56,6 +72,11 @@ function requestRole(request: FastifyRequest): SensorSphereRole | null {
   return settings.defaultRole;
 }
 function requireAdmin(request: FastifyRequest): void {
+  const sessionUser = (request as FastifyRequest & {
+    sensorSphereUser?: SessionUser;
+  }).sensorSphereUser;
+
+  if (sessionUser?.role === "admin") return;
   if (requestRole(request) === "admin") return;
 
   const error = new Error("Administrator role required") as Error & {
@@ -135,7 +156,62 @@ async function ensureBootstrapAdmin(pool: Pool) {
      WHERE is_bootstrap_admin = TRUE
      LIMIT 1`
   );
-  if (existing.rows[0]) return;
+
+  if (existing.rows[0]) {
+    const bootstrap = existing.rows[0];
+
+    if (bootstrap.email === bootstrapAdminEmail) return;
+
+    const identities = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM user_identities
+       WHERE user_id = $1`,
+      [bootstrap.id]
+    );
+
+    // Before the first real OIDC identity is attached, the bootstrap address
+    // may be corrected in configuration without creating a permanent
+    // privilege-escalation path. After first identity link it is immutable.
+    if (Number(identities.rows[0]?.count ?? "0") > 0) return;
+
+    const configuredUser = await pool.query(
+      "SELECT id FROM users WHERE email = $1 LIMIT 1",
+      [bootstrapAdminEmail]
+    );
+
+    if (configuredUser.rows[0]) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          `UPDATE users
+           SET role = 'admin',
+               status = 'active',
+               is_bootstrap_admin = TRUE,
+               approved_at = COALESCE(approved_at, NOW())
+           WHERE id = $1`,
+          [configuredUser.rows[0].id]
+        );
+        await client.query(
+          "DELETE FROM users WHERE id = $1",
+          [bootstrap.id]
+        );
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+      return;
+    }
+
+    await pool.query(
+      "UPDATE users SET email = $2 WHERE id = $1",
+      [bootstrap.id, bootstrapAdminEmail]
+    );
+    return;
+  }
 
   const admins = await pool.query<{ count: string }>(
     `SELECT COUNT(*)::text AS count
@@ -197,6 +273,235 @@ function parseProvider(value: unknown): IdentityProvider {
   return httpError(400, "Provider must be google or microsoft");
 }
 
+function publicUrl(): string {
+  const value =
+    process.env.SENSORSPHERE_PUBLIC_URL?.trim().replace(/\/$/, "") ?? "";
+  if (!value) {
+    httpError(503, "SENSORSPHERE_PUBLIC_URL is not configured");
+  }
+  return value;
+}
+
+function parseOidcProvider(value: unknown): OidcProvider {
+  if (value === "google" || value === "microsoft") return value;
+  return httpError(404, "OIDC provider not found");
+}
+
+function identityFromClaims(
+  provider: OidcProvider,
+  claims: {
+    sub?: string;
+    oid?: string;
+    tid?: string;
+    email?: string;
+    preferred_username?: string;
+    name?: string;
+  }
+) {
+  const providerEmail =
+    (claims.email || claims.preferred_username)?.trim().toLowerCase() || null;
+
+  if (provider === "google") {
+    if (!claims.sub) httpError(401, "Google identity is missing sub");
+    return {
+      providerSubject: claims.sub,
+      providerTenant: null,
+      providerEmail,
+      displayName: claims.name?.trim() || null
+    };
+  }
+
+  if (!claims.oid || !claims.tid) {
+    httpError(401, "Microsoft identity is missing oid or tid");
+  }
+
+  return {
+    providerSubject: `${claims.tid}:${claims.oid}`,
+    providerTenant: claims.tid,
+    providerEmail,
+    displayName: claims.name?.trim() || null
+  };
+}
+
+async function resolveOidcUser(
+  pool: Pool,
+  provider: OidcProvider,
+  identity: {
+    providerSubject: string;
+    providerTenant: string | null;
+    providerEmail: string | null;
+    displayName: string | null;
+  },
+  linkUserId: string | null
+): Promise<Record<string, any>> {
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    if (linkUserId) {
+      const target = await getUserRow(client, linkUserId);
+
+      try {
+        await client.query(
+          `INSERT INTO user_identities (
+             user_id, provider, provider_subject, provider_tenant,
+             provider_email, last_login_at
+           ) VALUES ($1, $2, $3, $4, $5, NOW())`,
+          [
+            linkUserId,
+            provider,
+            identity.providerSubject,
+            identity.providerTenant,
+            identity.providerEmail
+          ]
+        );
+      } catch (error) {
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          error.code === "23505"
+        ) {
+          httpError(409, "This provider identity is already linked");
+        }
+        throw error;
+      }
+
+      await audit(client, "identity.link.oidc", linkUserId, { provider });
+      await client.query("COMMIT");
+      return target;
+    }
+
+    const existingIdentity = await client.query(
+      `SELECT u.*
+       FROM user_identities i
+       JOIN users u ON u.id = i.user_id
+       WHERE i.provider = $1
+         AND i.provider_subject = $2
+       LIMIT 1`,
+      [provider, identity.providerSubject]
+    );
+
+    if (existingIdentity.rows[0]) {
+      const user = existingIdentity.rows[0];
+
+      await client.query(
+        `UPDATE user_identities
+         SET provider_tenant = $3,
+             provider_email = $4,
+             last_login_at = NOW()
+         WHERE provider = $1
+           AND provider_subject = $2`,
+        [
+          provider,
+          identity.providerSubject,
+          identity.providerTenant,
+          identity.providerEmail
+        ]
+      );
+
+      await client.query(
+        "UPDATE users SET last_login_at = NOW() WHERE id = $1",
+        [user.id]
+      );
+
+      await client.query("COMMIT");
+      return {
+        ...user,
+        last_login_at: new Date()
+      };
+    }
+
+    const settings = authSettings();
+    const bootstrapMatch =
+      settings.bootstrapAdminEmail &&
+      identity.providerEmail === settings.bootstrapAdminEmail;
+
+    if (bootstrapMatch) {
+      const bootstrap = await client.query(
+        `SELECT *
+         FROM users
+         WHERE is_bootstrap_admin = TRUE
+            OR email = $1
+         ORDER BY is_bootstrap_admin DESC
+         LIMIT 1`,
+        [settings.bootstrapAdminEmail]
+      );
+
+      if (bootstrap.rows[0]) {
+        const user = bootstrap.rows[0];
+        await client.query(
+          `INSERT INTO user_identities (
+             user_id, provider, provider_subject, provider_tenant,
+             provider_email, last_login_at
+           ) VALUES ($1, $2, $3, $4, $5, NOW())`,
+          [
+            user.id,
+            provider,
+            identity.providerSubject,
+            identity.providerTenant,
+            identity.providerEmail
+          ]
+        );
+        await client.query(
+          "UPDATE users SET last_login_at = NOW() WHERE id = $1",
+          [user.id]
+        );
+        await audit(client, "identity.bootstrap.link", user.id, { provider });
+        await client.query("COMMIT");
+        return user;
+      }
+    }
+
+    if (!identity.providerEmail) {
+      httpError(409, "Provider did not return an email for a new account");
+    }
+
+    const sameEmail = await client.query(
+      "SELECT id FROM users WHERE email = $1 LIMIT 1",
+      [identity.providerEmail]
+    );
+    if (sameEmail.rows[0]) {
+      httpError(
+        409,
+        "This email already belongs to a SensorSphere account; sign in with an existing identity and link this provider explicitly"
+      );
+    }
+
+    const created = await client.query(
+      `INSERT INTO users (
+         email, display_name, role, status
+       ) VALUES ($1, $2, 'user', 'pending')
+       RETURNING *`,
+      [identity.providerEmail, identity.displayName]
+    );
+    const user = created.rows[0];
+
+    await client.query(
+      `INSERT INTO user_identities (
+         user_id, provider, provider_subject, provider_tenant,
+         provider_email, last_login_at
+       ) VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [
+        user.id,
+        provider,
+        identity.providerSubject,
+        identity.providerTenant,
+        identity.providerEmail
+      ]
+    );
+    await audit(client, "user.create.oidc", user.id, { provider });
+    await client.query("COMMIT");
+    return user;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function registerAuthFeature(
   app: FastifyInstance,
   deps: { pool: Pool }
@@ -206,15 +511,186 @@ export async function registerAuthFeature(
 
   app.get("/api/v1/auth/context", async request => {
     const settings = authSettings();
+
+    if (settings.enabled) {
+      const user = await readSessionUser(pool, request);
+      return {
+        enabled: true,
+        authenticated: Boolean(user),
+        devRoleSwitchEnabled: false,
+        devDefaultRole: settings.defaultRole,
+        role: user?.role ?? null,
+        isAdmin: user?.role === "admin" && user.status === "active",
+        status: user?.status ?? null,
+        user: user
+          ? {
+              id: user.id,
+              email: user.email,
+              displayName: user.displayName,
+              role: user.role,
+              status: user.status,
+              isBootstrapAdmin: user.isBootstrapAdmin
+            }
+          : null,
+        providers: settings.providers
+      };
+    }
+
     const role = requestRole(request);
     return {
-      enabled: settings.enabled,
+      enabled: false,
+      authenticated: true,
       devRoleSwitchEnabled: settings.devRoleSwitchEnabled,
       devDefaultRole: settings.defaultRole,
       role,
       isAdmin: role === "admin",
+      status: "active",
+      user: null,
       providers: settings.providers
     };
+  });
+
+  app.get("/api/v1/auth/oidc/:provider/start", async (request, reply) => {
+    const settings = authSettings();
+    if (!settings.enabled) {
+      httpError(404, "OIDC authentication is not enabled");
+    }
+
+    const { provider: rawProvider } = request.params as { provider: string };
+    const provider = parseOidcProvider(rawProvider);
+    if (!settings.providers.includes(provider)) {
+      httpError(404, "OIDC provider is not enabled");
+    }
+
+    const state = randomToken();
+    const nonce = randomToken();
+
+    await pool.query(
+      `DELETE FROM auth_oidc_requests WHERE expires_at <= NOW()`
+    );
+    await pool.query(
+      `INSERT INTO auth_oidc_requests (
+         state_hash, provider, nonce, link_user_id,
+         redirect_after, expires_at
+       ) VALUES ($1, $2, $3, NULL, '/', NOW() + INTERVAL '10 minutes')`,
+      [sha256(state), provider, nonce]
+    );
+
+    return reply.redirect(
+      await buildAuthorizationUrl(provider, state, nonce)
+    );
+  });
+
+  app.get("/api/v1/auth/oidc/:provider/link", async (request, reply) => {
+    const settings = authSettings();
+    if (!settings.enabled) {
+      httpError(404, "OIDC authentication is not enabled");
+    }
+
+    const user = await readSessionUser(pool, request);
+    if (!user || user.status !== "active") {
+      httpError(401, "Active authentication session required");
+    }
+
+    const { provider: rawProvider } = request.params as { provider: string };
+    const provider = parseOidcProvider(rawProvider);
+    if (!settings.providers.includes(provider)) {
+      httpError(404, "OIDC provider is not enabled");
+    }
+
+    const state = randomToken();
+    const nonce = randomToken();
+
+    await pool.query(
+      `INSERT INTO auth_oidc_requests (
+         state_hash, provider, nonce, link_user_id,
+         redirect_after, expires_at
+       ) VALUES ($1, $2, $3, $4, '/?page=users', NOW() + INTERVAL '10 minutes')`,
+      [sha256(state), provider, nonce, user.id]
+    );
+
+    return reply.redirect(
+      await buildAuthorizationUrl(provider, state, nonce)
+    );
+  });
+
+  app.get("/api/v1/auth/oidc/:provider/callback", async (request, reply) => {
+    const { provider: rawProvider } = request.params as { provider: string };
+    const provider = parseOidcProvider(rawProvider);
+    const query = request.query as {
+      code?: string;
+      state?: string;
+      error?: string;
+    };
+
+    if (query.error) {
+      return reply.redirect(
+        `${publicUrl()}/?auth_error=${encodeURIComponent(query.error)}`
+      );
+    }
+    if (!query.code || !query.state) {
+      httpError(400, "OIDC callback is missing code or state");
+    }
+
+    const stateResult = await pool.query(
+      `DELETE FROM auth_oidc_requests
+       WHERE state_hash = $1
+         AND provider = $2
+         AND expires_at > NOW()
+       RETURNING nonce, link_user_id, redirect_after`,
+      [sha256(query.state), provider]
+    );
+    const oidcRequest = stateResult.rows[0];
+    if (!oidcRequest) {
+      httpError(400, "OIDC state is invalid or expired");
+    }
+
+    const claims = await exchangeAndValidateIdToken(
+      provider,
+      query.code,
+      oidcRequest.nonce
+    );
+    const identity = identityFromClaims(provider, claims);
+
+    if (oidcRequest.link_user_id) {
+      const currentUser = await readSessionUser(pool, request);
+      if (
+        !currentUser ||
+        currentUser.status !== "active" ||
+        currentUser.id !== oidcRequest.link_user_id
+      ) {
+        httpError(401, "Identity linking session no longer matches");
+      }
+
+      await resolveOidcUser(
+        pool,
+        provider,
+        identity,
+        oidcRequest.link_user_id
+      );
+      return reply.redirect(
+        `${publicUrl()}${oidcRequest.redirect_after || "/"}`
+      );
+    }
+
+    const user = await resolveOidcUser(pool, provider, identity, null);
+
+    if (user.status === "disabled" || user.status === "rejected") {
+      return reply.redirect(
+        `${publicUrl()}/?auth_error=account_${encodeURIComponent(user.status)}`
+      );
+    }
+
+    const sessionToken = await createSession(pool, user.id);
+    setSessionCookie(reply, sessionToken);
+
+    return reply.redirect(publicUrl() + "/");
+  });
+
+  app.post("/api/v1/auth/logout", async (request, reply) => {
+    await deleteSession(pool, request);
+    clearSessionCookie(reply);
+    return { ok: true };
   });
 
   app.get("/api/v1/admin/users", async request => {

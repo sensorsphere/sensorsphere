@@ -46,6 +46,9 @@ import {
 import {
   registerAuthFeature
 } from "./features/auth/index.js";
+import {
+  installAuthGuard
+} from "./features/auth/session.js";
 
 import {
   registerSimpleDashboardFeature
@@ -102,6 +105,8 @@ const app = Fastify({
     level: config.LOG_LEVEL ?? "info"
   }
 });
+
+installAuthGuard(app, pool);
 
 const healthHandler = async () => {
   await pool.query("SELECT 1");

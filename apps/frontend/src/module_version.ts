@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.88.0";
+export const MODULE_VERSION = "1.89.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.89.0": {
+    releasedAt: "2026-09-28T05:28:55+02:00",
+    patch: "PR-278-https-oidc-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Add Google/Microsoft sign-in screen and Pending approval state for real OIDC authentication" },
+      { type: "added", description: "Allow the signed-in account to link another Google or Microsoft identity through OIDC" }
+    ]
+  },
   "1.88.0": {
     releasedAt: "2026-09-28T04:41:48+02:00",
     patch: "PR-277-user-management-multi-identities-v1.patch",

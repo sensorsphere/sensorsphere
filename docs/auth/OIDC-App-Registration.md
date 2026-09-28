@@ -35,9 +35,14 @@ https://sensorsphere.example.com/api/v1/auth/oidc/microsoft/callback
 Scheme, hostname, port, path, case and trailing slash must match the
 provider registration exactly.
 
-The current user/identity-management foundation reserves these variables and
-paths. Do not enable real provider authentication until the OIDC callback
-implementation is present in the deployed Stack Release.
+SensorSphere implements these callback paths directly. Before enabling real
+authentication, the target environment must have HTTPS working and
+`SENSORSPHERE_PUBLIC_URL` must contain its exact public HTTPS base URL.
+
+For the host-level HTTPS proxy and Cloudflare DNS-01 token setup, see:
+
+- `docs/auth/CloudFlare-api-token.md`
+- `infrastructure/https-proxy/README.md`
 
 ## Environment isolation
 
@@ -64,6 +69,7 @@ Example with both providers:
 
 ~~~dotenv
 SENSORSPHERE_AUTH_ENABLED=true
+SENSORSPHERE_PUBLIC_URL=https://fit.example.com
 SENSORSPHERE_AUTH_PROVIDERS=google,microsoft
 SENSORSPHERE_AUTH_BOOTSTRAP_ADMIN_EMAIL=admin@example.com
 
@@ -224,13 +230,14 @@ For each environment:
 5. Configure SENSORSPHERE_AUTH_PROVIDERS.
 6. Configure provider client IDs/secrets and Microsoft tenant when used.
 7. Configure the bootstrap admin email for initial bootstrap.
-8. Deploy a Stack Release containing the OIDC callback implementation.
-9. Test provider login.
-10. Test that an unknown user becomes Pending.
-11. Test that only an Admin can approve the request.
-12. Link a second identity and verify it opens the same SensorSphere account.
-13. Verify backend role enforcement, not only UI visibility.
-14. Perform the complete fresh-install test in FIT before PROD.
+8. Deploy a Stack Release containing the OIDC implementation.
+9. Verify `SENSORSPHERE_PUBLIC_URL` matches the HTTPS hostname exactly.
+10. Test provider login.
+11. Test that an unknown user becomes Pending.
+12. Test that only an Admin can approve the request.
+13. Link a second identity and verify it opens the same SensorSphere account.
+14. Verify backend role enforcement, not only UI visibility.
+15. Perform the complete fresh-install test in FIT before PROD.
 
 ## Secret rotation
 

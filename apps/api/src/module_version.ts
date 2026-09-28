@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.49.0";
+export const MODULE_VERSION = "1.50.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.50.0": {
+    releasedAt: "2026-09-28T05:28:55+02:00",
+    patch: "PR-278-https-oidc-foundation-v1.patch",
+    changes: [
+      { type: "added", description: "Add real Google and Microsoft OIDC authorization-code login with state, nonce and cryptographic id_token validation" },
+      { type: "added", description: "Add secure server-side SensorSphere sessions, Pending onboarding and explicit OIDC identity linking" },
+      { type: "security", description: "Protect browser API access when authentication is enabled while preserving agent bearer-token authentication" }
+    ]
+  },
   "1.49.0": {
     releasedAt: "2026-09-28T04:41:48+02:00",
     patch: "PR-277-user-management-multi-identities-v1.patch",

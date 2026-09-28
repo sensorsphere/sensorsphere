@@ -1,0 +1,24 @@
+{
+	email {$ACME_EMAIL}
+}
+
+(cloudflare_tls) {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+}
+
+dev.sensorsphere.f-colas.com {
+	import cloudflare_tls
+	reverse_proxy host.docker.internal:8080
+}
+
+dit.sensorsphere.f-colas.com {
+	import cloudflare_tls
+	reverse_proxy host.docker.internal:8081
+}
+
+test1.sensorsphere.f-colas.com {
+	import cloudflare_tls
+	reverse_proxy host.docker.internal:48080
+}
