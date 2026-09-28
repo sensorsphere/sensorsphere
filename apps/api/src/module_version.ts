@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.48.0";
+export const MODULE_VERSION = "1.49.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.49.0": {
+    releasedAt: "2026-09-28T04:41:48+02:00",
+    patch: "PR-277-user-management-multi-identities-v1.patch",
+    changes: [
+      { type: "added", description: "Add role promotion/demotion, disable/enable, reject and user-management audit endpoints" },
+      { type: "security", description: "Protect the bootstrap administrator and prevent removal of the last active administrator" },
+      { type: "added", description: "Support multiple Google and Microsoft login identities per SensorSphere account" }
+    ]
+  },
   "1.48.0": {
     releasedAt: "2026-09-28T03:59:50+02:00",
     patch: "PR-276-auth-foundation-dev-role-switch-v1.patch",

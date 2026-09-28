@@ -58,6 +58,7 @@ import {
   getMetricDisplaySettings,
   getRuntimeConfig,
   getAuthContext,
+  getUserSummary,
   setDevAuthRole,
   getModuleVersions,
   getFrontendBuildDate,
@@ -638,6 +639,21 @@ function Dashboard() {
 
       refetchOnWindowFocus:
         false
+    });
+
+  const userSummaryQuery =
+    useQuery({
+      queryKey:
+        ["admin-user-summary"],
+
+      queryFn:
+        getUserSummary,
+
+      enabled:
+        authContextQuery.data?.isAdmin === true,
+
+      refetchInterval:
+        30_000
     });
 
   const frontendBuildQuery =
@@ -2618,6 +2634,68 @@ function Dashboard() {
         </Stack>
 
         <Stack gap="xs" mt="auto" pt="md">
+          {authContextQuery.data?.isAdmin && (
+            <NavLink
+              label={
+                navbarCollapsed
+                  ? null
+                  : "Administration · Users"
+              }
+              leftSection={
+                <NavigationIcon
+                  page="users"
+                />
+              }
+              rightSection={
+                !navbarCollapsed &&
+                (userSummaryQuery.data?.pending ?? 0) > 0
+                  ? (
+                    <Badge size="xs" color="yellow" variant="light">
+                      {userSummaryQuery.data?.pending}
+                    </Badge>
+                  )
+                  : null
+              }
+              title="Administration · Users"
+              aria-label="Administration · Users"
+              active={
+                activePage ===
+                "users"
+              }
+              onClick={
+                () =>
+                  navigateTo(
+                    "users"
+                  )
+              }
+            />
+          )}
+
+          <NavLink
+            label={
+              navbarCollapsed
+                ? null
+                : "Versions"
+            }
+            leftSection={
+              <NavigationIcon
+                page="versions"
+              />
+            }
+            title="Versions"
+            aria-label="Versions"
+            active={
+              activePage ===
+                "versions"
+            }
+            onClick={
+              () =>
+                navigateTo(
+                  "versions"
+                )
+            }
+          />
+
           {projectTodosEnabled && (
             <NavLink
               label={
@@ -2654,58 +2732,6 @@ function Dashboard() {
               }
             />
           )}
-
-          {authContextQuery.data?.isAdmin && (
-            <NavLink
-              label={
-                navbarCollapsed
-                  ? null
-                  : "Administration · Users"
-              }
-              leftSection={
-                <NavigationIcon
-                  page="users"
-                />
-              }
-              title="Administration · Users"
-              aria-label="Administration · Users"
-              active={
-                activePage ===
-                "users"
-              }
-              onClick={
-                () =>
-                  navigateTo(
-                    "users"
-                  )
-              }
-            />
-          )}
-
-          <NavLink
-            label={
-              navbarCollapsed
-                ? null
-                : "Versions"
-            }
-            leftSection={
-              <NavigationIcon
-                page="versions"
-              />
-            }
-            title="Versions"
-            aria-label="Versions"
-            active={
-              activePage ===
-              "versions"
-            }
-            onClick={
-              () =>
-                navigateTo(
-                  "versions"
-                )
-            }
-          />
 
           {!navbarCollapsed && (
             <Stack

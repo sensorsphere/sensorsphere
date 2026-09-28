@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.87.0";
+export const MODULE_VERSION = "1.88.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.88.0": {
+    releasedAt: "2026-09-28T04:41:48+02:00",
+    patch: "PR-277-user-management-multi-identities-v1.patch",
+    changes: [
+      { type: "added", description: "Add role/status management, identity management, filters and authentication audit to Administration Users" },
+      { type: "changed", description: "Move Project Todos below Versions in the navigation" },
+      { type: "added", description: "Show pending-user count on Administration navigation" }
+    ]
+  },
   "1.87.0": {
     releasedAt: "2026-09-28T03:59:50+02:00",
     patch: "PR-276-auth-foundation-dev-role-switch-v1.patch",

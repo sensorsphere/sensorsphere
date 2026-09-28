@@ -50,12 +50,24 @@ export interface RuntimeConfig {
 
 export type SensorSphereRole = "admin" | "user";
 
+export type IdentityProvider = "google" | "microsoft";
+
 export interface AuthContext {
   enabled: boolean;
   devRoleSwitchEnabled: boolean;
   devDefaultRole: SensorSphereRole;
   role: SensorSphereRole | null;
   isAdmin: boolean;
+  providers: IdentityProvider[];
+}
+
+export interface SensorSphereIdentity {
+  provider: IdentityProvider;
+  providerSubject: string;
+  providerTenant: string | null;
+  providerEmail: string | null;
+  createdAt: string;
+  lastLoginAt: string | null;
 }
 
 export interface SensorSphereUser {
@@ -64,10 +76,29 @@ export interface SensorSphereUser {
   displayName: string | null;
   role: SensorSphereRole;
   status: "pending" | "active" | "disabled" | "rejected";
+  isBootstrapAdmin: boolean;
   createdAt: string;
   approvedAt: string | null;
   approvedBy: string | null;
   lastLoginAt: string | null;
+  identities: SensorSphereIdentity[];
+}
+
+export interface UserSummary {
+  pending: number;
+  active: number;
+  disabled: number;
+  rejected: number;
+}
+
+export interface AuthAuditEntry {
+  id: string;
+  actorUserId: string | null;
+  actorRole: string | null;
+  action: string;
+  targetUserId: string | null;
+  details: Record<string, unknown>;
+  createdAt: string;
 }
 
 export type MetricQualityStatus =

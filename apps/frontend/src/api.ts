@@ -82,7 +82,10 @@ import type {
   DiscoveredDeviceAction,
   AuthContext,
   SensorSphereUser,
-  SensorSphereRole
+  SensorSphereRole,
+  IdentityProvider,
+  UserSummary,
+  AuthAuditEntry
 } from "./types";
 
 async function readJson<T>(
@@ -174,6 +177,106 @@ export async function createDevPendingUser(
         },
         body: JSON.stringify({ email, displayName })
       }
+    )
+  );
+}
+
+export async function getUserSummary():
+Promise<UserSummary> {
+  return readJson<UserSummary>(
+    await fetch(
+      "/api/v1/admin/users/summary",
+      { headers: devAuthHeaders() }
+    )
+  );
+}
+
+export async function setUserRole(
+  id: string,
+  role: SensorSphereRole
+): Promise<SensorSphereUser> {
+  return readJson<SensorSphereUser>(
+    await fetch(
+      `/api/v1/admin/users/${id}/role`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...devAuthHeaders()
+        },
+        body: JSON.stringify({ role })
+      }
+    )
+  );
+}
+
+async function userAction(
+  id: string,
+  action: "approve" | "reject" | "disable" | "enable"
+): Promise<SensorSphereUser> {
+  return readJson<SensorSphereUser>(
+    await fetch(
+      `/api/v1/admin/users/${id}/${action}`,
+      {
+        method: "POST",
+        headers: devAuthHeaders()
+      }
+    )
+  );
+}
+
+export const rejectUser =
+  (id: string) => userAction(id, "reject");
+export const disableUser =
+  (id: string) => userAction(id, "disable");
+export const enableUser =
+  (id: string) => userAction(id, "enable");
+
+export async function addDevUserIdentity(
+  id: string,
+  input: {
+    provider: IdentityProvider;
+    providerSubject: string;
+    providerTenant?: string | null;
+    providerEmail?: string | null;
+  }
+): Promise<SensorSphereUser> {
+  return readJson<SensorSphereUser>(
+    await fetch(
+      `/api/v1/admin/users/${id}/identities`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...devAuthHeaders()
+        },
+        body: JSON.stringify(input)
+      }
+    )
+  );
+}
+
+export async function unlinkUserIdentity(
+  id: string,
+  provider: IdentityProvider,
+  subject: string
+): Promise<void> {
+  const response = await fetch(
+    `/api/v1/admin/users/${id}/identities/${provider}/${encodeURIComponent(subject)}`,
+    {
+      method: "DELETE",
+      headers: devAuthHeaders()
+    }
+  );
+  if (!response.ok) await readJson<unknown>(response);
+}
+
+export async function getAuthAudit():
+Promise<AuthAuditEntry[]> {
+  return readJson<AuthAuditEntry[]>(
+    await fetch(
+      "/api/v1/admin/auth-audit",
+      { headers: devAuthHeaders() }
     )
   );
 }
