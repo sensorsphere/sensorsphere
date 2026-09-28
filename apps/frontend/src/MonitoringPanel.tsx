@@ -687,6 +687,7 @@ export function MonitoringPanel({
   const checkFiltersActive = Boolean(checkDeviceFilter || checkClassFilter || checkTypeFilter || checkTechnologyFilter || checkNameFilter || checkSlotFilter || checkStatusFilter);
 
   const onlineAgents = agents.filter(item => item.online).length;
+  const noSlotChecks = checks.filter(check => check.assignments.length === 0).length;
   const statuses = checks.map(overallCheckStatus);
   const upChecks = statuses.filter(item => item === "UP").length;
   const downChecks = statuses.filter(item => item === "DOWN").length;

@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.91.0";
+export const MODULE_VERSION = "1.91.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.91.1": {
+    releasedAt: "2026-09-28T19:24:00+02:00",
+    patch: "PR-280-fix-no-slots-card-v1.patch",
+    changes: [
+      { type: "fixed", description: "Define the Device Checks No slots counter in MonitoringPanel to prevent the Device Registry runtime error" }
+    ]
+  },
   "1.91.0": {
     releasedAt: "2026-09-28T13:42:00+02:00",
     patch: "PR-280-no-slots-cards-v1.patch",
