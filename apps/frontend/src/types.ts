@@ -38,6 +38,7 @@ export interface RuntimeConfig {
   contractVersion: number;
   databaseMigrationLevel: number | null;
   stackVersion: string | null;
+  ingestionVersion: string | null;
   nginxVersion: string | null;
   migrationsVersion: string | null;
   builds?: {

@@ -353,7 +353,7 @@ export function SupervisorAgentsPanel() {
         const cleanup = await requestSupervisorManagedOperation(supervisor.id, { operation: "REMOVE", agentType: "device-agent", instance: "main" });
         trackOperation("Cleanup Device Agent / main", cleanup);
         const cleaned = await waitSupervisorManagedOperation(cleanup.commandId, operation => trackOperation("Cleanup Device Agent / main", operation));
-        if (cleaned.status !== "SUCCESS") throw new Error(cleaned.error ?? "Unable to remove the unmanaged local Device Agent installation");
+        if (cleaned.status !== "SUCCESS" && !/is not installed$/i.test(cleaned.error ?? "")) throw new Error(cleaned.error ?? "Unable to remove the unmanaged local Device Agent installation");
         setDeployStatus("CREATING");
       }
       const existing = (deviceAgentsQuery.data ?? []).find(agent => agent.name.trim().toLowerCase() === name.trim().toLowerCase());
@@ -651,7 +651,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
           <Button size="xs" variant="light" onClick={() => void queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] })}>Refresh</Button>
         </Group>
         {trackedManagedRuntimeTarget && trackedManagedRuntimeTarget.managedAgents.length > 0 ? <div className="monitoring-table-scroll"><Table striped withTableBorder withColumnBorders>
-          <Table.Thead><Table.Tr><Table.Th>Agent</Table.Th><Table.Th>Slot</Table.Th><Table.Th>Instance</Table.Th><Table.Th>SensorSphere association</Table.Th><Table.Th>Runtime reported</Table.Th><Table.Th>Path / Compose</Table.Th><Table.Th>Version</Table.Th><Table.Th>Container</Table.Th><Table.Th>Reconciliation</Table.Th><Table.Th>Action</Table.Th></Table.Tr></Table.Thead>
+          <Table.Thead><Table.Tr><Table.Th>Agent</Table.Th><Table.Th>Logical assignment</Table.Th><Table.Th>Instance</Table.Th><Table.Th>SensorSphere association</Table.Th><Table.Th>Runtime reported</Table.Th><Table.Th>Path / Compose</Table.Th><Table.Th>Version</Table.Th><Table.Th>Container</Table.Th><Table.Th>Reconciliation</Table.Th><Table.Th>Action</Table.Th></Table.Tr></Table.Thead>
           <Table.Tbody>{trackedManagedRuntimeTarget.managedAgents.map((entry, index) => {
             const association = managedAssociation(entry);
             const type = typeof entry.agent_type === "string" ? entry.agent_type : managedString(association, "agent_type") ?? "agent";
@@ -757,22 +757,22 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
             <Card withBorder p="sm">
               <Group justify="space-between">
                 <div>
-                  <Text size="xs" c="dimmed">Device Agent Slot</Text>
+                  <Text size="xs" c="dimmed">Device Agent identity</Text>
                   <Text fw={600}>{deployPreservedDeviceSlot.name}</Text>
                 </div>
                 <Badge color="violet" variant="light">Preserved</Badge>
               </Group>
-              <Text size="xs" c="dimmed" mt={4}>Deploy/reinstall reuses the existing persistent Slot for this Device Agent.</Text>
+              <Text size="xs" c="dimmed" mt={4}>Deploy/reinstall reuses the existing persistent Device Agent identity for this Device Agent.</Text>
             </Card>
           ) : (
             <Stack gap="xs">
               <Select
-                label="Slot assignment"
+                label="Device Agent assignment"
                 value={deployDeviceSlotMode}
                 allowDeselect={false}
                 data={[
-                  { value: "new", label: "Create new Slot" },
-                  { value: "existing", label: "Use existing unbound Slot" }
+                  { value: "new", label: "Create new Device Agent identity" },
+                  { value: "existing", label: "Use existing unbound Device Agent identity" }
                 ]}
                 onChange={value => {
                   if (value === "new" || value === "existing") {
@@ -787,10 +787,10 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
               />
               {deployDeviceSlotMode === "existing" ? (
                 <Select
-                  label="Device Agent Slot"
-                  description="Unbound Slots keep Device assignments while the physical agent is absent."
+                  label="Device Agent identity"
+                  description="Unbound Device Agent identities keep Device assignments while the physical agent is absent."
                   searchable
-                  placeholder="Select an unbound Slot"
+                  placeholder="Select an unbound Device Agent identity"
                   data={unboundDeviceAgentSlots.map(slot => ({
                     value: slot.id,
                     label: slot.name + " · UNBOUND"
@@ -801,7 +801,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
                 />
               ) : (
                 <TextInput
-                  label="New Slot name"
+                  label="New Device Agent identity name"
                   value={deployDeviceSlotName}
                   onChange={event => setDeployDeviceSlotName(event.currentTarget.value)}
                   disabled={deployDeviceAgentMutation.isPending || deployStatus === "SUCCESS"}
@@ -820,7 +820,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
                 </div>
                 <Badge color="violet" variant="light">Preserved</Badge>
               </Group>
-              <Text size="xs" c="dimmed" mt={4}>Reinstall/deploy reuses the existing persistent Slot for this Monitoring Agent.</Text>
+              <Text size="xs" c="dimmed" mt={4}>Reinstall/deploy reuses the existing persistent Monitoring Slot for this Monitoring Agent.</Text>
             </Card>
           ) : (
             <Stack gap="xs">

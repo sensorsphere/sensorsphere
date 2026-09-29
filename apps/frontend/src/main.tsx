@@ -641,7 +641,10 @@ function Dashboard() {
         getAuthContext,
 
       refetchOnWindowFocus:
-        false
+        false,
+
+      refetchInterval:
+        15_000
     });
 
   const canLoadProtectedData =
@@ -692,6 +695,11 @@ function Dashboard() {
   }, [frontendBuildQuery.data]);
 
   React.useEffect(() => {
+    if (authContextQuery.data?.enabled && authContextQuery.data.status !== "active") {
+      setFrontendUpdateAvailable(null);
+      return;
+    }
+
     let cancelled = false;
 
     const frontendCanReload = () => {
@@ -724,7 +732,7 @@ function Dashboard() {
 
         setFrontendUpdateAvailable(latest);
 
-        if (frontendCanReload()) {
+        if (frontendCanReload() && (!authContextQuery.data?.enabled || authContextQuery.data.status === "active")) {
           window.location.reload();
         }
       } catch {
@@ -762,7 +770,7 @@ function Dashboard() {
         onVisibilityChange
       );
     };
-  }, []);
+  }, [authContextQuery.data?.enabled, authContextQuery.data?.status]);
 
   const moduleVersionsQuery =
     useQuery({
@@ -869,6 +877,7 @@ function Dashboard() {
         item => item.module === "ingestion-service"
       )
       ?.version
+    ?? runtimeConfigQuery.data?.ingestionVersion
     ?? null;
 
   const nginxModuleVersion =
@@ -953,6 +962,8 @@ function Dashboard() {
         typeof value ===
         "boolean"
     );
+
+  const [usersPendingFilterRequest, setUsersPendingFilterRequest] = React.useState(0);
 
   React.useEffect(
     () => {
@@ -1397,6 +1408,9 @@ function Dashboard() {
       queryFn:
         getGateways,
 
+      enabled:
+        canLoadProtectedData,
+
       refetchInterval:
         30_000
     });
@@ -1526,6 +1540,63 @@ function Dashboard() {
   }
 
   if (
+    authContextQuery.data?.enabled &&
+    authContextQuery.data.authenticated &&
+    authContextQuery.data.status === "disabled"
+  ) {
+    return (
+      <Container size="xs" py={80}>
+        <Alert color="red" title="Account disabled">
+          <Stack gap="sm">
+            <Text size="sm">
+              Your SensorSphere account has been disabled by an administrator.
+              Access will resume automatically after the account is re-enabled.
+            </Text>
+            <Button
+              size="xs"
+              variant="light"
+              onClick={async () => {
+                await logout();
+                window.location.reload();
+              }}
+            >
+              Sign out
+            </Button>
+          </Stack>
+        </Alert>
+      </Container>
+    );
+  }
+
+  if (
+    authContextQuery.data?.enabled &&
+    authContextQuery.data.authenticated &&
+    authContextQuery.data.status === "rejected"
+  ) {
+    return (
+      <Container size="xs" py={80}>
+        <Alert color="red" title="Access request rejected">
+          <Stack gap="sm">
+            <Text size="sm">
+              Your SensorSphere access request was rejected by an administrator.
+            </Text>
+            <Button
+              size="xs"
+              variant="light"
+              onClick={async () => {
+                await logout();
+                window.location.reload();
+              }}
+            >
+              Sign out
+            </Button>
+          </Stack>
+        </Alert>
+      </Container>
+    );
+  }
+
+  if (
     assetsQuery.isLoading ||
     gatewaysQuery.isLoading ||
     sensorsQuery.isLoading
@@ -1544,9 +1615,14 @@ function Dashboard() {
   ) {
     return (
       <Container py="xl">
-        <Text c="red">
-          Unable to load SensorSphere data.
-        </Text>
+        {authContextQuery.data?.enabled ? (
+          <Stack align="center" gap="xs">
+            <Loader size="sm" />
+            <Text c="dimmed">Checking account access…</Text>
+          </Stack>
+        ) : (
+          <Text c="red">Unable to load SensorSphere data.</Text>
+        )}
       </Container>
     );
   }
@@ -2214,82 +2290,6 @@ function Dashboard() {
           )
       : null;
 
-  if (authContextQuery.isLoading) {
-    return (
-      <Container size="sm" py="xl">
-        <Group justify="center">
-          <Loader />
-        </Group>
-      </Container>
-    );
-  }
-
-  if (
-    authContextQuery.data?.enabled &&
-    !authContextQuery.data.authenticated
-  ) {
-    return (
-      <Container size="xs" py={80}>
-        <Card withBorder shadow="sm">
-          <Stack gap="md">
-            <div>
-              <Title order={2}>Sign in to SensorSphere</Title>
-              <Text size="sm" c="dimmed" mt="xs">
-                Use one of the configured OpenID Connect providers.
-              </Text>
-            </div>
-
-            {authContextQuery.data.providers.includes("google") && (
-              <Button
-                component="a"
-                href={oidcLoginUrl("google")}
-                variant="default"
-              >
-                Sign in with Google
-              </Button>
-            )}
-
-            {authContextQuery.data.providers.includes("microsoft") && (
-              <Button
-                component="a"
-                href={oidcLoginUrl("microsoft")}
-              >
-                Sign in with Microsoft
-              </Button>
-            )}
-          </Stack>
-        </Card>
-      </Container>
-    );
-  }
-
-  if (
-    authContextQuery.data?.enabled &&
-    authContextQuery.data.status === "pending"
-  ) {
-    return (
-      <Container size="xs" py={80}>
-        <Alert color="yellow" title="Access request pending approval">
-          <Stack gap="sm">
-            <Text size="sm">
-              Your identity is recognized, but an administrator must approve
-              this SensorSphere account before access is granted.
-            </Text>
-            <Button
-              size="xs"
-              variant="light"
-              onClick={async () => {
-                await logout();
-                window.location.reload();
-              }}
-            >
-              Sign out
-            </Button>
-          </Stack>
-        </Alert>
-      </Container>
-    );
-  }
 
   if (compatibilityError) {
     return (
@@ -2397,6 +2397,19 @@ function Dashboard() {
             </Group>
 
             <Group gap="sm">
+              {authContextQuery.data?.isAdmin && (userSummaryQuery.data?.pending ?? 0) > 0 && (
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="yellow"
+                  onClick={() => {
+                    setUsersPendingFilterRequest(current => current + 1);
+                    navigateTo("users");
+                  }}
+                >
+                  Access requests · {userSummaryQuery.data?.pending}
+                </Button>
+              )}
               {authContextQuery.data?.devRoleSwitchEnabled && (
                 <SegmentedControl
                   size="xs"
@@ -5606,6 +5619,7 @@ function Dashboard() {
                   enabledProviders={
                     authContextQuery.data.providers
                   }
+                  pendingFilterRequest={usersPendingFilterRequest}
                 />
               )
             }

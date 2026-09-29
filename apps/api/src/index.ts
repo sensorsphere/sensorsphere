@@ -244,6 +244,7 @@ app.get("/api/v1/config", async () => {
       migrationLevelResult.rows[0]?.migrationLevel
       ?? null,
     stackVersion,
+    ingestionVersion: process.env.SENSORSPHERE_INGESTION_VERSION?.trim() || null,
     nginxVersion,
     migrationsVersion,
     builds: {
@@ -284,7 +285,7 @@ app.get("/api/v1/module-versions", async () => {
     },
     {
       module: "ingestion-service",
-      version: ingestion?.version ?? null,
+      version: ingestion?.version ?? process.env.SENSORSPHERE_INGESTION_VERSION?.trim() ?? null,
       changelog: ingestion?.changelog ?? {}
     }
   ];

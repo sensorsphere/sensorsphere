@@ -42,16 +42,22 @@ export function UsersPanel({
   devMode,
   authEnabled,
   currentUserId,
-  enabledProviders
+  enabledProviders,
+  pendingFilterRequest = 0
 }: {
   devMode: boolean;
   authEnabled: boolean;
   currentUserId: string | null;
   enabledProviders: IdentityProvider[];
+  pendingFilterRequest?: number;
 }) {
   const [email, setEmail] = React.useState("");
   const [roleFilter, setRoleFilter] = React.useState<string | null>("all");
   const [statusFilter, setStatusFilter] = React.useState<string | null>("all");
+
+  React.useEffect(() => {
+    if (pendingFilterRequest > 0) setStatusFilter("pending");
+  }, [pendingFilterRequest]);
   const [identityUserId, setIdentityUserId] =
     React.useState<string | null>(null);
   const [identityProvider, setIdentityProvider] =

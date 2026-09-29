@@ -18,10 +18,22 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.93.1";
+export const MODULE_VERSION = "1.94.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.94.0": {
+    releasedAt: "2026-09-29T06:30:25+02:00",
+    patch: "PR-287-auth-ux-device-agent-recreate-v1.patch",
+    changes: [
+      { type: "added", description: "Add an admin header access-request box linked directly to pending Users" },
+      { type: "fixed", description: "Show dedicated disabled and rejected account states instead of generic data-load errors" },
+      { type: "changed", description: "Disable frontend auto-reload while an authenticated account is not active" },
+      { type: "fixed", description: "Treat Device Agent cleanup already-not-installed as idempotent during Supervisor reprovisioning" },
+      { type: "changed", description: "Use Device Agent terminology in Device UI while retaining Monitoring Slot terminology" },
+      { type: "fixed", description: "Fallback to configured Ingestion version in Build information" }
+    ]
+  },
   "1.93.1": {
     releasedAt: "2026-09-29T05:42:10+02:00",
     patch: "PR-286-login-bootstrap-v1.patch",

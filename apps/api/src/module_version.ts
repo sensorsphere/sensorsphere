@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.54.0";
+export const MODULE_VERSION = "1.55.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.55.0": {
+    releasedAt: "2026-09-29T06:30:25+02:00",
+    patch: "PR-287-auth-ux-device-agent-recreate-v1.patch",
+    changes: [
+      { type: "changed", description: "Expose the configured Ingestion version as a runtime fallback when component build reporting is unavailable" }
+    ]
+  },
   "1.54.0": {
     releasedAt: "2026-09-28T22:53:01+02:00",
     patch: "PR-285-fail-closed-auth-installation-v1.patch",

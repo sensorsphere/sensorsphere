@@ -768,7 +768,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
         <Text size="xs" c="dimmed">{filteredAgents.length}/{allAgents.length}</Text>
       </Group>
       <div className="monitoring-table-scroll"><Table striped highlightOnHover stickyHeader style={{ minWidth: "max-content" }}>
-        <Table.Thead><Table.Tr><SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader><SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader><Table.Th>Slot</Table.Th><SortableTableHeader active={agentSortKey === "reported"} direction={agentSortDirection} onClick={() => toggleAgentSort("reported")}>Reported</SortableTableHeader><SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>{showSupervisorControls && <Table.Th>Supervisor</Table.Th>}<SortableTableHeader active={agentSortKey === "system"} direction={agentSortDirection} onClick={() => toggleAgentSort("system")}>System</SortableTableHeader><Table.Th>Host Network</Table.Th><SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last Seen</SortableTableHeader><SortableTableHeader active={agentSortKey === "capabilities"} direction={agentSortDirection} onClick={() => toggleAgentSort("capabilities")}>Capabilities</SortableTableHeader><SortableTableHeader active={agentSortKey === "agentLabels"} direction={agentSortDirection} onClick={() => toggleAgentSort("agentLabels")}>Agent Labels</SortableTableHeader><Table.Th style={{ width: showSupervisorControls ? 202 : 160, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
+        <Table.Thead><Table.Tr><SortableTableHeader active={agentSortKey === "name"} direction={agentSortDirection} onClick={() => toggleAgentSort("name")}>Name</SortableTableHeader><SortableTableHeader active={agentSortKey === "status"} direction={agentSortDirection} onClick={() => toggleAgentSort("status")}>Status</SortableTableHeader><Table.Th>Persistent Agent</Table.Th><SortableTableHeader active={agentSortKey === "reported"} direction={agentSortDirection} onClick={() => toggleAgentSort("reported")}>Reported</SortableTableHeader><SortableTableHeader active={agentSortKey === "version"} direction={agentSortDirection} onClick={() => toggleAgentSort("version")}>Version</SortableTableHeader>{showSupervisorControls && <Table.Th>Supervisor</Table.Th>}<SortableTableHeader active={agentSortKey === "system"} direction={agentSortDirection} onClick={() => toggleAgentSort("system")}>System</SortableTableHeader><Table.Th>Host Network</Table.Th><SortableTableHeader active={agentSortKey === "lastSeen"} direction={agentSortDirection} onClick={() => toggleAgentSort("lastSeen")}>Last Seen</SortableTableHeader><SortableTableHeader active={agentSortKey === "capabilities"} direction={agentSortDirection} onClick={() => toggleAgentSort("capabilities")}>Capabilities</SortableTableHeader><SortableTableHeader active={agentSortKey === "agentLabels"} direction={agentSortDirection} onClick={() => toggleAgentSort("agentLabels")}>Agent Labels</SortableTableHeader><Table.Th style={{ width: showSupervisorControls ? 202 : 160, textAlign: "right" }}>Actions</Table.Th></Table.Tr></Table.Thead>
         <Table.Tbody>{filteredAgents.map(agent => <Table.Tr key={agent.id}>
           <Table.Td><Text size="sm" fw={600}>{agent.name}</Text>{agent.managedBySupervisorName ? <Text size="xs" c="dimmed">Supervisor: {agent.managedBySupervisorName}{agent.managedInstance && agent.managedInstance !== "main" ? ` / ${agent.managedInstance}` : ""}</Text> : <Text size="xs" c="orange">[No supervisor]</Text>}</Table.Td>
           <Table.Td><Badge color={agent.online ? "green" : agent.enabled ? "gray" : "red"} variant="light">{agent.online ? "ONLINE" : agent.enabled ? "OFFLINE" : "DISABLED"}</Badge></Table.Td>
@@ -814,15 +814,15 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
         {editing && (
           <Card withBorder p="sm">
             <Stack gap="xs">
-              <Text fw={600} size="sm">Device Agent Slot</Text>
+              <Text fw={600} size="sm">Device Agent identity</Text>
               <Select
-                label="Slot action"
+                label="Agent action"
                 value={slotMode}
                 allowDeselect={false}
                 data={[
-                  { value: "current", label: editing.slotName ? `Keep current Slot · ${editing.slotName}` : "Keep current Slot" },
-                  { value: "existing", label: "Use another unbound Slot" },
-                  { value: "new", label: "Create new Slot" }
+                  { value: "current", label: editing.slotName ? `Keep current Device Agent identity · ${editing.slotName}` : "Keep current Device Agent identity" },
+                  { value: "existing", label: "Use another unbound Device Agent identity" },
+                  { value: "new", label: "Create new Device Agent identity" }
                 ]}
                 onChange={value => {
                   if (value === "current" || value === "existing" || value === "new") {
@@ -842,7 +842,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
               />
               {slotMode === "existing" && (
                 <Select
-                  label="Unbound Slot"
+                  label="Unbound Device Agent identity"
                   searchable
                   placeholder="Select a Slot"
                   value={slotId}
@@ -854,8 +854,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
                 />
               )}
               <TextInput
-                label={slotMode === "new" ? "New Slot name" : "Slot name"}
-                description={slotMode === "current" ? "Renaming keeps the same Slot ID and every Device assignment." : undefined}
+                label={slotMode === "new" ? "New Device Agent identity name" : "Device Agent identity name"}
+                description={slotMode === "current" ? "Renaming keeps the same persistent identity and every Device assignment." : undefined}
                 value={slotName}
                 onChange={event => setSlotName(event.currentTarget.value)}
                 disabled={slotMode === "existing" && !slotId}
@@ -1097,7 +1097,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
     </>}
 
     <Modal opened={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Device Agent?" centered>
-      <Stack><Text>Delete <strong>{deleteTarget?.name}</strong>? Its Device Agent Slot and all Device assignments will be preserved. The Slot becomes <strong>UNBOUND</strong> until another Device Agent is assigned.{deleteTarget?.managedBySupervisorId ? " Its local installation will first be removed by the associated Supervisor Agent." : ""}</Text><Group justify="flex-end"><Button variant="default" onClick={() => setDeleteTarget(null)}>Cancel</Button><Button color="red" loading={remove.isPending} onClick={() => deleteTarget && remove.mutate(deleteTarget)}>Delete</Button></Group></Stack>
+      <Stack><Text>Delete <strong>{deleteTarget?.name}</strong>? Its Device Agent identity and all Device assignments will be preserved. The Device Agent identity becomes <strong>UNBOUND</strong> until another runtime is assigned.{deleteTarget?.managedBySupervisorId ? " Its local installation will first be removed by the associated Supervisor Agent." : ""}</Text><Group justify="flex-end"><Button variant="default" onClick={() => setDeleteTarget(null)}>Cancel</Button><Button color="red" loading={remove.isPending} onClick={() => deleteTarget && remove.mutate(deleteTarget)}>Delete</Button></Group></Stack>
     </Modal>
 
     {copyNotice && (
