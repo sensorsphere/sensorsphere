@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.95.0";
+export const MODULE_VERSION = "1.96.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.96.0": {
+    releasedAt: "2026-09-29T21:16:43+02:00",
+    patch: "PR-289-discovery-agent-selection-and-check-copy-v1.patch",
+    changes: [
+      { type: "added", description: "Allow Discovery scans to target All Device Agents or an explicit selection of one or more Device Agents" },
+      { type: "added", description: "Add clipboard copy actions for Device and Target values in Device Checks" }
+    ]
+  },
   "1.95.0": {
     releasedAt: "2026-09-29T19:08:00+02:00",
     patch: "PR-288-device-bulk-slots-discovery-v1.patch",

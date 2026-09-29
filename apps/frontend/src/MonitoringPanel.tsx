@@ -924,7 +924,22 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
                               )}
                             />
                           </Table.Td>
-                          <Table.Td><Text fw={600} size="sm">{check.deviceName}</Text></Table.Td>
+                          <Table.Td>
+                            <Group gap={4} wrap="nowrap">
+                              <Text fw={600} size="sm">{check.deviceName}</Text>
+                              <Tooltip label="Copy Device">
+                                <ActionIcon
+                                  size="xs"
+                                  variant="subtle"
+                                  color="gray"
+                                  aria-label="Copy Device"
+                                  onClick={() => void writeClipboardText(check.deviceName).then(() => showCopyNotice("Device copied to clipboard"))}
+                                >
+                                  ⧉
+                                </ActionIcon>
+                              </Tooltip>
+                            </Group>
+                          </Table.Td>
                           <Table.Td>{device ? <Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceClassInfo.icon} color={device.deviceClassInfo.color} /><Text size="sm">{device.deviceClassInfo.label}</Text></Group> : "—"}</Table.Td>
                           <Table.Td>{device ? <Group gap={6} wrap="nowrap"><DeviceGlyph icon={device.deviceTypeInfo.icon} color={device.deviceTypeInfo.color} /><Text size="sm">{device.deviceTypeInfo.label}</Text></Group> : "—"}</Table.Td>
                           <Table.Td>{device && device.technologies.length > 0 ? <Group gap={6} wrap="wrap">{device.technologies.map(item => <Group key={item.code} gap={4} wrap="nowrap"><DeviceGlyph icon={item.icon} color={item.color} /><Text size="xs">{item.label}</Text></Group>)}</Group> : "—"}</Table.Td>
@@ -939,7 +954,20 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
                               return (
                                 <Stack gap={2}>
                                   <Badge size="xs" color="red" variant="light">UNRESOLVED</Badge>
-                                  <Code>{check.targetValue ?? "—"}</Code>
+                                  <Group gap={4} wrap="nowrap">
+                                    <Code>{check.targetValue ?? "—"}</Code>
+                                    <Tooltip label="Copy Target">
+                                      <ActionIcon
+                                        size="xs"
+                                        variant="subtle"
+                                        color="gray"
+                                        aria-label="Copy Target"
+                                        onClick={() => void writeClipboardText(check.targetValue ?? "").then(() => showCopyNotice("Target copied to clipboard"))}
+                                      >
+                                        ⧉
+                                      </ActionIcon>
+                                    </Tooltip>
+                                  </Group>
                                 </Stack>
                               );
                             }
@@ -947,7 +975,20 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
                             if (symbolicTarget && resolvedTarget) {
                               return (
                                 <Stack gap={2}>
-                                  <Code>{resolvedTarget}{check.port ? `:${check.port}` : ""}</Code>
+                                  <Group gap={4} wrap="nowrap">
+                                    <Code>{resolvedTarget}{check.port ? `:${check.port}` : ""}</Code>
+                                    <Tooltip label="Copy Target">
+                                      <ActionIcon
+                                        size="xs"
+                                        variant="subtle"
+                                        color="gray"
+                                        aria-label="Copy Target"
+                                        onClick={() => void writeClipboardText(`${resolvedTarget}${check.port ? `:${check.port}` : ""}`).then(() => showCopyNotice("Target copied to clipboard"))}
+                                      >
+                                        ⧉
+                                      </ActionIcon>
+                                    </Tooltip>
+                                  </Group>
                                   <Text size="xs" c="dimmed">{check.targetValue}</Text>
                                 </Stack>
                               );
@@ -955,7 +996,20 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
 
                             return (
                               <Stack gap={2}>
-                                <Code>{target ?? "—"}{check.port ? `:${check.port}` : ""}</Code>
+                                <Group gap={4} wrap="nowrap">
+                                  <Code>{target ?? "—"}{check.port ? `:${check.port}` : ""}</Code>
+                                  <Tooltip label="Copy Target">
+                                    <ActionIcon
+                                      size="xs"
+                                      variant="subtle"
+                                      color="gray"
+                                      aria-label="Copy Target"
+                                      onClick={() => void writeClipboardText(`${resolvedTarget ?? target ?? ""}${check.port ? `:${check.port}` : ""}`).then(() => showCopyNotice("Target copied to clipboard"))}
+                                    >
+                                      ⧉
+                                    </ActionIcon>
+                                  </Tooltip>
+                                </Group>
                                 {resolvedTarget && resolvedTarget !== target && (
                                   <Text size="xs" c="dimmed">→ {resolvedTarget}{check.port ? `:${check.port}` : ""}</Text>
                                 )}

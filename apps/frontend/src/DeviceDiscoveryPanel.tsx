@@ -394,6 +394,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const [updateKey, setUpdateKey] = React.useState<string | null>(null);
   const [scanProvider, setScanProvider] = React.useState<DiscoveryProvider | "ALL" | null>(null);
   const [clearBeforeScan, setClearBeforeScan] = usePersistentState("device-registry.discovery.clear-before-scan", false);
+  const [scanAgentIds, setScanAgentIds] = usePersistentState<string[]>("device-registry.discovery.scan.agent-ids", []);
   const [hiddenDiscoveryCommandIds, setHiddenDiscoveryCommandIds] = React.useState<Set<string>>(() => new Set());
   const [agentChoice, setAgentChoice] = React.useState<{ row: DisplayDiscoveryRow; rowKey: string } | null>(null);
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
@@ -423,9 +424,12 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       }
       setScanProvider(provider);
       const agents = agentsQuery.data ?? [];
+      const selectedAgents = scanAgentIds.length > 0
+        ? agents.filter(agent => scanAgentIds.includes(agent.id))
+        : agents;
       const providers = provider === "ALL" ? [...DISCOVERY_PROVIDERS] : [provider];
       const requests: Promise<unknown>[] = [];
-      for (const agent of agents) {
+      for (const agent of selectedAgents) {
         if (!agent.online || !agent.enabled) continue;
         for (const currentProvider of providers) {
           const capability = agent.capabilities.find(item => item.provider.toUpperCase() === currentProvider && item.discovery);
@@ -758,6 +762,25 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       <Group gap="sm" align="center">
         <Text size="xs" c="dimmed">Agents: <Text component="span" c="green" fw={600}>{onlineAgents} online</Text> · <Text component="span" c={offlineAgents ? "red" : "dimmed"} fw={600}>{offlineAgents} offline</Text></Text>
         <Group gap="xs" align="center">
+          <MultiSelect
+            size="xs"
+            w={280}
+            searchable
+            clearable
+            placeholder="All Device Agents"
+            value={scanAgentIds}
+            data={agents
+              .filter(agent => agent.enabled)
+              .map(agent => ({
+                value: agent.id,
+                label: agent.name + (agent.online ? "" : " · OFFLINE")
+              }))}
+            onChange={setScanAgentIds}
+            disabled={scanBusy}
+            maxDropdownHeight={260}
+            nothingFoundMessage="No Device Agents"
+            comboboxProps={{ withinPortal: true }}
+          />
           <Switch
             size="xs"
             label="Clear before scan"
