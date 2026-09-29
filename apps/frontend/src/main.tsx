@@ -644,6 +644,10 @@ function Dashboard() {
         false
     });
 
+  const canLoadProtectedData =
+    authContextQuery.data != null &&
+    (!authContextQuery.data.enabled || (authContextQuery.data.authenticated && authContextQuery.data.status === "active"));
+
   const userSummaryQuery =
     useQuery({
       queryKey:
@@ -1196,6 +1200,9 @@ function Dashboard() {
       queryFn:
         getSensors,
 
+      enabled:
+        canLoadProtectedData,
+
       refetchInterval:
         30_000
     });
@@ -1207,6 +1214,9 @@ function Dashboard() {
 
       queryFn:
         getAssets,
+
+      enabled:
+        canLoadProtectedData,
 
       refetchInterval:
         30_000
@@ -1446,6 +1456,74 @@ function Dashboard() {
       setAssetLocationFilter
     ]
   );
+
+  if (authContextQuery.isLoading) {
+    return (
+      <Container size="sm" py="xl">
+        <Group justify="center">
+          <Loader />
+        </Group>
+      </Container>
+    );
+  }
+
+  if (
+    authContextQuery.data?.enabled &&
+    !authContextQuery.data.authenticated
+  ) {
+    return (
+      <Container size="xs" py={80}>
+        <Card withBorder shadow="sm">
+          <Stack gap="md">
+            <div>
+              <Title order={2}>Sign in to SensorSphere</Title>
+              <Text size="sm" c="dimmed" mt="xs">
+                Use one of the configured OpenID Connect providers.
+              </Text>
+            </div>
+            {authContextQuery.data.providers.includes("google") && (
+              <Button component="a" href={oidcLoginUrl("google")} variant="default">
+                Sign in with Google
+              </Button>
+            )}
+            {authContextQuery.data.providers.includes("microsoft") && (
+              <Button component="a" href={oidcLoginUrl("microsoft")}>
+                Sign in with Microsoft
+              </Button>
+            )}
+          </Stack>
+        </Card>
+      </Container>
+    );
+  }
+
+  if (
+    authContextQuery.data?.enabled &&
+    authContextQuery.data.status === "pending"
+  ) {
+    return (
+      <Container size="xs" py={80}>
+        <Alert color="yellow" title="Access request pending approval">
+          <Stack gap="sm">
+            <Text size="sm">
+              Your identity is recognized, but an administrator must approve
+              this SensorSphere account before access is granted.
+            </Text>
+            <Button
+              size="xs"
+              variant="light"
+              onClick={async () => {
+                await logout();
+                window.location.reload();
+              }}
+            >
+              Sign out
+            </Button>
+          </Stack>
+        </Alert>
+      </Container>
+    );
+  }
 
   if (
     assetsQuery.isLoading ||

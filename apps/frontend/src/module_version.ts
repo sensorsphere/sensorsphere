@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.93.0";
+export const MODULE_VERSION = "1.93.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.93.1": {
+    releasedAt: "2026-09-29T05:42:10+02:00",
+    patch: "PR-286-login-bootstrap-v1.patch",
+    changes: [
+      { type: "fixed", description: "Show the sign-in or pending screen before protected-data query errors" },
+      { type: "changed", description: "Delay core protected data queries until access is active" }
+    ]
+  },
   "1.93.0": {
     releasedAt: "2026-09-28T21:46:07+02:00",
     patch: "PR-284-device-agent-slots-and-agent-edit-v1.patch",
