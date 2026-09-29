@@ -1,7 +1,7 @@
 import React from "react";
-import { ActionIcon, Badge, Button, Card, Group, Modal, MultiSelect, Select, SimpleGrid, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Button, Card, Checkbox, Group, Modal, MultiSelect, Select, SimpleGrid, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getDeviceAgents, getDeviceDiscoveries, getDiscardedDeviceDiscoveries, setDeviceDiscoveryDiscarded, startDeviceDiscovery } from "./api";
+import { bulkAssignDeviceRegistrySlot, getDeviceAgentSlots, getDeviceAgents, getDeviceDiscoveries, getDiscardedDeviceDiscoveries, setDeviceDiscoveryDiscarded, startDeviceDiscovery } from "./api";
 import type { DeviceAgent, DeviceRegistryDevice } from "./types";
 import type { DiscoveredDeviceImportRequest } from "./DeviceAgentsPanel";
 import { EditActionIcon } from "./TableActionIcons";
@@ -26,6 +26,7 @@ interface DeviceDiscoveryPanelProps {
   devices: DeviceRegistryDevice[];
   onImportDiscoveredDevice: (request: DiscoveredDeviceImportRequest) => void;
   onUpdateDiscoveredDevice: (request: DiscoveredDeviceImportRequest, device: DeviceRegistryDevice) => Promise<void>;
+  onBulkImportDiscoveredDevices: (requests: DiscoveredDeviceImportRequest[], slotId: string | null) => Promise<void>;
   onOpenRegisteredDevice: (device: DeviceRegistryDevice) => void;
 }
 
@@ -374,7 +375,11 @@ function statusColor(status: DiscoveryRowStatus): string {
 
 const STATUS_ORDER: Record<DiscoveryRowStatus, number> = { CAN_ADD: 0, POSSIBLE: 1, AMBIGUOUS: 2, UPDATE: 3, REGISTERED: 4, DISCARDED: 5 };
 
-export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpdateDiscoveredDevice, onOpenRegisteredDevice }: DeviceDiscoveryPanelProps) {
+function discoveryRowSelectionKey(row: DisplayDiscoveryRow): string {
+  return `${row.discovery.provider.toUpperCase()}|${row.logicalKey}`;
+}
+
+export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpdateDiscoveredDevice, onBulkImportDiscoveredDevices, onOpenRegisteredDevice }: DeviceDiscoveryPanelProps) {
   const queryClient = useQueryClient();
   const [providerFilter, setProviderFilter] = usePersistentState<string | null>("device-registry.discovery.filter.provider", null);
   const [agentFilter, setAgentFilter] = usePersistentState<string | null>("device-registry.discovery.filter.agent", null);
@@ -394,8 +399,13 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
   const [reconcileChoice, setReconcileChoice] = React.useState<{ row: DisplayDiscoveryRow; rowKey: string } | null>(null);
   const [selectedRegistryDeviceId, setSelectedRegistryDeviceId] = React.useState<string | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = React.useState<string[]>([]);
+  const [bulkAction, setBulkAction] = React.useState<"ADD" | "SLOT" | null>(null);
+  const [bulkSlotId, setBulkSlotId] = React.useState<string | null>(null);
+  const [bulkError, setBulkError] = React.useState<string | null>(null);
 
   const agentsQuery = useQuery({ queryKey: ["device-agents"], queryFn: getDeviceAgents, refetchInterval: 5000 });
+  const slotsQuery = useQuery({ queryKey: ["device-control", "slots"], queryFn: getDeviceAgentSlots, refetchInterval: 10000 });
   const discoveriesQuery = useQuery({
     queryKey: ["device-discoveries"],
     queryFn: getDeviceDiscoveries,
@@ -556,6 +566,53 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     else if (sortKey === "model") result = compareTableValues(textValue(left.device, "model"), textValue(right.device, "model"), sortDirection);
     if (result !== 0) return result;
     return textValue(left.device, "name").localeCompare(textValue(right.device, "name"), undefined, { sensitivity: "base", numeric: true });
+  });
+
+  const selectedLogicalRows = [...new Map(
+    displayRows
+      .filter(row => selectedRowKeys.includes(discoveryRowSelectionKey(row)))
+      .map(row => [discoveryRowSelectionKey(row), row] as const)
+  ).values()];
+  const selectedAddRows = selectedLogicalRows.filter(row => row.status === "CAN_ADD" && row.agent);
+  const selectedRegisteredRows = selectedLogicalRows.filter(row => Boolean(row.registered));
+  const visibleSelectableKeys = [...new Set(
+    sortedRows
+      .filter(row => (row.status === "CAN_ADD" && Boolean(row.agent)) || Boolean(row.registered))
+      .map(discoveryRowSelectionKey)
+  )];
+  const selectedVisibleCount = visibleSelectableKeys.filter(key => selectedRowKeys.includes(key)).length;
+
+  const bulkImportMutation = useMutation({
+    mutationFn: async () => {
+      const requests = selectedAddRows.map(row => ({
+        agent: row.agent!,
+        provider: row.discovery.provider.toUpperCase(),
+        device: row.device
+      }));
+      await onBulkImportDiscoveredDevices(requests, bulkSlotId);
+      return requests.length;
+    },
+    onSuccess: async () => {
+      setSelectedRowKeys([]);
+      setBulkAction(null);
+      setBulkError(null);
+      await queryClient.invalidateQueries({ queryKey: ["device-registry", "devices"] });
+    },
+    onError: cause => setBulkError(cause instanceof Error ? cause.message : "Unable to add selected devices")
+  });
+
+  const bulkSlotMutation = useMutation({
+    mutationFn: async () => {
+      const deviceIds = [...new Set(selectedRegisteredRows.flatMap(row => row.registered ? [row.registered.id] : []))];
+      return bulkAssignDeviceRegistrySlot({ deviceIds, slotId: bulkSlotId });
+    },
+    onSuccess: async () => {
+      setSelectedRowKeys([]);
+      setBulkAction(null);
+      setBulkError(null);
+      await queryClient.invalidateQueries({ queryKey: ["device-registry", "devices"] });
+    },
+    onError: cause => setBulkError(cause instanceof Error ? cause.message : "Unable to assign Device Agent Slot")
   });
 
   const allLogicalRows = [...groups.values()].map(sourceRows => sourceRows[0]);
@@ -729,6 +786,38 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     {scanMutation.isError && <Text size="sm" c="red">{scanMutation.error instanceof Error ? scanMutation.error.message : "Unable to start discovery"}</Text>}
     {failedDiscoveries.map(item => <Text key={item.commandId} size="xs" c="red">{item.provider} discovery on {agentById.get(item.agentId)?.name ?? item.agentId}: {item.error ?? item.status}</Text>)}
 
+    <Group gap="xs" wrap="wrap">
+      <Button
+        size="compact-sm"
+        variant="light"
+        color="green"
+        disabled={selectedAddRows.length === 0}
+        onClick={() => {
+          const slotIds = [...new Set(selectedAddRows.map(row => row.agent?.slotId).filter((value): value is string => Boolean(value)))];
+          setBulkSlotId(slotIds.length === 1 ? slotIds[0]! : null);
+          setBulkError(null);
+          setBulkAction("ADD");
+        }}
+      >
+        Add selected ({selectedAddRows.length})
+      </Button>
+      <Button
+        size="compact-sm"
+        variant="light"
+        color="violet"
+        disabled={selectedRegisteredRows.length === 0}
+        onClick={() => {
+          const slotIds = [...new Set(selectedRegisteredRows.map(row => row.registered?.controlSlotId).filter((value): value is string => Boolean(value)))];
+          setBulkSlotId(slotIds.length === 1 ? slotIds[0]! : null);
+          setBulkError(null);
+          setBulkAction("SLOT");
+        }}
+      >
+        Assign Slot ({selectedRegisteredRows.length})
+      </Button>
+      {selectedRowKeys.length > 0 && <Button size="compact-sm" variant="subtle" color="gray" onClick={() => setSelectedRowKeys([])}>Clear selection</Button>}
+    </Group>
+
     <Group gap="sm" wrap="nowrap">
       <ResetFiltersAction active={activeFilters} onReset={() => { setProviderFilter(null); setAgentFilter(null); setTextFilter(""); setIdentityFilter(""); setModelFilter(""); setActionFilters([...DEFAULT_REGISTRY_FILTERS]); setShowDuplicateAgents(false); setShowDiscarded(false); }} />
       <Select
@@ -775,6 +864,19 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       <div className="device-registry-discovery-scroll">
         <Table striped highlightOnHover stickyHeader style={{ minWidth: 1040 }}>
           <Table.Thead><Table.Tr>
+            <Table.Th style={{ width: 34, minWidth: 34, maxWidth: 34, paddingInline: 6 }}>
+              <Checkbox
+                size="xs"
+                aria-label="Select all actionable discovery rows"
+                checked={visibleSelectableKeys.length > 0 && selectedVisibleCount === visibleSelectableKeys.length}
+                indeterminate={selectedVisibleCount > 0 && selectedVisibleCount < visibleSelectableKeys.length}
+                onChange={event => setSelectedRowKeys(current => {
+                  const visible = new Set(visibleSelectableKeys);
+                  if (event.currentTarget.checked) return [...new Set([...current, ...visible])];
+                  return current.filter(key => !visible.has(key));
+                })}
+              />
+            </Table.Th>
             <Table.Th aria-label="Icon" style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }} />
             <SortableTableHeader active={sortKey === "provider"} direction={sortDirection} onClick={() => toggleSort("provider")}>Provider</SortableTableHeader>
             <SortableTableHeader active={sortKey === "name"} direction={sortDirection} onClick={() => toggleSort("name")}>Name</SortableTableHeader>
@@ -827,7 +929,22 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                 ? <Tooltip multiline label={<>Discovered by {row.sourceRows.length} agents:<br />{agentNames.join(" · ")}</>}><span style={{ cursor: "help" }}>{agentLabel}</span></Tooltip>
                 : agentLabel;
               const statusBadge = <Badge size="sm" variant="light" color={statusColor(row.status)} style={{ maxWidth: "none", whiteSpace: "nowrap", overflow: "visible", textOverflow: "clip" }}>{statusLabel(row.status)}</Badge>;
+              const selectionKey = discoveryRowSelectionKey(row);
+              const selectable = (row.status === "CAN_ADD" && Boolean(row.agent)) || Boolean(row.registered);
               return <Table.Tr key={rowKey}>
+                <Table.Td style={{ width: 34, minWidth: 34, maxWidth: 34, paddingInline: 6 }}>
+                  <Tooltip label={selectable ? "Select for bulk action" : "Resolve this Registry match before using bulk actions"}>
+                    <span>
+                      <Checkbox
+                        size="xs"
+                        aria-label={`Select ${textValue(row.device, "name")}`}
+                        disabled={!selectable}
+                        checked={selectedRowKeys.includes(selectionKey)}
+                        onChange={event => setSelectedRowKeys(current => event.currentTarget.checked ? [...new Set([...current, selectionKey])] : current.filter(key => key !== selectionKey))}
+                      />
+                    </span>
+                  </Tooltip>
+                </Table.Td>
                 <Table.Td style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }}><ResolvedIconGlyph resolved={resolveDiscoveryIcon(provider, row.device)} size={20} /></Table.Td>
                 <Table.Td><Badge variant="light" color={providerColor(provider)}>{providerLabel(provider)}</Badge></Table.Td>
                 <Table.Td><CopyableDiscoveryValue value={textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")} fw={600} /></Table.Td>
@@ -852,12 +969,46 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                 </Group></Table.Td>
               </Table.Tr>;
             })}
-            {!sortedRows.length && <Table.Tr><Table.Td colSpan={10}><Text c="dimmed" ta="center" py="xl">No discovery matches the current filters.</Text></Table.Td></Table.Tr>}
+            {!sortedRows.length && <Table.Tr><Table.Td colSpan={11}><Text c="dimmed" ta="center" py="xl">No discovery matches the current filters.</Text></Table.Td></Table.Tr>}
           </Table.Tbody>
         </Table>
         <div className="device-registry-discovery-scroll-spacer" aria-hidden="true" />
       </div>
     </Card>
+
+    <Modal
+      opened={bulkAction != null}
+      onClose={() => { setBulkAction(null); setBulkError(null); }}
+      title={bulkAction === "ADD" ? `Add ${selectedAddRows.length} discovered device${selectedAddRows.length === 1 ? "" : "s"}` : `Assign Slot to ${selectedRegisteredRows.length} registered device${selectedRegisteredRows.length === 1 ? "" : "s"}`}
+      centered
+    >
+      <Stack gap="md">
+        <Text size="sm" c="dimmed">
+          {bulkAction === "ADD"
+            ? "The selected discoveries will be added with the same Device Agent Slot. Clear the field to add them without a Slot."
+            : "The selected Registry devices will be reassigned to the same Device Agent Slot. Clear the field to remove their Slot assignment."}
+        </Text>
+        <Select
+          label="Device Agent Slot"
+          searchable
+          clearable
+          placeholder="No Slot"
+          value={bulkSlotId}
+          onChange={setBulkSlotId}
+          data={(slotsQuery.data ?? []).map(slot => ({
+            value: slot.id,
+            label: `${slot.name} · ${slot.bound ? slot.agentName ?? "BOUND" : "UNBOUND"}`
+          }))}
+        />
+        {bulkError && <Text size="sm" c="red">{bulkError}</Text>}
+        <Group justify="flex-end">
+          <Button variant="default" onClick={() => { setBulkAction(null); setBulkError(null); }}>Cancel</Button>
+          {bulkAction === "ADD"
+            ? <Button color="green" loading={bulkImportMutation.isPending} disabled={selectedAddRows.length === 0} onClick={() => bulkImportMutation.mutate()}>Add selected</Button>
+            : <Button color="violet" loading={bulkSlotMutation.isPending} disabled={selectedRegisteredRows.length === 0} onClick={() => bulkSlotMutation.mutate()}>Apply Slot</Button>}
+        </Group>
+      </Stack>
+    </Modal>
 
     <Modal opened={Boolean(reconcileChoice)} onClose={closeReconcile} title="Reconcile discovered device" centered>
       <Stack gap="sm">

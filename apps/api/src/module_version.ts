@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.55.1";
+export const MODULE_VERSION = "1.56.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.56.0": {
+    releasedAt: "2026-09-29T19:08:00+02:00",
+    patch: "PR-288-device-bulk-slots-discovery-v1.patch",
+    changes: [
+      { type: "added", description: "Add atomic bulk Device Agent Slot assignment for Device Registry devices" }
+    ]
+  },
   "1.55.1": {
     releasedAt: "2026-09-29T07:14:01+02:00",
     patch: "PR-287-unmanaged-cleanup-path-v2.patch",

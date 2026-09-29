@@ -1072,6 +1072,48 @@ export async function registerDeviceRegistryFeature(
     }
   });
 
+  app.post("/api/v1/device-registry/devices/bulk-slot", async (
+    request: FastifyRequest<{ Body: unknown }>, reply
+  ) => {
+    const parsed = z.object({
+      deviceIds: z.array(z.string().uuid()).min(1),
+      slotId: z.string().uuid().nullable()
+    }).strict().safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid bulk Slot assignment" });
+
+    const input = parsed.data;
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      let agentId: string | null = null;
+      if (input.slotId) {
+        const slot = await client.query<{ agent_id: string | null }>(
+          "SELECT agent_id FROM device_agent_slots WHERE id=$1",
+          [input.slotId]
+        );
+        if (!slot.rows[0]) {
+          await client.query("ROLLBACK");
+          return reply.code(404).send({ error: "Device Agent Slot not found" });
+        }
+        agentId = slot.rows[0].agent_id;
+      }
+
+      const result = await client.query(
+        `UPDATE device_registry_devices
+         SET control_slot_id=$2, control_agent_id=$3, updated_at=NOW()
+         WHERE id = ANY($1::uuid[])`,
+        [input.deviceIds, input.slotId, agentId]
+      );
+      await client.query("COMMIT");
+      return reply.send({ updatedDevices: result.rowCount ?? 0 });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+
   app.patch("/api/v1/device-registry/devices/:id", async (
     request: FastifyRequest<{ Params: { id: string }; Body: unknown }>, reply
   ) => {

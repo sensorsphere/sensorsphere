@@ -18,10 +18,21 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.94.1";
+export const MODULE_VERSION = "1.95.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.95.0": {
+    releasedAt: "2026-09-29T19:08:00+02:00",
+    patch: "PR-288-device-bulk-slots-discovery-v1.patch",
+    changes: [
+      { type: "added", description: "Add bulk Discovery imports with optional Device Agent Slot assignment" },
+      { type: "added", description: "Add bulk Device Agent Slot reassignment from Discovery and Devices" },
+      { type: "changed", description: "Display the logical Device Agent Slot and its bound runtime in the Devices table and edit dialog" },
+      { type: "added", description: "Add a Device Agent Slot filter to Devices and clarify the existing No monitoring slots card" },
+      { type: "fixed", description: "Bulk Proxmox Discovery imports create parent nodes before guests so parent relationships are preserved within the same batch" }
+    ]
+  },
   "1.94.1": {
     releasedAt: "2026-09-29T07:14:01+02:00",
     patch: "PR-287-unmanaged-cleanup-path-v2.patch",

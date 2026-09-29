@@ -890,6 +890,8 @@ export interface DeviceRegistryDevice {
   location: { id: string; name: string } | null;
   parentDevice: { id: string; name: string } | null;
   healthProfile: { id: string; name: string } | null;
+  controlSlotId: string | null;
+  controlSlot: { id: string; name: string } | null;
   controlAgent: { id: string; name: string } | null;
   controlProvider: string | null;
   enabled: boolean;
@@ -925,6 +927,7 @@ export interface CreateDeviceRegistryDeviceInput {
   locationId?: string | null;
   parentDeviceId?: string | null;
   healthProfileId?: string | null;
+  controlSlotId?: string | null;
   controlAgentId?: string | null;
   controlProvider?: string | null;
   enabled?: boolean;

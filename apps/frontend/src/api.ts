@@ -1833,6 +1833,17 @@ export async function deleteDeviceRegistryDevice(id: string): Promise<void> {
   if (!response.ok) await readJson<unknown>(response);
 }
 
+export async function bulkAssignDeviceRegistrySlot(input: {
+  deviceIds: string[];
+  slotId: string | null;
+}): Promise<{ updatedDevices: number }> {
+  return readJson<{ updatedDevices: number }>(await fetch("/api/v1/device-registry/devices/bulk-slot", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  }));
+}
+
 export async function getDeviceHealthProfiles(): Promise<DeviceHealthProfile[]> {
   return readJson<DeviceHealthProfile[]>(await fetch("/api/v1/device-registry/health-profiles"));
 }

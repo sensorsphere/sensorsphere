@@ -34,11 +34,13 @@ import {
   createDeviceHealthProfile,
   createDeviceRegistryDevice,
   createDeviceControlCommand,
+  bulkAssignDeviceRegistrySlot,
   deleteDeviceHealthProfile,
   deleteDeviceRegistryDevice,
   getAssets,
   getDeviceHealthProfiles,
   getDeviceAgents,
+  getDeviceAgentSlots,
   getDeviceControlCommand,
   getDeviceControlState,
   getDeviceIdentityLabelReferences,
@@ -219,6 +221,7 @@ interface DeviceFormState {
   locationId: string | null;
   parentDeviceId: string | null;
   healthProfileId: string | null;
+  controlSlotId: string | null;
   controlAgentId: string | null;
   controlProvider: string;
   enabled: boolean;
@@ -246,6 +249,7 @@ function emptyDeviceForm(): DeviceFormState {
     locationId: null,
     parentDeviceId: null,
     healthProfileId: null,
+    controlSlotId: null,
     controlAgentId: null,
     controlProvider: "",
     enabled: true,
@@ -274,6 +278,7 @@ function deviceToForm(device: DeviceRegistryDevice): DeviceFormState {
     locationId: device.location?.id ?? null,
     parentDeviceId: device.parentDevice?.id ?? null,
     healthProfileId: device.healthProfile?.id ?? null,
+    controlSlotId: device.controlSlotId ?? null,
     controlAgentId: device.controlAgent?.id ?? null,
     controlProvider: device.controlProvider ?? "",
     enabled: device.enabled,
@@ -306,7 +311,7 @@ function deviceFormPayload(form: DeviceFormState): CreateDeviceRegistryDeviceInp
     locationId: form.locationId,
     parentDeviceId: form.parentDeviceId,
     healthProfileId: form.healthProfileId,
-    controlAgentId: form.controlAgentId,
+    controlSlotId: form.controlSlotId,
     controlProvider: form.controlProvider.trim() || null,
     enabled: form.enabled,
     lastSeenAt: form.lastSeenAt ? new Date(form.lastSeenAt).toISOString() : null,
@@ -534,6 +539,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const [typeFilter, setTypeFilter] = usePersistentState<string | null>("device-registry.filter.type", null);
   const [technologyFilter, setTechnologyFilter] = usePersistentState<string | null>("device-registry.filter.technology", null);
   const [healthFilter, setHealthFilter] = usePersistentState<string | null>("device-registry.filter.health", null);
+  const [deviceAgentSlotFilter, setDeviceAgentSlotFilter] = usePersistentState<string | null>("device-registry.filter.device-agent-slot", null);
   const [noSlotsFilter, setNoSlotsFilter] = usePersistentState("device-registry.filter.no-slots", false);
   const [editingDevice, setEditingDevice] = React.useState<DeviceRegistryDevice | null>(null);
   const [deviceModalOpen, setDeviceModalOpen] = React.useState(false);
@@ -548,6 +554,9 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const [error, setError] = React.useState<string | null>(null);
   const [accessLinkToOpen, setAccessLinkToOpen] = React.useState<string | null>(null);
   const [quickCheckRequest, setQuickCheckRequest] = React.useState<MonitoringQuickCheckRequest | null>(null);
+  const [selectedDeviceIds, setSelectedDeviceIds] = React.useState<string[]>([]);
+  const [bulkSlotModalOpen, setBulkSlotModalOpen] = React.useState(false);
+  const [bulkSlotId, setBulkSlotId] = React.useState<string | null>(null);
 
   const [controlDevice, setControlDevice] = React.useState<DeviceRegistryDevice | null>(null);
   const [controlState, setControlState] = React.useState<DeviceControlState | null>(null);
@@ -577,6 +586,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
   const deviceClassesQuery = useQuery({ queryKey: ["device-registry", "classes"], queryFn: getDeviceClassReferences });
   const profilesQuery = useQuery({ queryKey: ["device-registry", "health-profiles"], queryFn: getDeviceHealthProfiles });
   const deviceAgentsQuery = useQuery({ queryKey: ["device-control", "agents"], queryFn: getDeviceAgents, refetchInterval: 10000 });
+  const deviceAgentSlotsQuery = useQuery({ queryKey: ["device-control", "slots"], queryFn: getDeviceAgentSlots, refetchInterval: 10000 });
   const deviceTypesQuery = useQuery({ queryKey: ["device-registry", "device-types"], queryFn: getDeviceTypeReferences });
   const technologiesQuery = useQuery({ queryKey: ["device-registry", "technologies"], queryFn: getDeviceTechnologyReferences });
   const identityLabelsQuery = useQuery({ queryKey: ["device-registry", "identity-labels"], queryFn: getDeviceIdentityLabelReferences });
@@ -605,6 +615,17 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       onDeviceSaved?.();
     },
     onError: cause => setError(cause instanceof Error ? cause.message : "Unable to save device")
+  });
+
+  const bulkAssignSlot = useMutation({
+    mutationFn: () => bulkAssignDeviceRegistrySlot({ deviceIds: selectedDeviceIds, slotId: bulkSlotId }),
+    onSuccess: async () => {
+      setBulkSlotModalOpen(false);
+      setSelectedDeviceIds([]);
+      setError(null);
+      await refresh();
+    },
+    onError: cause => setError(cause instanceof Error ? cause.message : "Unable to assign Device Agent Slot")
   });
 
   const removeDevice = useMutation({
@@ -931,6 +952,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       (!typeFilter || device.deviceType === typeFilter) &&
       (!technologyFilter || device.technologies.some(item => item.code === technologyFilter)) &&
       (!healthFilter || device.health.status === healthFilter) &&
+      (!deviceAgentSlotFilter || (deviceAgentSlotFilter === "__NO_SLOT__" ? !device.controlSlotId : device.controlSlotId === deviceAgentSlotFilter)) &&
       (!noSlotsFilter || !deviceHasMonitoringSlot(device.id));
   }).sort((left, right) => {
     const leftValue = sortKey === "name" ? left.name
@@ -940,7 +962,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       : sortKey === "technology" ? left.technologies.map(item => item.label).join(", ")
       : sortKey === "location" ? left.location?.name ?? null
       : sortKey === "parent" ? left.parentDevice?.name ?? null
-      : sortKey === "controlAgent" ? left.controlAgent?.name ?? null
+      : sortKey === "controlAgent" ? left.controlSlot?.name ?? null
       : sortKey === "lastSeen" ? (left.lastSeenAt ? new Date(left.lastSeenAt).getTime() : null)
       : sortKey === "health" ? left.health.status
       : deviceCheckCount(left.id);
@@ -951,7 +973,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       : sortKey === "technology" ? right.technologies.map(item => item.label).join(", ")
       : sortKey === "location" ? right.location?.name ?? null
       : sortKey === "parent" ? right.parentDevice?.name ?? null
-      : sortKey === "controlAgent" ? right.controlAgent?.name ?? null
+      : sortKey === "controlAgent" ? right.controlSlot?.name ?? null
       : sortKey === "lastSeen" ? (right.lastSeenAt ? new Date(right.lastSeenAt).getTime() : null)
       : sortKey === "health" ? right.health.status
       : deviceCheckCount(right.id);
@@ -972,7 +994,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     return acc;
   }, { ONLINE: 0, WARNING: 0, OFFLINE: 0, UNKNOWN: 0, DISABLED: 0 });
 
-  const openDiscoveredDeviceImport = ({ agent, provider, device }: DiscoveredDeviceImportRequest) => {
+  const discoveredDeviceForm = ({ agent, provider, device }: DiscoveredDeviceImportRequest, knownDevices: DeviceRegistryDevice[] = devices): DeviceFormState => {
     const value = (key: string): string => {
       const raw = device[key];
       return raw == null ? "" : String(raw).trim();
@@ -1015,7 +1037,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       : proxmoxKind === "PVE_LXC" ? "lxc_container"
       : "";
     const proxmoxParent = proxmoxParentId
-      ? devices.find(existing => existing.identities.some(identity =>
+      ? knownDevices.find(existing => existing.identities.some(identity =>
         identity.identityType.toUpperCase() === "PROXMOX_ID"
         && identity.value.trim().toLowerCase() === proxmoxParentId.toLowerCase()
       )) ?? null
@@ -1043,8 +1065,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       macAddresses.length ? `MAC: ${macAddresses.join(", ")}` : ""
     ].filter(Boolean).join(" · ");
 
-    setEditingDevice(null);
-    setDeviceForm({
+    return {
       ...emptyDeviceForm(),
       name: providerName === "YEELIGHT"
         ? discoveredYeelightDeviceName(mac, id)
@@ -1064,12 +1085,37 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           ? proxmoxDescription
           : (entities.length ? `Discovered ESPHome entities: ${entities.join(", ")}` : "Discovered through ESPHome mDNS"),
       parentDeviceId: providerName === "PROXMOX" ? proxmoxParent?.id ?? null : null,
+      controlSlotId: agent.slotId,
       controlAgentId: agent.id,
       controlProvider: providerName
-    });
+    };
+  };
+
+  const openDiscoveredDeviceImport = (request: DiscoveredDeviceImportRequest) => {
+    setEditingDevice(null);
+    setDeviceForm(discoveredDeviceForm(request));
     setError(null);
     setTab("devices");
     setDeviceModalOpen(true);
+  };
+
+  const bulkImportDiscoveredDevices = async (requests: DiscoveredDeviceImportRequest[], slotId: string | null) => {
+    const orderedRequests = [...requests].sort((left, right) => {
+      const rank = (request: DiscoveredDeviceImportRequest) => {
+        if (request.provider.toUpperCase() !== "PROXMOX") return 1;
+        const kind = typeof request.device.kind === "string" ? request.device.kind.toUpperCase() : "";
+        return kind === "PVE_NODE" || kind === "PBS_SERVER" ? 0 : 2;
+      };
+      return rank(left) - rank(right);
+    });
+    const knownDevices = [...devices];
+    for (const request of orderedRequests) {
+      const form = discoveredDeviceForm(request, knownDevices);
+      const created = await createDeviceRegistryDevice(deviceFormPayload({ ...form, controlSlotId: slotId, controlAgentId: null }));
+      knownDevices.push(created);
+    }
+    await refresh();
+    await queryClient.refetchQueries({ queryKey: ["device-registry", "devices"], type: "active" });
   };
 
   const updateRegisteredDeviceFromDiscovery = async (
@@ -1146,6 +1192,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         mac ? `MAC: ${mac}` : ""
       ].filter(Boolean).join(" · ");
     }
+    form.controlSlotId = agent.slotId;
     form.controlAgentId = agent.id;
     form.controlProvider = providerName;
     // Keep the discovery provider first so the legacy `technology` field remains
@@ -1269,7 +1316,24 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
 
         <Tabs.Panel value="devices" pt="md" className="device-registry-devices-panel">
           <Stack gap="sm" className="device-registry-devices-stack">
-            <Group justify="flex-end"><Button size="compact-sm" onClick={openCreateDevice}>+ Add device</Button></Group>
+            <Group justify="space-between">
+              <Group gap="xs">
+                <Button
+                  size="compact-sm"
+                  variant="light"
+                  disabled={selectedDeviceIds.length === 0}
+                  onClick={() => {
+                    const first = devices.find(device => selectedDeviceIds.includes(device.id));
+                    setBulkSlotId(first?.controlSlotId ?? null);
+                    setBulkSlotModalOpen(true);
+                  }}
+                >
+                  Slot for selected ({selectedDeviceIds.length})
+                </Button>
+                {selectedDeviceIds.length > 0 && <Button size="compact-sm" variant="subtle" color="gray" onClick={() => setSelectedDeviceIds([])}>Clear selection</Button>}
+              </Group>
+              <Button size="compact-sm" onClick={openCreateDevice}>+ Add device</Button>
+            </Group>
             <SimpleGrid cols={{ base: 2, sm: 4, lg: 7 }} spacing="sm">
               <Card
                 withBorder
@@ -1293,7 +1357,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                 }}
                 onClick={() => setNoSlotsFilter(current => !current)}
               >
-                <Badge size="xs" color="orange" variant="light">No slots</Badge>
+                <Badge size="xs" color="orange" variant="light">No monitoring slots</Badge>
                 <Text fw={700} size="xl" c="orange.6">{noSlotDevices}</Text>
                 <Text size="xs" c="dimmed">Devices without a Monitoring Slot</Text>
               </Card>
@@ -1321,7 +1385,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
 
             <Group gap="sm" align="center" wrap="nowrap">
               <ResetFiltersAction
-                active={Boolean(nameFilter.trim() || addressFilter.trim() || classFilter || typeFilter || technologyFilter || healthFilter || noSlotsFilter)}
+                active={Boolean(nameFilter.trim() || addressFilter.trim() || classFilter || typeFilter || technologyFilter || healthFilter || deviceAgentSlotFilter || noSlotsFilter)}
                 onReset={() => {
                   setNameFilter("");
                   setAddressFilter("");
@@ -1329,6 +1393,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                   setTypeFilter(null);
                   setTechnologyFilter(null);
                   setHealthFilter(null);
+                  setDeviceAgentSlotFilter(null);
                   setNoSlotsFilter(false);
                 }}
               />
@@ -1337,6 +1402,19 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
               <Select placeholder="All classes" clearable value={classFilter} onChange={setClassFilter} styles={activeFilterStyles(Boolean(classFilter))} data={[...(deviceClassesQuery.data ?? [])].sort((a, b) => a.label.localeCompare(b.label)).map(item => ({ value: item.code, label: item.label }))} leftSection={classFilter ? <DeviceGlyph icon={(deviceClassesQuery.data ?? []).find(item => item.code === classFilter)?.icon ?? "device"} color={(deviceClassesQuery.data ?? []).find(item => item.code === classFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (deviceClassesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={180} />
               <Select placeholder="All types" searchable clearable value={typeFilter} onChange={setTypeFilter} styles={activeFilterStyles(Boolean(typeFilter))} data={[...(deviceTypesQuery.data ?? [])].sort((a, b) => a.label.localeCompare(b.label)).map(type => ({ value: type.code, label: type.label }))} leftSection={typeFilter ? <DeviceGlyph icon={(deviceTypesQuery.data ?? []).find(item => item.code === typeFilter)?.icon ?? "device"} color={(deviceTypesQuery.data ?? []).find(item => item.code === typeFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (deviceTypesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={190} />
               <Select placeholder="All technologies" searchable clearable value={technologyFilter} onChange={setTechnologyFilter} styles={activeFilterStyles(Boolean(technologyFilter))} data={[...(technologiesQuery.data ?? [])].sort((a, b) => a.label.localeCompare(b.label)).map(technology => ({ value: technology.code, label: technology.label }))} leftSection={technologyFilter ? <DeviceGlyph icon={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.icon ?? "link"} color={(technologiesQuery.data ?? []).find(item => item.code === technologyFilter)?.color} /> : undefined} renderOption={({ option }) => { const item = (technologiesQuery.data ?? []).find(ref => ref.code === option.value); return item ? <TaxonomyOption icon={item.icon} color={item.color} label={item.label} /> : option.label; }} w={205} />
+              <Select
+                placeholder="All Device Agent Slots"
+                searchable
+                clearable
+                value={deviceAgentSlotFilter}
+                onChange={setDeviceAgentSlotFilter}
+                styles={activeFilterStyles(Boolean(deviceAgentSlotFilter))}
+                data={[
+                  { value: "__NO_SLOT__", label: "No Device Agent Slot" },
+                  ...(deviceAgentSlotsQuery.data ?? []).map(slot => ({ value: slot.id, label: `${slot.name}${slot.bound ? ` · ${slot.agentName ?? "BOUND"}` : " · UNBOUND"}` }))
+                ]}
+                w={220}
+              />
               <Select placeholder="All health" clearable value={healthFilter} onChange={setHealthFilter} styles={activeFilterStyles(Boolean(healthFilter))} data={Object.keys(HEALTH_COLORS)} w={150} />
             </Group>
 
@@ -1345,6 +1423,19 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                 <Table striped highlightOnHover stickyHeader>
                   <Table.Thead>
                     <Table.Tr>
+                      <Table.Th style={{ width: 34, minWidth: 34, maxWidth: 34, paddingInline: 6 }}>
+                        <Checkbox
+                          size="xs"
+                          aria-label="Select all filtered devices"
+                          checked={filteredDevices.length > 0 && filteredDevices.every(device => selectedDeviceIds.includes(device.id))}
+                          indeterminate={filteredDevices.some(device => selectedDeviceIds.includes(device.id)) && !filteredDevices.every(device => selectedDeviceIds.includes(device.id))}
+                          onChange={event => setSelectedDeviceIds(current => {
+                            const visible = new Set(filteredDevices.map(device => device.id));
+                            if (event.currentTarget.checked) return [...new Set([...current, ...visible])];
+                            return current.filter(id => !visible.has(id));
+                          })}
+                        />
+                      </Table.Th>
                       <Table.Th aria-label="Icon" style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }} />
                       <SortableTableHeader active={sortKey === "name"} direction={sortDirection} onClick={() => toggleSort("name")}>Name</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "address"} direction={sortDirection} onClick={() => toggleSort("address")}>Address</SortableTableHeader>
@@ -1353,7 +1444,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                       <SortableTableHeader active={sortKey === "technology"} direction={sortDirection} onClick={() => toggleSort("technology")}>Technology</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "location"} direction={sortDirection} onClick={() => toggleSort("location")}>Location</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "parent"} direction={sortDirection} onClick={() => toggleSort("parent")}>Parent</SortableTableHeader>
-                      <SortableTableHeader active={sortKey === "controlAgent"} direction={sortDirection} onClick={() => toggleSort("controlAgent")}>Device Agent</SortableTableHeader>
+                      <SortableTableHeader active={sortKey === "controlAgent"} direction={sortDirection} onClick={() => toggleSort("controlAgent")}>Device Agent Slot</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "lastSeen"} direction={sortDirection} onClick={() => toggleSort("lastSeen")}>Last seen</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "health"} direction={sortDirection} onClick={() => toggleSort("health")}>Health</SortableTableHeader>
                       <SortableTableHeader active={sortKey === "checks"} direction={sortDirection} onClick={() => toggleSort("checks")}>Checks</SortableTableHeader>
@@ -1364,6 +1455,14 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                   <Table.Tbody>
                     {filteredDevices.map(device => (
                       <Table.Tr key={device.id}>
+                        <Table.Td style={{ width: 34, minWidth: 34, maxWidth: 34, paddingInline: 6 }}>
+                          <Checkbox
+                            size="xs"
+                            aria-label={`Select ${device.name}`}
+                            checked={selectedDeviceIds.includes(device.id)}
+                            onChange={event => setSelectedDeviceIds(current => event.currentTarget.checked ? [...new Set([...current, device.id])] : current.filter(id => id !== device.id))}
+                          />
+                        </Table.Td>
                         <Table.Td style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }}><ResolvedIconGlyph resolved={resolveDeviceIcon(device)} size={20} /></Table.Td>
                         <Table.Td>
                           <Stack gap={0}>
@@ -1392,10 +1491,18 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                         </Table.Td>
                         <Table.Td>{device.location ? <Group gap={6} wrap="nowrap"><LocationIcon name={getLocationIconName(device.location)} size={16} /><Text size="sm">{device.location.name}</Text></Group> : "—"}</Table.Td>
                         <Table.Td>{device.parentDevice?.name ?? "—"}</Table.Td>
-                        <Table.Td>{device.controlAgent ? (() => {
-                          const agent = (deviceAgentsQuery.data ?? []).find(item => item.id === device.controlAgent?.id);
-                          return <Stack gap={2}><Text size="sm">{device.controlAgent.name}</Text>{agent && <Group gap={6} wrap="nowrap"><Badge size="xs" variant="light" w="fit-content" color={!agent.enabled ? "gray" : agent.online ? "green" : "red"}>{!agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE"}</Badge><Text size="xs" c="dimmed">{agent.version ? `v${agent.version.replace(/^v/i, "")}` : "—"}</Text></Group>}</Stack>;
-                        })() : "—"}</Table.Td>
+                        <Table.Td>{device.controlSlot ? (() => {
+                          const agent = device.controlAgent ? (deviceAgentsQuery.data ?? []).find(item => item.id === device.controlAgent?.id) : null;
+                          return <Stack gap={2}>
+                            <Group gap={6} wrap="nowrap">
+                              <Badge size="xs" variant="light" color="violet">{device.controlSlot.name}</Badge>
+                              {!device.controlAgent && <Badge size="xs" variant="light" color="orange">UNBOUND</Badge>}
+                            </Group>
+                            {device.controlAgent
+                              ? <Group gap={6} wrap="nowrap"><Text size="xs">{device.controlAgent.name}</Text>{agent && <Badge size="xs" variant="light" color={!agent.enabled ? "gray" : agent.online ? "green" : "red"}>{!agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE"}</Badge>}</Group>
+                              : <Text size="xs" c="dimmed">No physical Device Agent bound</Text>}
+                          </Stack>;
+                        })() : <Badge size="xs" variant="light" color="gray">NO SLOT</Badge>}</Table.Td>
                         <Table.Td title={device.lastSeenAt ?? undefined}>{compactDate(device.lastSeenAt)}</Table.Td>
                         <Table.Td>
                           {device.healthProfile && (
@@ -1423,7 +1530,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                               const capability = agent?.capabilities.find(item => item.provider.toUpperCase() === provider);
                               const supported = provider === "YEELIGHT" || provider === "ESPHOME";
                               const canControl = Boolean(supported && capability && agent?.enabled && agent.online);
-                              const label = !supported ? "Device control is not available for this provider" : !device.controlAgent ? "Assign a Device Agent first" : !agent?.online ? "Device Agent is offline" : !capability ? `Device Agent does not advertise ${provider}` : "Control device";
+                              const label = !supported ? "Device control is not available for this provider" : !device.controlSlot ? "Assign a Device Agent Slot first" : !device.controlAgent ? "The assigned Device Agent Slot is UNBOUND" : !agent?.online ? "Device Agent is offline" : !capability ? `Device Agent does not advertise ${provider}` : "Control device";
                               return <Tooltip label={label}><span><ActionIcon size="sm" variant="light" color="violet" disabled={!canControl} aria-label={`Control ${device.name}`} onClick={() => void openDeviceControl(device)}>◉</ActionIcon></span></Tooltip>;
                             })()}
                             <EditActionIcon onClick={() => openEditDevice(device)} />
@@ -1434,7 +1541,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                       </Table.Tr>
                     ))}
                     {filteredDevices.length === 0 && (
-                      <Table.Tr><Table.Td colSpan={13}><Text c="dimmed" ta="center" py="xl">No devices match the current filters.</Text></Table.Td></Table.Tr>
+                      <Table.Tr><Table.Td colSpan={14}><Text c="dimmed" ta="center" py="xl">No devices match the current filters.</Text></Table.Td></Table.Tr>
                     )}
                   </Table.Tbody>
                 </Table>
@@ -1456,6 +1563,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
             devices={devices}
             onImportDiscoveredDevice={openDiscoveredDeviceImport}
             onUpdateDiscoveredDevice={updateRegisteredDeviceFromDiscovery}
+            onBulkImportDiscoveredDevices={bulkImportDiscoveredDevices}
             onOpenRegisteredDevice={openEditDevice}
           />
         </Tabs.Panel>
@@ -1836,6 +1944,38 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       </Modal>
 
       <Modal
+        opened={bulkSlotModalOpen}
+        onClose={() => setBulkSlotModalOpen(false)}
+        title={`Assign Device Agent Slot to ${selectedDeviceIds.length} device${selectedDeviceIds.length === 1 ? "" : "s"}`}
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            This changes the logical Device Agent Slot assignment for every selected Device. Clearing the field removes the Slot assignment.
+          </Text>
+          <Select
+            label="Device Agent Slot"
+            searchable
+            clearable
+            placeholder="No Slot"
+            value={bulkSlotId}
+            onChange={setBulkSlotId}
+            data={(deviceAgentSlotsQuery.data ?? []).map(slot => ({
+              value: slot.id,
+              label: `${slot.name} · ${slot.bound ? slot.agentName ?? "BOUND" : "UNBOUND"}`
+            }))}
+          />
+          {error && <Text size="sm" c="red">{error}</Text>}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setBulkSlotModalOpen(false)}>Cancel</Button>
+            <Button loading={bulkAssignSlot.isPending} disabled={selectedDeviceIds.length === 0} onClick={() => bulkAssignSlot.mutate()}>
+              Apply Slot
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
         opened={deviceModalOpen}
         onClose={() => setDeviceModalOpen(false)}
         title={<Group gap="sm" wrap="nowrap"><DeviceGlyph icon={devicePreviewIcon.icon} color={devicePreviewIcon.color} size={32} /><Text fw={600}>{editingDevice ? "Edit device" : "Add device"}</Text></Group>}
@@ -1874,7 +2014,18 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
             />
             <Select label="Parent device" searchable clearable value={deviceForm.parentDeviceId} onChange={value => setDeviceForm(current => ({ ...current, parentDeviceId: value }))} data={devices.filter(device => device.id !== editingDevice?.id).map(device => ({ value: device.id, label: device.name }))} />
             <Select label="Health profile" searchable clearable value={deviceForm.healthProfileId} onChange={value => setDeviceForm(current => ({ ...current, healthProfileId: value }))} data={(profilesQuery.data ?? []).map(profile => ({ value: profile.id, label: profile.name }))} />
-            <Select label="Device Agent" description={deviceForm.technologies.some(value => value.toLowerCase() === "yeelight") ? "Yeelight control will use this agent." : deviceForm.technologies.some(value => value.toLowerCase() === "esphome") ? "ESPHome Native API control will use this agent. Add ESPHOME_ENTITY when the node exposes multiple light/switch entities." : "Used by Device Control providers."} searchable clearable value={deviceForm.controlAgentId} onChange={value => setDeviceForm(current => ({ ...current, controlAgentId: value }))} data={(deviceAgentsQuery.data ?? []).filter(agent => agent.enabled).map(agent => ({ value: agent.id, label: `${agent.name}${agent.online ? " · ONLINE" : " · OFFLINE"}` }))} />
+            <Select
+              label="Device Agent Slot"
+              description="Logical assignment used by Device Control. The bound Device Agent may be replaced without changing the Device assignment."
+              searchable
+              clearable
+              value={deviceForm.controlSlotId}
+              onChange={value => setDeviceForm(current => ({ ...current, controlSlotId: value, controlAgentId: null }))}
+              data={(deviceAgentSlotsQuery.data ?? []).map(slot => ({
+                value: slot.id,
+                label: `${slot.name} · ${slot.bound ? slot.agentName ?? "BOUND" : "UNBOUND"}`
+              }))}
+            />
             <TextInput label="Control provider" description="Set by Discovery / Device Control provider." value={deviceForm.controlProvider || "—"} readOnly />
             <TextInput type="datetime-local" label="Last seen" value={deviceForm.lastSeenAt} onChange={event => setDeviceForm(current => ({ ...current, lastSeenAt: event.currentTarget.value }))} />
             <NumberInput label="Battery %" min={0} max={100} value={deviceForm.batteryPercent} onChange={value => setDeviceForm(current => ({ ...current, batteryPercent: value }))} />
