@@ -18,16 +18,22 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.55.0";
+export const MODULE_VERSION = "1.55.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.55.1": {
+    releasedAt: "2026-09-29T07:14:01+02:00",
+    patch: "PR-287-unmanaged-cleanup-path-v2.patch",
+    changes: [
+      { type: "fixed", description: "Preserve an explicit discovered install directory for unmanaged Supervisor cleanup operations" }
+    ]
+  },
   "1.55.0": {
     releasedAt: "2026-09-29T06:30:25+02:00",
     patch: "PR-287-auth-ux-device-agent-recreate-v1.patch",
     changes: [
-      { type: "changed", description: "Expose the configured Ingestion version as a runtime fallback when component build reporting is unavailable" },
-      { type: "fixed", description: "Preserve an explicit discovered install directory for unmanaged Supervisor cleanup operations" }
+      { type: "changed", description: "Expose the configured Ingestion version as a runtime fallback when component build reporting is unavailable" }
     ]
   },
   "1.54.0": {
