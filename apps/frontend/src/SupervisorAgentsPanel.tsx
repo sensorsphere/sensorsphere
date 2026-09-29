@@ -232,9 +232,13 @@ function explicitlyManaged(agent: AutonomousSupervisorAgent, agentType: "device-
   return Boolean(entry && typeof entry.management_id === "string" && entry.management_id);
 }
 
-function discoveredUnmanaged(agent: AutonomousSupervisorAgent, agentType: "device-agent" | "monitor-agent", instance = "main"): boolean {
+function discoveredUnmanagedEntry(agent: AutonomousSupervisorAgent, agentType: "device-agent" | "monitor-agent", instance = "main") {
   const entry = reportedManagedEntry(agent, agentType, instance);
-  return Boolean(entry && !(typeof entry.management_id === "string" && entry.management_id));
+  return entry && !(typeof entry.management_id === "string" && entry.management_id) ? entry : null;
+}
+
+function discoveredUnmanaged(agent: AutonomousSupervisorAgent, agentType: "device-agent" | "monitor-agent", instance = "main"): boolean {
+  return discoveredUnmanagedEntry(agent, agentType, instance) != null;
 }
 
 
@@ -348,9 +352,16 @@ export function SupervisorAgentsPanel() {
       setDeployStatus("CREATING");
       setDeployError(null);
       setDialogActionDetails(null);
-      if (discoveredUnmanaged(supervisor, "device-agent")) {
+      const unmanagedDevice = discoveredUnmanagedEntry(supervisor, "device-agent");
+      if (unmanagedDevice) {
         setDeployStatus("DEPLOYING");
-        const cleanup = await requestSupervisorManagedOperation(supervisor.id, { operation: "REMOVE", agentType: "device-agent", instance: "main" });
+        const cleanupInstallDir = typeof unmanagedDevice.install_dir === "string" ? unmanagedDevice.install_dir : undefined;
+        const cleanup = await requestSupervisorManagedOperation(supervisor.id, {
+          operation: "REMOVE",
+          agentType: "device-agent",
+          instance: "main",
+          ...(cleanupInstallDir ? { installDir: cleanupInstallDir } : {})
+        });
         trackOperation("Cleanup Device Agent / main", cleanup);
         const cleaned = await waitSupervisorManagedOperation(cleanup.commandId, operation => trackOperation("Cleanup Device Agent / main", operation));
         if (cleaned.status !== "SUCCESS" && !/is not installed$/i.test(cleaned.error ?? "")) throw new Error(cleaned.error ?? "Unable to remove the unmanaged local Device Agent installation");
@@ -399,9 +410,16 @@ export function SupervisorAgentsPanel() {
       if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(normalizedInstance)) throw new Error("Instance must start with a letter or number and contain only letters, numbers, dot, underscore or dash");
       const occupied = supervisor.managedAgents.find(entry => entry.agent_type === "monitor-agent" && entry.instance === normalizedInstance && entry.installed !== false && typeof entry.management_id === "string" && entry.management_id);
       if (occupied) throw new Error(`Monitoring Agent instance '${normalizedInstance}' is already managed by this Supervisor`);
-      if (discoveredUnmanaged(supervisor, "monitor-agent", normalizedInstance)) {
+      const unmanagedMonitoring = discoveredUnmanagedEntry(supervisor, "monitor-agent", normalizedInstance);
+      if (unmanagedMonitoring) {
         setDeployStatus("DEPLOYING");
-        const cleanup = await requestSupervisorManagedOperation(supervisor.id, { operation: "REMOVE", agentType: "monitor-agent", instance: normalizedInstance });
+        const cleanupInstallDir = typeof unmanagedMonitoring.install_dir === "string" ? unmanagedMonitoring.install_dir : undefined;
+        const cleanup = await requestSupervisorManagedOperation(supervisor.id, {
+          operation: "REMOVE",
+          agentType: "monitor-agent",
+          instance: normalizedInstance,
+          ...(cleanupInstallDir ? { installDir: cleanupInstallDir } : {})
+        });
         trackOperation(`Cleanup Monitoring Agent / ${normalizedInstance}`, cleanup);
         const cleaned = await waitSupervisorManagedOperation(cleanup.commandId, operation => trackOperation(`Cleanup Monitoring Agent / ${normalizedInstance}`, operation));
         if (cleaned.status !== "SUCCESS") throw new Error(cleaned.error ?? "Unable to remove the unmanaged local Monitoring Agent installation");

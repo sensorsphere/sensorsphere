@@ -1891,7 +1891,8 @@ export async function registerDeviceControlFeature(
       environment: parsed.data.environment,
       managementId: assignment?.id,
       agentId: assignment ? (assignment.device_agent_id ?? assignment.monitoring_agent_id) : parsed.data.agentId,
-      installDir: assignment?.install_dir ?? parsed.data.installDir ?? undefined
+      installDir: parsed.data.installDir ?? assignment?.install_dir ?? undefined,
+      unmanagedCleanup: parsed.data.operation === "REMOVE" && parsed.data.installDir != null
     }));
     return reply.code(202).send(supervisorManagedAgentOperationDto(record));
   });
