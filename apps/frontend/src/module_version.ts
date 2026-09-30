@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.97.0";
+export const MODULE_VERSION = "1.98.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.98.0": {
+    releasedAt: "2026-09-30T04:07:28Z",
+    patch: "PR-291-managed-runtime-inspector-issues-and-filters.patch",
+    changes: [
+      { type: "added", description: "Show an Issues detected summary with explicit reconciliation reasons above the Managed Runtime Inspector table" },
+      { type: "changed", description: "Keep the Managed Runtime Inspector table visible in a dedicated scrollable area" },
+      { type: "added", description: "Make reconciliation summary cards filter the runtime table, with second-click and ALL reset" }
+    ]
+  },
   "1.97.0": {
     releasedAt: "2026-09-30T03:38:55Z",
     patch: "PR-290-managed-runtime-inspector-v2.patch",
