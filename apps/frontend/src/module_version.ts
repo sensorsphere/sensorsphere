@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.101.0";
+export const MODULE_VERSION = "1.101.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.101.1": {
+    releasedAt: "2026-09-30T09:20:00Z",
+    patch: "PR-298-managed-runtime-update-icon-hotfix.patch",
+    changes: [
+      { type: "fixed", description: "Define the Managed Runtime Inspector update icon so opening a DRIFT runtime no longer crashes the Supervisor Agents UI" }
+    ]
+  },
   "1.101.0": {
     releasedAt: "2026-09-30T08:58:00Z",
     patch: "PR-297-managed-runtime-remediation-v1.patch",
