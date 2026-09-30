@@ -2199,14 +2199,16 @@ export async function removeRealtimeEntities(
 }
 
 export async function deleteRealtimeEntityReferences(
-  entities: Array<{ deviceId: string; provider: string; entityValue: string }>
+  entities: Array<{ deviceId: string; provider: string; entityValue: string; snapshot?: Record<string, unknown> }>
 ): Promise<{
   deleted: number;
   references: {
     dashboardWidgets: number;
     deviceIdentities: number;
     deviceCommands: number;
+    discoveryBaselines: number;
     exclusions: number;
+    hardDeleteTombstones: number;
   };
 }> {
   return readJson(await fetch("/api/v1/device-control/entities/delete-all-references", {

@@ -221,9 +221,9 @@ export function RealtimeEntityBrowser() {
             variant="light"
             color={removedCount > 0 ? "orange" : "gray"}
             style={{ cursor: "pointer" }}
-            title="Show removed entities"
-            onClick={() => setLifecycleFilter("removed")}
-          >{removedCount} removed</Badge>
+            title={lifecycleFilter === "removed" ? "Show active entities" : "Show removed entities"}
+            onClick={() => setLifecycleFilter(current => current === "removed" ? "active" : "removed")}
+          >Removed ({removedCount})</Badge>
           <Button size="compact-sm" variant="light" color="green" disabled={selectedActiveCount === 0} onClick={() => {
             const dashboards = (dashboardsQuery.data?.dashboards ?? []).filter(item => !item.templateId);
             const selectedDashboard = dashboards.some(item => item.id === dashboardId) ? dashboardId : (dashboards[0]?.id ?? null);

@@ -1394,6 +1394,25 @@ export async function registerDeviceControlFeature(
           discovery.devices = message.devices;
           discovery.error = message.error ?? null;
           discovery.finishedAt = new Date();
+
+          if (discovery.status === "SUCCESS") {
+            const releasedTombstones = await pool.query(`
+              DELETE FROM device_control_entity_exclusions e
+              USING device_control_states s
+              WHERE e.lifecycle = 'HARD_DELETED'
+                AND s.device_id = e.device_id
+                AND s.agent_id = $1
+                AND UPPER(s.provider) = UPPER($2)
+                AND e.provider = UPPER($2)
+            `, [agent.id, message.provider]);
+            if ((releasedTombstones.rowCount ?? 0) > 0) {
+              app.log.info({
+                agentId: agent.id,
+                provider: message.provider,
+                released: releasedTombstones.rowCount
+              }, "Released hard-deleted entity tombstones after successful discovery");
+            }
+          }
         }
       })().catch(error => app.log.error({ err: error, agentId: agent.id }, "Device agent WebSocket message failed"));
     });
@@ -2801,13 +2820,14 @@ export async function registerDeviceControlFeature(
         };
         await client.query(`
           INSERT INTO device_control_entity_exclusions (
-            device_id, provider, entity_value, entity_snapshot, removed_at, created_at, updated_at
+            device_id, provider, entity_value, entity_snapshot, removed_at, lifecycle, created_at, updated_at
           )
-          VALUES ($1, UPPER($2), $3, $4::jsonb, NOW(), NOW(), NOW())
+          VALUES ($1, UPPER($2), $3, $4::jsonb, NOW(), 'REMOVED', NOW(), NOW())
           ON CONFLICT (device_id, provider, entity_value)
           DO UPDATE SET
             entity_snapshot = EXCLUDED.entity_snapshot,
             removed_at = NOW(),
+            lifecycle = 'REMOVED',
             updated_at = NOW()
         `, [entity.deviceId, entity.provider, entity.entityValue, JSON.stringify(snapshot)]);
       }
@@ -2832,7 +2852,8 @@ export async function registerDeviceControlFeature(
       deviceIdentities: 0,
       deviceCommands: 0,
       discoveryBaselines: 0,
-      exclusions: 0
+      exclusions: 0,
+      hardDeleteTombstones: 0
     };
     try {
       await client.query("BEGIN");
@@ -2935,10 +2956,26 @@ export async function registerDeviceControlFeature(
           `DELETE FROM device_control_entity_exclusions
            WHERE device_id = $1
              AND provider = UPPER($2)
-             AND entity_value = $3`,
+             AND entity_value = $3
+             AND lifecycle = 'REMOVED'`,
           [entity.deviceId, entity.provider, entity.entityValue]
         );
         references.exclusions += exclusionResult.rowCount ?? 0;
+
+        const tombstoneResult = await client.query(
+          `INSERT INTO device_control_entity_exclusions (
+             device_id, provider, entity_value, entity_snapshot, removed_at, lifecycle, created_at, updated_at
+           )
+           VALUES ($1, UPPER($2), $3, NULL, NOW(), 'HARD_DELETED', NOW(), NOW())
+           ON CONFLICT (device_id, provider, entity_value)
+           DO UPDATE SET
+             entity_snapshot = NULL,
+             removed_at = NOW(),
+             lifecycle = 'HARD_DELETED',
+             updated_at = NOW()`,
+          [entity.deviceId, entity.provider, entity.entityValue]
+        );
+        references.hardDeleteTombstones += tombstoneResult.rowCount ?? 0;
       }
       await client.query("COMMIT");
     } catch (error) {
@@ -2979,7 +3016,21 @@ export async function registerDeviceControlFeature(
       SELECT device_id AS "deviceId", provider, entity_value AS "entityValue",
         entity_snapshot AS snapshot, removed_at AS "removedAt"
       FROM device_control_entity_exclusions
+      WHERE lifecycle = 'REMOVED'
     `);
+
+    const hardDeletedResult = await pool.query<{
+      deviceId: string;
+      provider: string;
+      entityValue: string;
+    }>(`
+      SELECT device_id AS "deviceId", provider, entity_value AS "entityValue"
+      FROM device_control_entity_exclusions
+      WHERE lifecycle = 'HARD_DELETED'
+    `);
+    const hardDeletedKeys = new Set(hardDeletedResult.rows.map(item =>
+      `${item.deviceId}|${item.provider.toUpperCase()}|${item.entityValue}`
+    ));
     const exclusionMap = new Map(exclusionResult.rows.map(item => [
       `${item.deviceId}|${item.provider.toUpperCase()}|${item.entityValue}`,
       item
@@ -2998,6 +3049,7 @@ export async function registerDeviceControlFeature(
         const value = typeof entity.value === "string" ? entity.value : typeof entity.id === "string" ? entity.id : null;
         if (!value) return [];
         const key = `${row.deviceId}|${row.provider.toUpperCase()}|${value}`;
+        if (hardDeletedKeys.has(key)) return [];
         seenKeys.add(key);
         const exclusion = exclusionMap.get(key);
         return [{

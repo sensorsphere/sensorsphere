@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.112.1";
+export const MODULE_VERSION = "1.112.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.112.2": {
+    releasedAt: "2026-09-30T22:40:00Z",
+    patch: "PR-315-hard-delete-tombstone-and-removed-toggle.patch",
+    changes: [
+      { type: "fixed", description: "Toggle the Removed entity summary badge between Removed and Active filters on repeated clicks" },
+      { type: "changed", description: "Display the Removed entity summary as Removed (N)" }
+    ]
+  },
   "1.112.1": {
     releasedAt: "2026-09-30T22:08:00Z",
     patch: "PR-314-hard-delete-discovery-baseline.patch",
