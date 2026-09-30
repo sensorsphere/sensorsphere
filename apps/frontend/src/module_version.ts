@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.100.0";
+export const MODULE_VERSION = "1.101.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.101.0": {
+    releasedAt: "2026-09-30T08:58:00Z",
+    patch: "PR-297-managed-runtime-remediation-v1.patch",
+    changes: [
+      { type: "added", description: "Add Managed Runtime Inspector remediation actions for version drift, missing runtimes and untracked runtimes" },
+      { type: "changed", description: "Allow missing Device Agent runtimes to be reinstalled directly from the Managed Runtime Inspector" },
+      { type: "added", description: "Add guarded cleanup confirmation for untracked runtimes using the exact runtime install directory" }
+    ]
+  },
   "1.100.0": {
     releasedAt: "2026-09-30T06:36:46Z",
     patch: "PR-293-installation-information-v1.patch",
