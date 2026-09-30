@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.62.0";
+export const MODULE_VERSION = "1.63.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.63.0": {
+    releasedAt: "2026-09-30T21:20:00Z",
+    patch: "PR-313-entity-lifecycle-and-user-admin-completion.patch",
+    changes: [
+      { type: "added", description: "Add Removed entity snapshots and complete hard-delete of SensorSphere entity references" },
+      { type: "changed", description: "Return Active and Removed realtime entities with lifecycle metadata" },
+      { type: "added", description: "Add deletion of pending user accounts with audit preservation" }
+    ]
+  },
   "1.62.0": {
     releasedAt: "2026-09-30T18:56:00Z",
     patch: "PR-312-interactive-discovery-details-and-entity-removal.patch",

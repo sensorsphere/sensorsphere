@@ -23,6 +23,7 @@ import {
   addDevUserIdentity,
   approveUser,
   createDevPendingUser,
+  deletePendingUser,
   disableUser,
   enableUser,
   getAuthAudit,
@@ -52,8 +53,10 @@ export function UsersPanel({
   pendingFilterRequest?: number;
 }) {
   const [email, setEmail] = React.useState("");
+  const [accountFilter, setAccountFilter] = React.useState("");
   const [roleFilter, setRoleFilter] = React.useState<string | null>("all");
   const [statusFilter, setStatusFilter] = React.useState<string | null>("all");
+  const [deleteTarget, setDeleteTarget] = React.useState<SensorSphereUser | null>(null);
 
   React.useEffect(() => {
     if (pendingFilterRequest > 0) setStatusFilter("pending");
@@ -93,6 +96,13 @@ export function UsersPanel({
   const rejectMutation = useMutation({
     mutationFn: rejectUser,
     onSuccess: refresh
+  });
+  const deleteMutation = useMutation({
+    mutationFn: deletePendingUser,
+    onSuccess: async () => {
+      setDeleteTarget(null);
+      await refresh();
+    }
   });
   const disableMutation = useMutation({
     mutationFn: disableUser,
@@ -158,7 +168,9 @@ export function UsersPanel({
     onSuccess: refresh
   });
 
+  const normalizedAccountFilter = accountFilter.trim().toLowerCase();
   const users = (usersQuery.data ?? []).filter(user =>
+    (!normalizedAccountFilter || `${user.email} ${user.displayName ?? ""}`.toLowerCase().includes(normalizedAccountFilter)) &&
     (roleFilter === "all" || user.role === roleFilter) &&
     (statusFilter === "all" || user.status === statusFilter)
   );
@@ -170,6 +182,7 @@ export function UsersPanel({
   const mutationError =
     approveMutation.error ||
     rejectMutation.error ||
+    deleteMutation.error ||
     disableMutation.error ||
     enableMutation.error ||
     roleMutation.error ||
@@ -186,6 +199,12 @@ export function UsersPanel({
           </Text>
         </div>
         <Group gap="xs">
+          <TextInput
+            label="Account"
+            placeholder="Email / name"
+            value={accountFilter}
+            onChange={event => setAccountFilter(event.currentTarget.value)}
+          />
           <Select
             label="Role"
             value={roleFilter}
@@ -351,6 +370,17 @@ export function UsersPanel({
                         >
                           Reject
                         </Button>
+                        <Button
+                          size="compact-xs"
+                          color="red"
+                          variant="outline"
+                          onClick={() => {
+                            deleteMutation.reset();
+                            setDeleteTarget(user);
+                          }}
+                        >
+                          Delete
+                        </Button>
                       </>
                     )}
                     {user.status === "active" && !user.isBootstrapAdmin && (
@@ -390,7 +420,12 @@ export function UsersPanel({
               gap="sm"
               wrap="nowrap"
             >
-              <Text size="xs">{entry.action}</Text>
+              <Stack gap={0}>
+                <Text size="xs">{entry.action}</Text>
+                <Text size="xs" c="dimmed">
+                  By {usersQuery.data?.find(user => user.id === entry.actorUserId)?.email ?? entry.actorRole ?? "system"}
+                </Text>
+              </Stack>
               <Text size="xs" c="dimmed">
                 {new Date(entry.createdAt).toLocaleString()}
               </Text>
@@ -401,6 +436,35 @@ export function UsersPanel({
           )}
         </Stack>
       </Card>
+
+      <Modal
+        opened={deleteTarget !== null}
+        onClose={() => !deleteMutation.isPending && setDeleteTarget(null)}
+        title="Delete pending user"
+        centered
+      >
+        <Stack>
+          <Text>
+            Delete pending account <b>{deleteTarget?.email}</b>?
+          </Text>
+          <Text size="sm" c="dimmed">
+            The account and its login identities/sessions will be removed. An audit event recording the deletion is kept.
+          </Text>
+          {deleteMutation.isError && (
+            <Text c="red">
+              {deleteMutation.error instanceof Error ? deleteMutation.error.message : "Unable to delete pending user."}
+            </Text>
+          )}
+          <Group justify="flex-end">
+            <Button data-autofocus variant="light" color="gray" disabled={deleteMutation.isPending} onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button color="red" loading={deleteMutation.isPending} disabled={!deleteTarget} onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}>
+              Delete
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal
         opened={identityUser !== null}

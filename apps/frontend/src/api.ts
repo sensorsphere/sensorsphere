@@ -253,6 +253,17 @@ export const disableUser =
 export const enableUser =
   (id: string) => userAction(id, "enable");
 
+export async function deletePendingUser(id: string): Promise<void> {
+  const response = await fetch(
+    `/api/v1/admin/users/${id}`,
+    {
+      method: "DELETE",
+      headers: devAuthHeaders()
+    }
+  );
+  if (!response.ok) await readJson<unknown>(response);
+}
+
 export async function addDevUserIdentity(
   id: string,
   input: {
@@ -2178,9 +2189,27 @@ export async function getRealtimeEntities(): Promise<RealtimeEntityRecord[]> {
 }
 
 export async function removeRealtimeEntities(
-  entities: Array<{ deviceId: string; provider: string; entityValue: string }>
+  entities: Array<{ deviceId: string; provider: string; entityValue: string; snapshot?: Record<string, unknown> }>
 ): Promise<{ removed: number }> {
   return readJson<{ removed: number }>(await fetch("/api/v1/device-control/entities/remove", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ entities })
+  }));
+}
+
+export async function deleteRealtimeEntityReferences(
+  entities: Array<{ deviceId: string; provider: string; entityValue: string }>
+): Promise<{
+  deleted: number;
+  references: {
+    dashboardWidgets: number;
+    deviceIdentities: number;
+    deviceCommands: number;
+    exclusions: number;
+  };
+}> {
+  return readJson(await fetch("/api/v1/device-control/entities/delete-all-references", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ entities })

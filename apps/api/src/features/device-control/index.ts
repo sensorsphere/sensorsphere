@@ -131,7 +131,8 @@ const entityRemovalSchema = z.object({
   entities: z.array(z.object({
     deviceId: z.string().uuid(),
     provider: providerSchema,
-    entityValue: z.string().trim().min(1).max(500)
+    entityValue: z.string().trim().min(1).max(500),
+    snapshot: z.record(z.string(), z.unknown()).optional()
   }).strict()).min(1).max(2000)
 }).strict();
 
@@ -2789,12 +2790,26 @@ export async function registerDeviceControlFeature(
     try {
       await client.query("BEGIN");
       for (const entity of parsed.data.entities) {
+        const removedAt = new Date().toISOString();
+        const snapshot = {
+          ...(entity.snapshot ?? {}),
+          deviceId: entity.deviceId,
+          provider: entity.provider,
+          entityValue: entity.entityValue,
+          removed: true,
+          removedAt
+        };
         await client.query(`
-          INSERT INTO device_control_entity_exclusions (device_id, provider, entity_value, created_at, updated_at)
-          VALUES ($1, UPPER($2), $3, NOW(), NOW())
+          INSERT INTO device_control_entity_exclusions (
+            device_id, provider, entity_value, entity_snapshot, removed_at, created_at, updated_at
+          )
+          VALUES ($1, UPPER($2), $3, $4::jsonb, NOW(), NOW(), NOW())
           ON CONFLICT (device_id, provider, entity_value)
-          DO UPDATE SET updated_at = NOW()
-        `, [entity.deviceId, entity.provider, entity.entityValue]);
+          DO UPDATE SET
+            entity_snapshot = EXCLUDED.entity_snapshot,
+            removed_at = NOW(),
+            updated_at = NOW()
+        `, [entity.deviceId, entity.provider, entity.entityValue, JSON.stringify(snapshot)]);
       }
       await client.query("COMMIT");
     } catch (error) {
@@ -2805,6 +2820,86 @@ export async function registerDeviceControlFeature(
     }
 
     return reply.send({ removed: parsed.data.entities.length });
+  });
+
+  app.post("/api/v1/device-control/entities/delete-all-references", async (request: FastifyRequest<{ Body: unknown }>, reply) => {
+    const parsed = entityRemovalSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid entity deletion request" });
+
+    const client = await pool.connect();
+    const references = {
+      dashboardWidgets: 0,
+      deviceIdentities: 0,
+      deviceCommands: 0,
+      exclusions: 0
+    };
+    try {
+      await client.query("BEGIN");
+      for (const entity of parsed.data.entities) {
+        const dashboardResult = await client.query(
+          `DELETE FROM simple_dashboard_entity_cards
+           WHERE device_id = $1 AND entity_value = $2`,
+          [entity.deviceId, entity.entityValue]
+        );
+        references.dashboardWidgets += dashboardResult.rowCount ?? 0;
+
+        const identityResult = await client.query(
+          `DELETE FROM device_registry_identities
+           WHERE device_id = $1
+             AND UPPER(identity_type) = 'ESPHOME_ENTITY'
+             AND value = $2`,
+          [entity.deviceId, entity.entityValue]
+        );
+        references.deviceIdentities += identityResult.rowCount ?? 0;
+
+        const commandResult = await client.query(
+          `DELETE FROM device_control_commands
+           WHERE device_id = $1
+             AND parameters->>'entity' = $2`,
+          [entity.deviceId, entity.entityValue]
+        );
+        references.deviceCommands += commandResult.rowCount ?? 0;
+
+        await client.query(`
+          UPDATE device_control_states
+          SET state = jsonb_set(
+                state,
+                '{entities}',
+                COALESCE((
+                  SELECT jsonb_agg(item)
+                  FROM jsonb_array_elements(
+                    CASE
+                      WHEN jsonb_typeof(state->'entities') = 'array' THEN state->'entities'
+                      ELSE '[]'::jsonb
+                    END
+                  ) AS item
+                  WHERE COALESCE(item->>'value', item->>'id', '') <> $2
+                ), '[]'::jsonb),
+                true
+              ),
+              updated_at = NOW()
+          WHERE device_id = $1
+            AND UPPER(provider) = UPPER($3)
+        `, [entity.deviceId, entity.entityValue, entity.provider]);
+
+        const exclusionResult = await client.query(
+          `DELETE FROM device_control_entity_exclusions
+           WHERE device_id = $1
+             AND provider = UPPER($2)
+             AND entity_value = $3`,
+          [entity.deviceId, entity.provider, entity.entityValue]
+        );
+        references.exclusions += exclusionResult.rowCount ?? 0;
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    return reply.send({ deleted: parsed.data.entities.length, references });
   });
 
   app.get("/api/v1/device-control/entities", async (_request, reply) => {
@@ -2825,13 +2920,24 @@ export async function registerDeviceControlFeature(
       ORDER BY lower(d.name), d.id
     `);
 
-    const exclusionResult = await pool.query<{ deviceId: string; provider: string; entityValue: string }>(`
-      SELECT device_id AS "deviceId", provider, entity_value AS "entityValue"
+    const exclusionResult = await pool.query<{
+      deviceId: string;
+      provider: string;
+      entityValue: string;
+      snapshot: Record<string, unknown> | null;
+      removedAt: Date;
+    }>(`
+      SELECT device_id AS "deviceId", provider, entity_value AS "entityValue",
+        entity_snapshot AS snapshot, removed_at AS "removedAt"
       FROM device_control_entity_exclusions
     `);
-    const exclusions = new Set(exclusionResult.rows.map(item => `${item.deviceId}|${item.provider.toUpperCase()}|${item.entityValue}`));
+    const exclusionMap = new Map(exclusionResult.rows.map(item => [
+      `${item.deviceId}|${item.provider.toUpperCase()}|${item.entityValue}`,
+      item
+    ]));
+    const seenKeys = new Set<string>();
 
-    const entities = result.rows.flatMap(row => {
+    const liveEntities = result.rows.flatMap(row => {
       const state = row.state ?? {};
       const connected = state.connected === true;
       const host = typeof state.host === "string" ? state.host : null;
@@ -2841,7 +2947,10 @@ export async function registerDeviceControlFeature(
         if (!raw || typeof raw !== "object") return [];
         const entity = raw as Record<string, unknown>;
         const value = typeof entity.value === "string" ? entity.value : typeof entity.id === "string" ? entity.id : null;
-        if (!value || exclusions.has(`${row.deviceId}|${row.provider.toUpperCase()}|${value}`)) return [];
+        if (!value) return [];
+        const key = `${row.deviceId}|${row.provider.toUpperCase()}|${value}`;
+        seenKeys.add(key);
+        const exclusion = exclusionMap.get(key);
         return [{
           deviceId: row.deviceId,
           deviceName: row.deviceName,
@@ -2859,12 +2968,42 @@ export async function registerDeviceControlFeature(
           unit: typeof entity.unit === "string" ? entity.unit : null,
           controllable: entity.controllable === true,
           observedAt: typeof entity.observedAt === "string" ? entity.observedAt : row.observedAt.toISOString(),
-          deviceObservedAt: row.observedAt.toISOString()
+          deviceObservedAt: row.observedAt.toISOString(),
+          removed: Boolean(exclusion),
+          removedAt: exclusion?.removedAt?.toISOString() ?? null
         }];
       });
     });
 
-    return reply.send(entities);
+    const removedSnapshots = exclusionResult.rows.flatMap(exclusion => {
+      const key = `${exclusion.deviceId}|${exclusion.provider.toUpperCase()}|${exclusion.entityValue}`;
+      if (seenKeys.has(key)) return [];
+      const snapshot = exclusion.snapshot ?? {};
+      return [{
+        ...snapshot,
+        deviceId: exclusion.deviceId,
+        provider: exclusion.provider,
+        entityValue: exclusion.entityValue,
+        entityId: typeof snapshot.entityId === "string" ? snapshot.entityId : exclusion.entityValue,
+        entityName: typeof snapshot.entityName === "string" ? snapshot.entityName : exclusion.entityValue,
+        entityType: typeof snapshot.entityType === "string" ? snapshot.entityType : "unknown",
+        currentValue: snapshot.currentValue ?? null,
+        unit: typeof snapshot.unit === "string" ? snapshot.unit : null,
+        controllable: snapshot.controllable === true,
+        connected: snapshot.connected === true,
+        host: typeof snapshot.host === "string" ? snapshot.host : null,
+        error: typeof snapshot.error === "string" ? snapshot.error : null,
+        agentId: typeof snapshot.agentId === "string" ? snapshot.agentId : "",
+        agentName: typeof snapshot.agentName === "string" ? snapshot.agentName : null,
+        deviceName: typeof snapshot.deviceName === "string" ? snapshot.deviceName : exclusion.deviceId,
+        observedAt: typeof snapshot.observedAt === "string" ? snapshot.observedAt : exclusion.removedAt.toISOString(),
+        deviceObservedAt: typeof snapshot.deviceObservedAt === "string" ? snapshot.deviceObservedAt : exclusion.removedAt.toISOString(),
+        removed: true,
+        removedAt: exclusion.removedAt.toISOString()
+      }];
+    });
+
+    return reply.send([...liveEntities, ...removedSnapshots]);
   });
 
   app.get("/api/v1/device-control/devices/:id/state", async (request: FastifyRequest<{ Params: { id: string } }>, reply) => {

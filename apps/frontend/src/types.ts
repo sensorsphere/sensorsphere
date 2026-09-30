@@ -1454,4 +1454,6 @@ export interface RealtimeEntityRecord {
   controllable: boolean;
   observedAt: string;
   deviceObservedAt: string;
+  removed: boolean;
+  removedAt: string | null;
 }

@@ -963,7 +963,7 @@ export function ProjectTodosPanel() {
             badgeColor={value => sectionColor(value, sections)}
             required
           />
-          <TextInput label="Title" value={taskForm.title} onChange={event => setTaskForm(current => ({ ...current, title: event.currentTarget.value }))} required />
+          <TextInput data-autofocus label="Title" value={taskForm.title} onChange={event => setTaskForm(current => ({ ...current, title: event.currentTarget.value }))} required />
           <Textarea label="Description / notes" minRows={6} autosize value={taskForm.description ?? ""} onChange={event => setTaskForm(current => ({ ...current, description: event.currentTarget.value || null }))} />
           <Group grow>
             <BadgeSelect

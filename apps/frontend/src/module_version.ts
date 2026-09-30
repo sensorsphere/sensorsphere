@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.111.0";
+export const MODULE_VERSION = "1.112.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.112.0": {
+    releasedAt: "2026-09-30T21:20:00Z",
+    patch: "PR-313-entity-lifecycle-and-user-admin-completion.patch",
+    changes: [
+      { type: "added", description: "Add Active/Removed entity lifecycle filter and Delete all references action" },
+      { type: "fixed", description: "Keep Project Todos Section selector closed when opening New/Edit task dialogs" },
+      { type: "added", description: "Add Account filter and pending-user Delete action to Administration Users" }
+    ]
+  },
   "1.111.0": {
     releasedAt: "2026-09-30T18:56:00Z",
     patch: "PR-312-interactive-discovery-details-and-entity-removal.patch",

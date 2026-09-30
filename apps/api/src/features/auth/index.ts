@@ -208,15 +208,22 @@ async function mapUser(pool: Pool, row: Record<string, any>) {
 
 async function audit(
   db: Pool | PoolClient,
+  request: FastifyRequest | null,
   action: string,
   targetUserId: string | null,
   details: Record<string, unknown> = {}
 ) {
+  const sessionUser = request
+    ? (request as FastifyRequest & { sensorSphereUser?: SessionUser }).sensorSphereUser
+    : undefined;
+  const actorUserId = sessionUser?.id ?? null;
+  const actorRole = sessionUser?.role ?? (request ? requestRole(request) : null);
+
   await db.query(
     `INSERT INTO auth_audit_log (
        actor_user_id, actor_role, action, target_user_id, details
-     ) VALUES (NULL, 'admin', $1, $2, $3::jsonb)`,
-    [action, targetUserId, JSON.stringify(details)]
+     ) VALUES ($1, $2, $3, $4, $5::jsonb)`,
+    [actorUserId, actorRole, action, targetUserId, JSON.stringify(details)]
   );
 }
 
@@ -442,7 +449,7 @@ async function resolveOidcUser(
         throw error;
       }
 
-      await audit(client, "identity.link.oidc", linkUserId, { provider });
+      await audit(client, null, "identity.link.oidc", linkUserId, { provider });
       await client.query("COMMIT");
       return target;
     }
@@ -522,7 +529,7 @@ async function resolveOidcUser(
           "UPDATE users SET last_login_at = NOW() WHERE id = $1",
           [user.id]
         );
-        await audit(client, "identity.bootstrap.link", user.id, { provider });
+        await audit(client, null, "identity.bootstrap.link", user.id, { provider });
         await client.query("COMMIT");
         return user;
       }
@@ -565,7 +572,7 @@ async function resolveOidcUser(
         identity.providerEmail
       ]
     );
-    await audit(client, "user.create.oidc", user.id, { provider });
+    await audit(client, null, "user.create.oidc", user.id, { provider });
     await client.query("COMMIT");
     return user;
   } catch (error) {
@@ -803,7 +810,7 @@ export async function registerAuthFeature(
       [id]
     );
     if (!result.rows[0]) httpError(404, "Pending user not found");
-    await audit(pool, "user.approve", id);
+    await audit(pool, request, "user.approve", id);
     return mapUser(pool, result.rows[0]);
   });
 
@@ -823,8 +830,29 @@ export async function registerAuthFeature(
       [id]
     );
     if (!result.rows[0]) httpError(409, "Only pending users can be rejected");
-    await audit(pool, "user.reject", id);
+    await audit(pool, request, "user.reject", id);
     return mapUser(pool, result.rows[0]);
+  });
+
+  app.delete("/api/v1/admin/users/:id", async (request, reply) => {
+    requireAdmin(request);
+    const { id } = request.params as { id: string };
+    const user = await getUserRow(pool, id);
+    if (user.is_bootstrap_admin) {
+      httpError(409, "Bootstrap admin cannot be deleted");
+    }
+    if (user.status !== "pending") {
+      httpError(409, "Only pending users can be deleted");
+    }
+
+    await pool.query("DELETE FROM users WHERE id = $1", [id]);
+    await audit(pool, request, "user.delete.pending", null, {
+      deletedUserId: id,
+      email: user.email,
+      previousStatus: user.status,
+      previousRole: user.role
+    });
+    return reply.code(204).send();
   });
 
   app.patch("/api/v1/admin/users/:id/role", async request => {
@@ -852,7 +880,7 @@ export async function registerAuthFeature(
                  created_at, approved_at, approved_by, last_login_at`,
       [id, nextRole]
     );
-    await audit(pool, "user.role.change", id, {
+    await audit(pool, request, "user.role.change", id, {
       previousRole: user.role,
       role: nextRole
     });
@@ -882,7 +910,7 @@ export async function registerAuthFeature(
       [id]
     );
     if (!result.rows[0]) httpError(409, "Only active users can be disabled");
-    await audit(pool, "user.disable", id);
+    await audit(pool, request, "user.disable", id);
     return mapUser(pool, result.rows[0]);
   });
 
@@ -899,7 +927,7 @@ export async function registerAuthFeature(
     if (!result.rows[0]) {
       httpError(409, "Only disabled or rejected users can be enabled");
     }
-    await audit(pool, "user.enable", id);
+    await audit(pool, request, "user.enable", id);
     return mapUser(pool, result.rows[0]);
   });
   app.post("/api/v1/admin/users/:id/identities", async request => {
@@ -946,7 +974,7 @@ export async function registerAuthFeature(
       throw error;
     }
 
-    await audit(pool, "identity.link.dev", id, { provider });
+    await audit(pool, request, "identity.link.dev", id, { provider });
     return mapUser(pool, await getUserRow(pool, id));
   });
 
@@ -978,7 +1006,7 @@ export async function registerAuthFeature(
         [id, parseProvider(provider), subject]
       );
       if (result.rowCount === 0) httpError(404, "Identity not found");
-      await audit(pool, "identity.unlink", id, { provider });
+      await audit(pool, request, "identity.unlink", id, { provider });
       return { ok: true };
     }
   );
@@ -1020,7 +1048,7 @@ export async function registerAuthFeature(
       [email, body?.displayName?.trim() || null]
     );
 
-    await audit(pool, "user.create.dev", result.rows[0].id);
+    await audit(pool, request, "user.create.dev", result.rows[0].id);
     return mapUser(pool, result.rows[0]);
   });
 }
