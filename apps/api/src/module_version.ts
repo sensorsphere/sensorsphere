@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.58.0";
+export const MODULE_VERSION = "1.59.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.59.0": {
+    releasedAt: "2026-09-30T08:46:15Z",
+    patch: "PR-296-test-role-switch-v1.patch",
+    changes: [
+      { type: "changed", description: "Allow the unauthenticated User/Admin role switch in DEV, TEST* and TST* environments when explicitly enabled" },
+      { type: "added", description: "Add regression tests covering role-switch environment, auth-enabled and feature-flag conditions" }
+    ]
+  },
   "1.58.0": {
     releasedAt: "2026-09-30T07:07:42Z",
     patch: "PR-294-test-auth-and-update-install-dir-v1.patch",

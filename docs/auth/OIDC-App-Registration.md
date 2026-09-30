@@ -142,7 +142,7 @@ Important:
 - Never commit secrets to Git.
 - For Microsoft, store the client secret **Value**, not its Secret ID.
 - Restart/redeploy the API after changing OIDC credentials.
-- When real OIDC is enabled, the DEV role switch is not used.
+- When real OIDC is enabled, the unauthenticated DEV/TEST*/TST* role switch is not used.
 
 For HTTPS/Cloudflare prerequisites, see:
 

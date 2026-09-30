@@ -29,15 +29,26 @@ function flag(value: string | undefined): boolean {
   return /^(1|true|yes|on)$/i.test(value?.trim() ?? "");
 }
 
+export function shouldEnableUnauthenticatedRoleSwitch(
+  environment: string,
+  authEnabled: boolean,
+  roleSwitchFlag: boolean
+): boolean {
+  return !authEnabled
+    && canDisableAuthentication(environment)
+    && roleSwitchFlag;
+}
+
 function authSettings() {
   const enabled = flag(process.env.SENSORSPHERE_AUTH_ENABLED);
   const environment = (process.env.SENSORSPHERE_ENVIRONMENT ?? "DEFAULT")
     .trim()
     .toUpperCase();
-  const devRoleSwitchEnabled =
-    !enabled &&
-    environment === "DEV" &&
-    flag(process.env.SENSORSPHERE_AUTH_DEV_ROLE_SWITCH_ENABLED);
+  const devRoleSwitchEnabled = shouldEnableUnauthenticatedRoleSwitch(
+    environment,
+    enabled,
+    flag(process.env.SENSORSPHERE_AUTH_DEV_ROLE_SWITCH_ENABLED)
+  );
   const defaultRole: SensorSphereRole =
     (process.env.SENSORSPHERE_AUTH_DEV_DEFAULT_ROLE ?? "admin")
       .trim()

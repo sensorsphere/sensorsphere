@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { canDisableAuthentication } from "./index.js";
+import {
+  canDisableAuthentication,
+  shouldEnableUnauthenticatedRoleSwitch
+} from "./index.js";
 
 test("allows authentication to be disabled in DEV", () => {
   assert.equal(canDisableAuthentication("DEV"), true);
@@ -23,5 +26,45 @@ test("allows authentication to be disabled in TST* environments", () => {
 test("rejects disabling authentication in production-like environments", () => {
   for (const environment of ["DEFAULT", "DIT", "FIT", "PROD", "STAGING", "DEVELOPMENT"]) {
     assert.equal(canDisableAuthentication(environment), false, environment);
+  }
+});
+
+test("enables the unauthenticated role switch in DEV, TEST* and TST*", () => {
+  for (const environment of ["DEV", "TEST", "TEST1", "TEST-LAB", "TST", "TST1", "TST-LAB"]) {
+    assert.equal(
+      shouldEnableUnauthenticatedRoleSwitch(environment, false, true),
+      true,
+      environment
+    );
+  }
+});
+
+test("keeps the role switch disabled when authentication is enabled", () => {
+  for (const environment of ["DEV", "TEST1", "TST1"]) {
+    assert.equal(
+      shouldEnableUnauthenticatedRoleSwitch(environment, true, true),
+      false,
+      environment
+    );
+  }
+});
+
+test("keeps the role switch disabled when its feature flag is off", () => {
+  for (const environment of ["DEV", "TEST1", "TST1"]) {
+    assert.equal(
+      shouldEnableUnauthenticatedRoleSwitch(environment, false, false),
+      false,
+      environment
+    );
+  }
+});
+
+test("keeps the role switch disabled outside DEV, TEST* and TST*", () => {
+  for (const environment of ["DIT", "FIT", "PROD", "DEFAULT"]) {
+    assert.equal(
+      shouldEnableUnauthenticatedRoleSwitch(environment, false, true),
+      false,
+      environment
+    );
   }
 });
