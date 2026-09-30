@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.61.1";
+export const MODULE_VERSION = "1.62.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.62.0": {
+    releasedAt: "2026-09-30T18:56:00Z",
+    patch: "PR-312-interactive-discovery-details-and-entity-removal.patch",
+    changes: [
+      { type: "added", description: "Add persistent realtime entity exclusions with single and bulk removal API support" },
+      { type: "changed", description: "Filter excluded entities from realtime Entity Browser and per-device entity responses" }
+    ]
+  },
   "1.61.1": {
     releasedAt: "2026-09-30T18:05:00Z",
     patch: "PR-311-discovery-timeout-and-esphome-realtime-inventory.patch",

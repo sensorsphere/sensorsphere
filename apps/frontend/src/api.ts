@@ -2177,6 +2177,16 @@ export async function getRealtimeEntities(): Promise<RealtimeEntityRecord[]> {
   return readJson<RealtimeEntityRecord[]>(await fetch("/api/v1/device-control/entities"));
 }
 
+export async function removeRealtimeEntities(
+  entities: Array<{ deviceId: string; provider: string; entityValue: string }>
+): Promise<{ removed: number }> {
+  return readJson<{ removed: number }>(await fetch("/api/v1/device-control/entities/remove", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ entities })
+  }));
+}
+
 export async function getMonitoringAgents(): Promise<MonitoringAgent[]> {
   return readJson<MonitoringAgent[]>(await fetch("/api/v1/monitoring/agents"));
 }

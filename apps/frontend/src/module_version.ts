@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.110.3";
+export const MODULE_VERSION = "1.111.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.111.0": {
+    releasedAt: "2026-09-30T18:56:00Z",
+    patch: "PR-312-interactive-discovery-details-and-entity-removal.patch",
+    changes: [
+      { type: "changed", description: "Make Discovery Details an interactive hover card with a scrollable entity list" },
+      { type: "added", description: "Add single entity removal and Remove selected bulk action with confirmation in the realtime Entity Browser" }
+    ]
+  },
   "1.110.3": {
     releasedAt: "2026-09-30T18:05:00Z",
     patch: "PR-311-discovery-timeout-and-esphome-realtime-inventory.patch",

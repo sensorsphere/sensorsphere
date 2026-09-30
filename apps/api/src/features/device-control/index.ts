@@ -127,6 +127,14 @@ const deviceStateMessageSchema = z.object({
   state: z.record(z.string(), z.unknown())
 }).strict();
 
+const entityRemovalSchema = z.object({
+  entities: z.array(z.object({
+    deviceId: z.string().uuid(),
+    provider: providerSchema,
+    entityValue: z.string().trim().min(1).max(500)
+  }).strict()).min(1).max(2000)
+}).strict();
+
 const discoverResultMessageSchema = z.object({
   type: z.literal("DISCOVER_RESULT"),
   commandId: z.string().uuid(),
@@ -2773,6 +2781,32 @@ export async function registerDeviceControlFeature(
     return reply.send(result.rows[0]);
   });
 
+  app.post("/api/v1/device-control/entities/remove", async (request: FastifyRequest<{ Body: unknown }>, reply) => {
+    const parsed = entityRemovalSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid entity removal request" });
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      for (const entity of parsed.data.entities) {
+        await client.query(`
+          INSERT INTO device_control_entity_exclusions (device_id, provider, entity_value, created_at, updated_at)
+          VALUES ($1, UPPER($2), $3, NOW(), NOW())
+          ON CONFLICT (device_id, provider, entity_value)
+          DO UPDATE SET updated_at = NOW()
+        `, [entity.deviceId, entity.provider, entity.entityValue]);
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    return reply.send({ removed: parsed.data.entities.length });
+  });
+
   app.get("/api/v1/device-control/entities", async (_request, reply) => {
     const result = await pool.query<{
       deviceId: string;
@@ -2791,6 +2825,12 @@ export async function registerDeviceControlFeature(
       ORDER BY lower(d.name), d.id
     `);
 
+    const exclusionResult = await pool.query<{ deviceId: string; provider: string; entityValue: string }>(`
+      SELECT device_id AS "deviceId", provider, entity_value AS "entityValue"
+      FROM device_control_entity_exclusions
+    `);
+    const exclusions = new Set(exclusionResult.rows.map(item => `${item.deviceId}|${item.provider.toUpperCase()}|${item.entityValue}`));
+
     const entities = result.rows.flatMap(row => {
       const state = row.state ?? {};
       const connected = state.connected === true;
@@ -2801,7 +2841,7 @@ export async function registerDeviceControlFeature(
         if (!raw || typeof raw !== "object") return [];
         const entity = raw as Record<string, unknown>;
         const value = typeof entity.value === "string" ? entity.value : typeof entity.id === "string" ? entity.id : null;
-        if (!value) return [];
+        if (!value || exclusions.has(`${row.deviceId}|${row.provider.toUpperCase()}|${value}`)) return [];
         return [{
           deviceId: row.deviceId,
           deviceName: row.deviceName,
@@ -2849,6 +2889,18 @@ export async function registerDeviceControlFeature(
     const row = result.rows[0];
     if (!row) return reply.send(null);
     const state = row.state ?? {};
+    const exclusionResult = await pool.query<{ entityValue: string }>(`
+      SELECT entity_value AS "entityValue"
+      FROM device_control_entity_exclusions
+      WHERE device_id=$1 AND provider=UPPER($2)
+    `, [row.deviceId, row.provider]);
+    const exclusions = new Set(exclusionResult.rows.map(item => item.entityValue));
+    const entities = (Array.isArray(state.entities) ? state.entities : []).filter(raw => {
+      if (!raw || typeof raw !== "object") return false;
+      const entity = raw as Record<string, unknown>;
+      const value = typeof entity.value === "string" ? entity.value : typeof entity.id === "string" ? entity.id : null;
+      return Boolean(value) && !exclusions.has(value!);
+    });
     return reply.send({
       deviceId: row.deviceId,
       agentId: row.agentId,
@@ -2856,7 +2908,7 @@ export async function registerDeviceControlFeature(
       connected: state.connected === true,
       host: typeof state.host === "string" ? state.host : null,
       error: typeof state.error === "string" ? state.error : null,
-      entities: Array.isArray(state.entities) ? state.entities : [],
+      entities,
       observedAt: row.observedAt.toISOString()
     });
   });

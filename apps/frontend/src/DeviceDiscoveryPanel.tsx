@@ -1,5 +1,5 @@
 import React from "react";
-import { ActionIcon, Badge, Button, Card, Checkbox, Group, Modal, MultiSelect, Select, SimpleGrid, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Button, Card, Checkbox, Group, HoverCard, Modal, MultiSelect, ScrollArea, Select, SimpleGrid, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { bulkAssignDeviceRegistrySlot, getDeviceAgentSlots, getDeviceAgents, getDeviceDiscoveries, getDiscardedDeviceDiscoveries, getRealtimeEntities, setDeviceDiscoveryDiscarded, startDeviceDiscovery } from "./api";
 import type { DeviceAgent, DeviceRegistryDevice, RealtimeEntityRecord } from "./types";
@@ -1026,7 +1026,48 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                 <Table.Td><CopyableDiscoveryValue value={textValue(row.device, "ip")} monospace /></Table.Td>
                 <Table.Td><CopyableDiscoveryValue value={provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")} monospace compact /></Table.Td>
                 <Table.Td><Text size="sm" style={{ cursor: "pointer" }} title="Filter by model" onClick={() => { const value = provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model"); if (value !== "—") setModelFilter(value); }}>{provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text></Table.Td>
-                <Table.Td><Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Discovery details</Text><Text size="xs">Name: {textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")}</Text><Text size="xs">IP: {textValue(row.device, "ipAddresses") !== "—" ? textValue(row.device, "ipAddresses") : textValue(row.device, "ip")}</Text><Text size="xs">MAC: {textValue(row.device, "macAddresses") !== "—" ? textValue(row.device, "macAddresses") : textValue(row.device, "mac")}</Text><Text size="xs">Identity: {provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")}</Text><Text size="xs">Model / kind: {provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text>{entitySummaries.length > 0 && <><Text size="xs" fw={600}>Entities ({entitySummaries.length})</Text>{entitySummaries.map((entity, entityIndex) => <Text key={`${entity.type}:${entity.name}:${entityIndex}`} size="xs">• {entity.type}: {entity.name}</Text>)}</>}{provider === "PROXMOX" && <><Text size="xs">Endpoint: {textValue(row.device, "endpointId")}</Text><Text size="xs">Node: {textValue(row.device, "node")}</Text><Text size="xs">VMID: {textValue(row.device, "vmid")}</Text>{proxmoxGuest && <Group gap={5} wrap="nowrap"><Text component="span" size="xs">Status:</Text><ProxmoxRuntimeStatus status={proxmoxStatus} /></Group>}<Text size="xs">Version: {textValue(row.device, "version")}</Text><Text size="xs">OS: {textValue(row.device, "os")} / {textValue(row.device, "osType")}</Text><Text size="xs">Guest agent: {textValue(row.device, "guestAgent")}</Text><Text size="xs">Parent: {textValue(row.device, "parentProviderId")}</Text></>} {!proxmoxGuest && <Text size="xs">{details}</Text>}</Stack>}><span style={{ cursor: "help" }}>{detailsContent}</span></Tooltip></Table.Td>
+                <Table.Td>
+                  <HoverCard width={430} shadow="md" position="bottom-start" openDelay={150} closeDelay={300} withinPortal>
+                    <HoverCard.Target>
+                      <span style={{ cursor: "help", display: "inline-block" }}>{detailsContent}</span>
+                    </HoverCard.Target>
+                    <HoverCard.Dropdown>
+                      <Stack gap={4}>
+                        <Text size="xs" fw={600}>Discovery details</Text>
+                        <Text size="xs">Name: {textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")}</Text>
+                        <Text size="xs">IP: {textValue(row.device, "ipAddresses") !== "—" ? textValue(row.device, "ipAddresses") : textValue(row.device, "ip")}</Text>
+                        <Text size="xs">MAC: {textValue(row.device, "macAddresses") !== "—" ? textValue(row.device, "macAddresses") : textValue(row.device, "mac")}</Text>
+                        <Text size="xs">Identity: {provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")}</Text>
+                        <Text size="xs">Model / kind: {provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text>
+                        {entitySummaries.length > 0 && (
+                          <>
+                            <Text size="xs" fw={600}>Entities ({entitySummaries.length})</Text>
+                            <ScrollArea.Autosize mah={320} type="auto" offsetScrollbars scrollbarSize={8}>
+                              <Stack gap={2} pr="xs">
+                                {entitySummaries.map((entity, entityIndex) => (
+                                  <Text key={entity.type + ":" + entity.name + ":" + entityIndex} size="xs">• {entity.type}: {entity.name}</Text>
+                                ))}
+                              </Stack>
+                            </ScrollArea.Autosize>
+                          </>
+                        )}
+                        {provider === "PROXMOX" && (
+                          <>
+                            <Text size="xs">Endpoint: {textValue(row.device, "endpointId")}</Text>
+                            <Text size="xs">Node: {textValue(row.device, "node")}</Text>
+                            <Text size="xs">VMID: {textValue(row.device, "vmid")}</Text>
+                            {proxmoxGuest && <Group gap={5} wrap="nowrap"><Text component="span" size="xs">Status:</Text><ProxmoxRuntimeStatus status={proxmoxStatus} /></Group>}
+                            <Text size="xs">Version: {textValue(row.device, "version")}</Text>
+                            <Text size="xs">OS: {textValue(row.device, "os")} / {textValue(row.device, "osType")}</Text>
+                            <Text size="xs">Guest agent: {textValue(row.device, "guestAgent")}</Text>
+                            <Text size="xs">Parent: {textValue(row.device, "parentProviderId")}</Text>
+                          </>
+                        )}
+                        {!proxmoxGuest && entitySummaries.length === 0 && <Text size="xs">{details}</Text>}
+                      </Stack>
+                    </HoverCard.Dropdown>
+                  </HoverCard>
+                </Table.Td>
                 <Table.Td><span style={{ cursor: row.agent ? "pointer" : undefined }} title={row.agent ? "Filter by Device Agent" : undefined} onClick={() => row.agent && setAgentFilter(row.agent.id)}>{agentContent}</span></Table.Td>
                 <Table.Td style={{ minWidth: 160 }}>{row.status === "UPDATE"
                   ? <Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Expected updates</Text>{row.updateReasons.map(reason => <Text key={reason} size="xs">• {reason}</Text>)}</Stack>}>{statusBadge}</Tooltip>

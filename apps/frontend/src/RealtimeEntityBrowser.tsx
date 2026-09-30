@@ -17,7 +17,7 @@ import {
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { addSimpleDashboardEntityCard, getRealtimeEntities, getSimpleDashboards } from "./api";
+import { addSimpleDashboardEntityCard, getRealtimeEntities, getSimpleDashboards, removeRealtimeEntities } from "./api";
 import type { RealtimeEntityRecord } from "./types";
 import { activeFilterStyles } from "./ActiveFilterStyles";
 import { FilterClearAction } from "./FilterClearAction";
@@ -77,6 +77,7 @@ export function RealtimeEntityBrowser() {
   const [addEntity, setAddEntity] = React.useState<RealtimeEntityRecord | null>(null);
   const [selectedEntityKeys, setSelectedEntityKeys] = React.useState<string[]>([]);
   const [bulkAddOpen, setBulkAddOpen] = React.useState(false);
+  const [removeTargets, setRemoveTargets] = React.useState<RealtimeEntityRecord[] | null>(null);
   const [dashboardId, setDashboardId] = usePersistentState<string | null>("realtime-entities.add.dashboard", null);
   const [sectionId, setSectionId] = usePersistentState<string | null>("realtime-entities.add.section", null);
   const [widgetType, setWidgetType] = React.useState<"switch" | "status" | "value">("value");
@@ -110,6 +111,19 @@ export function RealtimeEntityBrowser() {
       await queryClient.invalidateQueries({ queryKey: ["simple-dashboards"] });
       setBulkAddOpen(false);
       setSelectedEntityKeys([]);
+    }
+  });
+  const removeEntitiesMutation = useMutation({
+    mutationFn: async (targets: RealtimeEntityRecord[]) => removeRealtimeEntities(targets.map(entity => ({
+      deviceId: entity.deviceId,
+      provider: entity.provider,
+      entityValue: entity.entityValue
+    }))),
+    onSuccess: async (_result, targets) => {
+      const removedKeys = new Set(targets.map(entitySelectionKey));
+      setSelectedEntityKeys(current => current.filter(key => !removedKeys.has(key)));
+      setRemoveTargets(null);
+      await queryClient.invalidateQueries({ queryKey: ["device-control", "realtime-entities"] });
     }
   });
 
@@ -184,6 +198,16 @@ export function RealtimeEntityBrowser() {
             bulkAddMutation.reset();
             setBulkAddOpen(true);
           }}>Add selected ({selectedEntityKeys.length})</Button>
+          <Button
+            size="compact-sm"
+            variant="light"
+            color="red"
+            disabled={selectedEntityKeys.length === 0}
+            onClick={() => {
+              removeEntitiesMutation.reset();
+              setRemoveTargets(entities.filter(entity => selectedEntityKeys.includes(entitySelectionKey(entity))));
+            }}
+          >Remove selected ({selectedEntityKeys.length})</Button>
           {selectedEntityKeys.length > 0 && <Button size="compact-sm" variant="subtle" color="gray" onClick={() => setSelectedEntityKeys([])}>Clear selection</Button>}
         </Group>
       </Group>
@@ -216,9 +240,9 @@ export function RealtimeEntityBrowser() {
                 <SortableTableHeader active={sortKey === "state"} direction={sortDirection} onClick={() => toggleSort("state")} align="right">State</SortableTableHeader>
                 <SortableTableHeader active={sortKey === "unit"} direction={sortDirection} onClick={() => toggleSort("unit")} align="right" style={{ width: 90, minWidth: 90, maxWidth: 90 }}>Unit</SortableTableHeader>
                 <SortableTableHeader active={sortKey === "provider"} direction={sortDirection} onClick={() => toggleSort("provider")}>Provider</SortableTableHeader>
-                <SortableTableHeader active={sortKey === "controllable"} direction={sortDirection} onClick={() => toggleSort("controllable")}>Actions</SortableTableHeader>
+                <SortableTableHeader active={sortKey === "controllable"} direction={sortDirection} onClick={() => toggleSort("controllable")}>Control</SortableTableHeader>
                 <SortableTableHeader active={sortKey === "updated"} direction={sortDirection} onClick={() => toggleSort("updated")} style={{ width: 150, minWidth: 150, maxWidth: 150 }}>Last seen</SortableTableHeader>
-                <Table.Th>Dashboard</Table.Th>
+                <Table.Th>Actions</Table.Th>
               </Table.Tr>
               <Table.Tr style={{ position: "sticky", top: 39, zIndex: 3, background: "var(--mantine-color-body)" }}>
                 <Table.Th />
@@ -229,7 +253,7 @@ export function RealtimeEntityBrowser() {
                 <Table.Th><TextInput size="xs" placeholder="Filter state" value={stateFilter} onChange={event => setStateFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(stateFilter.trim()))} rightSection={<FilterClearAction active={Boolean(stateFilter.trim())} onClear={() => setStateFilter("")} />} /></Table.Th>
                 <Table.Th><TextInput size="xs" placeholder="Filter unit" value={unitFilter} onChange={event => setUnitFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(unitFilter.trim()))} rightSection={<FilterClearAction active={Boolean(unitFilter.trim())} onClear={() => setUnitFilter("")} />} /></Table.Th>
                 <Table.Th><Select size="xs" placeholder="All providers" clearable value={providerFilter} onChange={setProviderFilter} data={providerOptions} styles={activeFilterStyles(Boolean(providerFilter))} leftSection={providerFilter ? <ResolvedIconGlyph resolved={resolveProviderIcon(providerFilter)} size={16} /> : undefined} renderOption={({ option }) => <Group gap={6} wrap="nowrap"><ResolvedIconGlyph resolved={resolveProviderIcon(option.value)} size={16} /><Text size="sm">{option.label}</Text></Group>} /></Table.Th>
-                <Table.Th><Select size="xs" placeholder="All actions" clearable value={controllableFilter} onChange={setControllableFilter} data={[{ value: "actionable", label: "Actionable" }, { value: "readonly", label: "Read-only" }]} styles={activeFilterStyles(Boolean(controllableFilter))} /></Table.Th>
+                <Table.Th><Select size="xs" placeholder="All control" clearable value={controllableFilter} onChange={setControllableFilter} data={[{ value: "actionable", label: "Actionable" }, { value: "readonly", label: "Read-only" }]} styles={activeFilterStyles(Boolean(controllableFilter))} /></Table.Th>
                 <Table.Th />
                 <Table.Th />
               </Table.Tr>
@@ -254,22 +278,35 @@ export function RealtimeEntityBrowser() {
                   <Table.Td><Text size="sm" c={entity.controllable ? undefined : "dimmed"} style={{ cursor: "pointer" }} title="Filter by actionability" onClick={() => setControllableFilter(entity.controllable ? "actionable" : "readonly")}>{entity.controllable ? "Actionable" : "Read-only"}</Text></Table.Td>
                   <Table.Td title={entity.observedAt} style={{ width: 150, minWidth: 150, maxWidth: 150, whiteSpace: "nowrap" }}><Text size="sm">{compactDate(entity.observedAt)}</Text></Table.Td>
                   <Table.Td>
-                    <ActionIcon
-                      size="sm"
-                      variant="light"
-                      color="green"
-                      title="Add entity to dashboard"
-                      aria-label="Add entity to dashboard"
-                      onClick={() => {
-                        const dashboards = (dashboardsQuery.data?.dashboards ?? []).filter(item => !item.templateId);
-                        const selectedDashboard = dashboards.some(item => item.id === dashboardId) ? dashboardId : (dashboards[0]?.id ?? null);
-                        const selectedSection = (dashboardsQuery.data?.sections ?? []).some(item => item.id === sectionId && item.dashboardId === selectedDashboard) ? sectionId : null;
-                        setAddEntity(entity);
-                        setDashboardId(selectedDashboard);
-                        setSectionId(selectedSection);
-                        setWidgetType(defaultWidgetType(entity));
-                      }}
-                    >+</ActionIcon>
+                    <Group gap={4} wrap="nowrap">
+                      <ActionIcon
+                        size="sm"
+                        variant="light"
+                        color="green"
+                        title="Add entity to dashboard"
+                        aria-label="Add entity to dashboard"
+                        onClick={() => {
+                          const dashboards = (dashboardsQuery.data?.dashboards ?? []).filter(item => !item.templateId);
+                          const selectedDashboard = dashboards.some(item => item.id === dashboardId) ? dashboardId : (dashboards[0]?.id ?? null);
+                          const selectedSection = (dashboardsQuery.data?.sections ?? []).some(item => item.id === sectionId && item.dashboardId === selectedDashboard) ? sectionId : null;
+                          setAddEntity(entity);
+                          setDashboardId(selectedDashboard);
+                          setSectionId(selectedSection);
+                          setWidgetType(defaultWidgetType(entity));
+                        }}
+                      >+</ActionIcon>
+                      <ActionIcon
+                        size="sm"
+                        variant="light"
+                        color="red"
+                        title="Remove entity"
+                        aria-label={"Remove " + entity.entityName}
+                        onClick={() => {
+                          removeEntitiesMutation.reset();
+                          setRemoveTargets([entity]);
+                        }}
+                      >×</ActionIcon>
+                    </Group>
                   </Table.Td>
                 </Table.Tr>
               ))}
@@ -304,6 +341,47 @@ export function RealtimeEntityBrowser() {
           <Group justify="flex-end">
             <Button data-autofocus variant="light" color="gray" disabled={bulkAddMutation.isPending} onClick={() => setBulkAddOpen(false)}>Cancel</Button>
             <Button color="green" disabled={!dashboardId || selectedEntityKeys.length === 0} loading={bulkAddMutation.isPending} onClick={() => bulkAddMutation.mutate()}>Add selected</Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={removeTargets !== null}
+        onClose={() => !removeEntitiesMutation.isPending && setRemoveTargets(null)}
+        title={removeTargets?.length === 1 ? "Remove entity" : `Remove ${removeTargets?.length ?? 0} entities`}
+        centered
+      >
+        <Stack>
+          {removeTargets?.length === 1 ? (
+            <Text>
+              Remove <b>{removeTargets[0]?.entityName}</b> from SensorSphere Entities?
+              The source device is not modified and dashboard widgets are kept.
+            </Text>
+          ) : (
+            <Text>
+              Remove <b>{removeTargets?.length ?? 0}</b> selected entities from SensorSphere Entities?
+              Source devices are not modified and dashboard widgets are kept.
+            </Text>
+          )}
+          <Text size="xs" c="dimmed">
+            Removed entities are excluded from the realtime Entity Browser even if the Device Agent continues reporting the same entity ID.
+          </Text>
+          {removeEntitiesMutation.isError && (
+            <Text c="red">
+              {removeEntitiesMutation.error instanceof Error ? removeEntitiesMutation.error.message : "Unable to remove entities."}
+            </Text>
+          )}
+          <Group justify="flex-end">
+            <Button variant="light" color="gray" disabled={removeEntitiesMutation.isPending} onClick={() => setRemoveTargets(null)}>Cancel</Button>
+            <Button
+              color="red"
+              variant="light"
+              disabled={!removeTargets?.length}
+              loading={removeEntitiesMutation.isPending}
+              onClick={() => removeTargets && removeEntitiesMutation.mutate(removeTargets)}
+            >
+              Remove
+            </Button>
           </Group>
         </Stack>
       </Modal>
