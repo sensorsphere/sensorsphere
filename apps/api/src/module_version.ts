@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.63.2";
+export const MODULE_VERSION = "1.63.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.63.3": {
+    releasedAt: "2026-09-30T22:48:00Z",
+    patch: "PR-315-hard-delete-tombstone-and-removed-toggle.patch",
+    changes: [
+      { type: "fixed", description: "Extend API database compatibility through migration level 81 for hard-delete entity tombstones" }
+    ]
+  },
   "1.63.2": {
     releasedAt: "2026-09-30T22:40:00Z",
     patch: "PR-315-hard-delete-tombstone-and-removed-toggle.patch",
