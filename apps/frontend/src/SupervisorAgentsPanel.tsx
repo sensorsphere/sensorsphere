@@ -412,6 +412,7 @@ export function SupervisorAgentsPanel() {
   const [deployError, setDeployError] = React.useState<string | null>(null);
   const [managedRuntimeTarget, setManagedRuntimeTarget] = React.useState<AutonomousSupervisorAgent | null>(null);
   const [managedRuntimeFilter, setManagedRuntimeFilter] = React.useState<string | null>(null);
+  const [globalRuntimeIssueFilter, setGlobalRuntimeIssueFilter] = React.useState<string | null>(null);
   const [deprovisionTarget, setDeprovisionTarget] = React.useState<{ supervisor: AutonomousSupervisorAgent; agentType: "device-agent" | "monitor-agent"; instance: string; name: string } | null>(null);
   const [cleanupRuntimeTarget, setCleanupRuntimeTarget] = React.useState<{ supervisor: AutonomousSupervisorAgent; agentType: "device-agent" | "monitor-agent"; instance: string; name: string; installDir: string } | null>(null);
   const [repairRuntimeTarget, setRepairRuntimeTarget] = React.useState<{ supervisor: AutonomousSupervisorAgent; agentType: "device-agent" | "monitor-agent"; agentId: string; instance: string; name: string; installDir: string; version: string; reasons: string[] } | null>(null);
@@ -825,7 +826,12 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
     const version = typeof entry.configured_version === "string" ? entry.configured_version : "—";
     const state = typeof entry.container_state === "string" ? entry.container_state : "unknown";
     const iconType = type === "device-agent" ? "device" : "monitoring";
-    return <AgentTypeIcon key={`${type}-${instance}-${index}`} type={iconType} size={17} tooltip={`${name} · ${agentTypeLabel(type)} · ${version} · ${state}`} />;
+    const color = type === "device-agent" ? "cyan" : "violet";
+    return <Tooltip key={`${type}-${instance}-${index}`} label={`${name} · ${agentTypeLabel(type)} · ${version} · ${state}`}>
+      <ActionIcon component="span" size="sm" variant="light" color={color} aria-label={`${name} ${agentTypeLabel(type)}`} style={{ flex: "0 0 auto" }}>
+        <AgentTypeIcon type={iconType} size={16} />
+      </ActionIcon>
+    </Tooltip>;
   };
   const updateLifecycle = (agent: AutonomousSupervisorAgent) => {
     if (agent.updateStatus === "FAILED") return { label: "FAILED", color: "red" };
@@ -845,11 +851,25 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
     if (agentSortKey === key) setAgentSortDirection(current => current === "asc" ? "desc" : "asc");
     else { setAgentSortKey(key); setAgentSortDirection("asc"); }
   };
+  const runtimeIssueStatuses = ["DRIFT", "MISSING", "DISCOVERED", "UNTRACKED", "ERROR"] as const;
+  const globalRuntimeIssueCounts = autonomous.reduce<Record<string, number>>((counts, agent) => {
+    for (const entry of agent.managedAgents) {
+      const status = managedRuntimeDiagnostic(entry).status;
+      if (runtimeIssueStatuses.includes(status as typeof runtimeIssueStatuses[number])) {
+        counts[status] = (counts[status] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, {});
+  const globalRuntimeIssueTotal = runtimeIssueStatuses.reduce((total, status) => total + (globalRuntimeIssueCounts[status] ?? 0), 0);
+
   const filteredAutonomous = autonomous.filter(agent => {
     const status = !agent.enabled ? "DISABLED" : agent.online ? "ONLINE" : "OFFLINE";
     const reported = `${agent.reportedName ?? ""} ${agent.hostname ?? ""}`.toLowerCase();
     const labels = `${Object.entries(agent.labels).map(([key,value]) => `${key}=${value}`).join(" ")} ${agent.agentLabels.join(" ")}`.toLowerCase();
-    return (!agentNameFilter.trim() || agent.name.toLowerCase().includes(agentNameFilter.trim().toLowerCase()))
+    const matchesRuntimeIssue = !globalRuntimeIssueFilter || agent.managedAgents.some(entry => managedRuntimeDiagnostic(entry).status === globalRuntimeIssueFilter);
+    return matchesRuntimeIssue
+      && (!agentNameFilter.trim() || agent.name.toLowerCase().includes(agentNameFilter.trim().toLowerCase()))
       && (!agentStatusFilter || status === agentStatusFilter)
       && (!agentReportedFilter.trim() || reported.includes(agentReportedFilter.trim().toLowerCase()))
       && (!agentLabelsFilter.trim() || labels.includes(agentLabelsFilter.trim().toLowerCase()));
@@ -866,14 +886,35 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
       : agent.agentLabels.join(",");
     return compareTableValues(value(left), value(right), agentSortDirection);
   });
-  const agentFiltersActive = Boolean(agentNameFilter || agentStatusFilter || agentReportedFilter || agentLabelsFilter);
+  const agentFiltersActive = Boolean(agentNameFilter || agentStatusFilter || agentReportedFilter || agentLabelsFilter || globalRuntimeIssueFilter);
 
   return <Stack gap="md" className="agent-admin-panel">
     <AgentActionHistory operations={actionHistoryQuery.data ?? []} onClear={() => clearActionHistoryMutation.mutate()} clearing={clearActionHistoryMutation.isPending} />
     <Card withBorder className="monitoring-table-card">
       <Group justify="space-between" mb="sm"><div><Text fw={600}>Supervisor Agents</Text><Text size="xs" c="dimmed">Direct outbound Supervisor → SensorSphere connections. Environment is defined once for this SensorSphere installation.</Text></div><Group gap="xs"><Button size="xs" variant="light" color="teal" disabled={bulkSupervisorCandidates.length === 0} onClick={() => setBulkUpdateOpen(true)}>Update All ({bulkSupervisorCandidates.length})</Button><Button size="xs" disabled={!installationEnvironmentQuery.data} onClick={() => { setCreateOpened(true); setCreatedToken(null); setTokenSupervisorName(""); setCopiedField(null); setCreateName(""); }}>Add Supervisor Agent</Button></Group></Group>
+      <Card withBorder p="xs" mb="sm">
+        <Group justify="space-between" align="center" mb={6}>
+          <div><Text size="sm" fw={600}>Runtime issues</Text><Text size="xs" c="dimmed">Click a status to filter Supervisor Agents that have runtimes requiring attention.</Text></div>
+          <Badge size="lg" variant={globalRuntimeIssueTotal > 0 ? "light" : "outline"} color={globalRuntimeIssueTotal > 0 ? "orange" : "green"}>{globalRuntimeIssueTotal} issue{globalRuntimeIssueTotal === 1 ? "" : "s"}</Badge>
+        </Group>
+        <Group gap="xs" wrap="wrap">
+          {([
+            ["DRIFT", "yellow"],
+            ["MISSING", "orange"],
+            ["DISCOVERED", "blue"],
+            ["UNTRACKED", "grape"],
+            ["ERROR", "red"]
+          ] as const).map(([status, color]) => {
+            const active = globalRuntimeIssueFilter === status;
+            return <Button key={status} size="compact-xs" variant={active ? "filled" : "light"} color={color} onClick={() => setGlobalRuntimeIssueFilter(current => current === status ? null : status)}>
+              {status} {globalRuntimeIssueCounts[status] ?? 0}
+            </Button>;
+          })}
+          {globalRuntimeIssueFilter && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setGlobalRuntimeIssueFilter(null)}>All Supervisors</Button>}
+        </Group>
+      </Card>
       <Group gap="xs" mb="sm" wrap="wrap">
-        <ResetFiltersAction active={agentFiltersActive} onReset={() => { setAgentNameFilter(""); setAgentStatusFilter(null); setAgentReportedFilter(""); setAgentLabelsFilter(""); }} />
+        <ResetFiltersAction active={agentFiltersActive} onReset={() => { setAgentNameFilter(""); setAgentStatusFilter(null); setAgentReportedFilter(""); setAgentLabelsFilter(""); setGlobalRuntimeIssueFilter(null); }} />
         <TextInput size="xs" placeholder="Filter name" value={agentNameFilter} onChange={event => setAgentNameFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentNameFilter.trim()))} rightSection={<FilterClearAction active={Boolean(agentNameFilter.trim())} onClear={() => setAgentNameFilter("")} />} w={180} />
         <Select size="xs" clearable placeholder="Status" data={["ONLINE","OFFLINE","DISABLED"]} value={agentStatusFilter} onChange={setAgentStatusFilter} styles={activeFilterStyles(Boolean(agentStatusFilter))} w={140} />
         <TextInput size="xs" placeholder="Reported / host" value={agentReportedFilter} onChange={event => setAgentReportedFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(agentReportedFilter.trim()))} rightSection={<FilterClearAction active={Boolean(agentReportedFilter.trim())} onClear={() => setAgentReportedFilter("")} />} w={180} />
@@ -904,7 +945,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
               <Table.Td><Text size="sm">{agent.version ?? "—"}</Text>{["REQUESTED", "UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? <><Tooltip label={agent.updateError ?? `Supervisor update lifecycle: ${lifecycle.label}`}><Badge size="xs" variant="light" color={lifecycle.color}>{lifecycle.label}</Badge></Tooltip><UpdateLifecycleAge status={agent.updateStatus} timestamp={agent.updateStartedAt ?? agent.updateRequestedAt} />{agent.desiredVersion && <Text size="xs" c="dimmed">Target {agent.desiredVersion}</Text>}</> : <>{agent.updateStatus !== "FAILED" && <AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents?.supervisorAgent} />}{agent.updateStatus === "FAILED" && <Tooltip label={agent.updateError ?? "Supervisor update failed"}><Badge size="xs" variant="light" color="red">FAILED</Badge></Tooltip>}{agent.lastSuccessfulUpdateAt && <Text size="xs" c="dimmed" title={agent.lastSuccessfulUpdateAt}>Updated {relativeAge(agent.lastSuccessfulUpdateAt)}</Text>}</>}</Table.Td>
               <Table.Td><AgentSystemCell os={agent.os} osVersion={agent.osVersion} architecture={agent.architecture} /></Table.Td><Table.Td><HostNetworkCell networks={agent.hostNetworks} /></Table.Td>
               <Table.Td title={agent.lastSeenAt ?? undefined}><Text size="sm">{relativeAge(agent.lastSeenAt)}</Text></Table.Td>
-              <Table.Td>{agent.managedAgents.length > 0 ? <Group gap={6} wrap="nowrap">{agent.managedAgents.filter(entry => entry.installed !== false).map(managedAgentIcon)}<Tooltip label={runtimeIssueTotal > 0 ? `Managed Runtime Inspector · ${runtimeIssueTotal} issue${runtimeIssueTotal === 1 ? "" : "s"} (${runtimeIssueDetails})` : "Managed Runtime Inspector · no issues"}><Indicator disabled={runtimeIssueTotal === 0} label={runtimeIssueTotal} size={16} color={(runtimeIssueCounts.ERROR ?? 0) > 0 ? "red" : "orange"} offset={2}><ActionIcon size="sm" variant="subtle" color={runtimeIssueTotal > 0 ? "orange" : "blue"} aria-label={runtimeIssueTotal > 0 ? `Managed Runtime Inspector, ${runtimeIssueTotal} issues` : "Managed Runtime Inspector"} onClick={() => { setManagedRuntimeFilter(null); setManagedRuntimeTarget(agent); }}><ManagedRuntimeIcon /></ActionIcon></Indicator></Tooltip></Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
+              <Table.Td>{agent.managedAgents.length > 0 ? <Group gap={6} wrap="nowrap" align="center" style={{ minHeight: 28 }}>{agent.managedAgents.filter(entry => entry.installed !== false).map(managedAgentIcon)}<Tooltip label={runtimeIssueTotal > 0 ? `Managed Runtime Inspector · ${runtimeIssueTotal} issue${runtimeIssueTotal === 1 ? "" : "s"} (${runtimeIssueDetails})` : "Managed Runtime Inspector · no issues"}><span style={{ display: "inline-flex", alignItems: "center", flex: "0 0 auto" }}><Indicator disabled={runtimeIssueTotal === 0} label={runtimeIssueTotal} size={16} color={(runtimeIssueCounts.ERROR ?? 0) > 0 ? "red" : "orange"} offset={2}><ActionIcon size="sm" variant="light" color={runtimeIssueTotal > 0 ? "orange" : "blue"} aria-label={runtimeIssueTotal > 0 ? `Managed Runtime Inspector, ${runtimeIssueTotal} issues` : "Managed Runtime Inspector"} onClick={() => { setManagedRuntimeFilter(null); setManagedRuntimeTarget(agent); }}><ManagedRuntimeIcon size={16} /></ActionIcon></Indicator></span></Tooltip></Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
 
               <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
               <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">{explicitlyManaged(agent, "device-agent") ? <Tooltip label="Deprovision Device Agent"><ActionIcon size="sm" variant="light" color="red" aria-label="Deprovision Device Agent" disabled={!agent.online} onClick={() => { const entry = reportedManagedEntry(agent, "device-agent")!; setDeprovisionTarget({ supervisor: agent, agentType: "device-agent", instance: typeof entry.instance === "string" ? entry.instance : "main", name: typeof entry.agent_name === "string" ? entry.agent_name : agent.name }); }}><DeprovisionAgentIcon /></ActionIcon></Tooltip> : <Tooltip label={!agent.online ? "Supervisor Agent must be online" : discoveredUnmanaged(agent, "device-agent") ? "Replace unmanaged local Device Agent installation" : "Deploy Device Agent"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Deploy Device Agent" disabled={!agent.online} onClick={() => { setDeployTarget(agent); setDeployAgentType("device-agent"); setDeployInstance("main"); setDeployAgentName(agent.name); setDeployDeviceSlotMode("new"); setDeployDeviceSlotId(null); setDeployDeviceSlotName(agent.name); setDeployVersion(latestDeviceAgentVersion !== "latest" ? latestDeviceAgentVersion : ""); setDeployStatus("IDLE"); setDeployError(null); setDialogActionDetails(null); deployDeviceAgentMutation.reset(); }}><DeployAgentIcon /></ActionIcon></Tooltip>}{explicitlyManaged(agent, "monitor-agent") && <Tooltip label="Deprovision Monitoring Agent main"><ActionIcon size="sm" variant="light" color="red" aria-label="Deprovision Monitoring Agent main" disabled={!agent.online} onClick={() => { const entry = reportedManagedEntry(agent, "monitor-agent")!; setDeprovisionTarget({ supervisor: agent, agentType: "monitor-agent", instance: typeof entry.instance === "string" ? entry.instance : "main", name: typeof entry.agent_name === "string" ? entry.agent_name : `${agent.name}-monitor` }); }}><DeprovisionAgentIcon /></ActionIcon></Tooltip>}{(() => { const missing = missingManagedEntry(agent, "monitor-agent"); const missingInstance = missing && typeof missing.instance === "string" ? missing.instance : null; const instance = missingInstance ?? nextMonitoringInstance(agent); const missingName = missing && typeof missing.agent_name === "string" ? missing.agent_name : null; const label = !agent.online ? "Supervisor Agent must be online" : missingInstance ? `Reinstall missing Monitoring Agent ${missingInstance}` : "Deploy new Monitoring Agent instance"; return <Tooltip label={label}><ActionIcon size="sm" variant="light" color={missingInstance ? "orange" : "violet"} aria-label={missingInstance ? `Reinstall Monitoring Agent ${missingInstance}` : "Deploy new Monitoring Agent instance"} disabled={!agent.online} onClick={() => { setDeployTarget(agent); setDeployAgentType("monitor-agent"); setDeployInstance(instance); setDeployAgentName(missingName ?? defaultMonitoringAgentName(agent, instance)); setDeploySlotMode("new"); setDeploySlotId(null); setDeploySlotName(missingName ?? defaultMonitoringAgentName(agent, instance)); setDeployVersion(latestMonitoringAgentVersion !== "latest" ? latestMonitoringAgentVersion : ""); setDeployStatus("IDLE"); setDeployError(null); setDialogActionDetails(null); deployMonitoringAgentMutation.reset(); }}><DeployAgentIcon /></ActionIcon></Tooltip>; })()}<Tooltip label={agent.selfUpdateSupported ? "Update Supervisor Agent" : "Supervisor self-update unavailable"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.selfUpdateSupported || ["REQUESTED", "UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => { setAutonomousUpdateTarget(agent); setUpdateVersion(latestSupervisorVersion !== "latest" ? latestSupervisorVersion : agent.version ?? ""); autonomousUpdateMutation.reset(); }}><SupervisorUpdateIcon /></ActionIcon></Tooltip><EditActionIcon onClick={() => { setEditTarget(agent); setEditName(agent.name); setEditEnabled(agent.enabled); setEditHeartbeatTimeout(agent.heartbeatTimeoutSeconds); setEditLabelsText(labelsText(agent.labels)); editMutation.reset(); }} /><Tooltip label="Copy supervisor agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy supervisor agent" onClick={() => copyMutation.mutate(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check configured token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check configured token" onClick={() => checkTokenMutation.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerateMutation.mutate(agent)}>↻</ActionIcon></Tooltip><ReinstallCommandActionIcon onClick={() => reinstallMutation.mutate(agent)} loading={reinstallMutation.isPending && reinstallMutation.variables?.id === agent.id} /><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Table.Td>
@@ -1013,30 +1054,41 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
               <Table.Td><Stack gap={2}><Group gap={4}><Text size="xs" c="dimmed">management_id</Text>{managementId && <ActionIcon size="xs" variant="subtle" aria-label="Copy management id" onClick={() => void copyText(managementId)}><CopyIcon size={12} /></ActionIcon>}</Group><Code style={{ maxWidth: 210, overflow: "hidden", textOverflow: "ellipsis" }}>{managementId ?? "—"}</Code><Text size="xs" c="dimmed">agent {agentId ?? "—"}</Text></Stack></Table.Td>
               <Table.Td><Badge size="xs" variant="light" color={runtimeReported ? "green" : "orange"}>{runtimeReported ? "REPORTED" : "NOT REPORTED"}</Badge></Table.Td>
               <Table.Td>
-                <Stack gap={4}>
+                <Stack gap={6}>
                   <div>
-                    <Text size="xs" c="dimmed">Expected</Text>
-                    <Group gap={4} wrap="nowrap">
-                      <Text size="xs" style={{ maxWidth: 280, wordBreak: "break-all" }}>{expectedInstallDir ?? "—"}</Text>
-                      {expectedInstallDir && <ActionIcon size="xs" variant="subtle" aria-label="Copy expected install directory" onClick={() => void copyText(expectedInstallDir)}><CopyIcon size={12} /></ActionIcon>}
+                    <Text size="xs" c="dimmed">Install directory · Expected → Runtime</Text>
+                    <Group gap={4} wrap="nowrap" align="flex-start">
+                      <Group gap={2} wrap="nowrap" style={{ minWidth: 0 }}>
+                        <Text size="xs" fw={600} c={expectedInstallDir && runtimeInstallDir && expectedInstallDir !== runtimeInstallDir ? "orange" : undefined} style={{ maxWidth: 190, wordBreak: "break-all" }}>{expectedInstallDir ?? "—"}</Text>
+                        {expectedInstallDir && <ActionIcon size="xs" variant="subtle" aria-label="Copy expected install directory" onClick={() => void copyText(expectedInstallDir)}><CopyIcon size={12} /></ActionIcon>}
+                      </Group>
+                      <Text size="xs" c="dimmed">→</Text>
+                      <Group gap={2} wrap="nowrap" style={{ minWidth: 0 }}>
+                        <Text size="xs" fw={600} c={expectedInstallDir && runtimeInstallDir && expectedInstallDir !== runtimeInstallDir ? "orange" : undefined} style={{ maxWidth: 190, wordBreak: "break-all" }}>{runtimeInstallDir ?? "—"}</Text>
+                        {runtimeInstallDir && <ActionIcon size="xs" variant="subtle" aria-label="Copy runtime install directory" onClick={() => void copyText(runtimeInstallDir)}><CopyIcon size={12} /></ActionIcon>}
+                      </Group>
                     </Group>
-                    <Text size="xs" c="dimmed">{expectedComposeProject ?? "—"} / {composeService ?? "—"}</Text>
                   </div>
                   <div>
-                    <Text size="xs" c="dimmed">Runtime</Text>
+                    <Text size="xs" c="dimmed">Compose project · Expected → Runtime</Text>
                     <Group gap={4} wrap="nowrap">
-                      <Text size="xs" style={{ maxWidth: 280, wordBreak: "break-all" }}>{runtimeInstallDir ?? "—"}</Text>
-                      {runtimeInstallDir && <ActionIcon size="xs" variant="subtle" aria-label="Copy runtime install directory" onClick={() => void copyText(runtimeInstallDir)}><CopyIcon size={12} /></ActionIcon>}
+                      <Text size="xs" fw={600} c={expectedComposeProject && runtimeComposeProject && expectedComposeProject !== runtimeComposeProject ? "orange" : undefined}>{expectedComposeProject ?? "—"}</Text>
+                      <Text size="xs" c="dimmed">→</Text>
+                      <Text size="xs" fw={600} c={expectedComposeProject && runtimeComposeProject && expectedComposeProject !== runtimeComposeProject ? "orange" : undefined}>{runtimeComposeProject ?? "—"}</Text>
                     </Group>
-                    <Text size="xs" c="dimmed">{runtimeComposeProject ?? "—"}</Text>
+                    <Text size="xs" c="dimmed">service {composeService ?? "—"}</Text>
                   </div>
                 </Stack>
               </Table.Td>
               <Table.Td>
-                <Stack gap={2}>
-                  <Text size="xs" c="dimmed">desired <Text span fw={600} c="inherit">{desiredVersion ?? "—"}</Text></Text>
-                  <Text size="xs" c="dimmed">reported <Text span fw={600} c="inherit">{reportedVersion ?? "—"}</Text></Text>
-                  <Text size="xs" c="dimmed">runtime <Text span fw={600} c="inherit">{runtimeVersion ?? "—"}</Text></Text>
+                <Stack gap={3}>
+                  <Text size="xs" c="dimmed">Desired → Runtime</Text>
+                  <Group gap={4} wrap="nowrap">
+                    <Text size="xs" fw={700} c={desiredVersion && runtimeVersion && desiredVersion !== runtimeVersion ? "orange" : undefined}>{desiredVersion ?? "—"}</Text>
+                    <Text size="xs" c="dimmed">→</Text>
+                    <Text size="xs" fw={700} c={desiredVersion && runtimeVersion && desiredVersion !== runtimeVersion ? "orange" : undefined}>{runtimeVersion ?? "—"}</Text>
+                  </Group>
+                  <Text size="xs" c="dimmed">reported {reportedVersion ?? "—"}</Text>
                 </Stack>
               </Table.Td>
               <Table.Td><Badge size="xs" variant="light" color={containerState === "running" ? "green" : containerState === "not_reported" ? "gray" : "orange"}>{containerState}</Badge></Table.Td>

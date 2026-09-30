@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.103.0";
+export const MODULE_VERSION = "1.104.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.104.0": {
+    releasedAt: "2026-09-30T11:10:27Z",
+    patch: "PR-301-runtime-inspector-ux-global-issues.patch",
+    changes: [
+      { type: "changed", description: "Align Managed Agents icons using uniform ActionIcon buttons and keep the Inspector badge vertically aligned" },
+      { type: "added", description: "Add global runtime issue summary and click-to-filter controls for DRIFT, MISSING, DISCOVERED, UNTRACKED and ERROR" },
+      { type: "changed", description: "Display install directory, Compose project and version differences as Expected to Runtime comparisons" }
+    ]
+  },
   "1.103.0": {
     releasedAt: "2026-09-30T09:58:29Z",
     patch: "PR-300-managed-runtime-repair-reconcile.patch",
