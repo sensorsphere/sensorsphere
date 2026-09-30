@@ -10,6 +10,7 @@ COMMAND="${1:-}"
 shift || true
 
 INSTALL_DIR="${SENSORSPHERE_INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
+INSTALL_DIR_FROM_ARG=0
 STACK_VERSION=""
 MANIFEST_SOURCE=""
 RELEASE_BASE_URL="${SENSORSPHERE_RELEASE_BASE_URL:-$DEFAULT_RELEASE_BASE_URL}"
@@ -18,7 +19,7 @@ FORCE_ROLLBACK=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --install-dir) INSTALL_DIR="$2"; shift 2 ;;
+    --install-dir) INSTALL_DIR="$2"; INSTALL_DIR_FROM_ARG=1; shift 2 ;;
     --stack) STACK_VERSION="$2"; shift 2 ;;
     --manifest) MANIFEST_SOURCE="$2"; shift 2 ;;
     --release-base-url) RELEASE_BASE_URL="$2"; shift 2 ;;
@@ -27,6 +28,10 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
+
+if [[ "$COMMAND" == "update" && "$INSTALL_DIR_FROM_ARG" -eq 0 ]]; then
+  INSTALL_DIR="$SCRIPT_DIR"
+fi
 
 require_tools() {
   command -v docker >/dev/null 2>&1 || { echo "ERROR: docker is required" >&2; exit 1; }
@@ -97,9 +102,14 @@ configure_and_validate_auth() {
     set_env "$INSTALL_DIR/.env" SENSORSPHERE_AUTH_ENABLED "$auth_enabled"
   fi
 
-  if [[ "$env_name" != "DEV" ]] && ! bool_true "$auth_enabled"; then
+  local unauthenticated_environment_allowed=0
+  if [[ "$env_name" == "DEV" || "$env_name" == TEST* || "$env_name" == TST* ]]; then
+    unauthenticated_environment_allowed=1
+  fi
+
+  if [[ "$unauthenticated_environment_allowed" -ne 1 ]] && ! bool_true "$auth_enabled"; then
     echo "ERROR: authentication cannot be disabled when SENSORSPHERE_ENVIRONMENT=$env_name" >&2
-    echo "Use SENSORSPHERE_ENVIRONMENT=DEV for an explicitly unauthenticated development instance." >&2
+    echo "Use DEV, TEST*, or TST* for an explicitly unauthenticated non-production instance." >&2
     exit 1
   fi
 

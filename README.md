@@ -31,7 +31,7 @@ env \
   WEB_PORT=8082 \
   MQTT_PORT=1892 \
   INSTALL_DIR="$HOME/sensorsphere-fit" \
-  VERSION=2026.09.30.4 \
+  VERSION=2026.09.30.5 \
   SENSORSPHERE_PUBLIC_URL="https://fit.example.com" \
   SENSORSPHERE_AUTH_PROVIDERS=google \
   SENSORSPHERE_AUTH_BOOTSTRAP_ADMIN_EMAIL="admin@example.com" \
@@ -40,9 +40,9 @@ env \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere/master/scripts/install.sh)"
 ```
 
-For non-DEV environments, authentication is enabled by default and cannot be disabled. A fresh DIT/TEST1/FIT/PROD installation therefore requires a valid public HTTPS URL, a bootstrap admin email, and complete credentials for every provider listed in `SENSORSPHERE_AUTH_PROVIDERS`.
+Authentication defaults to disabled in `DEV`. In `TEST*` and `TST*` environments, authentication still defaults to enabled but may be explicitly disabled with `SENSORSPHERE_AUTH_ENABLED=false`. Other environments such as DIT/FIT/PROD remain fail-closed and cannot disable authentication.
 
-For DEV, authentication defaults to disabled. Set `SENSORSPHERE_AUTH_ENABLED=true` explicitly when testing real OIDC in DEV.
+Set `SENSORSPHERE_AUTH_ENABLED=true` explicitly when testing real OIDC in DEV.
 
 The leading `env` scopes these variables to the installer command only. Do not put a space after an assignment operator; for example use `INSTALL_DIR="$HOME/sensorsphere-fit"`, not `INSTALL_DIR= "$HOME/sensorsphere-fit"`.
 The main installation variables are:
@@ -57,7 +57,7 @@ The main installation variables are:
 | `MQTT_PORT` | Host port for MQTT | `1883` |
 | `INSTALL_DIR` | Installation directory | `/opt/sensorsphere` |
 | `SENSORSPHERE_PROJECT_TODOS_ENABLED` | Show the development Project Todos feature | `false` |
-| `SENSORSPHERE_AUTH_ENABLED` | Enable OIDC authentication | `false` in DEV, `true` in non-DEV |
+| `SENSORSPHERE_AUTH_ENABLED` | Enable OIDC authentication | `false` in DEV, `true` otherwise; TEST*/TST* may explicitly disable it |
 | `SENSORSPHERE_PUBLIC_URL` | Public HTTPS origin used to build OIDC callbacks | required when auth is enabled |
 | `SENSORSPHERE_AUTH_PROVIDERS` | Comma-separated OIDC providers: `google`, `microsoft` | `google` |
 | `SENSORSPHERE_AUTH_BOOTSTRAP_ADMIN_EMAIL` | Initial protected admin email on a fresh install | required when auth is enabled |
@@ -74,10 +74,11 @@ bash -c "$(wget -qO- https://raw.githubusercontent.com/sensorsphere/sensorsphere
 
 ### Authentication variables
 
-The installer is fail-closed outside DEV:
+The installer is fail-closed for production-like environments:
 
 - `DEV`: authentication defaults to `false` and may be disabled explicitly.
-- any non-DEV environment, including `DIT`, `TEST1`, `FIT`, and `PROD`: authentication defaults to `true` and `SENSORSPHERE_AUTH_ENABLED=false` is rejected.
+- `TEST*` / `TST*`: authentication defaults to `true`, but `SENSORSPHERE_AUTH_ENABLED=false` is allowed explicitly.
+- other environments such as `DIT`, `FIT`, and `PROD`: authentication defaults to `true` and `SENSORSPHERE_AUTH_ENABLED=false` is rejected.
 
 When authentication is enabled, the installer requires:
 
@@ -115,7 +116,7 @@ application image versions.
 env \
   ACTION=update \
   INSTALL_DIR="$HOME/sensorsphere-fit" \
-  VERSION=2026.09.30.4 \
+  VERSION=2026.09.30.5 \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere/master/scripts/install.sh)"
 ```
 
@@ -188,7 +189,7 @@ and the same `INSTALL_DIR`:
 env \
   SENSORSPHERE_ENVIRONMENT=FIT \
   INSTALL_DIR="$HOME/sensorsphere-fit" \
-  VERSION=2026.09.30.4 \
+  VERSION=2026.09.30.5 \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere/master/scripts/install.sh)"
 ```
 

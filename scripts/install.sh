@@ -51,7 +51,8 @@ Authentication settings are forwarded when supplied, including:
 
 Authentication defaults:
   DEV                         Authentication may be explicitly disabled
-  non-DEV                     Authentication defaults to enabled and cannot be disabled
+  TEST* / TST*                Authentication may be explicitly disabled
+  other environments          Authentication defaults to enabled and cannot be disabled
 
 Removal:
   ACTION=remove                                 Remove containers/networks, preserve data/config

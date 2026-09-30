@@ -50,7 +50,7 @@ To select a published Stack Release explicitly:
 
 ```bash
 ./install.sh install \
-  --stack 2026.09.30.4 \
+  --stack 2026.09.30.5 \
   --install-dir /opt/sensorsphere
 ```
 
@@ -61,7 +61,7 @@ For an offline/local manifest:
 
 ```bash
 ./install.sh install \
-  --manifest ./2026.09.30.4.yaml \
+  --manifest ./2026.09.30.5.yaml \
   --install-dir /opt/sensorsphere
 ```
 
@@ -72,11 +72,12 @@ TimescaleDB/API/frontend/nginx health.
 
 ### Authentication during installation
 
-SensorSphere is fail-closed outside DEV.
+SensorSphere is fail-closed for production-like environments.
 
 - `SENSORSPHERE_ENVIRONMENT=DEV`: authentication defaults to disabled.
-- any other environment: authentication defaults to enabled and cannot be
+- `TEST*` / `TST*`: authentication defaults to enabled but may be explicitly
   disabled.
+- other environments: authentication defaults to enabled and cannot be disabled.
 
 When authentication is enabled, installation requires:
 
@@ -96,17 +97,19 @@ SENSORSPHERE_MICROSOFT_TENANT=common
 Only credentials for providers listed in `SENSORSPHERE_AUTH_PROVIDERS` are
 required. The variable is plural; `SENSORSPHERE_AUTH_PROVIDER` is not used.
 
-The installer stops before starting containers when a non-DEV installation
-would otherwise be unauthenticated or when an enabled OIDC provider is
-incomplete. See `docs/auth/OIDC-App-Registration.md` for provider-console
-registration.
+The installer stops before starting containers when an environment outside
+`DEV`, `TEST*`, or `TST*` would otherwise be unauthenticated, or when an enabled
+OIDC provider is incomplete. See `docs/auth/OIDC-App-Registration.md` for
+provider-console registration.
 
 ## Update
 
 ```bash
 /opt/sensorsphere/install.sh update \
-  --stack <stack-release> \
-  --install-dir /opt/sensorsphere
+  --stack <stack-release>
+
+# --install-dir is optional for update. When omitted, install.sh uses its own
+# directory as the installation directory.
 ```
 
 Before changing versions, update saves:

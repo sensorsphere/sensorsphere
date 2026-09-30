@@ -109,10 +109,10 @@ The installation policy is environment-sensitive:
 - `DEV`: authentication defaults to disabled. This preserves the development
   role-switch workflow. Set `SENSORSPHERE_AUTH_ENABLED=true` explicitly to
   exercise real OIDC in DEV.
-- every non-DEV environment, including `DIT`, `TEST1`, `FIT`, and
-  `PROD`: authentication defaults to enabled.
-- a non-DEV installation explicitly configured with
-  `SENSORSPHERE_AUTH_ENABLED=false` is rejected.
+- `TEST*` / `TST*`: authentication defaults to enabled, but may be explicitly
+  disabled with `SENSORSPHERE_AUTH_ENABLED=false`.
+- other environments such as `DIT`, `FIT`, and `PROD`: authentication defaults
+  to enabled and an explicit `SENSORSPHERE_AUTH_ENABLED=false` is rejected.
 - an auth-enabled installation is rejected before the stack starts when the
   public HTTPS URL, bootstrap-admin email, or credentials for an enabled
   provider are incomplete.

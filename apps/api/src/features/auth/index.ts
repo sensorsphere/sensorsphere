@@ -71,7 +71,12 @@ function validateAuthStartupConfiguration(): void {
     .trim()
     .toUpperCase();
 
-  if (environment !== "DEV" && !settings.enabled) {
+  const unauthenticatedEnvironmentAllowed =
+    environment === "DEV"
+    || environment.startsWith("TEST")
+    || environment.startsWith("TST");
+
+  if (!unauthenticatedEnvironmentAllowed && !settings.enabled) {
     throw new Error(
       `Authentication cannot be disabled when SENSORSPHERE_ENVIRONMENT=${environment}`
     );

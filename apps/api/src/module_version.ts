@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.57.0";
+export const MODULE_VERSION = "1.58.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.58.0": {
+    releasedAt: "2026-09-30T07:07:42Z",
+    patch: "PR-294-test-auth-and-update-install-dir-v1.patch",
+    changes: [
+      { type: "changed", description: "Allow authentication to be disabled in DEV, TEST* and TST* environments" },
+      { type: "fixed", description: "Make bundle update default to the directory containing install.sh when --install-dir is omitted" }
+    ]
+  },
   "1.57.0": {
     releasedAt: "2026-09-30T06:36:46Z",
     patch: "PR-293-installation-information-v1.patch",
