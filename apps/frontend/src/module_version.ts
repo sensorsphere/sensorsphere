@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.112.0";
+export const MODULE_VERSION = "1.112.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.112.1": {
+    releasedAt: "2026-09-30T22:08:00Z",
+    patch: "PR-314-hard-delete-discovery-baseline.patch",
+    changes: [
+      { type: "fixed", description: "Send entity lifecycle metadata during Delete all references so discovery baselines can be purged precisely" }
+    ]
+  },
   "1.112.0": {
     releasedAt: "2026-09-30T21:20:00Z",
     patch: "PR-313-entity-lifecycle-and-user-admin-completion.patch",

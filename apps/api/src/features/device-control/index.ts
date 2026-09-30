@@ -2831,6 +2831,7 @@ export async function registerDeviceControlFeature(
       dashboardWidgets: 0,
       deviceIdentities: 0,
       deviceCommands: 0,
+      discoveryBaselines: 0,
       exclusions: 0
     };
     try {
@@ -2881,6 +2882,54 @@ export async function registerDeviceControlFeature(
           WHERE device_id = $1
             AND UPPER(provider) = UPPER($3)
         `, [entity.deviceId, entity.entityValue, entity.provider]);
+
+        const snapshot = entity.snapshot ?? {};
+        const entityType = typeof snapshot.entityType === "string"
+          ? snapshot.entityType.trim().toLowerCase()
+          : "";
+        const candidateValues = [
+          entity.entityValue,
+          typeof snapshot.entityId === "string" ? snapshot.entityId : "",
+          typeof snapshot.entityName === "string" ? snapshot.entityName : ""
+        ].map(value => value.trim().toLowerCase()).filter(Boolean);
+        const discoveryKeys = new Set(candidateValues.map(value => {
+          if (!entityType) return value;
+          const prefix = `${entityType}:`;
+          return value.startsWith(prefix) ? value : `${prefix}${value}`;
+        }));
+
+        if (discoveryKeys.size > 0) {
+          const baselineResult = await client.query<{
+            signature: string | null;
+            count: number | null;
+          }>(
+            `SELECT discovery_entity_signature AS signature,
+                    discovery_entity_count AS count
+             FROM device_registry_devices
+             WHERE id = $1
+             FOR UPDATE`,
+            [entity.deviceId]
+          );
+          const baseline = baselineResult.rows[0];
+          if (baseline?.signature !== null && baseline?.signature !== undefined) {
+            const currentKeys = baseline.signature
+              .split("\n")
+              .map(value => value.trim())
+              .filter(Boolean);
+            const nextKeys = currentKeys.filter(value => !discoveryKeys.has(value.toLowerCase()));
+            if (nextKeys.length !== currentKeys.length) {
+              const baselineUpdate = await client.query(
+                `UPDATE device_registry_devices
+                 SET discovery_entity_signature = $2,
+                     discovery_entity_count = $3,
+                     updated_at = NOW()
+                 WHERE id = $1`,
+                [entity.deviceId, nextKeys.join("\n"), nextKeys.length]
+              );
+              references.discoveryBaselines += baselineUpdate.rowCount ?? 0;
+            }
+          }
+        }
 
         const exclusionResult = await client.query(
           `DELETE FROM device_control_entity_exclusions

@@ -131,7 +131,8 @@ export function RealtimeEntityBrowser() {
     mutationFn: async (targets: RealtimeEntityRecord[]) => deleteRealtimeEntityReferences(targets.map(entity => ({
       deviceId: entity.deviceId,
       provider: entity.provider,
-      entityValue: entity.entityValue
+      entityValue: entity.entityValue,
+      snapshot: entity as unknown as Record<string, unknown>
     }))),
     onSuccess: async (_result, targets) => {
       const deletedKeys = new Set(targets.map(entitySelectionKey));

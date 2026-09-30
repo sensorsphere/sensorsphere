@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.63.0";
+export const MODULE_VERSION = "1.63.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.63.1": {
+    releasedAt: "2026-09-30T22:08:00Z",
+    patch: "PR-314-hard-delete-discovery-baseline.patch",
+    changes: [
+      { type: "fixed", description: "Remove hard-deleted entities from the Device Registry discovery baseline so a later rediscovery reports them as added again" }
+    ]
+  },
   "1.63.0": {
     releasedAt: "2026-09-30T21:20:00Z",
     patch: "PR-313-entity-lifecycle-and-user-admin-completion.patch",
