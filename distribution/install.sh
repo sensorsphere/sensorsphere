@@ -204,6 +204,15 @@ prepare_bundle() {
   fi
 
   apply_environment_overrides
+
+  local install_host compose_project
+  install_host="$(hostname -f 2>/dev/null || hostname)"
+  compose_project="$(get_env "$INSTALL_DIR/.env" COMPOSE_PROJECT_NAME)"
+  compose_project="${compose_project:-$(basename "$INSTALL_DIR")}"
+  set_env "$INSTALL_DIR/.env" SENSORSPHERE_INSTALL_HOST "$install_host"
+  set_env "$INSTALL_DIR/.env" SENSORSPHERE_INSTALL_DIR "$INSTALL_DIR"
+  set_env "$INSTALL_DIR/.env" SENSORSPHERE_COMPOSE_PROJECT "$compose_project"
+
   configure_and_validate_auth
 }
 

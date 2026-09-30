@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.56.0";
+export const MODULE_VERSION = "1.57.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.57.0": {
+    releasedAt: "2026-09-30T06:36:46Z",
+    patch: "PR-293-installation-information-v1.patch",
+    changes: [
+      { type: "added", description: "Expose installation host, install directory, Compose project and public URL through runtime configuration" },
+      { type: "changed", description: "Carry installer-maintained deployment metadata into the API container" }
+    ]
+  },
   "1.56.0": {
     releasedAt: "2026-09-29T19:08:00+02:00",
     patch: "PR-288-device-bulk-slots-discovery-v1.patch",

@@ -50,7 +50,7 @@ To select a published Stack Release explicitly:
 
 ```bash
 ./install.sh install \
-  --stack 2026.09.30.3 \
+  --stack 2026.09.30.4 \
   --install-dir /opt/sensorsphere
 ```
 
@@ -61,7 +61,7 @@ For an offline/local manifest:
 
 ```bash
 ./install.sh install \
-  --manifest ./2026.09.30.3.yaml \
+  --manifest ./2026.09.30.4.yaml \
   --install-dir /opt/sensorsphere
 ```
 

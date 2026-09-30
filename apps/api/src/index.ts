@@ -150,6 +150,22 @@ const stackVersion =
   process.env.SENSORSPHERE_STACK_VERSION?.trim()
   || null;
 
+const installationHost =
+  process.env.SENSORSPHERE_INSTALL_HOST?.trim()
+  || null;
+
+const installationDir =
+  process.env.SENSORSPHERE_INSTALL_DIR?.trim()
+  || null;
+
+const composeProject =
+  process.env.SENSORSPHERE_COMPOSE_PROJECT?.trim()
+  || null;
+
+const publicUrl =
+  process.env.SENSORSPHERE_PUBLIC_URL?.trim()
+  || null;
+
 const nginxReleasedAt =
   process.env.SENSORSPHERE_NGINX_RELEASED_AT?.trim()
   || null;
@@ -244,6 +260,12 @@ app.get("/api/v1/config", async () => {
       migrationLevelResult.rows[0]?.migrationLevel
       ?? null,
     stackVersion,
+    installation: {
+      host: installationHost,
+      installDir: installationDir,
+      composeProject,
+      publicUrl
+    },
     ingestionVersion: process.env.SENSORSPHERE_INGESTION_VERSION?.trim() || null,
     nginxVersion,
     migrationsVersion,

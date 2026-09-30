@@ -12,6 +12,7 @@ import {
   Burger,
   Button,
   Card,
+  Code,
   Container,
   Group,
   Loader,
@@ -30,6 +31,7 @@ import {
   Textarea,
   TextInput,
   Title,
+  Tooltip,
   useMantineColorScheme
 } from "@mantine/core";
 
@@ -615,6 +617,16 @@ function Dashboard() {
     setDashboardRefreshing
   ] = React.useState(false);
 
+  const [installationInfoOpen, setInstallationInfoOpen] = React.useState(false);
+  const [copiedInstallationField, setCopiedInstallationField] = React.useState<string | null>(null);
+
+  const copyInstallationValue = React.useCallback(async (field: string, value: string | null | undefined) => {
+    if (!value) return;
+    await navigator.clipboard.writeText(value);
+    setCopiedInstallationField(field);
+    window.setTimeout(() => setCopiedInstallationField(current => current === field ? null : current), 1200);
+  }, []);
+
   const [
     dashboardRefreshedAt,
     setDashboardRefreshedAt
@@ -863,6 +875,16 @@ function Dashboard() {
     runtimeConfigQuery.data
       ?.stackVersion
     ?? null;
+
+  const installationFields = [
+    ["Instance", instanceName],
+    ["Environment", installationEnvironment],
+    ["Host", runtimeConfigQuery.data?.installation?.host ?? null],
+    ["Install directory", runtimeConfigQuery.data?.installation?.installDir ?? null],
+    ["Compose project", runtimeConfigQuery.data?.installation?.composeProject ?? null],
+    ["Public URL", runtimeConfigQuery.data?.installation?.publicUrl ?? null],
+    ["Stack Release", stackVersion]
+  ] as const;
 
 
   const apiModuleVersion =
@@ -2323,6 +2345,42 @@ function Dashboard() {
         }
       }}
     >
+      <Modal
+        opened={installationInfoOpen}
+        onClose={() => { setInstallationInfoOpen(false); setCopiedInstallationField(null); }}
+        title="Installation information"
+        centered
+        size="lg"
+      >
+        <Stack gap="sm">
+          <Text size="sm" c="dimmed">
+            Runtime deployment information for this SensorSphere instance.
+          </Text>
+          {installationFields.map(([label, value]) => (
+            <Group key={label} justify="space-between" gap="md" wrap="nowrap">
+              <Text size="sm" fw={600} style={{ minWidth: 125 }}>{label}</Text>
+              <Group gap={6} wrap="nowrap" style={{ minWidth: 0, flex: 1, justifyContent: "flex-end" }}>
+                <Code style={{ overflowWrap: "anywhere", whiteSpace: "normal", textAlign: "right" }}>{value || "—"}</Code>
+                <Tooltip label={copiedInstallationField === label ? "Copied" : `Copy ${label.toLowerCase()}`}>
+                  <ActionIcon
+                    size="sm"
+                    variant="subtle"
+                    color="green"
+                    aria-label={`Copy ${label}`}
+                    disabled={!value}
+                    onClick={() => void copyInstallationValue(label, value)}
+                  >
+                    ⧉
+                  </ActionIcon>
+                </Tooltip>
+              </Group>
+            </Group>
+          ))}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setInstallationInfoOpen(false)}>Close</Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <AppShell.Header>
 
@@ -3003,9 +3061,22 @@ function Dashboard() {
               }}
             >
               <Group justify="space-between" gap="xs" wrap="nowrap">
-                <Text size="xs" fw={600} c="dimmed">
-                  Build information
-                </Text>
+                <Group gap={4} wrap="nowrap">
+                  <Text size="xs" fw={600} c="dimmed">
+                    Build information
+                  </Text>
+                  <Tooltip label="Installation information">
+                    <ActionIcon
+                      size="xs"
+                      variant="subtle"
+                      color="gray"
+                      aria-label="Installation information"
+                      onClick={() => setInstallationInfoOpen(true)}
+                    >
+                      ⚙
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
                 <Text size="xs" fw={600} c="dimmed" ta="right">
                   {stackVersion ? `Stack ${stackVersion}` : "Stack —"}
                 </Text>

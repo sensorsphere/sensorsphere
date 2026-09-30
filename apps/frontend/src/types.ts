@@ -38,6 +38,12 @@ export interface RuntimeConfig {
   contractVersion: number;
   databaseMigrationLevel: number | null;
   stackVersion: string | null;
+  installation?: {
+    host: string | null;
+    installDir: string | null;
+    composeProject: string | null;
+    publicUrl: string | null;
+  };
   ingestionVersion: string | null;
   nginxVersion: string | null;
   migrationsVersion: string | null;

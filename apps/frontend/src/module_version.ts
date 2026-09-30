@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.99.0";
+export const MODULE_VERSION = "1.100.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.100.0": {
+    releasedAt: "2026-09-30T06:36:46Z",
+    patch: "PR-293-installation-information-v1.patch",
+    changes: [
+      { type: "added", description: "Add an Installation information gear action to Build information" },
+      { type: "added", description: "Show instance, environment, host, install directory, Compose project, public URL and Stack Release with per-field copy actions" }
+    ]
+  },
   "1.99.0": {
     releasedAt: "2026-09-30T04:36:00Z",
     patch: "PR-292-managed-runtime-inspector-wider.patch",
