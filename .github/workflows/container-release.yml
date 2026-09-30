@@ -6,7 +6,7 @@ on:
       manifest:
         description: Stack Release manifest path
         required: true
-        default: releases/stacks/2026.09.30.11.yaml
+        default: releases/stacks/2026.09.30.12.yaml
       modules:
         description: Space-separated modules to publish
         required: true

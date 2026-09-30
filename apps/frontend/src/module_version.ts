@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.104.0";
+export const MODULE_VERSION = "1.105.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.105.0": {
+    releasedAt: "2026-09-30T11:35:00Z",
+    patch: "PR-302-complete-runtime-remediation.patch",
+    changes: [
+      { type: "added", description: "Add DISCOVERED runtime adoption with existing identity token verification and automatic rollback on mismatch" },
+      { type: "added", description: "Add UNTRACKED runtime re-association while preserving the existing cleanup option" },
+      { type: "added", description: "Add safe replacement flow for a new Agent identity with Slot selection, exact runtime cleanup, redeploy and MANAGED verification" },
+      { type: "changed", description: "Reinstall MISSING runtimes using the same SensorSphere identity and require final MANAGED verification" }
+    ]
+  },
   "1.104.0": {
     releasedAt: "2026-09-30T11:10:27Z",
     patch: "PR-301-runtime-inspector-ux-global-issues.patch",
