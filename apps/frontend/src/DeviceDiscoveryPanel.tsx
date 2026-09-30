@@ -1,8 +1,8 @@
 import React from "react";
 import { ActionIcon, Badge, Button, Card, Checkbox, Group, Modal, MultiSelect, Select, SimpleGrid, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { bulkAssignDeviceRegistrySlot, getDeviceAgentSlots, getDeviceAgents, getDeviceDiscoveries, getDiscardedDeviceDiscoveries, setDeviceDiscoveryDiscarded, startDeviceDiscovery } from "./api";
-import type { DeviceAgent, DeviceRegistryDevice } from "./types";
+import { bulkAssignDeviceRegistrySlot, getDeviceAgentSlots, getDeviceAgents, getDeviceDiscoveries, getDiscardedDeviceDiscoveries, getRealtimeEntities, setDeviceDiscoveryDiscarded, startDeviceDiscovery } from "./api";
+import type { DeviceAgent, DeviceRegistryDevice, RealtimeEntityRecord } from "./types";
 import type { DiscoveredDeviceImportRequest } from "./DeviceAgentsPanel";
 import { EditActionIcon } from "./TableActionIcons";
 import { ResolvedIconGlyph, resolveDiscoveryIcon, resolveProviderIcon } from "./ResolvedDeviceIcon";
@@ -215,13 +215,68 @@ function mergedDiscoveryDevice(sourceRows: RawDiscoveryRow[], preferred: RawDisc
   return merged;
 }
 
+function entityInventoryKeysFromSignature(signature: string | null): string[] | null {
+  if (signature === null) return null;
+  return signature.split("\n").map(value => value.trim()).filter(Boolean).sort();
+}
+
+function realtimeEntityInventoryKeys(
+  registered: DeviceRegistryDevice,
+  provider: string,
+  realtimeEntities: RealtimeEntityRecord[]
+): string[] | null {
+  const matching = realtimeEntities.filter(entity =>
+    entity.deviceId === registered.id
+    && entity.provider.trim().toUpperCase() === provider.trim().toUpperCase()
+  );
+  if (!matching.length) return null;
+  return [...new Set(matching.map(entity =>
+    `${normalizeText(entity.entityType) || "unknown"}:${normalizeText(entity.entityName || entity.entityValue)}`
+  ))].sort();
+}
+
+function appendEntityInventoryReasons(
+  reasons: string[],
+  discovered: Record<string, unknown>,
+  registered: DeviceRegistryDevice,
+  provider: string,
+  realtimeEntities: RealtimeEntityRecord[]
+): void {
+  const discoveredInventory = discoveryEntityInventory(discovered);
+  if (discoveredInventory.signature === null) return;
+
+  const discoveredKeys = discoveredInventory.items.map(item => item.key);
+  const trackedKeys = entityInventoryKeysFromSignature(registered.discoveryEntitySignature);
+  const baselineKeys = trackedKeys ?? realtimeEntityInventoryKeys(registered, provider, realtimeEntities);
+
+  if (baselineKeys === null) return;
+
+  const current = new Set(discoveredKeys);
+  const baseline = new Set(baselineKeys);
+  const added = discoveredKeys.filter(key => !baseline.has(key));
+  const removed = baselineKeys.filter(key => !current.has(key));
+  if (!added.length && !removed.length) return;
+
+  const baselineCount = trackedKeys !== null
+    ? (registered.discoveryEntityCount ?? baselineKeys.length)
+    : baselineKeys.length;
+  const discoveredCount = discoveredInventory.count ?? discoveredKeys.length;
+  reasons.push(`Entities: ${baselineCount} → ${discoveredCount} (+${added.length} / -${removed.length})`);
+
+  const summarize = (values: string[]): string =>
+    values.length <= 6 ? values.join(", ") : `${values.slice(0, 6).join(", ")} (+${values.length - 6} more)`;
+  if (added.length) reasons.push(`Entities added: ${summarize(added)}`);
+  if (removed.length) reasons.push(`Entities removed: ${summarize(removed)}`);
+}
+
 function registryUpdateReasons(
   provider: string,
   discovered: Record<string, unknown>,
   registered: DeviceRegistryDevice,
   discoveryAgent: DeviceAgent | null,
   agentById: Map<string, DeviceAgent>,
-  devices: DeviceRegistryDevice[]
+  devices: DeviceRegistryDevice[],
+  realtimeEntities: RealtimeEntityRecord[]
 ): string[] {
   const reasons: string[] = [];
   const providerName = provider.toUpperCase();
@@ -273,10 +328,7 @@ function registryUpdateReasons(
   }
   if (model && (registered.model ?? "").trim() !== model) reasons.push(`Model: ${registered.model ?? "—"} → ${model}`);
   if (firmwareVersion && (registered.firmwareVersion ?? "").trim() !== firmwareVersion) reasons.push(`Firmware: ${registered.firmwareVersion ?? "—"} → ${firmwareVersion}`);
-  const entityInventory = discoveryEntityInventory(discovered);
-  if (entityInventory.signature !== null && registered.discoveryEntitySignature !== entityInventory.signature) {
-    reasons.push(`Entities: ${registered.discoveryEntityCount ?? "untracked"} → ${entityInventory.count ?? 0}`);
-  }
+  appendEntityInventoryReasons(reasons, discovered, registered, providerName, realtimeEntities);
   if (registered.controlProvider?.toUpperCase() !== providerName) reasons.push(`Provider: ${registered.controlProvider ?? "—"} → ${providerName}`);
   if (!registered.technologies.some(item => item.code.toUpperCase() === providerName)) reasons.push(`Technology: add ${providerName}`);
 
@@ -391,6 +443,11 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     refetchInterval: query => (query.state.data?.some(item => item.status === "SENT") ? 1000 : 5000)
   });
   const discardedQuery = useQuery({ queryKey: ["device-discovery-discarded"], queryFn: getDiscardedDeviceDiscoveries });
+  const realtimeEntitiesQuery = useQuery({
+    queryKey: ["device-control", "realtime-entities"],
+    queryFn: getRealtimeEntities,
+    refetchInterval: 5000
+  });
 
   const scanMutation = useMutation({
     mutationFn: async (provider: DiscoveryProvider | "ALL") => {
@@ -444,6 +501,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     ? allDiscoveries.filter(item => !hiddenDiscoveryCommandIds.has(item.commandId))
     : allDiscoveries;
   const discardedKeys = new Set((discardedQuery.data ?? []).map(item => `${item.provider.toUpperCase()}|${item.identityKey}`));
+  const realtimeEntities = realtimeEntitiesQuery.data ?? [];
 
   // Keep only the newest result for a logical device from each agent. A later scan must replace older rows.
   const latestPerAgent = new Map<string, RawDiscoveryRow>();
@@ -485,7 +543,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     for (const selected of selectedRows) {
       const discarded = discardedKeys.has(`${provider}|${selected.logicalKey}`);
       const mergedDevice = mergedDiscoveryDevice(sourceRows, selected);
-      const updateReasons = registered ? registryUpdateReasons(provider, mergedDevice, registered, selected.agent, agentById, devices) : [];
+      const updateReasons = registered ? registryUpdateReasons(provider, mergedDevice, registered, selected.agent, agentById, devices, realtimeEntities) : [];
       const exactCandidates = matchCandidates.filter(candidate => candidate.exact);
       const status: DiscoveryRowStatus = discarded
         ? "DISCARDED"
@@ -627,7 +685,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     const assigned = registered.controlAgent?.id ? sourceRowsForKey(groups, provider, row.logicalKey).find(item => item.discovery.agentId === registered.controlAgent?.id) : undefined;
     const candidate = assigned ?? row;
     const merged = mergedDiscoveryDevice(sourceRowsForKey(groups, provider, row.logicalKey), candidate);
-    return registryUpdateReasons(provider, merged, registered, candidate.agent, agentById, devices).length ? "UPDATE" as const : "REGISTERED" as const;
+    return registryUpdateReasons(provider, merged, registered, candidate.agent, agentById, devices, realtimeEntities).length ? "UPDATE" as const : "REGISTERED" as const;
   });
   const canAddCount = logicalStatuses.filter(item => item === "CAN_ADD").length;
   const possibleCount = logicalStatuses.filter(item => item === "POSSIBLE").length;
@@ -929,20 +987,9 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
               const agentNames = row.sourceRows.map(source => source.agent?.name ?? source.discovery.agentId);
               const primaryAgentName = row.agent?.name ?? row.discovery.agentId;
               const primaryAgentVersion = row.agent?.version ?? null;
-              const agentUpdateStatus = row.agent?.updateStatus ?? "IDLE";
-              const agentUpdateLabel = agentUpdateStatus === "IDLE"
-                ? (row.agent?.supervisorAvailable ? "READY" : "NO SUPERVISOR")
-                : agentUpdateStatus;
-              const agentUpdateColor = agentUpdateStatus === "FAILED"
-                ? "red"
-                : agentUpdateStatus === "UPDATED"
-                  ? "green"
-                  : ["UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agentUpdateStatus)
-                    ? "blue"
-                    : row.agent?.supervisorAvailable
-                      ? "teal"
-                      : "gray";
-              const agentLabel = <Stack gap={2}><Text size="sm">{primaryAgentName}{row.sourceRows.length > 1 && !showDuplicateAgents ? ` (${row.sourceRows.length - 1} other${row.sourceRows.length > 2 ? "s" : ""})` : ""}</Text><Text size="xs" c="dimmed">{primaryAgentVersion ?? "—"}</Text><Badge size="xs" variant="light" color={agentUpdateColor}>{agentUpdateLabel}</Badge></Stack>;
+              const agentStatusLabel = row.agent?.online ? "ONLINE" : row.agent?.enabled ? "OFFLINE" : "DISABLED";
+              const agentStatusColor = row.agent?.online ? "green" : row.agent?.enabled ? "gray" : "red";
+              const agentLabel = <Stack gap={2}><Text size="sm">{primaryAgentName}{row.sourceRows.length > 1 && !showDuplicateAgents ? ` (${row.sourceRows.length - 1} other${row.sourceRows.length > 2 ? "s" : ""})` : ""}</Text><Group gap={6} wrap="nowrap"><Text size="xs" c="dimmed">{primaryAgentVersion ?? "—"}</Text><Badge size="xs" variant="light" color={agentStatusColor}>{agentStatusLabel}</Badge></Group></Stack>;
               const agentContent = row.sourceRows.length > 1 && !showDuplicateAgents
                 ? <Tooltip multiline label={<>Discovered by {row.sourceRows.length} agents:<br />{agentNames.join(" · ")}</>}><span style={{ cursor: "help" }}>{agentLabel}</span></Tooltip>
                 : agentLabel;
@@ -1102,7 +1149,8 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
             candidate.device,
             selectedSource.agent,
             agentById,
-            devices
+            devices,
+            realtimeEntities
           );
           return <Card withBorder padding="sm">
             <Stack gap={4}>

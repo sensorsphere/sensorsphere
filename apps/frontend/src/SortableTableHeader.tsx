@@ -13,21 +13,25 @@ interface SortableTableHeaderProps {
   direction: SortDirection;
   onClick: () => void;
   children: React.ReactNode;
+  style?: React.CSSProperties;
+  align?: "left" | "right";
 }
 
 export function SortableTableHeader({
   active,
   direction,
   onClick,
-  children
+  children,
+  style,
+  align = "left"
 }: SortableTableHeaderProps) {
   return (
     <Table.Th
       onClick={onClick}
-      style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+      style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", textAlign: align, ...style }}
       aria-sort={active ? (direction === "asc" ? "ascending" : "descending") : "none"}
     >
-      <Group gap={5} wrap="nowrap">
+      <Group gap={5} wrap="nowrap" justify={align === "right" ? "flex-end" : undefined}>
         <Text component="span" size="sm" fw={600}>{children}</Text>
         <Text component="span" size="xs" c={active ? "blue" : "dimmed"}>
           {active ? (direction === "asc" ? "↑" : "↓") : "↕"}

@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.110.0";
+export const MODULE_VERSION = "1.110.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.110.1": {
+    releasedAt: "2026-09-30T16:25:00Z",
+    patch: "PR-309-discovery-entity-diff-entity-browser-polish.patch",
+    changes: [
+      { type: "fixed", description: "Compare Discovery entity inventory against tracked or realtime Registry entities and show precise added/removed entity differences instead of untracked counts" },
+      { type: "changed", description: "Align Discovery Agent status badges with the Agents table and place version plus status on one line" },
+      { type: "changed", description: "Widen Entity Device, narrow and right-align Unit, right-align State, and fix Last seen width with sub-minute wording" }
+    ]
+  },
   "1.110.0": {
     releasedAt: "2026-09-30T14:55:12Z",
     patch: "PR-308-entities-discovery-filtering-scroll-entity-drift.patch",

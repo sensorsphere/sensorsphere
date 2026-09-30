@@ -47,7 +47,7 @@ function compactDate(value: string | null | undefined): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   const seconds = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
-  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 60) return "less than one minute";
   if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.round(seconds / 3600)}h ago`;
   return `${Math.round(seconds / 86400)}d ago`;
@@ -210,14 +210,14 @@ export function RealtimeEntityBrowser() {
                   />
                 </Table.Th>
                 <Table.Th aria-label="Icon" style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }} />
-                <SortableTableHeader active={sortKey === "device"} direction={sortDirection} onClick={() => toggleSort("device")}>Device</SortableTableHeader>
+                <SortableTableHeader active={sortKey === "device"} direction={sortDirection} onClick={() => toggleSort("device")} style={{ width: 320, minWidth: 320 }}>Device</SortableTableHeader>
                 <SortableTableHeader active={sortKey === "entity"} direction={sortDirection} onClick={() => toggleSort("entity")}>Entity</SortableTableHeader>
                 <SortableTableHeader active={sortKey === "type"} direction={sortDirection} onClick={() => toggleSort("type")}>Type</SortableTableHeader>
-                <SortableTableHeader active={sortKey === "state"} direction={sortDirection} onClick={() => toggleSort("state")}>State</SortableTableHeader>
-                <SortableTableHeader active={sortKey === "unit"} direction={sortDirection} onClick={() => toggleSort("unit")}>Unit</SortableTableHeader>
+                <SortableTableHeader active={sortKey === "state"} direction={sortDirection} onClick={() => toggleSort("state")} align="right">State</SortableTableHeader>
+                <SortableTableHeader active={sortKey === "unit"} direction={sortDirection} onClick={() => toggleSort("unit")} align="right" style={{ width: 90, minWidth: 90, maxWidth: 90 }}>Unit</SortableTableHeader>
                 <SortableTableHeader active={sortKey === "provider"} direction={sortDirection} onClick={() => toggleSort("provider")}>Provider</SortableTableHeader>
                 <SortableTableHeader active={sortKey === "controllable"} direction={sortDirection} onClick={() => toggleSort("controllable")}>Actions</SortableTableHeader>
-                <SortableTableHeader active={sortKey === "updated"} direction={sortDirection} onClick={() => toggleSort("updated")}>Last update</SortableTableHeader>
+                <SortableTableHeader active={sortKey === "updated"} direction={sortDirection} onClick={() => toggleSort("updated")} style={{ width: 150, minWidth: 150, maxWidth: 150 }}>Last seen</SortableTableHeader>
                 <Table.Th>Dashboard</Table.Th>
               </Table.Tr>
               <Table.Tr style={{ position: "sticky", top: 39, zIndex: 3, background: "var(--mantine-color-body)" }}>
@@ -239,7 +239,7 @@ export function RealtimeEntityBrowser() {
                 <Table.Tr key={`${entity.deviceId}:${entity.entityValue}`}>
                   <Table.Td style={{ width: 34, minWidth: 34, maxWidth: 34, paddingInline: 6 }}><Checkbox size="xs" aria-label={`Select ${entity.entityName}`} checked={selectedEntityKeys.includes(entitySelectionKey(entity))} onChange={event => setSelectedEntityKeys(current => event.currentTarget.checked ? [...new Set([...current, entitySelectionKey(entity)])] : current.filter(key => key !== entitySelectionKey(entity)))} /></Table.Td>
                   <Table.Td style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }}><ResolvedIconGlyph resolved={resolveEntityIcon(entity)} size={20} /></Table.Td>
-                  <Table.Td style={{ cursor: "pointer" }} title="Filter by device" onClick={() => setDeviceFilter(entity.deviceName)}>
+                  <Table.Td style={{ cursor: "pointer", width: 320, minWidth: 320 }} title="Filter by device" onClick={() => setDeviceFilter(entity.deviceName)}>
                     <Text size="sm" fw={600}>{entity.deviceName}</Text>
                     <Text size="xs" c="dimmed">{entity.host ?? entity.agentName ?? "—"}</Text>
                   </Table.Td>
@@ -248,11 +248,11 @@ export function RealtimeEntityBrowser() {
                     <Text size="xs" c="dimmed" style={{ cursor: "pointer" }} title="Filter by entity ID" onClick={() => setEntityFilter(entity.entityValue)}>{entity.entityValue}</Text>
                   </Table.Td>
                   <Table.Td><Badge variant="outline" size="sm" style={{ cursor: "pointer" }} title="Filter by type" onClick={() => setTypeFilter(entity.entityType)}>{entity.entityType.replaceAll("_", " ").toUpperCase()}</Badge></Table.Td>
-                  <Table.Td><Badge variant="light" color={stateColor(entity)} style={{ cursor: "pointer" }} title="Filter by state" onClick={() => setStateFilter(stateLabel(entity))}>{stateLabel(entity)}</Badge></Table.Td>
-                  <Table.Td><Text size="sm" style={{ cursor: entity.unit ? "pointer" : undefined }} title={entity.unit ? "Filter by unit" : undefined} onClick={() => entity.unit && setUnitFilter(entity.unit)}>{entity.unit ?? "—"}</Text></Table.Td>
+                  <Table.Td style={{ textAlign: "right" }}><Badge variant="light" color={stateColor(entity)} style={{ cursor: "pointer" }} title="Filter by state" onClick={() => setStateFilter(stateLabel(entity))}>{stateLabel(entity)}</Badge></Table.Td>
+                  <Table.Td style={{ textAlign: "right", width: 90, minWidth: 90, maxWidth: 90 }}><Text size="sm" ta="right" style={{ cursor: entity.unit ? "pointer" : undefined }} title={entity.unit ? "Filter by unit" : undefined} onClick={() => entity.unit && setUnitFilter(entity.unit)}>{entity.unit ?? "—"}</Text></Table.Td>
                   <Table.Td><Badge variant="outline" color={entity.connected ? "green" : "gray"} style={{ cursor: "pointer" }} title="Filter by provider" onClick={() => setProviderFilter(entity.provider)}>{entity.provider}</Badge></Table.Td>
                   <Table.Td><Text size="sm" c={entity.controllable ? undefined : "dimmed"} style={{ cursor: "pointer" }} title="Filter by actionability" onClick={() => setControllableFilter(entity.controllable ? "actionable" : "readonly")}>{entity.controllable ? "Actionable" : "Read-only"}</Text></Table.Td>
-                  <Table.Td title={entity.observedAt}><Text size="sm">{compactDate(entity.observedAt)}</Text></Table.Td>
+                  <Table.Td title={entity.observedAt} style={{ width: 150, minWidth: 150, maxWidth: 150, whiteSpace: "nowrap" }}><Text size="sm">{compactDate(entity.observedAt)}</Text></Table.Td>
                   <Table.Td>
                     <ActionIcon
                       size="sm"
