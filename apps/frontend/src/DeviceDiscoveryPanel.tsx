@@ -403,6 +403,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const [selectedRowKeys, setSelectedRowKeys] = React.useState<string[]>([]);
   const [bulkAction, setBulkAction] = React.useState<"ADD" | "SLOT" | null>(null);
   const [bulkSlotId, setBulkSlotId] = React.useState<string | null>("__DISCOVERED_SLOT__");
+  const [bulkSlotDropdownOpened, setBulkSlotDropdownOpened] = React.useState(false);
   const [bulkError, setBulkError] = React.useState<string | null>(null);
 
   const agentsQuery = useQuery({ queryKey: ["device-agents"], queryFn: getDeviceAgents, refetchInterval: 5000 });
@@ -817,6 +818,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
         disabled={selectedAddRows.length === 0}
         onClick={() => {
           setBulkSlotId("__DISCOVERED_SLOT__");
+          setBulkSlotDropdownOpened(false);
           setBulkError(null);
           setBulkAction("ADD");
         }}
@@ -1000,7 +1002,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
 
     <Modal
       opened={bulkAction != null}
-      onClose={() => { setBulkAction(null); setBulkError(null); }}
+      onClose={() => { setBulkAction(null); setBulkError(null); setBulkSlotDropdownOpened(false); }}
       title={bulkAction === "ADD" ? `Add ${selectedAddRows.length} discovered device${selectedAddRows.length === 1 ? "" : "s"}` : `Assign Slot to ${selectedRegisteredRows.length} registered device${selectedRegisteredRows.length === 1 ? "" : "s"}`}
       centered
     >
@@ -1016,7 +1018,18 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
           clearable={bulkAction !== "ADD"}
           placeholder="No Slot"
           value={bulkSlotId}
-          onChange={setBulkSlotId}
+          dropdownOpened={bulkSlotDropdownOpened}
+          onDropdownClose={() => setBulkSlotDropdownOpened(false)}
+          onClick={() => setBulkSlotDropdownOpened(true)}
+          onKeyDown={event => {
+            if (["ArrowDown", "Enter", " "].includes(event.key)) setBulkSlotDropdownOpened(true);
+            if (event.key === "Escape") setBulkSlotDropdownOpened(false);
+          }}
+          onChange={value => {
+            setBulkSlotId(value);
+            setBulkError(null);
+            setBulkSlotDropdownOpened(false);
+          }}
           data={bulkAction === "ADD"
             ? [
                 { value: "__DISCOVERED_SLOT__", label: "Assign to discovered slot" },

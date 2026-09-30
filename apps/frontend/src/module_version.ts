@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.107.0";
+export const MODULE_VERSION = "1.107.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.107.1": {
+    releasedAt: "2026-09-30T12:32:00Z",
+    patch: "PR-305-discovery-bulk-add-validation-dropdown.patch",
+    changes: [
+      { type: "fixed", description: "Prevent the Discovery bulk Slot combobox from reopening after a selection or validation error" },
+      { type: "fixed", description: "Clear the previous bulk-add error immediately when the Device Agent Slot selection changes" },
+      { type: "fixed", description: "Use a valid configured IOT Device Type fallback for discovered devices when no preferred type matches, avoiding empty deviceType validation errors" },
+      { type: "changed", description: "Show an explicit Device Type configuration error before import if no valid fallback exists" }
+    ]
+  },
   "1.107.0": {
     releasedAt: "2026-09-30T12:18:00Z",
     patch: "PR-304-runtime-reconcile-preview-discovery-focus.patch",

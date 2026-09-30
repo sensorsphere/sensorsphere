@@ -1073,7 +1073,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           ? (discoveredName || (vmid ? `${proxmoxKind}-${vmid}` : node) || "Proxmox")
           : (discoveredName || hostname || "ESPHome"),
       deviceClass: providerName === "PROXMOX" ? proxmoxDeviceClass : "IOT",
-      deviceType: providerName === "PROXMOX" ? proxmoxDeviceType : preferredType?.code ?? "",
+      deviceType: providerName === "PROXMOX" ? proxmoxDeviceType : preferredType?.code ?? typeCandidates[0]?.code ?? "",
       technologies: [provider.toLowerCase()],
       identities,
       manufacturer: providerName === "YEELIGHT" ? "Yeelight" : providerName === "PROXMOX" ? "Proxmox" : "ESPHome",
@@ -1111,6 +1111,9 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     const knownDevices = [...devices];
     for (const request of orderedRequests) {
       const form = discoveredDeviceForm(request, knownDevices);
+      if (!form.deviceType.trim()) {
+        throw new Error(`No valid Device Type is configured for discovered device ${form.name || "without name"} (${request.provider}). Configure at least one matching Device Type before importing it.`);
+      }
       const resolvedSlotId = slotId === "__DISCOVERED_SLOT__"
         ? request.agent.slotId
         : slotId === "__NO_SLOT__"
