@@ -65,18 +65,20 @@ function authSettings() {
 }
 
 
+export function canDisableAuthentication(environment: string): boolean {
+  const normalizedEnvironment = environment.trim().toUpperCase();
+  return normalizedEnvironment === "DEV"
+    || normalizedEnvironment.startsWith("TEST")
+    || normalizedEnvironment.startsWith("TST");
+}
+
 function validateAuthStartupConfiguration(): void {
   const settings = authSettings();
   const environment = (process.env.SENSORSPHERE_ENVIRONMENT ?? "DEFAULT")
     .trim()
     .toUpperCase();
 
-  const unauthenticatedEnvironmentAllowed =
-    environment === "DEV"
-    || environment.startsWith("TEST")
-    || environment.startsWith("TST");
-
-  if (!unauthenticatedEnvironmentAllowed && !settings.enabled) {
+  if (!canDisableAuthentication(environment) && !settings.enabled) {
     throw new Error(
       `Authentication cannot be disabled when SENSORSPHERE_ENVIRONMENT=${environment}`
     );
