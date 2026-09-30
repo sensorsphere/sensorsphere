@@ -402,7 +402,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const [selectedRegistryDeviceId, setSelectedRegistryDeviceId] = React.useState<string | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = React.useState<string[]>([]);
   const [bulkAction, setBulkAction] = React.useState<"ADD" | "SLOT" | null>(null);
-  const [bulkSlotId, setBulkSlotId] = React.useState<string | null>(null);
+  const [bulkSlotId, setBulkSlotId] = React.useState<string | null>("__DISCOVERED_SLOT__");
   const [bulkError, setBulkError] = React.useState<string | null>(null);
 
   const agentsQuery = useQuery({ queryKey: ["device-agents"], queryFn: getDeviceAgents, refetchInterval: 5000 });
@@ -816,8 +816,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
         color="green"
         disabled={selectedAddRows.length === 0}
         onClick={() => {
-          const slotIds = [...new Set(selectedAddRows.map(row => row.agent?.slotId).filter((value): value is string => Boolean(value)))];
-          setBulkSlotId(slotIds.length === 1 ? slotIds[0]! : null);
+          setBulkSlotId("__DISCOVERED_SLOT__");
           setBulkError(null);
           setBulkAction("ADD");
         }}
@@ -1008,20 +1007,29 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       <Stack gap="md">
         <Text size="sm" c="dimmed">
           {bulkAction === "ADD"
-            ? "The selected discoveries will be added with the same Device Agent Slot. Clear the field to add them without a Slot."
+            ? "By default, each discovered device is assigned to the Device Agent Slot of the Agent that discovered it. You can instead force all selected devices to one Slot or choose No Slot."
             : "The selected Registry devices will be reassigned to the same Device Agent Slot. Clear the field to remove their Slot assignment."}
         </Text>
         <Select
           label="Device Agent Slot"
           searchable
-          clearable
+          clearable={bulkAction !== "ADD"}
           placeholder="No Slot"
           value={bulkSlotId}
           onChange={setBulkSlotId}
-          data={(slotsQuery.data ?? []).map(slot => ({
-            value: slot.id,
-            label: `${slot.name} · ${slot.bound ? slot.agentName ?? "BOUND" : "UNBOUND"}`
-          }))}
+          data={bulkAction === "ADD"
+            ? [
+                { value: "__DISCOVERED_SLOT__", label: "Assign to discovered slot" },
+                { value: "__NO_SLOT__", label: "No Slot" },
+                ...(slotsQuery.data ?? []).map(slot => ({
+                  value: slot.id,
+                  label: `${slot.name} · ${slot.bound ? slot.agentName ?? "BOUND" : "UNBOUND"}`
+                }))
+              ]
+            : (slotsQuery.data ?? []).map(slot => ({
+                value: slot.id,
+                label: `${slot.name} · ${slot.bound ? slot.agentName ?? "BOUND" : "UNBOUND"}`
+              }))}
         />
         {bulkError && <Text size="sm" c="red">{bulkError}</Text>}
         <Group justify="flex-end">

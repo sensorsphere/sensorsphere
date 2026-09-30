@@ -1111,7 +1111,15 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     const knownDevices = [...devices];
     for (const request of orderedRequests) {
       const form = discoveredDeviceForm(request, knownDevices);
-      const created = await createDeviceRegistryDevice(deviceFormPayload({ ...form, controlSlotId: slotId, controlAgentId: null }));
+      const resolvedSlotId = slotId === "__DISCOVERED_SLOT__"
+        ? request.agent.slotId
+        : slotId === "__NO_SLOT__"
+          ? null
+          : slotId;
+      if (slotId === "__DISCOVERED_SLOT__" && !resolvedSlotId) {
+        throw new Error(`Device Agent ${request.agent.name} has no Device Agent Slot; cannot assign discovered device ${form.name || "without name"} automatically`);
+      }
+      const created = await createDeviceRegistryDevice(deviceFormPayload({ ...form, controlSlotId: resolvedSlotId, controlAgentId: null }));
       knownDevices.push(created);
     }
     await refresh();

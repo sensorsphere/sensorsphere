@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.105.0";
+export const MODULE_VERSION = "1.106.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.106.0": {
+    releasedAt: "2026-09-30T12:00:33Z",
+    patch: "PR-303-runtime-operations-recovery-discovery-slot.patch",
+    changes: [
+      { type: "added", description: "Add Assign to discovered slot as the default bulk Discovery import mode and resolve each device Slot from the Device Agent that discovered it" },
+      { type: "added", description: "Add Reconcile selected for actionable DRIFT and MISSING runtimes with sequential safe reconciliation" },
+      { type: "changed", description: "Show the latest managed runtime operation, error and resulting reconciliation state directly in the Runtime Inspector" },
+      { type: "added", description: "Allow safe retry of failed or timed-out runtime UPDATE operations and manual Supervisor-state refresh for ERROR runtimes" }
+    ]
+  },
   "1.105.0": {
     releasedAt: "2026-09-30T11:35:00Z",
     patch: "PR-302-complete-runtime-remediation.patch",

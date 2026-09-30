@@ -1,5 +1,5 @@
 import React from "react";
-import { ActionIcon, Badge, Button, Card, Code, Group, Indicator, Modal, NumberInput, Select, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Button, Card, Checkbox, Code, Group, Indicator, Modal, NumberInput, Select, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AgentVersionFreshnessBadge, getAgentVersionAvailability, UpdateLifecycleAge } from "./AgentVersionAvailability";
 import { DeleteActionIcon, EditActionIcon, ReinstallCommandActionIcon } from "./TableActionIcons";
@@ -435,6 +435,8 @@ export function SupervisorAgentsPanel() {
   const [managedRuntimeTarget, setManagedRuntimeTarget] = React.useState<AutonomousSupervisorAgent | null>(null);
   const [managedRuntimeFilter, setManagedRuntimeFilter] = React.useState<string | null>(null);
   const [globalRuntimeIssueFilter, setGlobalRuntimeIssueFilter] = React.useState<string | null>(null);
+  const [selectedManagedRuntimeKeys, setSelectedManagedRuntimeKeys] = React.useState<string[]>([]);
+  const [bulkReconcileError, setBulkReconcileError] = React.useState<string | null>(null);
   const [deprovisionTarget, setDeprovisionTarget] = React.useState<{ supervisor: AutonomousSupervisorAgent; agentType: "device-agent" | "monitor-agent"; instance: string; name: string } | null>(null);
   const [cleanupRuntimeTarget, setCleanupRuntimeTarget] = React.useState<{ supervisor: AutonomousSupervisorAgent; agentType: "device-agent" | "monitor-agent"; instance: string; name: string; installDir: string } | null>(null);
   const [repairRuntimeTarget, setRepairRuntimeTarget] = React.useState<{ supervisor: AutonomousSupervisorAgent; agentType: "device-agent" | "monitor-agent"; agentId: string; instance: string; name: string; installDir: string; version: string; reasons: string[] } | null>(null);
@@ -919,6 +921,58 @@ export function SupervisorAgentsPanel() {
   const filteredManagedRuntimeRows = managedRuntimeFilter
     ? managedRuntimeRows.filter(row => row.diagnostic.status === managedRuntimeFilter)
     : managedRuntimeRows;
+  const managedRuntimeKey = (entry: Record<string, unknown>, index: number) => {
+    const association = managedAssociation(entry);
+    const fallbackIdentity = managedString(association, "agent_id")
+      ?? (typeof entry.install_dir === "string" ? entry.install_dir : String(index));
+    return managedString(association, "management_id")
+      ?? `${typeof entry.agent_type === "string" ? entry.agent_type : "agent"}:${typeof entry.instance === "string" ? entry.instance : "main"}:${fallbackIdentity}`;
+  };
+  const actionableManagedRuntimeRows = managedRuntimeRows
+    .map((row, index) => ({ ...row, index, key: managedRuntimeKey(row.entry, index) }))
+    .filter(row => ["DRIFT", "MISSING"].includes(row.diagnostic.status));
+  const selectedActionableRuntimeRows = actionableManagedRuntimeRows.filter(row => selectedManagedRuntimeKeys.includes(row.key));
+
+  const bulkReconcileMutation = useMutation({
+    mutationFn: async () => {
+      if (!trackedManagedRuntimeTarget) throw new Error("No Supervisor Agent selected");
+      setBulkReconcileError(null);
+      let completed = 0;
+      for (const row of selectedActionableRuntimeRows) {
+        const entry = row.entry;
+        const association = managedAssociation(entry);
+        const type = typeof entry.agent_type === "string" ? entry.agent_type : "";
+        if (type !== "device-agent" && type !== "monitor-agent") throw new Error("Unsupported Agent type");
+        const instance = typeof entry.instance === "string" ? entry.instance : "main";
+        const name = typeof entry.agent_name === "string" ? entry.agent_name : instance;
+        const agentId = managedString(association, "agent_id") ?? (typeof entry.sensor_sphere_agent_id === "string" ? entry.sensor_sphere_agent_id : null);
+        const runtimeInstallDir = typeof entry.install_dir === "string" ? entry.install_dir : null;
+        const runtimeVersion = typeof entry.configured_version === "string" ? entry.configured_version : null;
+        const desiredVersion = managedString(association, "desired_version");
+        const reportedVersion = managedString(association, "reported_version");
+        const version = desiredVersion ?? reportedVersion ?? runtimeVersion;
+        if (!agentId || !version) throw new Error(`${name}: Agent identity or target version is missing`);
+
+        if (row.diagnostic.status === "MISSING") {
+          await reinstallMissingRuntimeMutation.mutateAsync({ supervisor: trackedManagedRuntimeTarget, agentType: type, agentId, instance, name, version });
+        } else if (hasStructuralRuntimeDrift(entry)) {
+          if (!runtimeInstallDir) throw new Error(`${name}: runtime install_dir is missing`);
+          await repairRuntimeMutation.mutateAsync({ supervisor: trackedManagedRuntimeTarget, agentType: type, agentId, instance, name, installDir: runtimeInstallDir, version, reasons: row.diagnostic.reasons });
+        } else if (runtimeVersion && desiredVersion && runtimeVersion !== desiredVersion) {
+          await managedRuntimeUpdateMutation.mutateAsync({ supervisor: trackedManagedRuntimeTarget, agentType: type, agentId, instance, version: desiredVersion, name });
+        } else {
+          throw new Error(`${name}: no safe automatic reconciliation action is available`);
+        }
+        completed += 1;
+      }
+      return completed;
+    },
+    onSuccess: async () => {
+      setSelectedManagedRuntimeKeys([]);
+      await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"], refetchType: "active" });
+    },
+    onError: error => setBulkReconcileError(error instanceof Error ? error.message : "Unable to reconcile selected runtimes")
+  });
 
   React.useEffect(() => {
     if (!autonomousUpdateTarget || !autonomousUpdateMutation.isSuccess) return;
@@ -1102,7 +1156,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
               <Table.Td><Text size="sm">{agent.version ?? "—"}</Text>{["REQUESTED", "UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus) ? <><Tooltip label={agent.updateError ?? `Supervisor update lifecycle: ${lifecycle.label}`}><Badge size="xs" variant="light" color={lifecycle.color}>{lifecycle.label}</Badge></Tooltip><UpdateLifecycleAge status={agent.updateStatus} timestamp={agent.updateStartedAt ?? agent.updateRequestedAt} />{agent.desiredVersion && <Text size="xs" c="dimmed">Target {agent.desiredVersion}</Text>}</> : <>{agent.updateStatus !== "FAILED" && <AgentVersionFreshnessBadge installedVersion={agent.version} release={versionsQuery.data?.agents?.supervisorAgent} />}{agent.updateStatus === "FAILED" && <Tooltip label={agent.updateError ?? "Supervisor update failed"}><Badge size="xs" variant="light" color="red">FAILED</Badge></Tooltip>}{agent.lastSuccessfulUpdateAt && <Text size="xs" c="dimmed" title={agent.lastSuccessfulUpdateAt}>Updated {relativeAge(agent.lastSuccessfulUpdateAt)}</Text>}</>}</Table.Td>
               <Table.Td><AgentSystemCell os={agent.os} osVersion={agent.osVersion} architecture={agent.architecture} /></Table.Td><Table.Td><HostNetworkCell networks={agent.hostNetworks} /></Table.Td>
               <Table.Td title={agent.lastSeenAt ?? undefined}><Text size="sm">{relativeAge(agent.lastSeenAt)}</Text></Table.Td>
-              <Table.Td>{agent.managedAgents.length > 0 ? <Group gap={6} wrap="nowrap" align="center" style={{ minHeight: 28 }}>{agent.managedAgents.filter(entry => entry.installed !== false).map(managedAgentIcon)}<Tooltip label={runtimeIssueTotal > 0 ? `Managed Runtime Inspector · ${runtimeIssueTotal} issue${runtimeIssueTotal === 1 ? "" : "s"} (${runtimeIssueDetails})` : "Managed Runtime Inspector · no issues"}><span style={{ display: "inline-flex", alignItems: "center", flex: "0 0 auto" }}><Indicator disabled={runtimeIssueTotal === 0} label={runtimeIssueTotal} size={16} color={(runtimeIssueCounts.ERROR ?? 0) > 0 ? "red" : "orange"} offset={2}><ActionIcon size="sm" variant="light" color={runtimeIssueTotal > 0 ? "orange" : "blue"} aria-label={runtimeIssueTotal > 0 ? `Managed Runtime Inspector, ${runtimeIssueTotal} issues` : "Managed Runtime Inspector"} onClick={() => { setManagedRuntimeFilter(null); setManagedRuntimeTarget(agent); }}><ManagedRuntimeIcon size={16} /></ActionIcon></Indicator></span></Tooltip></Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
+              <Table.Td>{agent.managedAgents.length > 0 ? <Group gap={6} wrap="nowrap" align="center" style={{ minHeight: 28 }}>{agent.managedAgents.filter(entry => entry.installed !== false).map(managedAgentIcon)}<Tooltip label={runtimeIssueTotal > 0 ? `Managed Runtime Inspector · ${runtimeIssueTotal} issue${runtimeIssueTotal === 1 ? "" : "s"} (${runtimeIssueDetails})` : "Managed Runtime Inspector · no issues"}><span style={{ display: "inline-flex", alignItems: "center", flex: "0 0 auto" }}><Indicator disabled={runtimeIssueTotal === 0} label={runtimeIssueTotal} size={16} color={(runtimeIssueCounts.ERROR ?? 0) > 0 ? "red" : "orange"} offset={2}><ActionIcon size="sm" variant="light" color={runtimeIssueTotal > 0 ? "orange" : "blue"} aria-label={runtimeIssueTotal > 0 ? `Managed Runtime Inspector, ${runtimeIssueTotal} issues` : "Managed Runtime Inspector"} onClick={() => { setManagedRuntimeFilter(null); setSelectedManagedRuntimeKeys([]); setBulkReconcileError(null); setManagedRuntimeTarget(agent); }}><ManagedRuntimeIcon size={16} /></ActionIcon></Indicator></span></Tooltip></Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
 
               <Table.Td>{agent.agentLabels.length > 0 ? <Group gap={4} wrap="wrap">{agent.agentLabels.map(label => <Badge key={label} size="xs" variant="light" color="cyan">{label}</Badge>)}</Group> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
               <Table.Td><Group gap={4} wrap="nowrap" justify="flex-end">{explicitlyManaged(agent, "device-agent") ? <Tooltip label="Deprovision Device Agent"><ActionIcon size="sm" variant="light" color="red" aria-label="Deprovision Device Agent" disabled={!agent.online} onClick={() => { const entry = reportedManagedEntry(agent, "device-agent")!; setDeprovisionTarget({ supervisor: agent, agentType: "device-agent", instance: typeof entry.instance === "string" ? entry.instance : "main", name: typeof entry.agent_name === "string" ? entry.agent_name : agent.name }); }}><DeprovisionAgentIcon /></ActionIcon></Tooltip> : <Tooltip label={!agent.online ? "Supervisor Agent must be online" : discoveredUnmanaged(agent, "device-agent") ? "Replace unmanaged local Device Agent installation" : "Deploy Device Agent"}><ActionIcon size="sm" variant="light" color="cyan" aria-label="Deploy Device Agent" disabled={!agent.online} onClick={() => { setDeployTarget(agent); setDeployAgentType("device-agent"); setDeployInstance("main"); setDeployAgentName(agent.name); setDeployDeviceSlotMode("new"); setDeployDeviceSlotId(null); setDeployDeviceSlotName(agent.name); setDeployVersion(latestDeviceAgentVersion !== "latest" ? latestDeviceAgentVersion : ""); setDeployStatus("IDLE"); setDeployError(null); setDialogActionDetails(null); deployDeviceAgentMutation.reset(); }}><DeployAgentIcon /></ActionIcon></Tooltip>}{explicitlyManaged(agent, "monitor-agent") && <Tooltip label="Deprovision Monitoring Agent main"><ActionIcon size="sm" variant="light" color="red" aria-label="Deprovision Monitoring Agent main" disabled={!agent.online} onClick={() => { const entry = reportedManagedEntry(agent, "monitor-agent")!; setDeprovisionTarget({ supervisor: agent, agentType: "monitor-agent", instance: typeof entry.instance === "string" ? entry.instance : "main", name: typeof entry.agent_name === "string" ? entry.agent_name : `${agent.name}-monitor` }); }}><DeprovisionAgentIcon /></ActionIcon></Tooltip>}{(() => { const missing = missingManagedEntry(agent, "monitor-agent"); const missingInstance = missing && typeof missing.instance === "string" ? missing.instance : null; const instance = missingInstance ?? nextMonitoringInstance(agent); const missingName = missing && typeof missing.agent_name === "string" ? missing.agent_name : null; const label = !agent.online ? "Supervisor Agent must be online" : missingInstance ? `Reinstall missing Monitoring Agent ${missingInstance}` : "Deploy new Monitoring Agent instance"; return <Tooltip label={label}><ActionIcon size="sm" variant="light" color={missingInstance ? "orange" : "violet"} aria-label={missingInstance ? `Reinstall Monitoring Agent ${missingInstance}` : "Deploy new Monitoring Agent instance"} disabled={!agent.online} onClick={() => { setDeployTarget(agent); setDeployAgentType("monitor-agent"); setDeployInstance(instance); setDeployAgentName(missingName ?? defaultMonitoringAgentName(agent, instance)); setDeploySlotMode("new"); setDeploySlotId(null); setDeploySlotName(missingName ?? defaultMonitoringAgentName(agent, instance)); setDeployVersion(latestMonitoringAgentVersion !== "latest" ? latestMonitoringAgentVersion : ""); setDeployStatus("IDLE"); setDeployError(null); setDialogActionDetails(null); deployMonitoringAgentMutation.reset(); }}><DeployAgentIcon /></ActionIcon></Tooltip>; })()}<Tooltip label={agent.selfUpdateSupported ? "Update Supervisor Agent" : "Supervisor self-update unavailable"}><ActionIcon size="sm" variant="light" color="teal" aria-label="Update Supervisor Agent" disabled={!agent.online || !agent.selfUpdateSupported || ["REQUESTED", "UPDATE_REQUESTED", "UPDATING", "VERIFYING"].includes(agent.updateStatus)} onClick={() => { setAutonomousUpdateTarget(agent); setUpdateVersion(latestSupervisorVersion !== "latest" ? latestSupervisorVersion : agent.version ?? ""); autonomousUpdateMutation.reset(); }}><SupervisorUpdateIcon /></ActionIcon></Tooltip><EditActionIcon onClick={() => { setEditTarget(agent); setEditName(agent.name); setEditEnabled(agent.enabled); setEditHeartbeatTimeout(agent.heartbeatTimeoutSeconds); setEditLabelsText(labelsText(agent.labels)); editMutation.reset(); }} /><Tooltip label="Copy supervisor agent"><ActionIcon size="sm" variant="light" color="green" aria-label="Copy supervisor agent" onClick={() => copyMutation.mutate(agent)}>⧉</ActionIcon></Tooltip><Tooltip label="Check configured token"><ActionIcon size="sm" variant="light" color="teal" aria-label="Check configured token" onClick={() => checkTokenMutation.mutate(agent)}><CheckTokenIcon /></ActionIcon></Tooltip><Tooltip label="Regenerate agent token"><ActionIcon size="sm" variant="light" color="orange" aria-label="Regenerate agent token" onClick={() => regenerateMutation.mutate(agent)}>↻</ActionIcon></Tooltip><ReinstallCommandActionIcon onClick={() => reinstallMutation.mutate(agent)} loading={reinstallMutation.isPending && reinstallMutation.variables?.id === agent.id} /><DeleteActionIcon onClick={() => setDeleteTarget(agent)} /></Group></Table.Td>
@@ -1118,7 +1172,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
 
     <Modal
       opened={managedRuntimeTarget != null}
-      onClose={() => { setManagedRuntimeTarget(null); setManagedRuntimeFilter(null); }}
+      onClose={() => { setManagedRuntimeTarget(null); setManagedRuntimeFilter(null); setSelectedManagedRuntimeKeys([]); setBulkReconcileError(null); }}
       title={`Managed Runtime Inspector${trackedManagedRuntimeTarget ? ` · ${trackedManagedRuntimeTarget.name}` : ""}`}
       size="min(96vw, 1248px)"
       centered
@@ -1175,8 +1229,25 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
             </Stack>
           </Card>
         )}
+        {trackedManagedRuntimeTarget && trackedManagedRuntimeTarget.managedAgents.length > 0 && <Group justify="space-between" style={{ flexShrink: 0 }}>
+          <Group gap="xs">
+            <Checkbox
+              size="xs"
+              label="Select actionable"
+              checked={actionableManagedRuntimeRows.length > 0 && actionableManagedRuntimeRows.every(row => selectedManagedRuntimeKeys.includes(row.key))}
+              indeterminate={selectedManagedRuntimeKeys.length > 0 && !actionableManagedRuntimeRows.every(row => selectedManagedRuntimeKeys.includes(row.key))}
+              disabled={actionableManagedRuntimeRows.length === 0 || bulkReconcileMutation.isPending}
+              onChange={event => setSelectedManagedRuntimeKeys(event.currentTarget.checked ? actionableManagedRuntimeRows.map(row => row.key) : [])}
+            />
+            {selectedManagedRuntimeKeys.length > 0 && <Button size="compact-xs" variant="subtle" color="gray" disabled={bulkReconcileMutation.isPending} onClick={() => setSelectedManagedRuntimeKeys([])}>Clear selection</Button>}
+          </Group>
+          <Button size="compact-sm" color="orange" loading={bulkReconcileMutation.isPending} disabled={selectedActionableRuntimeRows.length === 0 || !trackedManagedRuntimeTarget.online} onClick={() => bulkReconcileMutation.mutate()}>
+            Reconcile selected ({selectedActionableRuntimeRows.length})
+          </Button>
+        </Group>}
+        {bulkReconcileError && <Text size="xs" c="red" style={{ flexShrink: 0 }}>{bulkReconcileError}</Text>}
         {trackedManagedRuntimeTarget && trackedManagedRuntimeTarget.managedAgents.length > 0 ? <div className="monitoring-table-scroll" style={{ flex: 1, minHeight: 220, overflow: "auto" }}><Table striped withTableBorder withColumnBorders>
-          <Table.Thead><Table.Tr><Table.Th>Agent</Table.Th><Table.Th>Logical assignment</Table.Th><Table.Th>Instance</Table.Th><Table.Th>SensorSphere association</Table.Th><Table.Th>Runtime reported</Table.Th><Table.Th>Path / Compose</Table.Th><Table.Th>Version</Table.Th><Table.Th>Container</Table.Th><Table.Th>Reconciliation</Table.Th><Table.Th>Action</Table.Th></Table.Tr></Table.Thead>
+          <Table.Thead><Table.Tr><Table.Th style={{ width: 36 }}>✓</Table.Th><Table.Th>Agent</Table.Th><Table.Th>Logical assignment</Table.Th><Table.Th>Instance</Table.Th><Table.Th>SensorSphere association</Table.Th><Table.Th>Runtime reported</Table.Th><Table.Th>Path / Compose</Table.Th><Table.Th>Version</Table.Th><Table.Th>Container</Table.Th><Table.Th>Reconciliation</Table.Th><Table.Th>Action</Table.Th></Table.Tr></Table.Thead>
           <Table.Tbody>{filteredManagedRuntimeRows.map(({ entry }, index) => {
             const association = managedAssociation(entry);
             const type = typeof entry.agent_type === "string" ? entry.agent_type : managedString(association, "agent_type") ?? "agent";
@@ -1198,6 +1269,14 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
             const diagnostic = managedRuntimeDiagnostic(entry);
             const structuralDrift = diagnostic.status === "DRIFT" && hasStructuralRuntimeDrift(entry);
             const repairVersion = desiredVersion ?? reportedVersion ?? runtimeVersion;
+            const latestRuntimeOperation = (actionHistoryQuery.data ?? []).find(operation =>
+              operation.supervisorId === trackedManagedRuntimeTarget.id
+              && operation.agentType === type
+              && operation.instance === instance
+              && (!agentId || !operation.agentId || operation.agentId === agentId)
+            ) ?? null;
+            const rowKey = managedRuntimeKey(entry, index);
+            const rowActionable = ["DRIFT", "MISSING"].includes(diagnostic.status);
             const monitoringIdentity = type === "monitor-agent" && agentId
               ? (monitoringAgentsQuery.data ?? []).find(agent => agent.id === agentId) ?? null
               : null;
@@ -1205,6 +1284,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
               ? (deviceAgentsQuery.data ?? []).find(agent => agent.id === agentId) ?? null
               : null;
             return <Table.Tr key={managementId ?? `${type}-${instance}-${index}`}>
+              <Table.Td><Checkbox size="xs" checked={selectedManagedRuntimeKeys.includes(rowKey)} disabled={!rowActionable || bulkReconcileMutation.isPending} aria-label={`Select ${name} for reconciliation`} onChange={event => setSelectedManagedRuntimeKeys(current => event.currentTarget.checked ? [...new Set([...current, rowKey])] : current.filter(key => key !== rowKey))} /></Table.Td>
               <Table.Td><Group gap={6} wrap="nowrap"><AgentTypeIcon type={type === "device-agent" ? "device" : "monitoring"} size={16} /><div><Text size="sm" fw={600}>{name}</Text><Text size="xs" c="dimmed">{agentTypeLabel(type)}</Text></div></Group></Table.Td>
               <Table.Td>{type === "monitor-agent" ? (monitoringIdentity?.slotName ? <Badge size="xs" variant="light" color="violet">{monitoringIdentity.slotName}</Badge> : <Badge size="xs" variant="light" color="orange">UNBOUND</Badge>) : type === "device-agent" ? (deviceIdentity?.slotName ? <Badge size="xs" variant="light" color="violet">{deviceIdentity.slotName}</Badge> : <Badge size="xs" variant="light" color="orange">UNBOUND</Badge>) : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
               <Table.Td><Code>{instance}</Code></Table.Td>
@@ -1255,6 +1335,14 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
                   {diagnostic.reasons.map((reason, reasonIndex) => <Text key={reasonIndex} size="xs" c={diagnostic.status === "ERROR" ? "red" : "dimmed"}>{reason}</Text>)}
                   <Group gap={4} wrap="nowrap"><Text size="xs" c="dimmed">SensorSphere</Text><Badge size="xs" variant="light" color={reconciliationColor(reconciliation)}>{reconciliation}</Badge></Group>
                   <Group gap={4} wrap="nowrap"><Text size="xs" c="dimmed">Supervisor</Text><Badge size="xs" variant="light" color={reconciliationColor(typeof entry.reconciliation_status === "string" ? entry.reconciliation_status : null)}>{typeof entry.reconciliation_status === "string" ? entry.reconciliation_status : "—"}</Badge></Group>
+                  {latestRuntimeOperation && <Card withBorder p={6}>
+                    <Stack gap={2}>
+                      <Group gap={4} wrap="nowrap"><Text size="xs" c="dimmed">Last operation</Text><Badge size="xs" variant="light" color={latestRuntimeOperation.status === "SUCCESS" ? "green" : latestRuntimeOperation.status === "SENT" ? "blue" : "red"}>{latestRuntimeOperation.operation} · {latestRuntimeOperation.status}</Badge></Group>
+                      <Text size="xs" c="dimmed">{new Date(latestRuntimeOperation.createdAt).toLocaleString()}</Text>
+                      {latestRuntimeOperation.error && <Text size="xs" c="red">{latestRuntimeOperation.error}</Text>}
+                      <Text size="xs" c="dimmed">After → {diagnostic.status}</Text>
+                    </Stack>
+                  </Card>}
                 </Stack>
               </Table.Td>
               <Table.Td>
@@ -1266,13 +1354,14 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
                   {diagnostic.status === "UNTRACKED" && runtimeInstallDir && (type === "device-agent" || type === "monitor-agent") && <Tooltip label="Cleanup untracked runtime"><ActionIcon size="sm" variant="light" color="red" aria-label={`Cleanup untracked ${name}`} disabled={!trackedManagedRuntimeTarget.online} onClick={() => setCleanupRuntimeTarget({ supervisor: trackedManagedRuntimeTarget, agentType: type, instance, name, installDir: runtimeInstallDir })}><DeprovisionAgentIcon /></ActionIcon></Tooltip>}
                   {diagnostic.status === "DRIFT" && structuralDrift && (!agentId || !runtimeInstallDir || !repairVersion) && <Tooltip label="Automatic repair unavailable because agent identity, runtime install_dir, or target version is missing"><Text size="xs" c="dimmed">Repair unavailable</Text></Tooltip>}
                   {!["DRIFT", "MISSING", "UNTRACKED"].includes(diagnostic.status) && managementId && <Tooltip label={`Deprovision ${name}`}><ActionIcon size="sm" variant="light" color="red" aria-label={`Deprovision ${name}`} disabled={!trackedManagedRuntimeTarget.online} onClick={() => { setManagedRuntimeTarget(null); setDeprovisionTarget({ supervisor: trackedManagedRuntimeTarget, agentType: type === "device-agent" ? "device-agent" : "monitor-agent", instance, name }); }}><DeprovisionAgentIcon /></ActionIcon></Tooltip>}
-                  {diagnostic.status === "ERROR" && <Text size="xs" c="dimmed">Refresh / inspect</Text>}
+                  {diagnostic.status === "ERROR" && latestRuntimeOperation?.operation === "UPDATE" && ["FAILED", "TIMEOUT"].includes(latestRuntimeOperation.status) && agentId && (latestRuntimeOperation.targetVersion ?? desiredVersion) && (type === "device-agent" || type === "monitor-agent") && <Tooltip label="Retry the last failed runtime update"><ActionIcon size="sm" variant="light" color="red" aria-label={`Retry update ${name}`} disabled={!trackedManagedRuntimeTarget.online || managedRuntimeUpdateMutation.isPending} onClick={() => managedRuntimeUpdateMutation.mutate({ supervisor: trackedManagedRuntimeTarget, agentType: type, agentId, instance, version: latestRuntimeOperation.targetVersion ?? desiredVersion!, name })}>↻</ActionIcon></Tooltip>}
+                  {diagnostic.status === "ERROR" && <Tooltip label="Refresh Supervisor runtime state"><ActionIcon size="sm" variant="subtle" color="gray" aria-label={`Refresh ${name}`} onClick={() => void queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"], refetchType: "active" })}>⟳</ActionIcon></Tooltip>}
                 </Group>
               </Table.Td>
             </Table.Tr>;
-          })}{filteredManagedRuntimeRows.length === 0 && <Table.Tr><Table.Td colSpan={10}><Text ta="center" c="dimmed" py="xl">No runtime matches the selected status.</Text></Table.Td></Table.Tr>}</Table.Tbody>
+          })}{filteredManagedRuntimeRows.length === 0 && <Table.Tr><Table.Td colSpan={11}><Text ta="center" c="dimmed" py="xl">No runtime matches the selected status.</Text></Table.Td></Table.Tr>}</Table.Tbody>
         </Table></div> : <Text size="sm" c="dimmed">No managed-agent association or runtime report is available for this Supervisor.</Text>}
-        <Group justify="flex-end" style={{ flexShrink: 0 }}><Button variant="default" onClick={() => { setManagedRuntimeTarget(null); setManagedRuntimeFilter(null); }}>Close</Button></Group>
+        <Group justify="flex-end" style={{ flexShrink: 0 }}><Button variant="default" onClick={() => { setManagedRuntimeTarget(null); setManagedRuntimeFilter(null); setSelectedManagedRuntimeKeys([]); setBulkReconcileError(null); }}>Close</Button></Group>
       </Stack>
     </Modal>
 
