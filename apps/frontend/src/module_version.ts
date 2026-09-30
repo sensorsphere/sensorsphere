@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.101.1";
+export const MODULE_VERSION = "1.102.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.102.0": {
+    releasedAt: "2026-09-30T09:40:00Z",
+    patch: "PR-299-managed-runtime-issue-counter.patch",
+    changes: [
+      { type: "added", description: "Show a global Managed Runtime Inspector issue counter for DRIFT, MISSING, DISCOVERED, UNTRACKED and ERROR states" },
+      { type: "changed", description: "Show issue breakdown in the Managed Runtime Inspector icon tooltip and highlight ERROR in red" }
+    ]
+  },
   "1.101.1": {
     releasedAt: "2026-09-30T09:20:00Z",
     patch: "PR-298-managed-runtime-update-icon-hotfix.patch",

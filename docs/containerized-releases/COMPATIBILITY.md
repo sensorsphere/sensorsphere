@@ -67,5 +67,5 @@ scripts/validate-stack-release.sh releases/stacks/2026.09.25.2.yaml
 A release built from the current source tree must use source validation:
 
 ```bash
-scripts/validate-stack-release.sh --source releases/stacks/2026.09.30.8.yaml
+scripts/validate-stack-release.sh --source releases/stacks/2026.09.30.9.yaml
 ```
