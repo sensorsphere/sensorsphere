@@ -12,6 +12,7 @@ import { SortableTableHeader, compareTableValues, type SortDirection } from "./S
 import { usePersistentState } from "./preferences/usePersistentState";
 import { FilterClearAction } from "./FilterClearAction";
 import { discoveryEntityInventory } from "./DiscoveryEntityInventory";
+import { AgentVersionFreshnessBadge, getAgentVersionAvailability } from "./AgentVersionAvailability";
 
 const DISCOVERY_PROVIDERS = ["YEELIGHT", "ESPHOME", "PROXMOX"] as const;
 type DiscoveryProvider = typeof DISCOVERY_PROVIDERS[number];
@@ -230,9 +231,13 @@ function realtimeEntityInventoryKeys(
     && entity.provider.trim().toUpperCase() === provider.trim().toUpperCase()
   );
   if (!matching.length) return null;
-  return [...new Set(matching.map(entity =>
-    `${normalizeText(entity.entityType) || "unknown"}:${normalizeText(entity.entityName || entity.entityValue)}`
-  ))].sort();
+  return [...new Set(matching.map(entity => {
+    const type = normalizeText(entity.entityType) || "unknown";
+    const value = normalizeText(entity.entityValue);
+    const prefix = `${type}:`;
+    const objectId = value.startsWith(prefix) ? value.slice(prefix.length) : value;
+    return `${type}:${objectId}`;
+  }))].sort();
 }
 
 function appendEntityInventoryReasons(
@@ -436,6 +441,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const [bulkSuccessCount, setBulkSuccessCount] = React.useState<number | null>(null);
 
   const agentsQuery = useQuery({ queryKey: ["device-agents"], queryFn: getDeviceAgents, refetchInterval: 5000 });
+  const versionsQuery = useQuery({ queryKey: ["agent-version-availability"], queryFn: getAgentVersionAvailability, refetchInterval: 300000 });
   const slotsQuery = useQuery({ queryKey: ["device-control", "slots"], queryFn: getDeviceAgentSlots, refetchInterval: 10000 });
   const discoveriesQuery = useQuery({
     queryKey: ["device-discoveries"],
@@ -987,9 +993,13 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
               const agentNames = row.sourceRows.map(source => source.agent?.name ?? source.discovery.agentId);
               const primaryAgentName = row.agent?.name ?? row.discovery.agentId;
               const primaryAgentVersion = row.agent?.version ?? null;
-              const agentStatusLabel = row.agent?.online ? "ONLINE" : row.agent?.enabled ? "OFFLINE" : "DISABLED";
-              const agentStatusColor = row.agent?.online ? "green" : row.agent?.enabled ? "gray" : "red";
-              const agentLabel = <Stack gap={2}><Text size="sm">{primaryAgentName}{row.sourceRows.length > 1 && !showDuplicateAgents ? ` (${row.sourceRows.length - 1} other${row.sourceRows.length > 2 ? "s" : ""})` : ""}</Text><Group gap={6} wrap="nowrap"><Text size="xs" c="dimmed">{primaryAgentVersion ?? "—"}</Text><Badge size="xs" variant="light" color={agentStatusColor}>{agentStatusLabel}</Badge></Group></Stack>;
+              const agentUpdateStatus = row.agent?.updateStatus ?? "IDLE";
+              const agentVersionStatus = ["UPDATE_REQUESTED", "REQUESTED", "UPDATING", "VERIFYING"].includes(agentUpdateStatus)
+                ? <Badge size="xs" variant="light" color="blue">{agentUpdateStatus}</Badge>
+                : agentUpdateStatus === "FAILED"
+                  ? <Tooltip label={row.agent?.updateError ?? "Device Agent update failed"}><Badge size="xs" variant="light" color="red">FAILED</Badge></Tooltip>
+                  : <AgentVersionFreshnessBadge installedVersion={primaryAgentVersion} release={versionsQuery.data?.agents.deviceAgent} />;
+              const agentLabel = <Stack gap={2}><Text size="sm">{primaryAgentName}{row.sourceRows.length > 1 && !showDuplicateAgents ? ` (${row.sourceRows.length - 1} other${row.sourceRows.length > 2 ? "s" : ""})` : ""}</Text><Group gap={6} wrap="nowrap"><Text size="xs" c="dimmed">{primaryAgentVersion ?? "—"}</Text>{agentVersionStatus}</Group></Stack>;
               const agentContent = row.sourceRows.length > 1 && !showDuplicateAgents
                 ? <Tooltip multiline label={<>Discovered by {row.sourceRows.length} agents:<br />{agentNames.join(" · ")}</>}><span style={{ cursor: "help" }}>{agentLabel}</span></Tooltip>
                 : agentLabel;

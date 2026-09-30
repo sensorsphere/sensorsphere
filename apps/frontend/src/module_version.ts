@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.110.1";
+export const MODULE_VERSION = "1.110.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.110.2": {
+    releasedAt: "2026-09-30T17:55:00Z",
+    patch: "PR-310-discovery-entity-identity-and-agent-version-status.patch",
+    changes: [
+      { type: "fixed", description: "Compare Discovery and realtime entities by technical entity ID instead of display name to avoid false add/remove diffs" },
+      { type: "changed", description: "Show Device Agent update freshness or lifecycle status in Discovery instead of redundant online status" }
+    ]
+  },
   "1.110.1": {
     releasedAt: "2026-09-30T16:25:00Z",
     patch: "PR-309-discovery-entity-diff-entity-browser-polish.patch",
