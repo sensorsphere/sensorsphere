@@ -437,6 +437,7 @@ export function SupervisorAgentsPanel() {
   const [globalRuntimeIssueFilter, setGlobalRuntimeIssueFilter] = React.useState<string | null>(null);
   const [selectedManagedRuntimeKeys, setSelectedManagedRuntimeKeys] = React.useState<string[]>([]);
   const [bulkReconcileError, setBulkReconcileError] = React.useState<string | null>(null);
+  const [bulkReconcileConfirmOpen, setBulkReconcileConfirmOpen] = React.useState(false);
   const [deprovisionTarget, setDeprovisionTarget] = React.useState<{ supervisor: AutonomousSupervisorAgent; agentType: "device-agent" | "monitor-agent"; instance: string; name: string } | null>(null);
   const [cleanupRuntimeTarget, setCleanupRuntimeTarget] = React.useState<{ supervisor: AutonomousSupervisorAgent; agentType: "device-agent" | "monitor-agent"; instance: string; name: string; installDir: string } | null>(null);
   const [repairRuntimeTarget, setRepairRuntimeTarget] = React.useState<{ supervisor: AutonomousSupervisorAgent; agentType: "device-agent" | "monitor-agent"; agentId: string; instance: string; name: string; installDir: string; version: string; reasons: string[] } | null>(null);
@@ -968,6 +969,7 @@ export function SupervisorAgentsPanel() {
       return completed;
     },
     onSuccess: async () => {
+      setBulkReconcileConfirmOpen(false);
       setSelectedManagedRuntimeKeys([]);
       await queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"], refetchType: "active" });
     },
@@ -1241,7 +1243,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
             />
             {selectedManagedRuntimeKeys.length > 0 && <Button size="compact-xs" variant="subtle" color="gray" disabled={bulkReconcileMutation.isPending} onClick={() => setSelectedManagedRuntimeKeys([])}>Clear selection</Button>}
           </Group>
-          <Button size="compact-sm" color="orange" loading={bulkReconcileMutation.isPending} disabled={selectedActionableRuntimeRows.length === 0 || !trackedManagedRuntimeTarget.online} onClick={() => bulkReconcileMutation.mutate()}>
+          <Button size="compact-sm" color="orange" loading={bulkReconcileMutation.isPending} disabled={selectedActionableRuntimeRows.length === 0 || !trackedManagedRuntimeTarget.online} onClick={() => setBulkReconcileConfirmOpen(true)}>
             Reconcile selected ({selectedActionableRuntimeRows.length})
           </Button>
         </Group>}
@@ -1362,6 +1364,50 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
           })}{filteredManagedRuntimeRows.length === 0 && <Table.Tr><Table.Td colSpan={11}><Text ta="center" c="dimmed" py="xl">No runtime matches the selected status.</Text></Table.Td></Table.Tr>}</Table.Tbody>
         </Table></div> : <Text size="sm" c="dimmed">No managed-agent association or runtime report is available for this Supervisor.</Text>}
         <Group justify="flex-end" style={{ flexShrink: 0 }}><Button variant="default" onClick={() => { setManagedRuntimeTarget(null); setManagedRuntimeFilter(null); setSelectedManagedRuntimeKeys([]); setBulkReconcileError(null); }}>Close</Button></Group>
+      </Stack>
+    </Modal>
+
+    <Modal
+      opened={bulkReconcileConfirmOpen}
+      onClose={() => !bulkReconcileMutation.isPending && setBulkReconcileConfirmOpen(false)}
+      title={`Reconcile ${selectedActionableRuntimeRows.length} runtime${selectedActionableRuntimeRows.length === 1 ? "" : "s"}`}
+      centered
+      size="lg"
+    >
+      <Stack>
+        <Text size="sm" c="dimmed">Review the remediation plan before SensorSphere starts any runtime operation. Actions are executed sequentially and stop on the first failure.</Text>
+        <Stack gap="xs">
+          {selectedActionableRuntimeRows.map(row => {
+            const entry = row.entry;
+            const association = managedAssociation(entry);
+            const type = typeof entry.agent_type === "string" ? entry.agent_type : managedString(association, "agent_type") ?? "agent";
+            const instance = typeof entry.instance === "string" ? entry.instance : managedString(association, "instance") ?? "main";
+            const name = typeof entry.agent_name === "string" ? entry.agent_name : managedString(association, "agent_name") ?? instance;
+            const runtimeVersion = typeof entry.configured_version === "string" ? entry.configured_version : null;
+            const desiredVersion = managedString(association, "desired_version");
+            const action = row.diagnostic.status === "MISSING"
+              ? "Reinstall same identity → Verify MANAGED"
+              : hasStructuralRuntimeDrift(entry)
+                ? "Remove exact runtime → Redeploy same identity → Verify MANAGED"
+                : runtimeVersion && desiredVersion && runtimeVersion !== desiredVersion
+                  ? `Update ${runtimeVersion} → ${desiredVersion}`
+                  : "No safe automatic action";
+            return <Card key={row.key} withBorder p="sm">
+              <Group justify="space-between" align="flex-start">
+                <div>
+                  <Group gap={6}><Badge size="xs" variant="light" color={reconciliationColor(row.diagnostic.status)}>{row.diagnostic.status}</Badge><Text size="sm" fw={600}>{name}</Text></Group>
+                  <Text size="xs" c="dimmed">{agentTypeLabel(type)} · {instance}</Text>
+                </div>
+                <Text size="xs" fw={600}>{action}</Text>
+              </Group>
+            </Card>;
+          })}
+        </Stack>
+        {bulkReconcileError && <Text size="sm" c="red">{bulkReconcileError}</Text>}
+        <Group justify="flex-end">
+          <Button data-autofocus variant="default" disabled={bulkReconcileMutation.isPending} onClick={() => setBulkReconcileConfirmOpen(false)}>Cancel</Button>
+          <Button color="orange" loading={bulkReconcileMutation.isPending} disabled={selectedActionableRuntimeRows.length === 0} onClick={() => bulkReconcileMutation.mutate()}>Confirm reconciliation</Button>
+        </Group>
       </Stack>
     </Modal>
 

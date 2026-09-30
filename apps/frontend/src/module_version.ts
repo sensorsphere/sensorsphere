@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.106.0";
+export const MODULE_VERSION = "1.107.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.107.0": {
+    releasedAt: "2026-09-30T12:18:00Z",
+    patch: "PR-304-runtime-reconcile-preview-discovery-focus.patch",
+    changes: [
+      { type: "fixed", description: "Keep the Add selected Device Agent Slot combobox closed when the Discovery bulk-add dialog opens" },
+      { type: "added", description: "Add a remediation plan preview before Reconcile selected starts any managed runtime operation" },
+      { type: "changed", description: "Focus Cancel by default in confirmation dialogs so explicit user interaction is required before changing selections or starting remediation" }
+    ]
+  },
   "1.106.0": {
     releasedAt: "2026-09-30T12:00:33Z",
     patch: "PR-303-runtime-operations-recovery-discovery-slot.patch",

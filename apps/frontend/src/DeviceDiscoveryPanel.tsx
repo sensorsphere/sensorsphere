@@ -1033,7 +1033,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
         />
         {bulkError && <Text size="sm" c="red">{bulkError}</Text>}
         <Group justify="flex-end">
-          <Button variant="default" onClick={() => { setBulkAction(null); setBulkError(null); }}>Cancel</Button>
+          <Button data-autofocus variant="default" onClick={() => { setBulkAction(null); setBulkError(null); }}>Cancel</Button>
           {bulkAction === "ADD"
             ? <Button color="green" loading={bulkImportMutation.isPending} disabled={selectedAddRows.length === 0} onClick={() => bulkImportMutation.mutate()}>Add selected</Button>
             : <Button color="violet" loading={bulkSlotMutation.isPending} disabled={selectedRegisteredRows.length === 0} onClick={() => bulkSlotMutation.mutate()}>Apply Slot</Button>}

@@ -31,7 +31,7 @@ env \
   WEB_PORT=8082 \
   MQTT_PORT=1892 \
   INSTALL_DIR="$HOME/sensorsphere-fit" \
-  VERSION=2026.09.30.13 \
+  VERSION=2026.09.30.14 \
   SENSORSPHERE_PUBLIC_URL="https://fit.example.com" \
   SENSORSPHERE_AUTH_PROVIDERS=google \
   SENSORSPHERE_AUTH_BOOTSTRAP_ADMIN_EMAIL="admin@example.com" \
@@ -116,7 +116,7 @@ application image versions.
 env \
   ACTION=update \
   INSTALL_DIR="$HOME/sensorsphere-fit" \
-  VERSION=2026.09.30.13 \
+  VERSION=2026.09.30.14 \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere/master/scripts/install.sh)"
 ```
 
@@ -189,7 +189,7 @@ and the same `INSTALL_DIR`:
 env \
   SENSORSPHERE_ENVIRONMENT=FIT \
   INSTALL_DIR="$HOME/sensorsphere-fit" \
-  VERSION=2026.09.30.13 \
+  VERSION=2026.09.30.14 \
   bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorsphere/master/scripts/install.sh)"
 ```
 
