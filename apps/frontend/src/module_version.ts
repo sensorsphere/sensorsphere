@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.96.0";
+export const MODULE_VERSION = "1.97.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.97.0": {
+    releasedAt: "2026-09-30T03:38:55Z",
+    patch: "PR-290-managed-runtime-inspector-v2.patch",
+    changes: [
+      { type: "added", description: "Add Managed Runtime Inspector summary counts for managed, drift, missing, discovered, untracked and error runtimes" },
+      { type: "changed", description: "Compare expected and runtime install paths, Compose projects and desired/reported/runtime versions" },
+      { type: "added", description: "Show explicit diagnostic reasons for runtime reconciliation drift and missing associations" }
+    ]
+  },
   "1.96.0": {
     releasedAt: "2026-09-29T21:16:43+02:00",
     patch: "PR-289-discovery-agent-selection-and-check-copy-v1.patch",

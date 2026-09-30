@@ -205,7 +205,60 @@ function reconciliationColor(value: string | null): string {
   if (value === "ERROR") return "red";
   if (value === "MISSING") return "orange";
   if (value === "DISCOVERED") return "blue";
+  if (value === "DRIFT") return "yellow";
+  if (value === "UNTRACKED") return "grape";
   return "gray";
+}
+
+function managedRuntimeDiagnostic(entry: Record<string, unknown>): {
+  status: "MANAGED" | "DRIFT" | "MISSING" | "DISCOVERED" | "UNTRACKED" | "ERROR";
+  reasons: string[];
+} {
+  const association = managedAssociation(entry);
+  const managementId = typeof entry.management_id === "string" && entry.management_id ? entry.management_id : null;
+  const runtimeReported = entry.runtime_reported !== false;
+  const installed = entry.installed !== false;
+  const runtimeVersion = typeof entry.configured_version === "string" ? entry.configured_version : null;
+  const runtimeInstallDir = typeof entry.install_dir === "string" ? entry.install_dir : null;
+  const runtimeComposeProject = typeof entry.compose_project === "string" ? entry.compose_project : null;
+  const containerState = typeof entry.container_state === "string" ? entry.container_state : null;
+  const supervisorReconciliation = typeof entry.reconciliation_status === "string" ? entry.reconciliation_status : null;
+  const desiredVersion = managedString(association, "desired_version");
+  const expectedInstallDir = managedString(association, "install_dir");
+  const expectedComposeProject = managedString(association, "compose_project");
+  const sensorSphereReconciliation = managedString(association, "reconciliation_status");
+
+  if (supervisorReconciliation === "ERROR" || sensorSphereReconciliation === "ERROR") {
+    return { status: "ERROR", reasons: ["SensorSphere or Supervisor reports a reconciliation error"] };
+  }
+
+  if (!managementId) {
+    return { status: "DISCOVERED", reasons: ["Runtime is present but has no SensorSphere management_id"] };
+  }
+
+  if (!association) {
+    return { status: "UNTRACKED", reasons: ["Runtime reports a management_id that has no SensorSphere association"] };
+  }
+
+  if (!runtimeReported || !installed) {
+    return { status: "MISSING", reasons: [!runtimeReported ? "SensorSphere association exists but Supervisor does not report the runtime" : "Supervisor reports the runtime as not installed"] };
+  }
+
+  const reasons: string[] = [];
+  if (desiredVersion && runtimeVersion && desiredVersion !== runtimeVersion) {
+    reasons.push(`Version drift: desired ${desiredVersion}, runtime ${runtimeVersion}`);
+  }
+  if (expectedInstallDir && runtimeInstallDir && expectedInstallDir !== runtimeInstallDir) {
+    reasons.push(`Path drift: expected ${expectedInstallDir}, runtime ${runtimeInstallDir}`);
+  }
+  if (expectedComposeProject && runtimeComposeProject && expectedComposeProject !== runtimeComposeProject) {
+    reasons.push(`Compose project drift: expected ${expectedComposeProject}, runtime ${runtimeComposeProject}`);
+  }
+  if (containerState && containerState !== "running") {
+    reasons.push(`Container state is ${containerState}`);
+  }
+
+  return reasons.length > 0 ? { status: "DRIFT", reasons } : { status: "MANAGED", reasons: [] };
 }
 
 function relativeAge(value: string | null): string {
@@ -517,6 +570,11 @@ export function SupervisorAgentsPanel() {
   const trackedManagedRuntimeTarget = managedRuntimeTarget
     ? autonomous.find(agent => agent.id === managedRuntimeTarget.id) ?? managedRuntimeTarget
     : null;
+  const managedRuntimeDiagnostics = trackedManagedRuntimeTarget?.managedAgents.map(managedRuntimeDiagnostic) ?? [];
+  const managedRuntimeCounts = managedRuntimeDiagnostics.reduce<Record<string, number>>((counts, diagnostic) => {
+    counts[diagnostic.status] = (counts[diagnostic.status] ?? 0) + 1;
+    return counts;
+  }, {});
 
   React.useEffect(() => {
     if (!autonomousUpdateTarget || !autonomousUpdateMutation.isSuccess) return;
@@ -665,9 +723,33 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
     <Modal opened={managedRuntimeTarget != null} onClose={() => setManagedRuntimeTarget(null)} title={`Managed Runtime Inspector${trackedManagedRuntimeTarget ? ` · ${trackedManagedRuntimeTarget.name}` : ""}`} size="xl" centered>
       <Stack>
         <Group justify="space-between">
-          <div><Text size="sm">SensorSphere associations compared with the runtime state reported by the Supervisor.</Text><Text size="xs" c="dimmed">Last Supervisor heartbeat: {relativeAge(trackedManagedRuntimeTarget?.lastSeenAt ?? null)}</Text></div>
+          <div>
+            <Text size="sm">SensorSphere associations compared with the runtime state reported by the Supervisor.</Text>
+            <Group gap="xs" mt={4}>
+              <Badge size="xs" variant="light" color={trackedManagedRuntimeTarget?.online ? "green" : "gray"}>{trackedManagedRuntimeTarget?.online ? "SUPERVISOR ONLINE" : "SUPERVISOR OFFLINE"}</Badge>
+              <Text size="xs" c="dimmed">version {trackedManagedRuntimeTarget?.version ?? "—"}</Text>
+              <Text size="xs" c="dimmed">heartbeat {relativeAge(trackedManagedRuntimeTarget?.lastSeenAt ?? null)}</Text>
+            </Group>
+          </div>
           <Button size="xs" variant="light" onClick={() => void queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"] })}>Refresh</Button>
         </Group>
+        {trackedManagedRuntimeTarget && trackedManagedRuntimeTarget.managedAgents.length > 0 && (
+          <Group gap="sm" align="stretch">
+            {([
+              ["MANAGED", "green"],
+              ["DRIFT", "yellow"],
+              ["MISSING", "orange"],
+              ["DISCOVERED", "blue"],
+              ["UNTRACKED", "grape"],
+              ["ERROR", "red"]
+            ] as const).map(([status, color]) => (
+              <Card key={status} withBorder p="xs" miw={110}>
+                <Text size="xs" c="dimmed">{status}</Text>
+                <Text fw={700} size="lg" c={color}>{managedRuntimeCounts[status] ?? 0}</Text>
+              </Card>
+            ))}
+          </Group>
+        )}
         {trackedManagedRuntimeTarget && trackedManagedRuntimeTarget.managedAgents.length > 0 ? <div className="monitoring-table-scroll"><Table striped withTableBorder withColumnBorders>
           <Table.Thead><Table.Tr><Table.Th>Agent</Table.Th><Table.Th>Logical assignment</Table.Th><Table.Th>Instance</Table.Th><Table.Th>SensorSphere association</Table.Th><Table.Th>Runtime reported</Table.Th><Table.Th>Path / Compose</Table.Th><Table.Th>Version</Table.Th><Table.Th>Container</Table.Th><Table.Th>Reconciliation</Table.Th><Table.Th>Action</Table.Th></Table.Tr></Table.Thead>
           <Table.Tbody>{trackedManagedRuntimeTarget.managedAgents.map((entry, index) => {
@@ -677,8 +759,10 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
             const name = typeof entry.agent_name === "string" ? entry.agent_name : managedString(association, "agent_name") ?? "—";
             const managementId = typeof entry.management_id === "string" ? entry.management_id : managedString(association, "id");
             const agentId = typeof entry.sensor_sphere_agent_id === "string" ? entry.sensor_sphere_agent_id : managedString(association, "agent_id");
-            const installDir = typeof entry.install_dir === "string" ? entry.install_dir : managedString(association, "install_dir");
-            const composeProject = managedString(association, "compose_project");
+            const runtimeInstallDir = typeof entry.install_dir === "string" ? entry.install_dir : null;
+            const expectedInstallDir = managedString(association, "install_dir");
+            const runtimeComposeProject = typeof entry.compose_project === "string" ? entry.compose_project : null;
+            const expectedComposeProject = managedString(association, "compose_project");
             const composeService = managedString(association, "compose_service");
             const runtimeVersion = typeof entry.configured_version === "string" ? entry.configured_version : null;
             const desiredVersion = managedString(association, "desired_version");
@@ -686,6 +770,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
             const containerState = typeof entry.container_state === "string" ? entry.container_state : "not_reported";
             const reconciliation = managedString(association, "reconciliation_status") ?? (typeof entry.reconciliation_status === "string" ? entry.reconciliation_status : "UNKNOWN");
             const runtimeReported = entry.runtime_reported !== false;
+            const diagnostic = managedRuntimeDiagnostic(entry);
             const monitoringIdentity = type === "monitor-agent" && agentId
               ? (monitoringAgentsQuery.data ?? []).find(agent => agent.id === agentId) ?? null
               : null;
@@ -698,10 +783,42 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
               <Table.Td><Code>{instance}</Code></Table.Td>
               <Table.Td><Stack gap={2}><Group gap={4}><Text size="xs" c="dimmed">management_id</Text>{managementId && <ActionIcon size="xs" variant="subtle" aria-label="Copy management id" onClick={() => void copyText(managementId)}><CopyIcon size={12} /></ActionIcon>}</Group><Code style={{ maxWidth: 210, overflow: "hidden", textOverflow: "ellipsis" }}>{managementId ?? "—"}</Code><Text size="xs" c="dimmed">agent {agentId ?? "—"}</Text></Stack></Table.Td>
               <Table.Td><Badge size="xs" variant="light" color={runtimeReported ? "green" : "orange"}>{runtimeReported ? "REPORTED" : "NOT REPORTED"}</Badge></Table.Td>
-              <Table.Td><Stack gap={2}><Group gap={4}><Text size="xs" style={{ maxWidth: 300, wordBreak: "break-all" }}>{installDir ?? "—"}</Text>{installDir && <ActionIcon size="xs" variant="subtle" aria-label="Copy install directory" onClick={() => void copyText(installDir)}><CopyIcon size={12} /></ActionIcon>}</Group><Text size="xs" c="dimmed">{composeProject ?? "—"} / {composeService ?? "—"}</Text></Stack></Table.Td>
-              <Table.Td><Stack gap={2}><Text size="sm">{runtimeVersion ?? reportedVersion ?? "—"}</Text>{desiredVersion && <Text size="xs" c="dimmed">desired {desiredVersion}</Text>}</Stack></Table.Td>
+              <Table.Td>
+                <Stack gap={4}>
+                  <div>
+                    <Text size="xs" c="dimmed">Expected</Text>
+                    <Group gap={4} wrap="nowrap">
+                      <Text size="xs" style={{ maxWidth: 280, wordBreak: "break-all" }}>{expectedInstallDir ?? "—"}</Text>
+                      {expectedInstallDir && <ActionIcon size="xs" variant="subtle" aria-label="Copy expected install directory" onClick={() => void copyText(expectedInstallDir)}><CopyIcon size={12} /></ActionIcon>}
+                    </Group>
+                    <Text size="xs" c="dimmed">{expectedComposeProject ?? "—"} / {composeService ?? "—"}</Text>
+                  </div>
+                  <div>
+                    <Text size="xs" c="dimmed">Runtime</Text>
+                    <Group gap={4} wrap="nowrap">
+                      <Text size="xs" style={{ maxWidth: 280, wordBreak: "break-all" }}>{runtimeInstallDir ?? "—"}</Text>
+                      {runtimeInstallDir && <ActionIcon size="xs" variant="subtle" aria-label="Copy runtime install directory" onClick={() => void copyText(runtimeInstallDir)}><CopyIcon size={12} /></ActionIcon>}
+                    </Group>
+                    <Text size="xs" c="dimmed">{runtimeComposeProject ?? "—"}</Text>
+                  </div>
+                </Stack>
+              </Table.Td>
+              <Table.Td>
+                <Stack gap={2}>
+                  <Text size="xs" c="dimmed">desired <Text span fw={600} c="inherit">{desiredVersion ?? "—"}</Text></Text>
+                  <Text size="xs" c="dimmed">reported <Text span fw={600} c="inherit">{reportedVersion ?? "—"}</Text></Text>
+                  <Text size="xs" c="dimmed">runtime <Text span fw={600} c="inherit">{runtimeVersion ?? "—"}</Text></Text>
+                </Stack>
+              </Table.Td>
               <Table.Td><Badge size="xs" variant="light" color={containerState === "running" ? "green" : containerState === "not_reported" ? "gray" : "orange"}>{containerState}</Badge></Table.Td>
-              <Table.Td><Stack gap={2}><Group gap={4} wrap="nowrap"><Text size="xs" c="dimmed">SensorSphere</Text><Badge size="xs" variant="light" color={reconciliationColor(reconciliation)}>{reconciliation}</Badge></Group><Group gap={4} wrap="nowrap"><Text size="xs" c="dimmed">Supervisor</Text><Badge size="xs" variant="light" color={reconciliationColor(typeof entry.reconciliation_status === "string" ? entry.reconciliation_status : null)}>{typeof entry.reconciliation_status === "string" ? entry.reconciliation_status : "—"}</Badge></Group></Stack></Table.Td>
+              <Table.Td>
+                <Stack gap={4}>
+                  <Badge size="xs" variant="light" color={reconciliationColor(diagnostic.status)}>{diagnostic.status}</Badge>
+                  {diagnostic.reasons.map((reason, reasonIndex) => <Text key={reasonIndex} size="xs" c={diagnostic.status === "ERROR" ? "red" : "dimmed"}>{reason}</Text>)}
+                  <Group gap={4} wrap="nowrap"><Text size="xs" c="dimmed">SensorSphere</Text><Badge size="xs" variant="light" color={reconciliationColor(reconciliation)}>{reconciliation}</Badge></Group>
+                  <Group gap={4} wrap="nowrap"><Text size="xs" c="dimmed">Supervisor</Text><Badge size="xs" variant="light" color={reconciliationColor(typeof entry.reconciliation_status === "string" ? entry.reconciliation_status : null)}>{typeof entry.reconciliation_status === "string" ? entry.reconciliation_status : "—"}</Badge></Group>
+                </Stack>
+              </Table.Td>
               <Table.Td>{entry.installed === false && type === "monitor-agent" ? <Tooltip label={`Reinstall ${name === "—" ? `Monitoring Agent ${instance}` : name}`}><ActionIcon size="sm" variant="light" color="orange" aria-label={`Reinstall Monitoring Agent ${instance}`} disabled={!trackedManagedRuntimeTarget.online} onClick={() => { setManagedRuntimeTarget(null); setDeployTarget(trackedManagedRuntimeTarget); setDeployAgentType("monitor-agent"); setDeployInstance(instance); setDeployAgentName(name === "—" ? defaultMonitoringAgentName(trackedManagedRuntimeTarget, instance) : name); setDeploySlotMode("new"); setDeploySlotId(null); setDeploySlotName(name === "—" ? defaultMonitoringAgentName(trackedManagedRuntimeTarget, instance) : name); setDeployVersion(latestMonitoringAgentVersion !== "latest" ? latestMonitoringAgentVersion : ""); setDeployStatus("IDLE"); setDeployError(null); setDialogActionDetails(null); deployMonitoringAgentMutation.reset(); }}><DeployAgentIcon /></ActionIcon></Tooltip> : managementId ? <Tooltip label={`Deprovision ${name}`}><ActionIcon size="sm" variant="light" color="red" aria-label={`Deprovision ${name}`} disabled={!trackedManagedRuntimeTarget.online} onClick={() => { setManagedRuntimeTarget(null); setDeprovisionTarget({ supervisor: trackedManagedRuntimeTarget, agentType: type === "device-agent" ? "device-agent" : "monitor-agent", instance, name }); }}><DeprovisionAgentIcon /></ActionIcon></Tooltip> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
             </Table.Tr>;
           })}</Table.Tbody>
