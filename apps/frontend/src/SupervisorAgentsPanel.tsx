@@ -270,6 +270,50 @@ function managedRuntimeDiagnostic(entry: Record<string, unknown>): {
   return reasons.length > 0 ? { status: "DRIFT", reasons } : { status: "MANAGED", reasons: [] };
 }
 
+function hasStructuralRuntimeDrift(entry: Record<string, unknown>): boolean {
+  const association = managedAssociation(entry);
+  const runtimeInstallDir = typeof entry.install_dir === "string" ? entry.install_dir : null;
+  const runtimeComposeProject = typeof entry.compose_project === "string" ? entry.compose_project : null;
+  const containerState = typeof entry.container_state === "string" ? entry.container_state : null;
+  const expectedInstallDir = managedString(association, "install_dir");
+  const expectedComposeProject = managedString(association, "compose_project");
+  return Boolean(
+    (expectedInstallDir && runtimeInstallDir && expectedInstallDir !== runtimeInstallDir)
+    || (expectedComposeProject && runtimeComposeProject && expectedComposeProject !== runtimeComposeProject)
+    || (containerState && containerState !== "running")
+  );
+}
+
+async function waitForManagedRuntimeManaged(
+  supervisorId: string,
+  agentType: "device-agent" | "monitor-agent",
+  agentId: string,
+  instance: string
+): Promise<AutonomousSupervisorAgent> {
+  const deadline = Date.now() + 120_000;
+  let lastDiagnostic = "Runtime has not been reported yet";
+  while (Date.now() < deadline) {
+    await new Promise(resolve => window.setTimeout(resolve, 2000));
+    const supervisors = await getAutonomousSupervisors();
+    const supervisor = supervisors.find(candidate => candidate.id === supervisorId);
+    if (!supervisor) throw new Error("Supervisor Agent disappeared while verifying the repaired runtime");
+    const entry = supervisor.managedAgents.find(candidate => {
+      if (candidate.agent_type !== agentType || candidate.instance !== instance) return false;
+      const association = managedAssociation(candidate);
+      return managedString(association, "agent_id") === agentId
+        || candidate.sensor_sphere_agent_id === agentId;
+    });
+    if (!entry) {
+      lastDiagnostic = "Runtime association is not reported yet";
+      continue;
+    }
+    const diagnostic = managedRuntimeDiagnostic(entry);
+    if (diagnostic.status === "MANAGED") return supervisor;
+    lastDiagnostic = diagnostic.reasons.join("; ") || diagnostic.status;
+  }
+  throw new Error(`Repair deployment completed but runtime did not reconcile to MANAGED within 120 seconds: ${lastDiagnostic}`);
+}
+
 function relativeAge(value: string | null): string {
   if (!value) return "Never";
   const milliseconds = Date.now() - new Date(value).getTime();
@@ -370,6 +414,8 @@ export function SupervisorAgentsPanel() {
   const [managedRuntimeFilter, setManagedRuntimeFilter] = React.useState<string | null>(null);
   const [deprovisionTarget, setDeprovisionTarget] = React.useState<{ supervisor: AutonomousSupervisorAgent; agentType: "device-agent" | "monitor-agent"; instance: string; name: string } | null>(null);
   const [cleanupRuntimeTarget, setCleanupRuntimeTarget] = React.useState<{ supervisor: AutonomousSupervisorAgent; agentType: "device-agent" | "monitor-agent"; instance: string; name: string; installDir: string } | null>(null);
+  const [repairRuntimeTarget, setRepairRuntimeTarget] = React.useState<{ supervisor: AutonomousSupervisorAgent; agentType: "device-agent" | "monitor-agent"; agentId: string; instance: string; name: string; installDir: string; version: string; reasons: string[] } | null>(null);
+  const [repairRuntimeStep, setRepairRuntimeStep] = React.useState<"IDLE" | "REMOVING" | "DEPLOYING" | "VERIFYING" | "SUCCESS">("IDLE");
   const [dialogActionDetails, setDialogActionDetails] = React.useState<{ label: string; operation: SupervisorManagedOperation } | null>(null);
 
   const trackOperation = (label: string, operation: SupervisorManagedOperation, showInDialog = true) => {
@@ -597,6 +643,81 @@ export function SupervisorAgentsPanel() {
     },
     onSuccess: async () => {
       setCleanupRuntimeTarget(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["device-control", "managed-operation-history"], refetchType: "active" })
+      ]);
+    }
+  });
+
+  const repairRuntimeMutation = useMutation({
+    mutationFn: async (target: { supervisor: AutonomousSupervisorAgent; agentType: "device-agent" | "monitor-agent"; agentId: string; instance: string; name: string; installDir: string; version: string; reasons: string[] }) => {
+      setDialogActionDetails(null);
+      setRepairRuntimeStep("REMOVING");
+
+      const removeLabel = `Repair cleanup ${agentTypeLabel(target.agentType)} / ${target.instance}`;
+      const removeStarted = await requestSupervisorManagedOperation(target.supervisor.id, {
+        operation: "REMOVE",
+        agentType: target.agentType,
+        instance: target.instance,
+        installDir: target.installDir
+      });
+      trackOperation(removeLabel, removeStarted);
+      const removeCompleted = await waitSupervisorManagedOperation(removeStarted.commandId, operation => trackOperation(removeLabel, operation));
+      if (removeCompleted.status !== "SUCCESS" && !/is not installed$/i.test(removeCompleted.error ?? "")) {
+        throw new Error(removeCompleted.error ?? `Unable to remove drifted ${agentTypeLabel(target.agentType)} runtime`);
+      }
+
+      setRepairRuntimeStep("DEPLOYING");
+      const identity = target.agentType === "device-agent"
+        ? await regenerateDeviceAgentToken(target.agentId)
+        : await regenerateMonitoringAgentToken(target.agentId);
+      const token = identity.token;
+      const deployLabel = `Repair deploy ${agentTypeLabel(target.agentType)} / ${target.instance}`;
+      const deployStarted = await requestSupervisorManagedOperation(target.supervisor.id, {
+        operation: "DEPLOY",
+        agentType: target.agentType,
+        agentId: target.agentId,
+        instance: target.instance,
+        version: target.version,
+        environment: target.agentType === "device-agent"
+          ? {
+              SENSORSPHERE_URL: window.location.origin,
+              SENSORSPHERE_DEVICE_AGENT_TOKEN: token,
+              AGENT_NAME: target.name
+            }
+          : {
+              SENSORSPHERE_URL: window.location.origin,
+              SENSORSPHERE_AGENT_TOKEN: token,
+              AGENT_NAME: target.name
+            }
+      });
+      trackOperation(deployLabel, deployStarted);
+      const deployCompleted = await waitSupervisorManagedOperation(deployStarted.commandId, operation => trackOperation(deployLabel, operation));
+      if (deployCompleted.status !== "SUCCESS") {
+        throw new Error(deployCompleted.error ?? `Unable to redeploy ${agentTypeLabel(target.agentType)} runtime`);
+      }
+
+      setRepairRuntimeStep("VERIFYING");
+      const reconciledSupervisor = await waitForManagedRuntimeManaged(
+        target.supervisor.id,
+        target.agentType,
+        target.agentId,
+        target.instance
+      );
+      return reconciledSupervisor;
+    },
+    onSuccess: async supervisor => {
+      setRepairRuntimeStep("SUCCESS");
+      setManagedRuntimeTarget(supervisor);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["device-control", "agents"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["monitoring", "agents"], refetchType: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["device-control", "managed-operation-history"], refetchType: "active" })
+      ]);
+    },
+    onError: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["device-control", "supervisors"], refetchType: "active" }),
         queryClient.invalidateQueries({ queryKey: ["device-control", "managed-operation-history"], refetchType: "active" })
@@ -877,6 +998,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
             const reconciliation = managedString(association, "reconciliation_status") ?? (typeof entry.reconciliation_status === "string" ? entry.reconciliation_status : "UNKNOWN");
             const runtimeReported = entry.runtime_reported !== false;
             const diagnostic = managedRuntimeDiagnostic(entry);
+            const structuralDrift = diagnostic.status === "DRIFT" && hasStructuralRuntimeDrift(entry);
+            const repairVersion = desiredVersion ?? reportedVersion ?? runtimeVersion;
             const monitoringIdentity = type === "monitor-agent" && agentId
               ? (monitoringAgentsQuery.data ?? []).find(agent => agent.id === agentId) ?? null
               : null;
@@ -927,10 +1050,11 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
               </Table.Td>
               <Table.Td>
                 <Group gap={4} wrap="nowrap">
-                  {diagnostic.status === "DRIFT" && desiredVersion && runtimeVersion && desiredVersion !== runtimeVersion && agentId && (type === "device-agent" || type === "monitor-agent") && <Tooltip label={`Update runtime to desired version ${desiredVersion}`}><ActionIcon size="sm" variant="light" color="teal" aria-label={`Update ${name} to ${desiredVersion}`} loading={managedRuntimeUpdateMutation.isPending} disabled={!trackedManagedRuntimeTarget.online || managedRuntimeUpdateMutation.isPending} onClick={() => managedRuntimeUpdateMutation.mutate({ supervisor: trackedManagedRuntimeTarget, agentType: type, agentId, instance, version: desiredVersion, name })}><AgentUpdateIcon /></ActionIcon></Tooltip>}
+                  {diagnostic.status === "DRIFT" && !structuralDrift && desiredVersion && runtimeVersion && desiredVersion !== runtimeVersion && agentId && (type === "device-agent" || type === "monitor-agent") && <Tooltip label={`Update runtime to desired version ${desiredVersion}`}><ActionIcon size="sm" variant="light" color="teal" aria-label={`Update ${name} to ${desiredVersion}`} loading={managedRuntimeUpdateMutation.isPending} disabled={!trackedManagedRuntimeTarget.online || managedRuntimeUpdateMutation.isPending} onClick={() => managedRuntimeUpdateMutation.mutate({ supervisor: trackedManagedRuntimeTarget, agentType: type, agentId, instance, version: desiredVersion, name })}><AgentUpdateIcon /></ActionIcon></Tooltip>}
+                  {structuralDrift && agentId && runtimeInstallDir && repairVersion && (type === "device-agent" || type === "monitor-agent") && <Tooltip label="Repair runtime: remove exact drifted runtime, redeploy same SensorSphere identity, then verify MANAGED"><ActionIcon size="sm" variant="light" color="orange" aria-label={`Repair ${name}`} disabled={!trackedManagedRuntimeTarget.online || repairRuntimeMutation.isPending} onClick={() => { repairRuntimeMutation.reset(); setRepairRuntimeStep("IDLE"); setDialogActionDetails(null); setRepairRuntimeTarget({ supervisor: trackedManagedRuntimeTarget, agentType: type, agentId, instance, name, installDir: runtimeInstallDir, version: repairVersion, reasons: diagnostic.reasons }); }}>⟳</ActionIcon></Tooltip>}
                   {diagnostic.status === "MISSING" && (type === "device-agent" || type === "monitor-agent") && <Tooltip label={`Reinstall missing ${agentTypeLabel(type)}`}><ActionIcon size="sm" variant="light" color="orange" aria-label={`Reinstall ${agentTypeLabel(type)} ${instance}`} disabled={!trackedManagedRuntimeTarget.online} onClick={() => { setManagedRuntimeTarget(null); setDeployTarget(trackedManagedRuntimeTarget); setDeployAgentType(type); setDeployInstance(instance); setDeployAgentName(name === "—" ? (type === "monitor-agent" ? defaultMonitoringAgentName(trackedManagedRuntimeTarget, instance) : trackedManagedRuntimeTarget.name) : name); if (type === "monitor-agent") { setDeploySlotMode("new"); setDeploySlotId(null); setDeploySlotName(name === "—" ? defaultMonitoringAgentName(trackedManagedRuntimeTarget, instance) : name); } else { setDeployDeviceSlotMode("new"); setDeployDeviceSlotId(null); setDeployDeviceSlotName(name === "—" ? trackedManagedRuntimeTarget.name : name); } setDeployVersion((type === "monitor-agent" ? latestMonitoringAgentVersion : latestDeviceAgentVersion) !== "latest" ? (type === "monitor-agent" ? latestMonitoringAgentVersion : latestDeviceAgentVersion) : (desiredVersion ?? reportedVersion ?? runtimeVersion ?? "")); setDeployStatus("IDLE"); setDeployError(null); setDialogActionDetails(null); type === "monitor-agent" ? deployMonitoringAgentMutation.reset() : deployDeviceAgentMutation.reset(); }}><DeployAgentIcon /></ActionIcon></Tooltip>}
                   {diagnostic.status === "UNTRACKED" && runtimeInstallDir && (type === "device-agent" || type === "monitor-agent") && <Tooltip label="Cleanup untracked runtime"><ActionIcon size="sm" variant="light" color="red" aria-label={`Cleanup untracked ${name}`} disabled={!trackedManagedRuntimeTarget.online} onClick={() => setCleanupRuntimeTarget({ supervisor: trackedManagedRuntimeTarget, agentType: type, instance, name, installDir: runtimeInstallDir })}><DeprovisionAgentIcon /></ActionIcon></Tooltip>}
-                  {diagnostic.status === "DRIFT" && managementId && <Tooltip label="Deprovision runtime before reinstalling to repair path, Compose or container drift"><ActionIcon size="sm" variant="light" color="red" aria-label={`Deprovision ${name}`} disabled={!trackedManagedRuntimeTarget.online} onClick={() => { setManagedRuntimeTarget(null); setDeprovisionTarget({ supervisor: trackedManagedRuntimeTarget, agentType: type === "device-agent" ? "device-agent" : "monitor-agent", instance, name }); }}><DeprovisionAgentIcon /></ActionIcon></Tooltip>}
+                  {diagnostic.status === "DRIFT" && structuralDrift && (!agentId || !runtimeInstallDir || !repairVersion) && <Tooltip label="Automatic repair unavailable because agent identity, runtime install_dir, or target version is missing"><Text size="xs" c="dimmed">Repair unavailable</Text></Tooltip>}
                   {!["DRIFT", "MISSING", "UNTRACKED"].includes(diagnostic.status) && managementId && <Tooltip label={`Deprovision ${name}`}><ActionIcon size="sm" variant="light" color="red" aria-label={`Deprovision ${name}`} disabled={!trackedManagedRuntimeTarget.online} onClick={() => { setManagedRuntimeTarget(null); setDeprovisionTarget({ supervisor: trackedManagedRuntimeTarget, agentType: type === "device-agent" ? "device-agent" : "monitor-agent", instance, name }); }}><DeprovisionAgentIcon /></ActionIcon></Tooltip>}
                   {diagnostic.status === "ERROR" && <Text size="xs" c="dimmed">Refresh / inspect</Text>}
                   {diagnostic.status === "DISCOVERED" && <Text size="xs" c="dimmed">Deploy to adopt</Text>}
@@ -956,6 +1080,52 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
         {dialogActionDetails && cleanupRuntimeMutation.isPending && <AgentActionDetails label={dialogActionDetails.label} operation={dialogActionDetails.operation} />}
         {cleanupRuntimeMutation.isError && <Text size="sm" c="red">{cleanupRuntimeMutation.error instanceof Error ? cleanupRuntimeMutation.error.message : "Unable to cleanup runtime"}</Text>}
         <Group justify="flex-end"><Button variant="default" disabled={cleanupRuntimeMutation.isPending} onClick={() => setCleanupRuntimeTarget(null)}>Cancel</Button><Button color="red" loading={cleanupRuntimeMutation.isPending} onClick={() => cleanupRuntimeTarget && cleanupRuntimeMutation.mutate(cleanupRuntimeTarget)}>Cleanup runtime</Button></Group>
+      </Stack>
+    </Modal>
+
+    <Modal
+      opened={repairRuntimeTarget != null}
+      onClose={() => {
+        if (!repairRuntimeMutation.isPending) {
+          setRepairRuntimeTarget(null);
+          setRepairRuntimeStep("IDLE");
+          setDialogActionDetails(null);
+          repairRuntimeMutation.reset();
+        }
+      }}
+      title="Repair managed runtime"
+      centered
+      size="lg"
+    >
+      <Stack>
+        <Text size="sm">
+          Reconcile <strong>{repairRuntimeTarget?.name}</strong> on Supervisor Agent <strong>{repairRuntimeTarget?.supervisor.name}</strong> by removing the exact drifted runtime, redeploying the same SensorSphere identity, and verifying that it returns to <strong>MANAGED</strong>.
+        </Text>
+        <Card withBorder p="sm">
+          <Stack gap={4}>
+            <Group justify="space-between"><Text size="xs" c="dimmed">Agent</Text><Code>{repairRuntimeTarget?.agentId ?? "—"}</Code></Group>
+            <Group justify="space-between"><Text size="xs" c="dimmed">Instance</Text><Code>{repairRuntimeTarget?.instance ?? "—"}</Code></Group>
+            <Group justify="space-between"><Text size="xs" c="dimmed">Target version</Text><Code>{repairRuntimeTarget?.version ?? "—"}</Code></Group>
+            <Text size="xs" c="dimmed">Runtime install_dir to remove</Text>
+            <Code block>{repairRuntimeTarget?.installDir ?? "—"}</Code>
+          </Stack>
+        </Card>
+        {repairRuntimeTarget && repairRuntimeTarget.reasons.length > 0 && <Card withBorder p="sm"><Text size="xs" fw={600} mb={4}>Detected drift</Text>{repairRuntimeTarget.reasons.map((reason, index) => <Text key={index} size="xs" c="orange">• {reason}</Text>)}</Card>}
+        <Group gap="xs">
+          <Badge variant="light" color={repairRuntimeStep === "REMOVING" ? "orange" : repairRuntimeStep === "DEPLOYING" || repairRuntimeStep === "VERIFYING" || repairRuntimeStep === "SUCCESS" ? "green" : "gray"}>1 Remove exact runtime</Badge>
+          <Badge variant="light" color={repairRuntimeStep === "DEPLOYING" ? "orange" : repairRuntimeStep === "VERIFYING" || repairRuntimeStep === "SUCCESS" ? "green" : "gray"}>2 Redeploy same identity</Badge>
+          <Badge variant="light" color={repairRuntimeStep === "VERIFYING" ? "orange" : repairRuntimeStep === "SUCCESS" ? "green" : "gray"}>3 Verify MANAGED</Badge>
+        </Group>
+        {dialogActionDetails && repairRuntimeMutation.isPending && <AgentActionDetails label={dialogActionDetails.label} operation={dialogActionDetails.operation} />}
+        {repairRuntimeStep === "VERIFYING" && <Text size="sm" c="blue">Waiting for the Supervisor to report the repaired runtime and for reconciliation to become MANAGED…</Text>}
+        {repairRuntimeStep === "SUCCESS" && <Text size="sm" c="green" fw={600}>Runtime repaired and verified as MANAGED.</Text>}
+        {repairRuntimeMutation.isError && <Text size="sm" c="red">{repairRuntimeMutation.error instanceof Error ? repairRuntimeMutation.error.message : "Unable to repair managed runtime"}</Text>}
+        <Group justify="flex-end">
+          {repairRuntimeStep === "SUCCESS" ? <Button onClick={() => { setRepairRuntimeTarget(null); setRepairRuntimeStep("IDLE"); setDialogActionDetails(null); repairRuntimeMutation.reset(); }}>Close</Button> : <>
+            <Button variant="default" disabled={repairRuntimeMutation.isPending} onClick={() => { setRepairRuntimeTarget(null); setRepairRuntimeStep("IDLE"); setDialogActionDetails(null); repairRuntimeMutation.reset(); }}>Cancel</Button>
+            <Button color="orange" loading={repairRuntimeMutation.isPending} disabled={!repairRuntimeTarget || !repairRuntimeTarget.supervisor.online} onClick={() => repairRuntimeTarget && repairRuntimeMutation.mutate(repairRuntimeTarget)}>Repair / Reconcile</Button>
+          </>}
+        </Group>
       </Stack>
     </Modal>
 

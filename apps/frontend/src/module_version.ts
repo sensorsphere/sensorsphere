@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.102.0";
+export const MODULE_VERSION = "1.103.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.103.0": {
+    releasedAt: "2026-09-30T09:58:29Z",
+    patch: "PR-300-managed-runtime-repair-reconcile.patch",
+    changes: [
+      { type: "added", description: "Add one-click Repair / Reconcile for structural Managed Runtime Inspector DRIFT states" },
+      { type: "added", description: "Repair removes the exact drifted runtime, redeploys the same SensorSphere identity and verifies reconciliation to MANAGED" },
+      { type: "changed", description: "Keep version-only DRIFT on the lightweight Update action while structural path, Compose or container drift uses Repair" }
+    ]
+  },
   "1.102.0": {
     releasedAt: "2026-09-30T09:40:00Z",
     patch: "PR-299-managed-runtime-issue-counter.patch",
