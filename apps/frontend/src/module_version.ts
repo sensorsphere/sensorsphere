@@ -18,10 +18,21 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.107.1";
+export const MODULE_VERSION = "1.108.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.108.0": {
+    releasedAt: "2026-09-30T13:36:12Z",
+    patch: "PR-306-runtime-inspector-hardening.patch",
+    changes: [
+      { type: "added", description: "Add per-runtime bulk reconciliation results with before, action, after, duration, success, failure and skipped summaries" },
+      { type: "added", description: "Add optional Continue after an error for sequential bulk reconciliation while keeping stop-on-first-error as the default" },
+      { type: "changed", description: "Explain why DISCOVERED, UNTRACKED, ERROR and MANAGED runtimes are excluded from bulk reconciliation selection" },
+      { type: "added", description: "Allow safe retry of failed or timed-out DEPLOY operations only when the runtime is absent or not reported" },
+      { type: "changed", description: "Show managed-operation duration and refresh runtime plus operation history together" }
+    ]
+  },
   "1.107.1": {
     releasedAt: "2026-09-30T12:32:00Z",
     patch: "PR-305-discovery-bulk-add-validation-dropdown.patch",
