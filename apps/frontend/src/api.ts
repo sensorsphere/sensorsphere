@@ -2099,7 +2099,7 @@ export async function deleteDeviceAgent(id: string): Promise<void> {
 export async function startDeviceDiscovery(
   agentId: string,
   provider: string,
-  timeoutSeconds = 4
+  timeoutSeconds = 8
 ): Promise<DeviceDiscovery> {
   return readJson<DeviceDiscovery>(await fetch(`/api/v1/device-control/agents/${agentId}/discover`, {
     method: "POST",

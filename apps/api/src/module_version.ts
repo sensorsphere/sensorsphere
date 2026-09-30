@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.61.0";
+export const MODULE_VERSION = "1.61.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.61.1": {
+    releasedAt: "2026-09-30T18:05:00Z",
+    patch: "PR-311-discovery-timeout-and-esphome-realtime-inventory.patch",
+    changes: [
+      { type: "changed", description: "Increase Device Discovery request limits and allow additional server-side completion time for provider enrichment" }
+    ]
+  },
   "1.61.0": {
     releasedAt: "2026-09-30T14:55:12Z",
     patch: "PR-308-entities-discovery-filtering-scroll-entity-drift.patch",

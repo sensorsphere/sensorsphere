@@ -33,7 +33,7 @@ const agentUpdateSchema = z.object({
 
 const discoveryCreateSchema = z.object({
   provider: providerSchema,
-  timeoutSeconds: z.number().int().min(1).max(15).optional()
+  timeoutSeconds: z.number().int().min(1).max(30).optional()
 }).strict();
 
 const discoveryDiscardSchema = z.object({
@@ -2640,7 +2640,7 @@ export async function registerDeviceControlFeature(
     if (!capability) return reply.code(409).send({ error: `Device Agent does not advertise provider ${input.provider}` });
     if (!capability.discovery) return reply.code(409).send({ error: `Device Agent provider ${input.provider} does not support discovery` });
 
-    const timeoutSeconds = input.timeoutSeconds ?? 4;
+    const timeoutSeconds = input.timeoutSeconds ?? 8;
     const commandId = randomUUID();
     const record: DiscoveryRecord = {
       id: commandId,
@@ -2650,7 +2650,7 @@ export async function registerDeviceControlFeature(
       devices: [],
       error: null,
       createdAt: new Date(),
-      expiresAt: new Date(Date.now() + (timeoutSeconds + 5) * 1000),
+      expiresAt: new Date(Date.now() + (timeoutSeconds + 20) * 1000),
       finishedAt: null
     };
     discoveries.set(commandId, record);

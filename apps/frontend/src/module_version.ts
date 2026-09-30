@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.110.2";
+export const MODULE_VERSION = "1.110.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.110.3": {
+    releasedAt: "2026-09-30T18:05:00Z",
+    patch: "PR-311-discovery-timeout-and-esphome-realtime-inventory.patch",
+    changes: [
+      { type: "changed", description: "Increase the default Device Discovery scan window from 4 seconds to 8 seconds" }
+    ]
+  },
   "1.110.2": {
     releasedAt: "2026-09-30T17:55:00Z",
     patch: "PR-310-discovery-entity-identity-and-agent-version-status.patch",
