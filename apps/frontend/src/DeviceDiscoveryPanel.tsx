@@ -26,7 +26,8 @@ interface DeviceDiscoveryPanelProps {
   devices: DeviceRegistryDevice[];
   onImportDiscoveredDevice: (request: DiscoveredDeviceImportRequest) => void;
   onUpdateDiscoveredDevice: (request: DiscoveredDeviceImportRequest, device: DeviceRegistryDevice) => Promise<void>;
-  onBulkImportDiscoveredDevices: (requests: DiscoveredDeviceImportRequest[], slotId: string | null) => Promise<void>;
+  onPreviewBulkImportDiscoveredDevices: (requests: DiscoveredDeviceImportRequest[], slotId: string | null) => Promise<Array<{ name: string; provider: string; agentName: string; slotName: string; deviceType: string }>>;
+  onBulkImportDiscoveredDevices: (requests: DiscoveredDeviceImportRequest[], slotId: string | null) => Promise<{ createdDevices: number; deviceIds: string[] }>;
   onOpenRegisteredDevice: (device: DeviceRegistryDevice) => void;
 }
 
@@ -379,7 +380,7 @@ function discoveryRowSelectionKey(row: DisplayDiscoveryRow): string {
   return `${row.discovery.provider.toUpperCase()}|${row.logicalKey}`;
 }
 
-export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpdateDiscoveredDevice, onBulkImportDiscoveredDevices, onOpenRegisteredDevice }: DeviceDiscoveryPanelProps) {
+export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpdateDiscoveredDevice, onPreviewBulkImportDiscoveredDevices, onBulkImportDiscoveredDevices, onOpenRegisteredDevice }: DeviceDiscoveryPanelProps) {
   const queryClient = useQueryClient();
   const [providerFilter, setProviderFilter] = usePersistentState<string | null>("device-registry.discovery.filter.provider", null);
   const [agentFilter, setAgentFilter] = usePersistentState<string | null>("device-registry.discovery.filter.agent", null);
@@ -405,6 +406,9 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const [bulkSlotId, setBulkSlotId] = React.useState<string | null>("__DISCOVERED_SLOT__");
   const [bulkSlotDropdownOpened, setBulkSlotDropdownOpened] = React.useState(false);
   const [bulkError, setBulkError] = React.useState<string | null>(null);
+  const [bulkPreview, setBulkPreview] = React.useState<Array<{ name: string; provider: string; agentName: string; slotName: string; deviceType: string }>>([]);
+  const [bulkPreviewLoading, setBulkPreviewLoading] = React.useState(false);
+  const [bulkSuccessCount, setBulkSuccessCount] = React.useState<number | null>(null);
 
   const agentsQuery = useQuery({ queryKey: ["device-agents"], queryFn: getDeviceAgents, refetchInterval: 5000 });
   const slotsQuery = useQuery({ queryKey: ["device-control", "slots"], queryFn: getDeviceAgentSlots, refetchInterval: 10000 });
@@ -580,6 +584,25 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   ).values()];
   const selectedAddRows = selectedLogicalRows.filter(row => row.status === "CAN_ADD" && row.agent);
   const selectedRegisteredRows = selectedLogicalRows.filter(row => Boolean(row.registered));
+  const selectedAddRequests = () => selectedAddRows.map(row => ({
+    agent: row.agent!,
+    provider: row.discovery.provider.toUpperCase(),
+    device: row.device
+  }));
+  const refreshBulkPreview = async (slotId: string | null) => {
+    setBulkPreviewLoading(true);
+    setBulkError(null);
+    setBulkSuccessCount(null);
+    try {
+      const preview = await onPreviewBulkImportDiscoveredDevices(selectedAddRequests(), slotId);
+      setBulkPreview(preview);
+    } catch (cause) {
+      setBulkPreview([]);
+      setBulkError(cause instanceof Error ? cause.message : "Unable to validate selected devices");
+    } finally {
+      setBulkPreviewLoading(false);
+    }
+  };
   const visibleSelectableKeys = [...new Set(
     sortedRows
       .filter(row => (row.status === "CAN_ADD" && Boolean(row.agent)) || Boolean(row.registered))
@@ -589,17 +612,12 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
 
   const bulkImportMutation = useMutation({
     mutationFn: async () => {
-      const requests = selectedAddRows.map(row => ({
-        agent: row.agent!,
-        provider: row.discovery.provider.toUpperCase(),
-        device: row.device
-      }));
-      await onBulkImportDiscoveredDevices(requests, bulkSlotId);
-      return requests.length;
+      const requests = selectedAddRequests();
+      if (bulkPreview.length !== requests.length) throw new Error("Bulk import preview is stale; validate the selected devices again before importing");
+      return onBulkImportDiscoveredDevices(requests, bulkSlotId);
     },
-    onSuccess: async () => {
-      setSelectedRowKeys([]);
-      setBulkAction(null);
+    onSuccess: async result => {
+      setBulkSuccessCount(result.createdDevices);
       setBulkError(null);
       await queryClient.invalidateQueries({ queryKey: ["device-registry", "devices"] });
     },
@@ -820,7 +838,10 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
           setBulkSlotId("__DISCOVERED_SLOT__");
           setBulkSlotDropdownOpened(false);
           setBulkError(null);
+          setBulkPreview([]);
+          setBulkSuccessCount(null);
           setBulkAction("ADD");
+          void refreshBulkPreview("__DISCOVERED_SLOT__");
         }}
       >
         Add selected ({selectedAddRows.length})
@@ -1002,8 +1023,15 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
 
     <Modal
       opened={bulkAction != null}
-      onClose={() => { setBulkAction(null); setBulkError(null); setBulkSlotDropdownOpened(false); }}
-      title={bulkAction === "ADD" ? `Add ${selectedAddRows.length} discovered device${selectedAddRows.length === 1 ? "" : "s"}` : `Assign Slot to ${selectedRegisteredRows.length} registered device${selectedRegisteredRows.length === 1 ? "" : "s"}`}
+      onClose={() => {
+        if (bulkSuccessCount != null) setSelectedRowKeys([]);
+        setBulkAction(null);
+        setBulkError(null);
+        setBulkSlotDropdownOpened(false);
+        setBulkPreview([]);
+        setBulkSuccessCount(null);
+      }}
+      title={bulkAction === "ADD" ? `Add ${bulkPreview.length || selectedAddRows.length} discovered device${(bulkPreview.length || selectedAddRows.length) === 1 ? "" : "s"}` : `Assign Slot to ${selectedRegisteredRows.length} registered device${selectedRegisteredRows.length === 1 ? "" : "s"}`}
       centered
     >
       <Stack gap="md">
@@ -1028,7 +1056,9 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
           onChange={value => {
             setBulkSlotId(value);
             setBulkError(null);
+            setBulkSuccessCount(null);
             setBulkSlotDropdownOpened(false);
+            if (bulkAction === "ADD") void refreshBulkPreview(value);
           }}
           data={bulkAction === "ADD"
             ? [
@@ -1044,12 +1074,29 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                 label: `${slot.name} · ${slot.bound ? slot.agentName ?? "BOUND" : "UNBOUND"}`
               }))}
         />
+        {bulkAction === "ADD" && <Card withBorder p="xs">
+          <Stack gap={6}>
+            <Group justify="space-between"><Text size="sm" fw={600}>Import preview</Text><Badge variant="light" color={bulkError ? "red" : bulkPreviewLoading ? "blue" : "green"}>{bulkPreviewLoading ? "VALIDATING" : bulkError ? "INVALID" : `${bulkPreview.length} READY`}</Badge></Group>
+            <Text size="xs" c="dimmed">The complete batch is validated before creation. The API commits all devices in one transaction or rolls the entire batch back.</Text>
+            {!bulkPreviewLoading && bulkPreview.length > 0 && <div style={{ maxHeight: 240, overflow: "auto" }}>
+              <Table striped withTableBorder>
+                <Table.Thead><Table.Tr><Table.Th>Device</Table.Th><Table.Th>Provider</Table.Th><Table.Th>Discovered by</Table.Th><Table.Th>Target Slot</Table.Th><Table.Th>Device Type</Table.Th></Table.Tr></Table.Thead>
+                <Table.Tbody>{bulkPreview.map((row, index) => <Table.Tr key={`${row.provider}-${row.name}-${index}`}><Table.Td>{row.name}</Table.Td><Table.Td>{row.provider}</Table.Td><Table.Td>{row.agentName}</Table.Td><Table.Td>{row.slotName}</Table.Td><Table.Td>{row.deviceType}</Table.Td></Table.Tr>)}</Table.Tbody>
+              </Table>
+            </div>}
+          </Stack>
+        </Card>}
+        {bulkSuccessCount != null && <Text size="sm" c="green" fw={600}>{bulkSuccessCount} device{bulkSuccessCount === 1 ? "" : "s"} imported successfully in one transaction.</Text>}
         {bulkError && <Text size="sm" c="red">{bulkError}</Text>}
         <Group justify="flex-end">
-          <Button data-autofocus variant="default" onClick={() => { setBulkAction(null); setBulkError(null); }}>Cancel</Button>
-          {bulkAction === "ADD"
-            ? <Button color="green" loading={bulkImportMutation.isPending} disabled={selectedAddRows.length === 0} onClick={() => bulkImportMutation.mutate()}>Add selected</Button>
-            : <Button color="violet" loading={bulkSlotMutation.isPending} disabled={selectedRegisteredRows.length === 0} onClick={() => bulkSlotMutation.mutate()}>Apply Slot</Button>}
+          {bulkSuccessCount != null
+            ? <Button data-autofocus onClick={() => { setSelectedRowKeys([]); setBulkAction(null); setBulkError(null); setBulkPreview([]); setBulkSuccessCount(null); }}>Close</Button>
+            : <>
+              <Button data-autofocus variant="default" disabled={bulkImportMutation.isPending || bulkSlotMutation.isPending} onClick={() => { setBulkAction(null); setBulkError(null); setBulkPreview([]); setBulkSuccessCount(null); }}>Cancel</Button>
+              {bulkAction === "ADD"
+                ? <Button color="green" loading={bulkImportMutation.isPending} disabled={selectedAddRows.length === 0 || bulkPreviewLoading || Boolean(bulkError) || bulkPreview.length !== selectedAddRows.length} onClick={() => bulkImportMutation.mutate()}>Add selected</Button>
+                : <Button color="violet" loading={bulkSlotMutation.isPending} disabled={selectedRegisteredRows.length === 0} onClick={() => bulkSlotMutation.mutate()}>Apply Slot</Button>}
+            </>}
         </Group>
       </Stack>
     </Modal>

@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.108.0";
+export const MODULE_VERSION = "1.109.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.109.0": {
+    releasedAt: "2026-09-30T13:55:39Z",
+    patch: "PR-307-discovery-import-hardening.patch",
+    changes: [
+      { type: "added", description: "Preview every selected Discovery import as device, provider, discoverer, target Slot and Device Type before creation" },
+      { type: "changed", description: "Validate the complete Discovery batch before enabling Add selected and import it through one all-or-nothing API transaction" },
+      { type: "added", description: "Show a final successful import count while keeping the bulk dialog open until the user closes it" }
+    ]
+  },
   "1.108.0": {
     releasedAt: "2026-09-30T13:36:12Z",
     patch: "PR-306-runtime-inspector-hardening.patch",

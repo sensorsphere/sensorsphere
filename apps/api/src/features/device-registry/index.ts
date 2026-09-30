@@ -106,6 +106,26 @@ const deviceCreateSchema = z.object({
   accessLinks: z.array(accessLinkSchema).max(100).optional()
 }).strict();
 
+const deviceBulkCreateSchema = z.object({
+  items: z.array(z.object({
+    clientKey: z.string().trim().min(1).max(500),
+    parentClientKey: z.string().trim().min(1).max(500).nullable().optional(),
+    device: deviceCreateSchema
+  }).strict()).min(1).max(500)
+}).strict().superRefine((value, context) => {
+  const seen = new Set<string>();
+  value.items.forEach((item, index) => {
+    if (seen.has(item.clientKey)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["items", index, "clientKey"],
+        message: `Duplicate clientKey: ${item.clientKey}`
+      });
+    }
+    seen.add(item.clientKey);
+  });
+});
+
 const deviceUpdateSchema = deviceCreateSchema.partial().strict().refine(
   value => Object.keys(value).length > 0,
   "At least one field is required"
@@ -1052,6 +1072,74 @@ export async function registerDeviceRegistryFeature(
       await replaceChildren(client, id, input.identities ?? [], input.links ?? [], input.technologies ?? (input.technology ? [input.technology] : []), input.accessLinks ?? []);
       await client.query("COMMIT");
       return sendDevice(pool, id, reply.code(201));
+    } catch (error) {
+      await client.query("ROLLBACK");
+      if (error instanceof DeviceIdentityValidationError) {
+        return reply.code(400).send({ code: "DEVICE_IDENTITY_INVALID", error: error.message });
+      }
+      if (error instanceof DeviceIdentityConflictError) {
+        return reply.code(409).send({
+          code: "DEVICE_IDENTITY_CONFLICT",
+          error: error.message,
+          identityType: error.identityType,
+          value: error.value,
+          device: error.device
+        });
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+
+  app.post("/api/v1/device-registry/devices/bulk", async (
+    request: FastifyRequest<{ Body: unknown }>, reply
+  ) => {
+    const parsed = deviceBulkCreateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Invalid bulk device import" });
+
+    const client = await pool.connect();
+    const idsByClientKey = new Map<string, string>();
+    const createdIds: string[] = [];
+    try {
+      await client.query("BEGIN");
+      for (const item of parsed.data.items) {
+        const input = item.device;
+        const parentDeviceId = item.parentClientKey
+          ? idsByClientKey.get(item.parentClientKey) ?? null
+          : input.parentDeviceId ?? null;
+        if (item.parentClientKey && !parentDeviceId) {
+          throw new Error(`Bulk import parent ${item.parentClientKey} was not created before child ${item.clientKey}`);
+        }
+
+        const controlAssignment = await resolveDeviceAgentSlotAssignment(
+          client,
+          input.controlSlotId,
+          input.controlAgentId
+        );
+        const result = await client.query<{ id: string }>(`
+          INSERT INTO device_registry_devices (
+            name, device_class, device_type, technology, icon_override, mac_address, ip_address, ieee_address, fqdn, manufacturer, model,
+            firmware_version, description, location_id, parent_device_id,
+            health_profile_id, control_slot_id, control_agent_id, control_provider, enabled, last_seen_at, battery_percent, rssi
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7::inet,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+          RETURNING id
+        `, [
+          input.name, input.deviceClass, input.deviceType, input.technology ?? null, input.iconOverride ?? null,
+          input.macAddress ?? null, input.ipAddress ?? null, input.ieeeAddress ?? null, input.fqdn ?? null,
+          input.manufacturer ?? null, input.model ?? null, input.firmwareVersion ?? null,
+          input.description ?? null, input.locationId ?? null, parentDeviceId,
+          input.healthProfileId ?? null, controlAssignment.slotId, controlAssignment.agentId,
+          input.controlProvider ?? controlProviderFromTechnologies(input.technologies ?? (input.technology ? [input.technology] : [])),
+          input.enabled ?? true, input.lastSeenAt ?? null, input.batteryPercent ?? null, input.rssi ?? null
+        ]);
+        const id = result.rows[0]!.id;
+        await replaceChildren(client, id, input.identities ?? [], input.links ?? [], input.technologies ?? (input.technology ? [input.technology] : []), input.accessLinks ?? []);
+        idsByClientKey.set(item.clientKey, id);
+        createdIds.push(id);
+      }
+      await client.query("COMMIT");
+      return reply.code(201).send({ createdDevices: createdIds.length, deviceIds: createdIds });
     } catch (error) {
       await client.query("ROLLBACK");
       if (error instanceof DeviceIdentityValidationError) {

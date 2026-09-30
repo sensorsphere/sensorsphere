@@ -33,6 +33,7 @@ import {
 import {
   createDeviceHealthProfile,
   createDeviceRegistryDevice,
+  bulkCreateDeviceRegistryDevices,
   createDeviceControlCommand,
   bulkAssignDeviceRegistrySlot,
   deleteDeviceHealthProfile,
@@ -1099,7 +1100,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     setDeviceModalOpen(true);
   };
 
-  const bulkImportDiscoveredDevices = async (requests: DiscoveredDeviceImportRequest[], slotId: string | null) => {
+  const prepareBulkDiscoveredDevices = (requests: DiscoveredDeviceImportRequest[], slotId: string | null) => {
     const orderedRequests = [...requests].sort((left, right) => {
       const rank = (request: DiscoveredDeviceImportRequest) => {
         if (request.provider.toUpperCase() !== "PROXMOX") return 1;
@@ -1108,11 +1109,27 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       };
       return rank(left) - rank(right);
     });
-    const knownDevices = [...devices];
-    for (const request of orderedRequests) {
-      const form = discoveredDeviceForm(request, knownDevices);
+    const requestKey = (request: DiscoveredDeviceImportRequest): string => {
+      const provider = request.provider.toUpperCase();
+      const value = (key: string) => {
+        const raw = request.device[key];
+        return raw == null ? "" : String(raw).trim();
+      };
+      const identity = provider === "PROXMOX"
+        ? value("providerId") || value("id") || value("name")
+        : provider === "YEELIGHT"
+          ? value("id") || value("mac") || value("name")
+          : value("mac") || value("hostname") || value("name");
+      if (!identity) throw new Error(`Unable to determine a stable import identity for ${provider} discovery`);
+      return `${provider}:${identity}`;
+    };
+    const batchKeys = new Set(orderedRequests.map(requestKey));
+    const previews: Array<{ name: string; provider: string; agentName: string; slotName: string; deviceType: string }> = [];
+    const items = orderedRequests.map(request => {
+      const form = discoveredDeviceForm(request, devices);
+      if (!form.name.trim()) throw new Error(`Discovered ${request.provider} device has no valid name`);
       if (!form.deviceType.trim()) {
-        throw new Error(`No valid Device Type is configured for discovered device ${form.name || "without name"} (${request.provider}). Configure at least one matching Device Type before importing it.`);
+        throw new Error(`No valid Device Type is configured for discovered device ${form.name} (${request.provider}). Configure at least one matching Device Type before importing it.`);
       }
       const resolvedSlotId = slotId === "__DISCOVERED_SLOT__"
         ? request.agent.slotId
@@ -1120,13 +1137,46 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           ? null
           : slotId;
       if (slotId === "__DISCOVERED_SLOT__" && !resolvedSlotId) {
-        throw new Error(`Device Agent ${request.agent.name} has no Device Agent Slot; cannot assign discovered device ${form.name || "without name"} automatically`);
+        throw new Error(`Device Agent ${request.agent.name} has no Device Agent Slot; cannot assign discovered device ${form.name} automatically`);
       }
-      const created = await createDeviceRegistryDevice(deviceFormPayload({ ...form, controlSlotId: resolvedSlotId, controlAgentId: null }));
-      knownDevices.push(created);
-    }
+      const resolvedSlot = resolvedSlotId
+        ? (deviceAgentSlotsQuery.data ?? []).find(slot => slot.id === resolvedSlotId) ?? null
+        : null;
+      if (resolvedSlotId && !resolvedSlot) throw new Error(`Target Device Agent Slot ${resolvedSlotId} no longer exists for ${form.name}`);
+
+      const provider = request.provider.toUpperCase();
+      const parentProviderId = provider === "PROXMOX" && typeof request.device.parentProviderId === "string"
+        ? request.device.parentProviderId.trim()
+        : "";
+      const parentKeyCandidate = parentProviderId ? `${provider}:${parentProviderId}` : null;
+      const clientKey = requestKey(request);
+      const type = (deviceTypesQuery.data ?? []).find(item => item.code === form.deviceType);
+      previews.push({
+        name: form.name,
+        provider,
+        agentName: request.agent.name,
+        slotName: resolvedSlot?.name ?? "No Slot",
+        deviceType: type ? `${type.label} (${type.code})` : form.deviceType
+      });
+      return {
+        clientKey,
+        parentClientKey: parentKeyCandidate && batchKeys.has(parentKeyCandidate) ? parentKeyCandidate : null,
+        device: deviceFormPayload({ ...form, controlSlotId: resolvedSlotId, controlAgentId: null })
+      };
+    });
+    return { items, previews };
+  };
+
+  const previewBulkImportDiscoveredDevices = async (requests: DiscoveredDeviceImportRequest[], slotId: string | null) => {
+    return prepareBulkDiscoveredDevices(requests, slotId).previews;
+  };
+
+  const bulkImportDiscoveredDevices = async (requests: DiscoveredDeviceImportRequest[], slotId: string | null) => {
+    const prepared = prepareBulkDiscoveredDevices(requests, slotId);
+    const result = await bulkCreateDeviceRegistryDevices({ items: prepared.items });
     await refresh();
     await queryClient.refetchQueries({ queryKey: ["device-registry", "devices"], type: "active" });
+    return result;
   };
 
   const updateRegisteredDeviceFromDiscovery = async (
@@ -1574,6 +1624,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
             devices={devices}
             onImportDiscoveredDevice={openDiscoveredDeviceImport}
             onUpdateDiscoveredDevice={updateRegisteredDeviceFromDiscovery}
+            onPreviewBulkImportDiscoveredDevices={previewBulkImportDiscoveredDevices}
             onBulkImportDiscoveredDevices={bulkImportDiscoveredDevices}
             onOpenRegisteredDevice={openEditDevice}
           />

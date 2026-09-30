@@ -1817,6 +1817,20 @@ export async function createDeviceRegistryDevice(
   }));
 }
 
+export async function bulkCreateDeviceRegistryDevices(input: {
+  items: Array<{
+    clientKey: string;
+    parentClientKey?: string | null;
+    device: CreateDeviceRegistryDeviceInput;
+  }>;
+}): Promise<{ createdDevices: number; deviceIds: string[] }> {
+  return readJson<{ createdDevices: number; deviceIds: string[] }>(await fetch("/api/v1/device-registry/devices/bulk", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  }));
+}
+
 export async function updateDeviceRegistryDevice(
   id: string,
   input: UpdateDeviceRegistryDeviceInput

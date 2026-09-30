@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.59.0";
+export const MODULE_VERSION = "1.60.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.60.0": {
+    releasedAt: "2026-09-30T13:55:39Z",
+    patch: "PR-307-atomic-discovery-bulk-import.patch",
+    changes: [
+      { type: "added", description: "Add transactional Device Registry bulk creation for Discovery imports so the entire batch is committed or rolled back atomically" },
+      { type: "added", description: "Resolve Proxmox parent-child relationships inside a bulk import using stable client keys before commit" }
+    ]
+  },
   "1.59.0": {
     releasedAt: "2026-09-30T08:46:15Z",
     patch: "PR-296-test-role-switch-v1.patch",
