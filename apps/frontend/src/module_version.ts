@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.98.0";
+export const MODULE_VERSION = "1.99.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.99.0": {
+    releasedAt: "2026-09-30T04:36:00Z",
+    patch: "PR-292-managed-runtime-inspector-wider.patch",
+    changes: [
+      { type: "changed", description: "Increase the Managed Runtime Inspector maximum width by 60 percent while keeping it constrained to the viewport" }
+    ]
+  },
   "1.98.0": {
     releasedAt: "2026-09-30T04:07:28Z",
     patch: "PR-291-managed-runtime-inspector-issues-and-filters.patch",

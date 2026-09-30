@@ -729,7 +729,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
       opened={managedRuntimeTarget != null}
       onClose={() => { setManagedRuntimeTarget(null); setManagedRuntimeFilter(null); }}
       title={`Managed Runtime Inspector${trackedManagedRuntimeTarget ? ` · ${trackedManagedRuntimeTarget.name}` : ""}`}
-      size="xl"
+      size="min(96vw, 1248px)"
       centered
       styles={{ content: { height: "90vh" }, body: { height: "calc(90vh - 60px)", overflow: "hidden" } }}
     >
