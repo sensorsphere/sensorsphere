@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.60.0";
+export const MODULE_VERSION = "1.61.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.61.0": {
+    releasedAt: "2026-09-30T14:55:12Z",
+    patch: "PR-308-entities-discovery-filtering-scroll-entity-drift.patch",
+    changes: [
+      { type: "added", description: "Persist canonical Discovery entity inventory signatures and counts in Device Registry devices" },
+      { type: "changed", description: "Allow Device Registry create, bulk create and update operations to maintain Discovery entity inventory metadata" }
+    ]
+  },
   "1.60.0": {
     releasedAt: "2026-09-30T13:55:39Z",
     patch: "PR-307-atomic-discovery-bulk-import.patch",

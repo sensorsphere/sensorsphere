@@ -91,6 +91,8 @@ const deviceCreateSchema = z.object({
   model: z.string().trim().max(300).nullable().optional(),
   firmwareVersion: z.string().trim().max(300).nullable().optional(),
   description: z.string().trim().max(5000).nullable().optional(),
+  discoveryEntitySignature: z.string().max(20000).nullable().optional(),
+  discoveryEntityCount: z.number().int().min(0).max(10000).nullable().optional(),
   locationId: z.string().uuid().nullable().optional(),
   parentDeviceId: z.string().uuid().nullable().optional(),
   healthProfileId: z.string().uuid().nullable().optional(),
@@ -210,6 +212,8 @@ interface DeviceRow {
   model: string | null;
   firmware_version: string | null;
   description: string | null;
+  discovery_entity_signature: string | null;
+  discovery_entity_count: number | null;
   location_id: string | null;
   location_name: string | null;
   parent_device_id: string | null;
@@ -381,6 +385,8 @@ async function listDeviceRows(pool: Pool): Promise<DeviceRow[]> {
       d.model,
       d.firmware_version,
       d.description,
+      d.discovery_entity_signature,
+      d.discovery_entity_count,
       d.location_id,
       l.name AS location_name,
       d.parent_device_id,
@@ -531,6 +537,8 @@ function mapDevice(row: DeviceRow, identities: IdentityRow[], links: LinkRow[], 
     model: row.model,
     firmwareVersion: row.firmware_version,
     description: row.description,
+    discoveryEntitySignature: row.discovery_entity_signature,
+    discoveryEntityCount: row.discovery_entity_count,
     location: row.location_id ? { id: row.location_id, name: row.location_name ?? row.location_id } : null,
     parentDevice: row.parent_device_id ? { id: row.parent_device_id, name: row.parent_device_name ?? row.parent_device_id } : null,
     healthProfile: row.health_profile_id ? { id: row.health_profile_id, name: row.health_profile_name ?? row.health_profile_id } : null,
@@ -1055,15 +1063,15 @@ export async function registerDeviceRegistryFeature(
       const result = await client.query<{ id: string }>(`
         INSERT INTO device_registry_devices (
           name, device_class, device_type, technology, icon_override, mac_address, ip_address, ieee_address, fqdn, manufacturer, model,
-          firmware_version, description, location_id, parent_device_id,
+          firmware_version, description, discovery_entity_signature, discovery_entity_count, location_id, parent_device_id,
           health_profile_id, control_slot_id, control_agent_id, control_provider, enabled, last_seen_at, battery_percent, rssi
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7::inet,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7::inet,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
         RETURNING id
       `, [
         input.name, input.deviceClass, input.deviceType, input.technology ?? null, input.iconOverride ?? null,
         input.macAddress ?? null, input.ipAddress ?? null, input.ieeeAddress ?? null, input.fqdn ?? null,
         input.manufacturer ?? null, input.model ?? null, input.firmwareVersion ?? null,
-        input.description ?? null, input.locationId ?? null, input.parentDeviceId ?? null,
+        input.description ?? null, input.discoveryEntitySignature ?? null, input.discoveryEntityCount ?? null, input.locationId ?? null, input.parentDeviceId ?? null,
         input.healthProfileId ?? null, controlAssignment.slotId, controlAssignment.agentId,
         input.controlProvider ?? controlProviderFromTechnologies(input.technologies ?? (input.technology ? [input.technology] : [])),
         input.enabled ?? true, input.lastSeenAt ?? null, input.batteryPercent ?? null, input.rssi ?? null
@@ -1120,15 +1128,15 @@ export async function registerDeviceRegistryFeature(
         const result = await client.query<{ id: string }>(`
           INSERT INTO device_registry_devices (
             name, device_class, device_type, technology, icon_override, mac_address, ip_address, ieee_address, fqdn, manufacturer, model,
-            firmware_version, description, location_id, parent_device_id,
+            firmware_version, description, discovery_entity_signature, discovery_entity_count, location_id, parent_device_id,
             health_profile_id, control_slot_id, control_agent_id, control_provider, enabled, last_seen_at, battery_percent, rssi
-          ) VALUES ($1,$2,$3,$4,$5,$6,$7::inet,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7::inet,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
           RETURNING id
         `, [
           input.name, input.deviceClass, input.deviceType, input.technology ?? null, input.iconOverride ?? null,
           input.macAddress ?? null, input.ipAddress ?? null, input.ieeeAddress ?? null, input.fqdn ?? null,
           input.manufacturer ?? null, input.model ?? null, input.firmwareVersion ?? null,
-          input.description ?? null, input.locationId ?? null, parentDeviceId,
+          input.description ?? null, input.discoveryEntitySignature ?? null, input.discoveryEntityCount ?? null, input.locationId ?? null, parentDeviceId,
           input.healthProfileId ?? null, controlAssignment.slotId, controlAssignment.agentId,
           input.controlProvider ?? controlProviderFromTechnologies(input.technologies ?? (input.technology ? [input.technology] : [])),
           input.enabled ?? true, input.lastSeenAt ?? null, input.batteryPercent ?? null, input.rssi ?? null
@@ -1254,6 +1262,8 @@ export async function registerDeviceRegistryFeature(
           last_seen_at = CASE WHEN $37::boolean THEN $38::timestamptz ELSE last_seen_at END,
           battery_percent = CASE WHEN $39::boolean THEN $40::double precision ELSE battery_percent END,
           rssi = CASE WHEN $41::boolean THEN $42::double precision ELSE rssi END,
+          discovery_entity_signature = CASE WHEN $43::boolean THEN $44 ELSE discovery_entity_signature END,
+          discovery_entity_count = CASE WHEN $45::boolean THEN $46::integer ELSE discovery_entity_count END,
           updated_at = NOW()
         WHERE id = $1
       `, [
@@ -1282,7 +1292,9 @@ export async function registerDeviceRegistryFeature(
         input.enabled ?? null,
         Object.prototype.hasOwnProperty.call(input, "lastSeenAt"), input.lastSeenAt ?? null,
         Object.prototype.hasOwnProperty.call(input, "batteryPercent"), input.batteryPercent ?? null,
-        Object.prototype.hasOwnProperty.call(input, "rssi"), input.rssi ?? null
+        Object.prototype.hasOwnProperty.call(input, "rssi"), input.rssi ?? null,
+        Object.prototype.hasOwnProperty.call(input, "discoveryEntitySignature"), input.discoveryEntitySignature ?? null,
+        Object.prototype.hasOwnProperty.call(input, "discoveryEntityCount"), input.discoveryEntityCount ?? null
       ]);
       await replaceChildren(client, request.params.id, input.identities, input.links, input.technologies, input.accessLinks);
       await client.query("COMMIT");

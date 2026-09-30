@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   Group,
   Modal,
   Select,
@@ -58,6 +59,10 @@ function defaultWidgetType(entity: RealtimeEntityRecord): "switch" | "status" | 
   return "value";
 }
 
+function entitySelectionKey(entity: RealtimeEntityRecord): string {
+  return `${entity.deviceId}:${entity.entityValue}`;
+}
+
 export function RealtimeEntityBrowser() {
   const queryClient = useQueryClient();
   const entitiesQuery = useQuery({
@@ -70,6 +75,8 @@ export function RealtimeEntityBrowser() {
     queryFn: getSimpleDashboards
   });
   const [addEntity, setAddEntity] = React.useState<RealtimeEntityRecord | null>(null);
+  const [selectedEntityKeys, setSelectedEntityKeys] = React.useState<string[]>([]);
+  const [bulkAddOpen, setBulkAddOpen] = React.useState(false);
   const [dashboardId, setDashboardId] = usePersistentState<string | null>("realtime-entities.add.dashboard", null);
   const [sectionId, setSectionId] = usePersistentState<string | null>("realtime-entities.add.section", null);
   const [widgetType, setWidgetType] = React.useState<"switch" | "status" | "value">("value");
@@ -81,6 +88,28 @@ export function RealtimeEntityBrowser() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["simple-dashboards"] });
       setAddEntity(null);
+    }
+  });
+  const bulkAddMutation = useMutation({
+    mutationFn: async () => {
+      if (!dashboardId) throw new Error("Dashboard is required");
+      const selected = entities.filter(entity => selectedEntityKeys.includes(entitySelectionKey(entity)));
+      if (!selected.length) throw new Error("Select at least one entity");
+      for (const entity of selected) {
+        await addSimpleDashboardEntityCard(
+          dashboardId,
+          entity.deviceId,
+          entity.entityValue,
+          defaultWidgetType(entity),
+          sectionId
+        );
+      }
+      return selected.length;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["simple-dashboards"] });
+      setBulkAddOpen(false);
+      setSelectedEntityKeys([]);
     }
   });
 
@@ -136,25 +165,50 @@ export function RealtimeEntityBrowser() {
   const actionableCount = entities.filter(entity => entity.controllable).length;
 
   return (
-    <Stack gap="sm" style={{ minHeight: 0 }}>
+    <Stack gap="sm" className="device-registry-devices-stack">
       <Group justify="space-between" align="flex-start">
         <div>
           <Text fw={600}>Realtime Entity Browser</Text>
           <Text size="xs" c="dimmed">Provider-neutral live entity inventory for Device Control and future dashboard widgets.</Text>
         </div>
         <Group gap="xs">
+          <Badge variant="light" color="gray">{filtered.length}/{entities.length} shown</Badge>
           <Badge variant="light" color="green">{liveDevices}/{totalDevices} devices live</Badge>
           <Badge variant="light" color="blue">{actionableCount}/{entities.length} actionable</Badge>
+          <Button size="compact-sm" variant="light" color="green" disabled={selectedEntityKeys.length === 0} onClick={() => {
+            const dashboards = (dashboardsQuery.data?.dashboards ?? []).filter(item => !item.templateId);
+            const selectedDashboard = dashboards.some(item => item.id === dashboardId) ? dashboardId : (dashboards[0]?.id ?? null);
+            const selectedSection = (dashboardsQuery.data?.sections ?? []).some(item => item.id === sectionId && item.dashboardId === selectedDashboard) ? sectionId : null;
+            setDashboardId(selectedDashboard);
+            setSectionId(selectedSection);
+            bulkAddMutation.reset();
+            setBulkAddOpen(true);
+          }}>Add selected ({selectedEntityKeys.length})</Button>
+          {selectedEntityKeys.length > 0 && <Button size="compact-sm" variant="subtle" color="gray" onClick={() => setSelectedEntityKeys([])}>Clear selection</Button>}
         </Group>
       </Group>
 
       {entitiesQuery.isError && <Text c="red" size="sm">Unable to load realtime entities.</Text>}
 
-      <Card withBorder padding={0} style={{ height: "calc(100vh - 245px)", minHeight: 360, overflow: "hidden" }}>
-        <div style={{ height: "100%", overflow: "auto" }}>
+      <Card withBorder padding={0} className="device-registry-table-card">
+        <div className="device-registry-table-scroll">
           <Table striped highlightOnHover withTableBorder horizontalSpacing="sm" verticalSpacing="xs" style={{ minWidth: 1200 }}>
             <Table.Thead>
               <Table.Tr style={{ position: "sticky", top: 0, zIndex: 4, background: "var(--mantine-color-body)" }}>
+                <Table.Th style={{ width: 34, minWidth: 34, maxWidth: 34, paddingInline: 6 }}>
+                  <Checkbox
+                    size="xs"
+                    aria-label="Select all filtered entities"
+                    checked={filtered.length > 0 && filtered.every(entity => selectedEntityKeys.includes(entitySelectionKey(entity)))}
+                    indeterminate={filtered.some(entity => selectedEntityKeys.includes(entitySelectionKey(entity))) && !filtered.every(entity => selectedEntityKeys.includes(entitySelectionKey(entity)))}
+                    onChange={event => setSelectedEntityKeys(current => {
+                      const visible = new Set(filtered.map(entitySelectionKey));
+                      return event.currentTarget.checked
+                        ? [...new Set([...current, ...visible])]
+                        : current.filter(key => !visible.has(key));
+                    })}
+                  />
+                </Table.Th>
                 <Table.Th aria-label="Icon" style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }} />
                 <SortableTableHeader active={sortKey === "device"} direction={sortDirection} onClick={() => toggleSort("device")}>Device</SortableTableHeader>
                 <SortableTableHeader active={sortKey === "entity"} direction={sortDirection} onClick={() => toggleSort("entity")}>Entity</SortableTableHeader>
@@ -167,6 +221,7 @@ export function RealtimeEntityBrowser() {
                 <Table.Th>Dashboard</Table.Th>
               </Table.Tr>
               <Table.Tr style={{ position: "sticky", top: 39, zIndex: 3, background: "var(--mantine-color-body)" }}>
+                <Table.Th />
                 <Table.Th />
                 <Table.Th><TextInput size="xs" placeholder="Filter device" value={deviceFilter} onChange={event => setDeviceFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(deviceFilter.trim()))} rightSection={<FilterClearAction active={Boolean(deviceFilter.trim())} onClear={() => setDeviceFilter("")} />} /></Table.Th>
                 <Table.Th><TextInput size="xs" placeholder="Filter entity" value={entityFilter} onChange={event => setEntityFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(entityFilter.trim()))} rightSection={<FilterClearAction active={Boolean(entityFilter.trim())} onClear={() => setEntityFilter("")} />} /></Table.Th>
@@ -182,20 +237,21 @@ export function RealtimeEntityBrowser() {
             <Table.Tbody>
               {filtered.map(entity => (
                 <Table.Tr key={`${entity.deviceId}:${entity.entityValue}`}>
+                  <Table.Td style={{ width: 34, minWidth: 34, maxWidth: 34, paddingInline: 6 }}><Checkbox size="xs" aria-label={`Select ${entity.entityName}`} checked={selectedEntityKeys.includes(entitySelectionKey(entity))} onChange={event => setSelectedEntityKeys(current => event.currentTarget.checked ? [...new Set([...current, entitySelectionKey(entity)])] : current.filter(key => key !== entitySelectionKey(entity)))} /></Table.Td>
                   <Table.Td style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }}><ResolvedIconGlyph resolved={resolveEntityIcon(entity)} size={20} /></Table.Td>
-                  <Table.Td>
+                  <Table.Td style={{ cursor: "pointer" }} title="Filter by device" onClick={() => setDeviceFilter(entity.deviceName)}>
                     <Text size="sm" fw={600}>{entity.deviceName}</Text>
                     <Text size="xs" c="dimmed">{entity.host ?? entity.agentName ?? "—"}</Text>
                   </Table.Td>
                   <Table.Td>
-                    <Text size="sm" fw={600}>{entity.entityName}</Text>
-                    <Text size="xs" c="dimmed">{entity.entityValue}</Text>
+                    <Text size="sm" fw={600} style={{ cursor: "pointer" }} title="Filter by entity name" onClick={() => setEntityFilter(entity.entityName)}>{entity.entityName}</Text>
+                    <Text size="xs" c="dimmed" style={{ cursor: "pointer" }} title="Filter by entity ID" onClick={() => setEntityFilter(entity.entityValue)}>{entity.entityValue}</Text>
                   </Table.Td>
-                  <Table.Td><Badge variant="outline" size="sm">{entity.entityType.replaceAll("_", " ").toUpperCase()}</Badge></Table.Td>
-                  <Table.Td><Badge variant="light" color={stateColor(entity)}>{stateLabel(entity)}</Badge></Table.Td>
-                  <Table.Td>{entity.unit ?? "—"}</Table.Td>
-                  <Table.Td><Badge variant="outline" color={entity.connected ? "green" : "gray"}>{entity.provider}</Badge></Table.Td>
-                  <Table.Td><Text size="sm" c={entity.controllable ? undefined : "dimmed"}>{entity.controllable ? "Actionable" : "Read-only"}</Text></Table.Td>
+                  <Table.Td><Badge variant="outline" size="sm" style={{ cursor: "pointer" }} title="Filter by type" onClick={() => setTypeFilter(entity.entityType)}>{entity.entityType.replaceAll("_", " ").toUpperCase()}</Badge></Table.Td>
+                  <Table.Td><Badge variant="light" color={stateColor(entity)} style={{ cursor: "pointer" }} title="Filter by state" onClick={() => setStateFilter(stateLabel(entity))}>{stateLabel(entity)}</Badge></Table.Td>
+                  <Table.Td><Text size="sm" style={{ cursor: entity.unit ? "pointer" : undefined }} title={entity.unit ? "Filter by unit" : undefined} onClick={() => entity.unit && setUnitFilter(entity.unit)}>{entity.unit ?? "—"}</Text></Table.Td>
+                  <Table.Td><Badge variant="outline" color={entity.connected ? "green" : "gray"} style={{ cursor: "pointer" }} title="Filter by provider" onClick={() => setProviderFilter(entity.provider)}>{entity.provider}</Badge></Table.Td>
+                  <Table.Td><Text size="sm" c={entity.controllable ? undefined : "dimmed"} style={{ cursor: "pointer" }} title="Filter by actionability" onClick={() => setControllableFilter(entity.controllable ? "actionable" : "readonly")}>{entity.controllable ? "Actionable" : "Read-only"}</Text></Table.Td>
                   <Table.Td title={entity.observedAt}><Text size="sm">{compactDate(entity.observedAt)}</Text></Table.Td>
                   <Table.Td>
                     <ActionIcon
@@ -218,12 +274,39 @@ export function RealtimeEntityBrowser() {
                 </Table.Tr>
               ))}
               {!entitiesQuery.isLoading && filtered.length === 0 && (
-                <Table.Tr><Table.Td colSpan={10}><Text c="dimmed" ta="center" py="xl">{entities.length === 0 ? "No realtime entities have been reported yet." : "No realtime entities match the active filters."}</Text></Table.Td></Table.Tr>
+                <Table.Tr><Table.Td colSpan={11}><Text c="dimmed" ta="center" py="xl">{entities.length === 0 ? "No realtime entities have been reported yet." : "No realtime entities match the active filters."}</Text></Table.Td></Table.Tr>
               )}
             </Table.Tbody>
           </Table>
         </div>
       </Card>
+
+      <Modal opened={bulkAddOpen} onClose={() => !bulkAddMutation.isPending && setBulkAddOpen(false)} title={`Add ${selectedEntityKeys.length} entities to dashboard`} centered>
+        <Stack>
+          <Text size="sm" c="dimmed">Each selected entity will be added with its recommended widget type (switch, binary status or value).</Text>
+          <Select
+            label="Dashboard"
+            value={dashboardId}
+            onChange={value => { setDashboardId(value); setSectionId(null); }}
+            data={(dashboardsQuery.data?.dashboards ?? []).filter(item => !item.templateId).map(item => ({ value: item.id, label: item.name }))}
+            allowDeselect={false}
+            placeholder="Select dashboard"
+          />
+          <Select
+            label="Section"
+            value={sectionId}
+            onChange={setSectionId}
+            clearable
+            placeholder="Dashboard default"
+            data={(dashboardsQuery.data?.sections ?? []).filter(item => item.dashboardId === dashboardId).map(item => ({ value: item.id, label: item.name }))}
+          />
+          {bulkAddMutation.isError && <Text size="sm" c="red">{bulkAddMutation.error instanceof Error ? bulkAddMutation.error.message : "Unable to add selected entities"}</Text>}
+          <Group justify="flex-end">
+            <Button data-autofocus variant="light" color="gray" disabled={bulkAddMutation.isPending} onClick={() => setBulkAddOpen(false)}>Cancel</Button>
+            <Button color="green" disabled={!dashboardId || selectedEntityKeys.length === 0} loading={bulkAddMutation.isPending} onClick={() => bulkAddMutation.mutate()}>Add selected</Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal opened={addEntity !== null} onClose={() => setAddEntity(null)} title="Add realtime entity to dashboard" centered>
         <Stack>

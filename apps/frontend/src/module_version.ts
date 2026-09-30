@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.109.0";
+export const MODULE_VERSION = "1.110.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.110.0": {
+    releasedAt: "2026-09-30T14:55:12Z",
+    patch: "PR-308-entities-discovery-filtering-scroll-entity-drift.patch",
+    changes: [
+      { type: "added", description: "Show filtered/total realtime entity counts, click-to-filter values and multi-select Add selected to Dashboard" },
+      { type: "changed", description: "Add Discovery click-to-filter for Provider, Model and Agent and place the Agent filter after Model" },
+      { type: "fixed", description: "Use the Service Registry flex scroll pattern for Entities and Discovery tables and remove the viewport-height Discovery scroll workaround" },
+      { type: "fixed", description: "Mark registered devices To be updated when the discovered entity inventory count or composition changes" }
+    ]
+  },
   "1.109.0": {
     releasedAt: "2026-09-30T13:55:39Z",
     patch: "PR-307-discovery-import-hardening.patch",

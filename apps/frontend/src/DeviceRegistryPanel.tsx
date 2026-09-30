@@ -87,6 +87,7 @@ import type { DiscoveredDeviceImportRequest } from "./DeviceAgentsPanel";
 import { AgentsPanel } from "./AgentsPanel";
 import { RealtimeEntityBrowser } from "./RealtimeEntityBrowser";
 import { DeviceDiscoveryPanel } from "./DeviceDiscoveryPanel";
+import { discoveryEntityInventory } from "./DiscoveryEntityInventory";
 
 
 type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "controlAgent" | "lastSeen" | "health" | "checks";
@@ -219,6 +220,8 @@ interface DeviceFormState {
   model: string;
   firmwareVersion: string;
   description: string;
+  discoveryEntitySignature: string | null;
+  discoveryEntityCount: number | null;
   locationId: string | null;
   parentDeviceId: string | null;
   healthProfileId: string | null;
@@ -247,6 +250,8 @@ function emptyDeviceForm(): DeviceFormState {
     model: "",
     firmwareVersion: "",
     description: "",
+    discoveryEntitySignature: null,
+    discoveryEntityCount: null,
     locationId: null,
     parentDeviceId: null,
     healthProfileId: null,
@@ -276,6 +281,8 @@ function deviceToForm(device: DeviceRegistryDevice): DeviceFormState {
     model: device.model ?? "",
     firmwareVersion: device.firmwareVersion ?? "",
     description: device.description ?? "",
+    discoveryEntitySignature: device.discoveryEntitySignature,
+    discoveryEntityCount: device.discoveryEntityCount,
     locationId: device.location?.id ?? null,
     parentDeviceId: device.parentDevice?.id ?? null,
     healthProfileId: device.healthProfile?.id ?? null,
@@ -309,6 +316,8 @@ function deviceFormPayload(form: DeviceFormState): CreateDeviceRegistryDeviceInp
     model: form.model.trim() || null,
     firmwareVersion: form.firmwareVersion.trim() || null,
     description: form.description.trim() || null,
+    discoveryEntitySignature: form.discoveryEntitySignature,
+    discoveryEntityCount: form.discoveryEntityCount,
     locationId: form.locationId,
     parentDeviceId: form.parentDeviceId,
     healthProfileId: form.healthProfileId,
@@ -1020,7 +1029,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     const os = value("os");
     const osType = value("osType");
     const guestAgent = value("guestAgent");
-    const entities = Array.isArray(device.entities) ? device.entities.map(item => String(item).trim()).filter(Boolean) : [];
+    const entityInventory = discoveryEntityInventory(device);
+    const entities = entityInventory.items.map(item => item.name);
     const typeCandidates = (deviceTypesQuery.data ?? []).filter(type => type.deviceClass === "IOT" || type.deviceClass === "OTHER");
     const normalizedModel = model.toLowerCase();
     const preferredType = providerName === "YEELIGHT"
@@ -1088,7 +1098,9 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       parentDeviceId: providerName === "PROXMOX" ? proxmoxParent?.id ?? null : null,
       controlSlotId: agent.slotId,
       controlAgentId: agent.id,
-      controlProvider: providerName
+      controlProvider: providerName,
+      discoveryEntitySignature: entityInventory.signature,
+      discoveryEntityCount: entityInventory.count
     };
   };
 
@@ -1203,7 +1215,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     const osType = value("osType");
     const status = value("status");
     const guestAgent = value("guestAgent");
-    const entities = Array.isArray(device.entities) ? device.entities.map(item => String(item).trim()).filter(Boolean) : [];
+    const entityInventory = discoveryEntityInventory(device);
+    const entities = entityInventory.items.map(item => item.name);
 
     let identities = registered.identities.map(identity => ({ ...identity }));
     identities = upsertDiscoveredIdentities(identities, "IP", ipAddresses, 0);
@@ -1240,6 +1253,10 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       form.model = model;
     }
     if (firmwareVersion) form.firmwareVersion = firmwareVersion;
+    if (entityInventory.signature !== null) {
+      form.discoveryEntitySignature = entityInventory.signature;
+      form.discoveryEntityCount = entityInventory.count;
+    }
     if (providerName === "PROXMOX") {
       form.description = [
         value("endpointId") ? `Endpoint: ${value("endpointId")}` : "",
@@ -1611,7 +1628,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           </Stack>
         </Tabs.Panel>
 
-        <Tabs.Panel value="entities" pt="md">
+        <Tabs.Panel value="entities" pt="md" className="device-registry-devices-panel">
           <RealtimeEntityBrowser />
         </Tabs.Panel>
 
@@ -1619,7 +1636,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           <MonitoringPanel quickCheckRequest={quickCheckRequest} onQuickCheckFinished={returnFromQuickCheck} view="checks" />
         </Tabs.Panel>
 
-        <Tabs.Panel value="discovery" pt="md">
+        <Tabs.Panel value="discovery" pt="md" className="device-registry-devices-panel">
           <DeviceDiscoveryPanel
             devices={devices}
             onImportDiscoveredDevice={openDiscoveredDeviceImport}
@@ -1630,8 +1647,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
           />
         </Tabs.Panel>
 
-        <Tabs.Panel value="health-profiles" pt="md">
-          <Stack gap="sm">
+        <Tabs.Panel value="health-profiles" pt="md" className="device-registry-devices-panel">
+          <Stack gap="sm" className="device-registry-devices-stack">
             <Group justify="space-between" wrap="wrap">
               <Group gap="xs">
                 <ResetFiltersAction active={Boolean(profileFilter)} onReset={() => setProfileFilter("")} />
@@ -1640,8 +1657,9 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
               </Group>
               <Button size="compact-sm" onClick={openCreateProfile}>+ Add health profile</Button>
             </Group>
-            <Card withBorder padding={0}>
-              <Table striped highlightOnHover>
+            <Card withBorder padding={0} className="device-registry-table-card">
+              <div className="device-registry-table-scroll">
+              <Table striped highlightOnHover stickyHeader>
                 <Table.Thead><Table.Tr>
                   <SortableTableHeader active={profileSortKey === "name"} direction={profileSortDirection} onClick={() => toggleProfileSort("name")}>Name</SortableTableHeader>
                   <SortableTableHeader active={profileSortKey === "monitoring"} direction={profileSortDirection} onClick={() => toggleProfileSort("monitoring")}>Monitoring</SortableTableHeader>
@@ -1672,6 +1690,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                   {filteredProfiles.length === 0 && <Table.Tr><Table.Td colSpan={9}><Text c="dimmed" ta="center" py="xl">{profiles.length === 0 ? "No health profiles yet. Create only the profiles you actually need." : "No health profiles match the active filter."}</Text></Table.Td></Table.Tr>}
                 </Table.Tbody>
               </Table>
+              </div>
             </Card>
           </Stack>
         </Tabs.Panel>

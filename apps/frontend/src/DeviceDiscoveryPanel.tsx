@@ -11,6 +11,7 @@ import { activeFilterStyles } from "./ActiveFilterStyles";
 import { SortableTableHeader, compareTableValues, type SortDirection } from "./SortableTableHeader";
 import { usePersistentState } from "./preferences/usePersistentState";
 import { FilterClearAction } from "./FilterClearAction";
+import { discoveryEntityInventory } from "./DiscoveryEntityInventory";
 
 const DISCOVERY_PROVIDERS = ["YEELIGHT", "ESPHOME", "PROXMOX"] as const;
 type DiscoveryProvider = typeof DISCOVERY_PROVIDERS[number];
@@ -73,38 +74,6 @@ function textValue(device: Record<string, unknown>, key: string): string {
   if (Array.isArray(value)) return value.join(", ");
   if (typeof value === "boolean") return value ? "ON" : "OFF";
   return String(value);
-}
-
-interface DiscoveryEntitySummary {
-  name: string;
-  type: string;
-}
-
-function discoveryEntitySummaries(device: Record<string, unknown>): DiscoveryEntitySummary[] {
-  const raw = device.entities;
-  if (!Array.isArray(raw)) return [];
-
-  return raw.map((entity, index) => {
-    if (typeof entity === "string") {
-      const value = entity.trim();
-      const separator = value.indexOf(":");
-      if (separator > 0 && separator < value.length - 1) {
-        return { type: value.slice(0, separator).trim() || "unknown", name: value.slice(separator + 1).trim() || value };
-      }
-      return { type: "unknown", name: value || `entity ${index + 1}` };
-    }
-
-    if (entity && typeof entity === "object") {
-      const item = entity as Record<string, unknown>;
-      const type = [item.type, item.entityType, item.domain, item.platform, item.kind]
-        .find(value => typeof value === "string" && value.trim()) as string | undefined;
-      const name = [item.name, item.entityId, item.id, item.objectId, item.key]
-        .find(value => typeof value === "string" && value.trim()) as string | undefined;
-      return { type: type?.trim() || "unknown", name: name?.trim() || `entity ${index + 1}` };
-    }
-
-    return { type: "unknown", name: String(entity ?? `entity ${index + 1}`) };
-  });
 }
 
 function registryFiltersExpanded(values: RegistryFilterValue[]): DiscoveryActionFilter[] {
@@ -304,6 +273,10 @@ function registryUpdateReasons(
   }
   if (model && (registered.model ?? "").trim() !== model) reasons.push(`Model: ${registered.model ?? "—"} → ${model}`);
   if (firmwareVersion && (registered.firmwareVersion ?? "").trim() !== firmwareVersion) reasons.push(`Firmware: ${registered.firmwareVersion ?? "—"} → ${firmwareVersion}`);
+  const entityInventory = discoveryEntityInventory(discovered);
+  if (entityInventory.signature !== null && registered.discoveryEntitySignature !== entityInventory.signature) {
+    reasons.push(`Entities: ${registered.discoveryEntityCount ?? "untracked"} → ${entityInventory.count ?? 0}`);
+  }
   if (registered.controlProvider?.toUpperCase() !== providerName) reasons.push(`Provider: ${registered.controlProvider ?? "—"} → ${providerName}`);
   if (!registered.technologies.some(item => item.code.toUpperCase() === providerName)) reasons.push(`Technology: add ${providerName}`);
 
@@ -772,7 +745,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
     closeReconcile();
   };
 
-  return <Stack gap="sm" className="device-registry-discovery-panel">
+  return <Stack gap="sm" className="device-registry-devices-stack device-registry-discovery-panel">
     <Group justify="space-between" align="flex-end" wrap="wrap">
       <div>
         <Text fw={600}>Device discovery</Text>
@@ -877,10 +850,10 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
         renderOption={({ option }) => <Group gap={6} wrap="nowrap"><ResolvedIconGlyph resolved={resolveProviderIcon(option.value)} size={16} /><Text size="sm">{option.label}</Text></Group>}
         w={155}
       />
-      <Select size="xs" placeholder="All agents" clearable searchable value={agentFilter} onChange={setAgentFilter} styles={activeFilterStyles(Boolean(agentFilter))} data={discoveryAgents.map(agent => ({ value: agent.id, label: agent.name }))} w={180} />
       <TextInput size="xs" placeholder="Name / IP / MAC / VMID" value={textFilter} onChange={event => setTextFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(textFilter.trim()))} rightSection={<FilterClearAction active={Boolean(textFilter.trim())} onClear={() => setTextFilter("")} />} style={{ flex: 1, minWidth: 180 }} />
       <TextInput size="xs" placeholder="Identity" value={identityFilter} onChange={event => setIdentityFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(identityFilter.trim()))} rightSection={<FilterClearAction active={Boolean(identityFilter.trim())} onClear={() => setIdentityFilter("")} />} w={165} />
       <TextInput size="xs" placeholder="Model" value={modelFilter} onChange={event => setModelFilter(event.currentTarget.value)} styles={activeFilterStyles(Boolean(modelFilter.trim()))} rightSection={<FilterClearAction active={Boolean(modelFilter.trim())} onClear={() => setModelFilter("")} />} w={150} />
+      <Select size="xs" placeholder="All agents" clearable searchable value={agentFilter} onChange={setAgentFilter} styles={activeFilterStyles(Boolean(agentFilter))} data={discoveryAgents.map(agent => ({ value: agent.id, label: agent.name }))} w={180} />
       <Switch size="xs" label="Show duplicate agent discoveries" checked={showDuplicateAgents} onChange={event => setShowDuplicateAgents(event.currentTarget.checked)} />
       <Switch size="xs" label="Show discarded" checked={showDiscarded} onChange={event => setShowDiscarded(event.currentTarget.checked)} />
       <MultiSelect
@@ -905,8 +878,8 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       <Text size="xs" c="dimmed">{sortedRows.length}</Text>
     </Group>
 
-    <Card withBorder padding={0}>
-      <div className="device-registry-discovery-scroll">
+    <Card withBorder padding={0} className="device-registry-table-card">
+      <div className="device-registry-table-scroll">
         <Table striped highlightOnHover stickyHeader style={{ minWidth: 1040 }}>
           <Table.Thead><Table.Tr>
             <Table.Th style={{ width: 34, minWidth: 34, maxWidth: 34, paddingInline: 6 }}>
@@ -941,7 +914,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
               const proxmoxKind = provider === "PROXMOX" ? textValue(row.device, "kind") : "";
               const proxmoxGuest = provider === "PROXMOX" && ["PVE_VM", "PVE_LXC"].includes(proxmoxKind);
               const proxmoxStatus = textValue(row.device, "status");
-              const entitySummaries = ["ESPHOME", "YEELIGHT"].includes(provider) ? discoveryEntitySummaries(row.device) : [];
+              const entitySummaries = ["ESPHOME", "YEELIGHT"].includes(provider) ? discoveryEntityInventory(row.device).items : [];
               const entityTypes = [...new Set(entitySummaries.map(entity => entity.type))];
               const details = provider === "ESPHOME" || (provider === "YEELIGHT" && entitySummaries.length > 0)
                 ? `${entitySummaries.length} entities`
@@ -991,13 +964,13 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                   </Tooltip>
                 </Table.Td>
                 <Table.Td style={{ width: 28, minWidth: 28, maxWidth: 28, paddingInline: 4 }}><ResolvedIconGlyph resolved={resolveDiscoveryIcon(provider, row.device)} size={20} /></Table.Td>
-                <Table.Td><Badge variant="light" color={providerColor(provider)}>{providerLabel(provider)}</Badge></Table.Td>
+                <Table.Td><Badge variant="light" color={providerColor(provider)} style={{ cursor: "pointer" }} title="Filter by provider" onClick={() => setProviderFilter(provider)}>{providerLabel(provider)}</Badge></Table.Td>
                 <Table.Td><CopyableDiscoveryValue value={textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")} fw={600} /></Table.Td>
                 <Table.Td><CopyableDiscoveryValue value={textValue(row.device, "ip")} monospace /></Table.Td>
                 <Table.Td><CopyableDiscoveryValue value={provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")} monospace compact /></Table.Td>
-                <Table.Td><Text size="sm">{provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text></Table.Td>
+                <Table.Td><Text size="sm" style={{ cursor: "pointer" }} title="Filter by model" onClick={() => { const value = provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model"); if (value !== "—") setModelFilter(value); }}>{provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text></Table.Td>
                 <Table.Td><Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Discovery details</Text><Text size="xs">Name: {textValue(row.device, "name") !== "—" ? textValue(row.device, "name") : textValue(row.device, "hostname")}</Text><Text size="xs">IP: {textValue(row.device, "ipAddresses") !== "—" ? textValue(row.device, "ipAddresses") : textValue(row.device, "ip")}</Text><Text size="xs">MAC: {textValue(row.device, "macAddresses") !== "—" ? textValue(row.device, "macAddresses") : textValue(row.device, "mac")}</Text><Text size="xs">Identity: {provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")}</Text><Text size="xs">Model / kind: {provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text>{entitySummaries.length > 0 && <><Text size="xs" fw={600}>Entities ({entitySummaries.length})</Text>{entitySummaries.map((entity, entityIndex) => <Text key={`${entity.type}:${entity.name}:${entityIndex}`} size="xs">• {entity.type}: {entity.name}</Text>)}</>}{provider === "PROXMOX" && <><Text size="xs">Endpoint: {textValue(row.device, "endpointId")}</Text><Text size="xs">Node: {textValue(row.device, "node")}</Text><Text size="xs">VMID: {textValue(row.device, "vmid")}</Text>{proxmoxGuest && <Group gap={5} wrap="nowrap"><Text component="span" size="xs">Status:</Text><ProxmoxRuntimeStatus status={proxmoxStatus} /></Group>}<Text size="xs">Version: {textValue(row.device, "version")}</Text><Text size="xs">OS: {textValue(row.device, "os")} / {textValue(row.device, "osType")}</Text><Text size="xs">Guest agent: {textValue(row.device, "guestAgent")}</Text><Text size="xs">Parent: {textValue(row.device, "parentProviderId")}</Text></>} {!proxmoxGuest && <Text size="xs">{details}</Text>}</Stack>}><span style={{ cursor: "help" }}>{detailsContent}</span></Tooltip></Table.Td>
-                <Table.Td>{agentContent}</Table.Td>
+                <Table.Td><span style={{ cursor: row.agent ? "pointer" : undefined }} title={row.agent ? "Filter by Device Agent" : undefined} onClick={() => row.agent && setAgentFilter(row.agent.id)}>{agentContent}</span></Table.Td>
                 <Table.Td style={{ minWidth: 160 }}>{row.status === "UPDATE"
                   ? <Tooltip multiline label={<Stack gap={2}><Text size="xs" fw={600}>Expected updates</Text>{row.updateReasons.map(reason => <Text key={reason} size="xs">• {reason}</Text>)}</Stack>}>{statusBadge}</Tooltip>
                   : ["POSSIBLE", "AMBIGUOUS"].includes(row.status)
@@ -1017,7 +990,6 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
             {!sortedRows.length && <Table.Tr><Table.Td colSpan={11}><Text c="dimmed" ta="center" py="xl">No discovery matches the current filters.</Text></Table.Td></Table.Tr>}
           </Table.Tbody>
         </Table>
-        <div className="device-registry-discovery-scroll-spacer" aria-hidden="true" />
       </div>
     </Card>
 

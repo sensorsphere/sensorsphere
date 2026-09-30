@@ -893,6 +893,8 @@ export interface DeviceRegistryDevice {
   model: string | null;
   firmwareVersion: string | null;
   description: string | null;
+  discoveryEntitySignature: string | null;
+  discoveryEntityCount: number | null;
   location: { id: string; name: string } | null;
   parentDevice: { id: string; name: string } | null;
   healthProfile: { id: string; name: string } | null;
@@ -930,6 +932,8 @@ export interface CreateDeviceRegistryDeviceInput {
   model?: string | null;
   firmwareVersion?: string | null;
   description?: string | null;
+  discoveryEntitySignature?: string | null;
+  discoveryEntityCount?: number | null;
   locationId?: string | null;
   parentDeviceId?: string | null;
   healthProfileId?: string | null;
