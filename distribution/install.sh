@@ -349,7 +349,9 @@ refresh_bundle_for_update() {
   fi
 
   echo "Bundle changes detected for Stack $STACK_VERSION:"
-  printf '  %s\n' "$changes"
+  while IFS= read -r change; do
+    [[ -n "$change" ]] && printf '  %s\n' "$change"
+  done <<< "$changes"
   echo "Refreshing SensorSphere installation bundle..."
   restore_bundle "$target"
   rm -rf "$tmp"

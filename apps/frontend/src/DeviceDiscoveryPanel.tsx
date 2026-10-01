@@ -13,6 +13,7 @@ import { usePersistentState } from "./preferences/usePersistentState";
 import { FilterClearAction } from "./FilterClearAction";
 import { discoveryEntityInventory } from "./DiscoveryEntityInventory";
 import { AgentVersionFreshnessBadge, getAgentVersionAvailability } from "./AgentVersionAvailability";
+import { ProxmoxConfigModal } from "./ProxmoxConfigModal";
 
 const DISCOVERY_PROVIDERS = ["YEELIGHT", "ESPHOME", "PROXMOX"] as const;
 type DiscoveryProvider = typeof DISCOVERY_PROVIDERS[number];
@@ -424,6 +425,9 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   const [scanProvider, setScanProvider] = React.useState<DiscoveryProvider | "ALL" | null>(null);
   const [clearBeforeScan, setClearBeforeScan] = usePersistentState("device-registry.discovery.clear-before-scan", false);
   const [scanAgentIds, setScanAgentIds] = usePersistentState<string[]>("device-registry.discovery.scan.agent-ids", []);
+  const [proxmoxBootstrapOpen, setProxmoxBootstrapOpen] = React.useState(false);
+  const [proxmoxBootstrapAgentId, setProxmoxBootstrapAgentId] = React.useState<string | null>(null);
+  const [proxmoxConfigTarget, setProxmoxConfigTarget] = React.useState<DeviceAgent | null>(null);
   const [hiddenDiscoveryCommandIds, setHiddenDiscoveryCommandIds] = React.useState<Set<string>>(() => new Set());
   const [agentChoice, setAgentChoice] = React.useState<{ row: DisplayDiscoveryRow; rowKey: string } | null>(null);
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
@@ -475,7 +479,12 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
           if (capability) requests.push(startDeviceDiscovery(agent.id, currentProvider));
         }
       }
-      if (!requests.length) throw new Error(`No online Device Agent can discover ${provider === "ALL" ? "Yeelight, ESPHome or Proxmox devices" : provider}`);
+      if (!requests.length) {
+        if (provider === "PROXMOX") {
+          throw new Error("No selected Device Agent currently reports Proxmox discovery. Configure the first Proxmox endpoint, then scan again.");
+        }
+        throw new Error(`No online Device Agent can discover ${provider === "ALL" ? "Yeelight, ESPHome or Proxmox devices" : provider}`);
+      }
       const settled = await Promise.allSettled(requests);
       const failed = settled.filter(item => item.status === "rejected");
       if (failed.length === settled.length) throw new Error("Unable to start discovery on the available Device Agents");
@@ -500,6 +509,21 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
 
   const agents = agentsQuery.data ?? [];
   const agentById = new Map(agents.map(agent => [agent.id, agent]));
+  const selectedScanAgents = scanAgentIds.length > 0
+    ? agents.filter(agent => scanAgentIds.includes(agent.id))
+    : agents;
+  const proxmoxBootstrapCandidates = selectedScanAgents.filter(agent =>
+    agent.enabled && Boolean(agent.managedBySupervisorId) && agent.supervisorAvailable
+  );
+
+  const openProxmoxBootstrap = () => {
+    if (proxmoxBootstrapCandidates.length === 1) {
+      setProxmoxConfigTarget(proxmoxBootstrapCandidates[0]!);
+      return;
+    }
+    setProxmoxBootstrapAgentId(proxmoxBootstrapCandidates[0]?.id ?? null);
+    setProxmoxBootstrapOpen(true);
+  };
   const allDiscoveries = discoveriesQuery.data ?? [];
   const discoveries = hiddenDiscoveryCommandIds.size
     ? allDiscoveries.filter(item => !hiddenDiscoveryCommandIds.has(item.commandId))
@@ -844,11 +868,53 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
           />
           <Button size="compact-sm" variant="light" color="yellow" disabled={scanBusy} loading={scanMutation.isPending && scanProvider === "YEELIGHT"} onClick={() => scanMutation.mutate("YEELIGHT")}>Scan Yeelight</Button>
           <Button size="compact-sm" variant="light" color="green" disabled={scanBusy} loading={scanMutation.isPending && scanProvider === "ESPHOME"} onClick={() => scanMutation.mutate("ESPHOME")}>Scan ESPHome</Button>
+          <Tooltip label={proxmoxBootstrapCandidates.length > 0 ? "Configure Proxmox on a Supervisor-managed Device Agent" : "Select an enabled Device Agent with an available Supervisor"}>
+            <span><Button size="compact-sm" variant="light" color="orange" disabled={scanBusy || proxmoxBootstrapCandidates.length === 0} onClick={openProxmoxBootstrap}>Configure Proxmox</Button></span>
+          </Tooltip>
           <Button size="compact-sm" variant="light" color="indigo" disabled={scanBusy} loading={scanMutation.isPending && scanProvider === "PROXMOX"} onClick={() => scanMutation.mutate("PROXMOX")}>Scan Proxmox</Button>
           <Button size="compact-sm" disabled={scanBusy} loading={scanMutation.isPending && scanProvider === "ALL"} onClick={() => scanMutation.mutate("ALL")}>Scan all</Button>
         </Group>
       </Group>
     </Group>
+
+    <Modal opened={proxmoxBootstrapOpen} onClose={() => setProxmoxBootstrapOpen(false)} title="Configure Proxmox" centered>
+      <Stack gap="sm">
+        <Text size="sm">Choose the Supervisor-managed Device Agent that hosts the Proxmox configuration.</Text>
+        <Select
+          label="Device Agent"
+          placeholder="Select Device Agent"
+          value={proxmoxBootstrapAgentId}
+          data={proxmoxBootstrapCandidates.map(agent => ({
+            value: agent.id,
+            label: `${agent.name}${agent.managedBySupervisorName ? ` · ${agent.managedBySupervisorName}` : ""}`
+          }))}
+          onChange={setProxmoxBootstrapAgentId}
+        />
+        <Group justify="flex-end">
+          <Button variant="default" onClick={() => setProxmoxBootstrapOpen(false)}>Cancel</Button>
+          <Button
+            color="orange"
+            disabled={!proxmoxBootstrapAgentId}
+            onClick={() => {
+              const target = proxmoxBootstrapCandidates.find(agent => agent.id === proxmoxBootstrapAgentId) ?? null;
+              setProxmoxBootstrapOpen(false);
+              setProxmoxConfigTarget(target);
+            }}
+          >Configure</Button>
+        </Group>
+      </Stack>
+    </Modal>
+
+    <ProxmoxConfigModal
+      agent={proxmoxConfigTarget}
+      onClose={() => setProxmoxConfigTarget(null)}
+      onChanged={async () => {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["device-agents"] }),
+          queryClient.invalidateQueries({ queryKey: ["device-discoveries"] })
+        ]);
+      }}
+    />
 
     <SimpleGrid cols={{ base: 2, sm: 7 }} spacing="sm">
       <Card withBorder padding="md" style={{ borderLeft: "4px solid var(--mantine-color-blue-6)" }}><Group gap={6} wrap="nowrap"><FilterCardAction active={actionFilterActive("CAN_ADD")} color="blue" label="Toggle Can be added" onClick={() => toggleActionFilter("CAN_ADD")} /><Text size="xs" c="dimmed">Can be added</Text></Group><Text fw={700} size="xl">{canAddCount}</Text></Card>

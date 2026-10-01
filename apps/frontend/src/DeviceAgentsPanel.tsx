@@ -1,7 +1,7 @@
 import React from "react";
 import { ActionIcon, Badge, Button, Card, Checkbox, Code, Group, Modal, Notification, NumberInput, Select, Stack, Table, Text, Textarea, TextInput, Tooltip } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createDeviceAgent, createDeviceAgentSlot, deleteDeviceAgent, deleteSupervisorManagedAgentAssignment, getDeviceAgents, getDeviceAgentSlots, getDeviceDiscovery, getDiscoveredDeviceAction, regenerateDeviceAgentToken, checkDeviceAgentToken, requestDeviceAgentUpdate, requestSupervisorAgentUpdate, runManagedAgentOperation, runSupervisorManagedAgentOperation, startDeviceDiscovery, startDiscoveredDeviceAction, updateDeviceAgent, updateDeviceAgentSlot, getDeviceAgentProxmoxConfig, saveDeviceAgentProxmoxConfig, deleteDeviceAgentProxmoxConfig, type ProxmoxEndpointConfigDto } from "./api";
+import { createDeviceAgent, createDeviceAgentSlot, deleteDeviceAgent, deleteSupervisorManagedAgentAssignment, getDeviceAgents, getDeviceAgentSlots, getDeviceDiscovery, getDiscoveredDeviceAction, regenerateDeviceAgentToken, checkDeviceAgentToken, requestDeviceAgentUpdate, requestSupervisorAgentUpdate, runManagedAgentOperation, runSupervisorManagedAgentOperation, startDeviceDiscovery, startDiscoveredDeviceAction, updateDeviceAgent, updateDeviceAgentSlot } from "./api";
 import { ResolvedIconGlyph, resolveProviderIcon } from "./ResolvedDeviceIcon";
 import { DeviceGlyph } from "./DeviceGlyph";
 import type { AgentTokenCheckResult, DeviceAgent, DeviceAgentSlot, DeviceDiscovery, DeviceRegistryDevice, DiscoveredDeviceAction, ManagedAgentStatus } from "./types";
@@ -16,6 +16,7 @@ import { getAutonomousSupervisors } from "./SupervisorAgentsPanel";
 import { HostNetworkCell } from "./HostNetworkCell";
 import { AgentReportedCell, AgentSystemCell } from "./AgentTechnicalCells";
 import { hasAgentUpdate } from "./AgentBulkUpdate";
+import { ProxmoxConfigModal } from "./ProxmoxConfigModal";
 
 
 
@@ -287,10 +288,6 @@ export function DeviceAgentsPanel({ devices = [], showSupervisorControls = false
   const [opened, setOpened] = React.useState(false);
   const [bulkUpdateOpen, setBulkUpdateOpen] = React.useState(false);
   const [proxmoxTarget, setProxmoxTarget] = React.useState<DeviceAgent | null>(null);
-  const [proxmoxEndpoints, setProxmoxEndpoints] = React.useState<ProxmoxEndpointConfigDto[]>([]);
-  const [proxmoxLoading, setProxmoxLoading] = React.useState(false);
-  const [proxmoxError, setProxmoxError] = React.useState<string | null>(null);
-  const [proxmoxTestResult, setProxmoxTestResult] = React.useState<string | null>(null);
   const [editing, setEditing] = React.useState<DeviceAgent | null>(null);
   const [form, setForm] = React.useState<AgentFormState>(emptyForm());
   const [slotMode, setSlotMode] = React.useState<"current" | "existing" | "new">("current");
@@ -695,65 +692,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
   const bulkDeviceCandidates = allAgents.filter(agent => agent.online && agent.enabled && !ACTIVE_UPDATE_STATES.includes(agent.updateStatus) && hasAgentUpdate(agent.version, latestDeviceVersion));
   const supervisorById = new Map((supervisorsQuery.data ?? []).map(supervisor => [supervisor.id, supervisor]));
 
-  const proxmoxConfigPayload = (endpoints: ProxmoxEndpointConfigDto[]): ProxmoxEndpointConfigDto[] => endpoints.map(endpoint => ({
-    id: endpoint.id,
-    product: endpoint.product,
-    url: endpoint.url,
-    tokenId: endpoint.tokenId,
-    ...(endpoint.originalId ? { originalId: endpoint.originalId } : {}),
-    ...(endpoint.tokenSecret ? { tokenSecret: endpoint.tokenSecret } : {}),
-    verifyTls: endpoint.verifyTls
-  }));
-
-  const openProxmoxConfig = async (agent: DeviceAgent) => {
-    setProxmoxTarget(agent); setProxmoxEndpoints([]); setProxmoxError(null); setProxmoxTestResult(null); setProxmoxLoading(true);
-    try {
-      const config = await getDeviceAgentProxmoxConfig(agent.id);
-      setProxmoxEndpoints(config.endpoints.map(endpoint => ({ ...endpoint, originalId: endpoint.id, tokenSecret: "" })));
-    } catch (error) { setProxmoxError(error instanceof Error ? error.message : "Unable to load Proxmox configuration"); }
-    finally { setProxmoxLoading(false); }
-  };
-  const saveProxmoxConfig = async () => {
-    if (!proxmoxTarget) return;
-    setProxmoxLoading(true); setProxmoxError(null); setProxmoxTestResult(null);
-    try {
-      const saved = await saveDeviceAgentProxmoxConfig(proxmoxTarget.id, proxmoxConfigPayload(proxmoxEndpoints));
-      setProxmoxEndpoints(saved.endpoints.map(endpoint => ({ ...endpoint, originalId: endpoint.id, tokenSecret: "" })));
-      await refresh();
-    } catch (error) { setProxmoxError(error instanceof Error ? error.message : "Unable to save Proxmox configuration"); }
-    finally { setProxmoxLoading(false); }
-  };
-  const removeProxmoxConfig = async () => {
-    if (!proxmoxTarget) return;
-    setProxmoxLoading(true); setProxmoxError(null);
-    try { await deleteDeviceAgentProxmoxConfig(proxmoxTarget.id); setProxmoxEndpoints([]); await refresh(); }
-    catch (error) { setProxmoxError(error instanceof Error ? error.message : "Unable to delete Proxmox configuration"); }
-    finally { setProxmoxLoading(false); }
-  };
-  const waitForDeviceAgentOnline = async (agentId: string, timeoutMs = 30_000) => {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      const agent = (await getDeviceAgents()).find(item => item.id === agentId);
-      if (agent?.online) return;
-      await new Promise(resolve => window.setTimeout(resolve, 500));
-    }
-    throw new Error("Device Agent did not reconnect after applying the Proxmox configuration");
-  };
-
-  const testProxmoxConfig = async () => {
-    if (!proxmoxTarget) return;
-    setProxmoxLoading(true); setProxmoxError(null); setProxmoxTestResult(null);
-    try {
-      await saveDeviceAgentProxmoxConfig(proxmoxTarget.id, proxmoxConfigPayload(proxmoxEndpoints));
-      await waitForDeviceAgentOnline(proxmoxTarget.id);
-      let discovery = await startDeviceDiscovery(proxmoxTarget.id, "PROXMOX", 8);
-      const deadline = Date.now() + 20_000;
-      while (discovery.status === "SENT" && Date.now() < deadline) { await new Promise(resolve => window.setTimeout(resolve, 500)); discovery = await getDeviceDiscovery(discovery.commandId); }
-      if (discovery.status !== "SUCCESS") throw new Error(discovery.error ?? `Proxmox test ${discovery.status.toLowerCase()}`);
-      setProxmoxTestResult(`Connection OK · ${discovery.devices.length} object(s) discovered`);
-      await refresh();
-    } catch (error) { setProxmoxError(error instanceof Error ? error.message : "Proxmox connection test failed"); }
-    finally { setProxmoxLoading(false); }
+  const openProxmoxConfig = (agent: DeviceAgent) => {
+    setProxmoxTarget(agent);
   };
 
   return <Stack gap="md" className="agent-admin-panel">
@@ -786,22 +726,11 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/sensorsphere/sensorspher
       </Table></div>
     </Card>
 
-    <Modal opened={!!proxmoxTarget} onClose={() => !proxmoxLoading && setProxmoxTarget(null)} title={`Proxmox configuration${proxmoxTarget ? ` — ${proxmoxTarget.name}` : ""}`} size="lg" centered>
-      <Stack gap="sm">
-        <Text size="xs" c="dimmed">Stored on the Device Agent host in <Code>config/proxmox.yml</Code>. Secrets stay on the host and are never returned to SensorSphere.</Text>
-        {proxmoxEndpoints.map((endpoint, index) => <Card key={`${endpoint.id}-${index}`} withBorder p="sm"><Stack gap="xs">
-          <Group grow><TextInput label="Endpoint id" value={endpoint.id} onChange={event => setProxmoxEndpoints(current => current.map((item,i) => i === index ? { ...item, id: event.currentTarget.value } : item))} /><Select label="Product" value={endpoint.product} data={["PVE","PBS"]} onChange={value => setProxmoxEndpoints(current => current.map((item,i) => i === index ? { ...item, product: (value === "PBS" ? "PBS" : "PVE") } : item))} /></Group>
-          <TextInput label="URL" placeholder="https://pve.example.net:8006" value={endpoint.url} onChange={event => setProxmoxEndpoints(current => current.map((item,i) => i === index ? { ...item, url: event.currentTarget.value } : item))} />
-          <TextInput label="Token ID" placeholder="user@realm!token" value={endpoint.tokenId} onChange={event => setProxmoxEndpoints(current => current.map((item,i) => i === index ? { ...item, tokenId: event.currentTarget.value } : item))} />
-          <TextInput type="password" label="Token secret" description={endpoint.tokenSecretConfigured ? "Leave empty to keep the current secret." : "Required for a new endpoint."} value={endpoint.tokenSecret ?? ""} onChange={event => setProxmoxEndpoints(current => current.map((item,i) => i === index ? { ...item, tokenSecret: event.currentTarget.value } : item))} />
-          <Group justify="space-between"><Checkbox label="Verify TLS certificate" checked={endpoint.verifyTls} onChange={event => setProxmoxEndpoints(current => current.map((item,i) => i === index ? { ...item, verifyTls: event.currentTarget.checked } : item))} /><Button size="compact-xs" variant="subtle" color="red" onClick={() => setProxmoxEndpoints(current => current.filter((_,i) => i !== index))}>Remove endpoint</Button></Group>
-        </Stack></Card>)}
-        <Button variant="light" size="xs" onClick={() => setProxmoxEndpoints(current => [...current, { id: `proxmox-${current.length + 1}`, product: "PVE", url: "", tokenId: "", tokenSecret: "", verifyTls: true }])}>Add Proxmox server</Button>
-        {proxmoxError && <Text c="red" size="sm">{proxmoxError}</Text>}
-        {proxmoxTestResult && <Text c="green" size="sm">{proxmoxTestResult}</Text>}
-        <Group justify="space-between"><Button variant="light" color="red" disabled={proxmoxEndpoints.length === 0 || proxmoxLoading} onClick={removeProxmoxConfig}>Delete configuration</Button><Group><Button variant="default" disabled={proxmoxLoading} onClick={() => setProxmoxTarget(null)}>Close</Button><Button variant="light" loading={proxmoxLoading} disabled={proxmoxEndpoints.length === 0} onClick={testProxmoxConfig}>Test connection</Button><Button loading={proxmoxLoading} disabled={proxmoxEndpoints.length === 0} onClick={saveProxmoxConfig}>Save</Button></Group></Group>
-      </Stack>
-    </Modal>
+    <ProxmoxConfigModal
+      agent={proxmoxTarget}
+      onClose={() => setProxmoxTarget(null)}
+      onChanged={refresh}
+    />
 
     <Modal opened={bulkUpdateOpen} onClose={() => !bulkDeviceUpdateMutation.isPending && setBulkUpdateOpen(false)} title="Update all Device Agents" centered>
       <Stack><Text size="sm">Update {bulkDeviceCandidates.length} Device Agent{bulkDeviceCandidates.length === 1 ? "" : "s"} to <strong>{latestDeviceVersion ?? "—"}</strong>?</Text>{bulkDeviceCandidates.map(agent => <Text size="sm" key={agent.id}>{agent.name}: {agent.version ?? "—"} → {latestDeviceVersion}</Text>)}{bulkDeviceUpdateMutation.isError && <Text size="sm" c="red">{bulkDeviceUpdateMutation.error instanceof Error ? bulkDeviceUpdateMutation.error.message : "Unable to update all Device Agents"}</Text>}<Group justify="flex-end"><Button variant="default" disabled={bulkDeviceUpdateMutation.isPending} onClick={() => setBulkUpdateOpen(false)}>Cancel</Button><Button color="teal" loading={bulkDeviceUpdateMutation.isPending} disabled={bulkDeviceCandidates.length === 0} onClick={() => bulkDeviceUpdateMutation.mutate(bulkDeviceCandidates)}>Update All</Button></Group></Stack>

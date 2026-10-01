@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.113.0";
+export const MODULE_VERSION = "1.114.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.114.0": {
+    releasedAt: "2026-10-01T12:05:51Z",
+    patch: "PR-319-proxmox-zero-config-bootstrap.patch",
+    changes: [
+      { type: "added", description: "Allow bootstrapping the first Proxmox endpoint directly from Device Discovery before a PROXMOX capability is announced" },
+      { type: "changed", description: "Reuse one Proxmox configuration dialog across Device Agents and Device Discovery, with a ready-to-fill first endpoint when no configuration exists" },
+      { type: "changed", description: "Guide zero-config Proxmox discovery toward configuration instead of reporting only that no Device Agent can discover Proxmox" }
+    ]
+  },
   "1.113.0": {
     releasedAt: "2026-10-01T01:17:10Z",
     patch: "PR-316-registered-vs-discovered-entity-inventory.patch",
