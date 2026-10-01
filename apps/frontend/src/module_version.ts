@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.114.0";
+export const MODULE_VERSION = "1.114.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.114.1": {
+    releasedAt: "2026-10-01T22:24:27Z",
+    patch: "PR-320-history-legend-solo-mode.patch",
+    changes: [
+      { type: "added", description: "Add Ctrl/Cmd + left-click solo mode on History chart legends to isolate one curve" },
+      { type: "changed", description: "Ctrl/Cmd + click on an already isolated History curve restores all curves while regular legend clicks keep the existing toggle behavior" }
+    ]
+  },
   "1.114.0": {
     releasedAt: "2026-10-01T12:05:51Z",
     patch: "PR-319-proxmox-zero-config-bootstrap.patch",

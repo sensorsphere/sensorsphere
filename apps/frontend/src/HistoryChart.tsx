@@ -1,3 +1,4 @@
+import React from "react";
 import ReactECharts from "echarts-for-react";
 
 import {
@@ -342,6 +343,38 @@ export function computeHistoryYAxisBounds(
   return bounds;
 }
 
+export function nextHistoryLegendSelection(
+  seriesNames: string[],
+  currentSelection: Record<string, boolean>,
+  clickedName: string,
+  soloClick: boolean
+): Record<string, boolean> {
+  const normalized = Object.fromEntries(
+    seriesNames.map(name => [
+      name,
+      currentSelection[name] ?? true
+    ])
+  );
+
+  if (!soloClick) {
+    return normalized;
+  }
+
+  const visibleNames = seriesNames.filter(
+    name => normalized[name]
+  );
+  const alreadySolo =
+    visibleNames.length === 1 &&
+    visibleNames[0] === clickedName;
+
+  return Object.fromEntries(
+    seriesNames.map(name => [
+      name,
+      alreadySolo ? true : name === clickedName
+    ])
+  );
+}
+
 export function HistoryChart({
   hours,
   series,
@@ -365,6 +398,30 @@ export function HistoryChart({
   const dark =
     colorScheme === "dark";
 
+  const seriesNames =
+    series.map(item => item.name);
+  const seriesNamesKey =
+    seriesNames.join("\u0000");
+  const [legendSelection, setLegendSelection] =
+    React.useState<Record<string, boolean>>(
+      () => Object.fromEntries(
+        seriesNames.map(name => [name, true])
+      )
+    );
+  const soloModifierRef =
+    React.useRef(false);
+
+  React.useEffect(() => {
+    setLegendSelection(current =>
+      Object.fromEntries(
+        seriesNames.map(name => [
+          name,
+          current[name] ?? true
+        ])
+      )
+    );
+  }, [seriesNamesKey]);
+
   const units =
     Array.from(
       new Set(
@@ -385,6 +442,39 @@ export function HistoryChart({
     to.getTime() -
       hours * 60 * 60 * 1000
   );
+
+  const handleLegendSelectChanged = (
+    params: {
+      name?: string;
+      selected?: Record<string, boolean>;
+    }
+  ) => {
+    const clickedName = params.name;
+    if (!clickedName) return;
+
+    if (soloModifierRef.current) {
+      setLegendSelection(current =>
+        nextHistoryLegendSelection(
+          seriesNames,
+          current,
+          clickedName,
+          true
+        )
+      );
+      return;
+    }
+
+    if (params.selected) {
+      setLegendSelection(
+        nextHistoryLegendSelection(
+          seriesNames,
+          params.selected,
+          clickedName,
+          false
+        )
+      );
+    }
+  };
 
   const option = {
     animation: false,
@@ -413,6 +503,7 @@ export function HistoryChart({
       itemGap: 18,
       data:
         series.map(item => item.name),
+      selected: legendSelection,
       textStyle: {
         color:
           dark ? "#c9cdd2" : "#495057"
@@ -552,13 +643,25 @@ export function HistoryChart({
   };
 
   return (
-    <ReactECharts
-      option={option}
-      notMerge
-      lazyUpdate
-      style={{
-        height: 390
+    <div
+      onMouseDownCapture={event => {
+        soloModifierRef.current =
+          event.button === 0 &&
+          (event.ctrlKey || event.metaKey);
       }}
-    />
+    >
+      <ReactECharts
+        option={option}
+        notMerge
+        lazyUpdate
+        onEvents={{
+          legendselectchanged:
+            handleLegendSelectChanged
+        }}
+        style={{
+          height: 390
+        }}
+      />
+    </div>
   );
 }
