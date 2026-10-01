@@ -2207,8 +2207,8 @@ export async function deleteRealtimeEntityReferences(
     deviceIdentities: number;
     deviceCommands: number;
     discoveryBaselines: number;
+    registeredEntities: number;
     exclusions: number;
-    hardDeleteTombstones: number;
   };
 }> {
   return readJson(await fetch("/api/v1/device-control/entities/delete-all-references", {

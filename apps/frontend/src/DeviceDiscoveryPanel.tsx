@@ -252,9 +252,7 @@ function appendEntityInventoryReasons(
 
   const discoveredKeys = discoveredInventory.items.map(item => item.key);
   const trackedKeys = entityInventoryKeysFromSignature(registered.discoveryEntitySignature);
-  const baselineKeys = trackedKeys ?? realtimeEntityInventoryKeys(registered, provider, realtimeEntities);
-
-  if (baselineKeys === null) return;
+  const baselineKeys = trackedKeys ?? realtimeEntityInventoryKeys(registered, provider, realtimeEntities) ?? [];
 
   const current = new Set(discoveredKeys);
   const baseline = new Set(baselineKeys);

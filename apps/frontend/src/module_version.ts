@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.112.2";
+export const MODULE_VERSION = "1.113.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.113.0": {
+    releasedAt: "2026-10-01T01:17:10Z",
+    patch: "PR-316-registered-vs-discovered-entity-inventory.patch",
+    changes: [
+      { type: "changed", description: "Compare Discovery entity inventories against the registered baseline and keep newly discovered entities pending until Update registered device" },
+      { type: "changed", description: "Report Delete all references against registered entity storage instead of hard-delete tombstones" }
+    ]
+  },
   "1.112.2": {
     releasedAt: "2026-09-30T22:40:00Z",
     patch: "PR-315-hard-delete-tombstone-and-removed-toggle.patch",

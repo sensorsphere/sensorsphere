@@ -611,6 +611,91 @@ function controlProviderFromTechnologies(technologies: string[]): string | null 
   return null;
 }
 
+function registeredEntityKey(entityType: string, entityValue: string): string {
+  const type = entityType.trim().toLowerCase() || "unknown";
+  const value = entityValue.trim().toLowerCase();
+  return value.startsWith(`${type}:`) ? value : `${type}:${value}`;
+}
+
+function registeredEntityParts(raw: Record<string, unknown>, fallbackKey: string) {
+  const keyType = fallbackKey.includes(":") ? fallbackKey.slice(0, fallbackKey.indexOf(":")) : "unknown";
+  const keyName = fallbackKey.includes(":") ? fallbackKey.slice(fallbackKey.indexOf(":") + 1) : fallbackKey;
+  const entityType = [raw.type, raw.entityType, raw.domain, raw.platform, raw.kind]
+    .find(value => typeof value === "string" && value.trim()) as string | undefined;
+  const entityValue = [raw.value, raw.id, raw.entityId, raw.objectId, raw.key, raw.name]
+    .find(value => typeof value === "string" && value.trim()) as string | undefined;
+  const value = entityValue?.trim() || fallbackKey;
+  const type = entityType?.trim() || keyType || "unknown";
+  const nameValue = [raw.name, raw.label, raw.entityName]
+    .find(item => typeof item === "string" && item.trim()) as string | undefined;
+  return {
+    key: registeredEntityKey(type, value),
+    value,
+    name: nameValue?.trim() || keyName || value,
+    type
+  };
+}
+
+async function syncRegisteredEntityInventory(
+  client: PoolClient,
+  deviceId: string,
+  provider: string | null | undefined,
+  signature: string
+): Promise<void> {
+  const providerName = provider?.trim().toUpperCase() || "UNKNOWN";
+  const targetKeys = [...new Set(signature
+    .split("\n")
+    .map(value => value.trim().toLowerCase())
+    .filter(Boolean))].sort();
+
+  const existingResult = await client.query<{
+    entity_key: string;
+    entity_snapshot: Record<string, unknown>;
+  }>(`
+    SELECT entity_key, entity_snapshot
+    FROM device_registry_entities
+    WHERE device_id = $1
+  `, [deviceId]);
+  const existingByKey = new Map(existingResult.rows.map(row => [row.entity_key.toLowerCase(), row.entity_snapshot ?? {}]));
+
+  const liveResult = await client.query<{ state: Record<string, unknown> }>(`
+    SELECT state
+    FROM device_control_states
+    WHERE device_id = $1 AND UPPER(provider) = $2
+    ORDER BY observed_at DESC
+    LIMIT 1
+  `, [deviceId, providerName]);
+  const liveState = liveResult.rows[0]?.state ?? {};
+  const liveEntities = Array.isArray(liveState.entities) ? liveState.entities : [];
+  const liveByKey = new Map<string, Record<string, unknown>>();
+  for (const candidate of liveEntities) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const raw = candidate as Record<string, unknown>;
+    const typeValue = [raw.type, raw.entityType, raw.domain, raw.platform, raw.kind]
+      .find(value => typeof value === "string" && value.trim());
+    const entityValue = [raw.value, raw.id, raw.entityId, raw.objectId, raw.key, raw.name]
+      .find(value => typeof value === "string" && value.trim());
+    if (typeof entityValue !== "string") continue;
+    const key = registeredEntityKey(typeof typeValue === "string" ? typeValue : "unknown", entityValue);
+    liveByKey.set(key, raw);
+  }
+
+  await client.query("DELETE FROM device_registry_entities WHERE device_id = $1", [deviceId]);
+  for (const key of targetKeys) {
+    const snapshot = liveByKey.get(key) ?? existingByKey.get(key) ?? {
+      type: key.includes(":") ? key.slice(0, key.indexOf(":")) : "unknown",
+      value: key,
+      name: key.includes(":") ? key.slice(key.indexOf(":") + 1) : key
+    };
+    const parts = registeredEntityParts(snapshot, key);
+    await client.query(`
+      INSERT INTO device_registry_entities (
+        device_id, provider, entity_key, entity_value, entity_name, entity_type, entity_snapshot, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,NOW(),NOW())
+    `, [deviceId, providerName, key, parts.value, parts.name, parts.type, JSON.stringify(snapshot)]);
+  }
+}
+
 function normalizeIdentityValue(identityType: string, value: string): { value: string; normalized: string } {
   const type = canonicalIdentityType(identityType);
   const trimmed = value.trim();
@@ -1060,6 +1145,7 @@ export async function registerDeviceRegistryFeature(
         input.controlSlotId,
         input.controlAgentId
       );
+      const controlProvider = input.controlProvider ?? controlProviderFromTechnologies(input.technologies ?? (input.technology ? [input.technology] : []));
       const result = await client.query<{ id: string }>(`
         INSERT INTO device_registry_devices (
           name, device_class, device_type, technology, icon_override, mac_address, ip_address, ieee_address, fqdn, manufacturer, model,
@@ -1073,11 +1159,14 @@ export async function registerDeviceRegistryFeature(
         input.manufacturer ?? null, input.model ?? null, input.firmwareVersion ?? null,
         input.description ?? null, input.discoveryEntitySignature ?? null, input.discoveryEntityCount ?? null, input.locationId ?? null, input.parentDeviceId ?? null,
         input.healthProfileId ?? null, controlAssignment.slotId, controlAssignment.agentId,
-        input.controlProvider ?? controlProviderFromTechnologies(input.technologies ?? (input.technology ? [input.technology] : [])),
+        controlProvider,
         input.enabled ?? true, input.lastSeenAt ?? null, input.batteryPercent ?? null, input.rssi ?? null
       ]);
       const id = result.rows[0]!.id;
       await replaceChildren(client, id, input.identities ?? [], input.links ?? [], input.technologies ?? (input.technology ? [input.technology] : []), input.accessLinks ?? []);
+      if (Object.prototype.hasOwnProperty.call(input, "discoveryEntitySignature")) {
+        await syncRegisteredEntityInventory(client, id, controlProvider, input.discoveryEntitySignature ?? "");
+      }
       await client.query("COMMIT");
       return sendDevice(pool, id, reply.code(201));
     } catch (error) {
@@ -1125,6 +1214,7 @@ export async function registerDeviceRegistryFeature(
           input.controlSlotId,
           input.controlAgentId
         );
+        const controlProvider = input.controlProvider ?? controlProviderFromTechnologies(input.technologies ?? (input.technology ? [input.technology] : []));
         const result = await client.query<{ id: string }>(`
           INSERT INTO device_registry_devices (
             name, device_class, device_type, technology, icon_override, mac_address, ip_address, ieee_address, fqdn, manufacturer, model,
@@ -1138,11 +1228,14 @@ export async function registerDeviceRegistryFeature(
           input.manufacturer ?? null, input.model ?? null, input.firmwareVersion ?? null,
           input.description ?? null, input.discoveryEntitySignature ?? null, input.discoveryEntityCount ?? null, input.locationId ?? null, parentDeviceId,
           input.healthProfileId ?? null, controlAssignment.slotId, controlAssignment.agentId,
-          input.controlProvider ?? controlProviderFromTechnologies(input.technologies ?? (input.technology ? [input.technology] : [])),
+          controlProvider,
           input.enabled ?? true, input.lastSeenAt ?? null, input.batteryPercent ?? null, input.rssi ?? null
         ]);
         const id = result.rows[0]!.id;
         await replaceChildren(client, id, input.identities ?? [], input.links ?? [], input.technologies ?? (input.technology ? [input.technology] : []), input.accessLinks ?? []);
+        if (Object.prototype.hasOwnProperty.call(input, "discoveryEntitySignature")) {
+          await syncRegisteredEntityInventory(client, id, controlProvider, input.discoveryEntitySignature ?? "");
+        }
         idsByClientKey.set(item.clientKey, id);
         createdIds.push(id);
       }
@@ -1236,6 +1329,11 @@ export async function registerDeviceRegistryFeature(
             slotId: existing.control_slot_id,
             agentId: existing.control_agent_id
           };
+      const controlProviderChanged =
+        Object.prototype.hasOwnProperty.call(input, "controlProvider") || Object.prototype.hasOwnProperty.call(input, "technologies");
+      const nextControlProvider = Object.prototype.hasOwnProperty.call(input, "controlProvider")
+        ? input.controlProvider ?? null
+        : input.technologies ? controlProviderFromTechnologies(input.technologies) : existing.control_provider;
 
       await client.query(`
         UPDATE device_registry_devices SET
@@ -1285,10 +1383,7 @@ export async function registerDeviceRegistryFeature(
         Object.prototype.hasOwnProperty.call(input, "parentDeviceId"), input.parentDeviceId ?? null,
         Object.prototype.hasOwnProperty.call(input, "healthProfileId"), input.healthProfileId ?? null,
         controlAssignmentChanged, controlAssignment.slotId, controlAssignment.agentId,
-        Object.prototype.hasOwnProperty.call(input, "controlProvider") || Object.prototype.hasOwnProperty.call(input, "technologies"),
-        Object.prototype.hasOwnProperty.call(input, "controlProvider")
-          ? input.controlProvider ?? null
-          : input.technologies ? controlProviderFromTechnologies(input.technologies) : null,
+        controlProviderChanged, nextControlProvider,
         input.enabled ?? null,
         Object.prototype.hasOwnProperty.call(input, "lastSeenAt"), input.lastSeenAt ?? null,
         Object.prototype.hasOwnProperty.call(input, "batteryPercent"), input.batteryPercent ?? null,
@@ -1297,6 +1392,15 @@ export async function registerDeviceRegistryFeature(
         Object.prototype.hasOwnProperty.call(input, "discoveryEntityCount"), input.discoveryEntityCount ?? null
       ]);
       await replaceChildren(client, request.params.id, input.identities, input.links, input.technologies, input.accessLinks);
+      if (Object.prototype.hasOwnProperty.call(input, "discoveryEntitySignature")) {
+        await syncRegisteredEntityInventory(client, request.params.id, nextControlProvider, input.discoveryEntitySignature ?? "");
+      } else if (controlProviderChanged) {
+        await client.query(`
+          UPDATE device_registry_entities
+          SET provider = $2, updated_at = NOW()
+          WHERE device_id = $1
+        `, [request.params.id, nextControlProvider?.trim().toUpperCase() || "UNKNOWN"]);
+      }
       await client.query("COMMIT");
       return sendDevice(pool, request.params.id, reply);
     } catch (error) {

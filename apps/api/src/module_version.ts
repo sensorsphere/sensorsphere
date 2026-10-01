@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.63.3";
+export const MODULE_VERSION = "1.64.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.64.0": {
+    releasedAt: "2026-10-01T01:17:10Z",
+    patch: "PR-316-registered-vs-discovered-entity-inventory.patch",
+    changes: [
+      { type: "added", description: "Persist the registered entity inventory separately from Device Agent live/discovered state" },
+      { type: "changed", description: "Apply discovered entity additions and removals to the registered inventory only through Update registered device" },
+      { type: "removed", description: "Remove HARD_DELETED tombstones; Delete all references now fully purges the registered entity and SensorSphere references" },
+      { type: "changed", description: "Extend API database compatibility through migration level 82 for registered entity inventory storage" }
+    ]
+  },
   "1.63.3": {
     releasedAt: "2026-09-30T22:48:00Z",
     patch: "PR-315-hard-delete-tombstone-and-removed-toggle.patch",
