@@ -54,6 +54,18 @@ compose() {
   (cd "$INSTALL_DIR" && "${clean_env[@]}" docker compose --env-file .env -f docker-compose.yml "$@")
 }
 
+download_file() {
+  local url="$1" destination="$2"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$url" -o "$destination"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$destination" "$url"
+  else
+    echo "ERROR: curl or wget is required to download Stack Releases" >&2
+    exit 1
+  fi
+}
+
 set_env() {
   local file="$1" key="$2" value="$3" tmp
   tmp="$(mktemp)"
@@ -258,22 +270,101 @@ restore_bundle() {
   local source="$1"
   [[ -d "$source" ]] || return 0
 
-  local file
+  local file dir
   for file in docker-compose.yml install.sh .env.example; do
     if [[ -f "$source/$file" ]]; then
       cp "$source/$file" "$INSTALL_DIR/$file"
+    else
+      rm -f "$INSTALL_DIR/$file"
     fi
   done
 
-  if [[ -d "$source/config" ]]; then
-    rm -rf "$INSTALL_DIR/config"
-    cp -a "$source/config" "$INSTALL_DIR/config"
-  fi
-  if [[ -d "$source/init" ]]; then
-    rm -rf "$INSTALL_DIR/init"
-    cp -a "$source/init" "$INSTALL_DIR/init"
-  fi
+  for dir in config init; do
+    rm -rf "$INSTALL_DIR/$dir"
+    [[ -d "$source/$dir" ]] && cp -a "$source/$dir" "$INSTALL_DIR/$dir"
+  done
+
   chmod 0755 "$INSTALL_DIR/install.sh" 2>/dev/null || true
+}
+
+managed_bundle_changes() {
+  local source="$1"
+  local path
+  for path in install.sh docker-compose.yml .env.example config init; do
+    if [[ ! -e "$source/$path" && ! -e "$INSTALL_DIR/$path" ]]; then
+      continue
+    fi
+    if [[ ! -e "$INSTALL_DIR/$path" ]]; then
+      echo "A $path"
+      continue
+    fi
+    if [[ ! -e "$source/$path" ]]; then
+      echo "D $path"
+      continue
+    fi
+    if ! diff -qr "$INSTALL_DIR/$path" "$source/$path" >/dev/null 2>&1; then
+      echo "M $path"
+    fi
+  done
+}
+
+refresh_bundle_for_update() {
+  [[ "${SENSORSPHERE_INTERNAL_BUNDLE_REFRESHED:-0}" != "1" ]] || return 1
+  [[ -n "$STACK_VERSION" ]] || return 1
+
+  if [[ -n "$MANIFEST_SOURCE" ]]; then
+    echo "Bundle self-refresh skipped because --manifest was supplied."
+    return 1
+  fi
+
+  command -v sha256sum >/dev/null 2>&1 || { echo "ERROR: sha256sum is required for bundle refresh" >&2; exit 1; }
+  command -v tar >/dev/null 2>&1 || { echo "ERROR: tar is required for bundle refresh" >&2; exit 1; }
+
+  local tmp base archive checksum target target_stack changes
+  tmp="$(mktemp -d)"
+  base="$RELEASE_BASE_URL/stack-$STACK_VERSION"
+  archive="sensorsphere-$STACK_VERSION.tar.gz"
+  checksum="$archive.sha256"
+
+  download_file "$base/$archive" "$tmp/$archive"
+  download_file "$base/$checksum" "$tmp/$checksum"
+  (cd "$tmp" && sha256sum -c "$checksum")
+  tar -xzf "$tmp/$archive" -C "$tmp"
+
+  target="$tmp/sensorsphere-$STACK_VERSION"
+  [[ -x "$target/install.sh" ]] || { rm -rf "$tmp"; echo "ERROR: target bundle does not contain install.sh" >&2; exit 1; }
+  [[ -f "$target/stack-release.yaml" ]] || { rm -rf "$tmp"; echo "ERROR: target bundle does not contain stack-release.yaml" >&2; exit 1; }
+
+  target_stack="$(manifest_top_value "$target/stack-release.yaml" stackVersion)"
+  [[ "$target_stack" == "$STACK_VERSION" ]] || {
+    rm -rf "$tmp"
+    echo "ERROR: target bundle stackVersion $target_stack does not match requested $STACK_VERSION" >&2
+    exit 1
+  }
+
+  changes="$(managed_bundle_changes "$target")"
+  if [[ -z "$changes" ]]; then
+    rm -rf "$tmp"
+    return 1
+  fi
+
+  echo "Bundle changes detected for Stack $STACK_VERSION:"
+  printf '  %s\n' "$changes"
+  echo "Refreshing SensorSphere installation bundle..."
+  restore_bundle "$target"
+  rm -rf "$tmp"
+  return 0
+}
+
+reexec_refreshed_installer() {
+  local -a args=(update --install-dir "$INSTALL_DIR")
+  [[ -n "$STACK_VERSION" ]] && args+=(--stack "$STACK_VERSION")
+  [[ -n "$MANIFEST_SOURCE" ]] && args+=(--manifest "$MANIFEST_SOURCE")
+  args+=(--release-base-url "$RELEASE_BASE_URL")
+  [[ "$SKIP_PULL" -eq 1 ]] && args+=(--skip-pull)
+
+  echo "Continuing update with refreshed installer..."
+  SENSORSPHERE_INTERNAL_BUNDLE_REFRESHED=1 exec "$INSTALL_DIR/install.sh" "${args[@]}"
 }
 
 fetch_manifest() {
@@ -295,14 +386,7 @@ fetch_manifest() {
   }
 
   local url="$RELEASE_BASE_URL/stack-$STACK_VERSION/$STACK_VERSION.yaml"
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$url" -o "$destination"
-  elif command -v wget >/dev/null 2>&1; then
-    wget -qO "$destination" "$url"
-  else
-    echo "ERROR: curl or wget is required to download Stack Releases" >&2
-    exit 1
-  fi
+  download_file "$url" "$destination"
 }
 
 apply_manifest() {
@@ -420,9 +504,15 @@ update_command() {
   require_tools
   [[ -f "$INSTALL_DIR/.env" ]] || { echo "ERROR: installation not found: $INSTALL_DIR" >&2; exit 1; }
 
-  cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.env.previous"
-  [[ -f "$INSTALL_DIR/.stack-release.yaml" ]]     && cp "$INSTALL_DIR/.stack-release.yaml" "$INSTALL_DIR/.stack-release.previous.yaml"
-  snapshot_bundle "$INSTALL_DIR/.bundle.previous"
+  if [[ "${SENSORSPHERE_INTERNAL_BUNDLE_REFRESHED:-0}" != "1" ]]; then
+    cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.env.previous"
+    [[ -f "$INSTALL_DIR/.stack-release.yaml" ]]       && cp "$INSTALL_DIR/.stack-release.yaml" "$INSTALL_DIR/.stack-release.previous.yaml"
+    snapshot_bundle "$INSTALL_DIR/.bundle.previous"
+
+    if refresh_bundle_for_update; then
+      reexec_refreshed_installer
+    fi
+  fi
 
   prepare_bundle
   fetch_manifest "$INSTALL_DIR/.stack-release.yaml"

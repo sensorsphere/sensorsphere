@@ -110,7 +110,10 @@ The complete Google and Microsoft registration walkthrough is in
 
 Updating uses the **target Stack Release bundle**, so lifecycle files such as `install.sh`,
 `docker-compose.yml`, configuration templates and runtime assets are updated together with the
-application image versions.
+application image versions. Starting with Stack `2026.10.01.4`, an installed
+`./install.sh update --stack <version>` downloads and verifies the target bundle, refreshes changed
+lifecycle files, and continues automatically with the refreshed installer. Installations older than
+`2026.10.01.4` need the bootstrap update once to acquire this self-refresh capability.
 
 ```bash
 env \
