@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.114.2";
+export const MODULE_VERSION = "1.115.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.115.0": {
+    releasedAt: "2026-10-01T23:30:44Z",
+    patch: "PR-323-proxmox-node-network-inventory.patch",
+    changes: [
+      { type: "added", description: "Display the complete Proxmox PVE node network-interface inventory in Discovery details, including bridges without IP addresses" },
+      { type: "added", description: "Show per-interface type, runtime state, IP/CIDR, MAC, gateways, bridge ports and VLAN-aware state when reported by the Proxmox API" },
+      { type: "changed", description: "Include Proxmox node interface details in Discovery text search" }
+    ]
+  },
   "1.114.2": {
     releasedAt: "2026-10-01T22:43:39Z",
     patch: "PR-321-history-sticky-header.patch",

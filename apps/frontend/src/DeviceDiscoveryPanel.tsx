@@ -113,6 +113,51 @@ function stringArray(value: unknown): string[] {
   return value.map(item => String(item).trim()).filter(Boolean);
 }
 
+interface ProxmoxNetworkInterfaceDetail {
+  name: string;
+  type: string | null;
+  active: boolean | null;
+  autostart: boolean | null;
+  ip: string | null;
+  cidr: string | null;
+  gateway: string | null;
+  ipv6: string | null;
+  cidr6: string | null;
+  gateway6: string | null;
+  mac: string | null;
+  bridgePorts: string[];
+  vlanAware: boolean | null;
+  comment: string | null;
+}
+
+function proxmoxNetworkInterfaces(device: Record<string, unknown>): ProxmoxNetworkInterfaceDetail[] {
+  if (!Array.isArray(device.networkInterfaces)) return [];
+  return device.networkInterfaces.flatMap(value => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const item = value as Record<string, unknown>;
+    const name = typeof item.name === "string" ? item.name.trim() : "";
+    if (!name) return [];
+    const text = (key: string) => typeof item[key] === "string" && String(item[key]).trim() ? String(item[key]).trim() : null;
+    const bool = (key: string) => typeof item[key] === "boolean" ? item[key] as boolean : null;
+    return [{
+      name,
+      type: text("type"),
+      active: bool("active"),
+      autostart: bool("autostart"),
+      ip: text("ip"),
+      cidr: text("cidr"),
+      gateway: text("gateway"),
+      ipv6: text("ipv6"),
+      cidr6: text("cidr6"),
+      gateway6: text("gateway6"),
+      mac: text("mac"),
+      bridgePorts: stringArray(item.bridgePorts),
+      vlanAware: bool("vlanAware"),
+      comment: text("comment")
+    }];
+  });
+}
+
 function discoveredIdentityValues(discovered: Record<string, unknown>, scalarKey: string, arrayKey: string): string[] {
   const scalar = typeof discovered[scalarKey] === "string" ? String(discovered[scalarKey]).trim() : "";
   return [...new Set([scalar, ...stringArray(discovered[arrayKey])].filter(Boolean))];
@@ -599,7 +644,20 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
       const needle = textFilter.trim().toLowerCase();
       if (!needle) return true;
       return ["name", "hostname", "ip", "mac", "model", "id", "providerId", "node", "vmid", "kind", "endpointId", "os", "osType"].some(key => textValue(row.device, key).toLowerCase().includes(needle))
-        || ["ipAddresses", "macAddresses"].some(key => Array.isArray(row.device[key]) && (row.device[key] as unknown[]).some(value => String(value).toLowerCase().includes(needle)));
+        || ["ipAddresses", "macAddresses"].some(key => Array.isArray(row.device[key]) && (row.device[key] as unknown[]).some(value => String(value).toLowerCase().includes(needle)))
+        || proxmoxNetworkInterfaces(row.device).some(networkInterface => [
+          networkInterface.name,
+          networkInterface.type,
+          networkInterface.ip,
+          networkInterface.cidr,
+          networkInterface.ipv6,
+          networkInterface.cidr6,
+          networkInterface.mac,
+          networkInterface.gateway,
+          networkInterface.gateway6,
+          networkInterface.comment,
+          ...networkInterface.bridgePorts
+        ].filter(Boolean).some(value => String(value).toLowerCase().includes(needle)));
     })
     .filter(row => {
       const needle = identityFilter.trim().toLowerCase();
@@ -1042,6 +1100,9 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
               const proxmoxKind = provider === "PROXMOX" ? textValue(row.device, "kind") : "";
               const proxmoxGuest = provider === "PROXMOX" && ["PVE_VM", "PVE_LXC"].includes(proxmoxKind);
               const proxmoxStatus = textValue(row.device, "status");
+              const networkInterfaces = provider === "PROXMOX" && proxmoxKind === "PVE_NODE"
+                ? proxmoxNetworkInterfaces(row.device)
+                : [];
               const entitySummaries = ["ESPHOME", "YEELIGHT"].includes(provider) ? discoveryEntityInventory(row.device).items : [];
               const entityTypes = [...new Set(entitySummaries.map(entity => entity.type))];
               const details = provider === "ESPHOME" || (provider === "YEELIGHT" && entitySummaries.length > 0)
@@ -1091,7 +1152,7 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                 <Table.Td><CopyableDiscoveryValue value={provider === "YEELIGHT" ? textValue(row.device, "id") : provider === "PROXMOX" ? textValue(row.device, "providerId") : textValue(row.device, "mac")} monospace compact /></Table.Td>
                 <Table.Td><Text size="sm" style={{ cursor: "pointer" }} title="Filter by model" onClick={() => { const value = provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model"); if (value !== "—") setModelFilter(value); }}>{provider === "PROXMOX" ? textValue(row.device, "kind") : textValue(row.device, "model")}</Text></Table.Td>
                 <Table.Td>
-                  <HoverCard width={430} shadow="md" position="bottom-start" openDelay={150} closeDelay={300} withinPortal>
+                  <HoverCard width={provider === "PROXMOX" && proxmoxKind === "PVE_NODE" ? 620 : 430} shadow="md" position="bottom-start" openDelay={150} closeDelay={300} withinPortal>
                     <HoverCard.Target>
                       <span style={{ cursor: "help", display: "inline-block" }}>{detailsContent}</span>
                     </HoverCard.Target>
@@ -1125,6 +1186,44 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
                             <Text size="xs">OS: {textValue(row.device, "os")} / {textValue(row.device, "osType")}</Text>
                             <Text size="xs">Guest agent: {textValue(row.device, "guestAgent")}</Text>
                             <Text size="xs">Parent: {textValue(row.device, "parentProviderId")}</Text>
+                            {networkInterfaces.length > 0 && (
+                              <>
+                                <Text size="xs" fw={600} mt={4}>Network interfaces ({networkInterfaces.length})</Text>
+                                <ScrollArea.Autosize mah={320} type="auto" offsetScrollbars scrollbarSize={8}>
+                                  <Stack gap={4} pr="xs">
+                                    {networkInterfaces.map(networkInterface => (
+                                      <Card key={networkInterface.name} withBorder p="xs">
+                                        <Stack gap={2}>
+                                          <Group gap={6} wrap="wrap">
+                                            <Text size="xs" fw={600}>{networkInterface.name}</Text>
+                                            {networkInterface.type && <Badge size="xs" variant="light" color="gray">{networkInterface.type}</Badge>}
+                                            {networkInterface.active !== null && (
+                                              <Badge size="xs" variant="light" color={networkInterface.active ? "green" : "gray"}>
+                                                {networkInterface.active ? "UP" : "DOWN"}
+                                              </Badge>
+                                            )}
+                                            {networkInterface.vlanAware === true && <Badge size="xs" variant="light" color="violet">VLAN aware</Badge>}
+                                          </Group>
+                                          <Text size="xs">
+                                            IP: {networkInterface.cidr ?? networkInterface.ip ?? "—"}
+                                            {" · "}MAC: {networkInterface.mac ?? "—"}
+                                          </Text>
+                                          {(networkInterface.cidr6 || networkInterface.ipv6) && (
+                                            <Text size="xs">IPv6: {networkInterface.cidr6 ?? networkInterface.ipv6}</Text>
+                                          )}
+                                          {networkInterface.gateway && <Text size="xs">Gateway: {networkInterface.gateway}</Text>}
+                                          {networkInterface.gateway6 && <Text size="xs">Gateway IPv6: {networkInterface.gateway6}</Text>}
+                                          {networkInterface.bridgePorts.length > 0 && (
+                                            <Text size="xs">Bridge ports: {networkInterface.bridgePorts.join(", ")}</Text>
+                                          )}
+                                          {networkInterface.comment && <Text size="xs" c="dimmed">{networkInterface.comment}</Text>}
+                                        </Stack>
+                                      </Card>
+                                    ))}
+                                  </Stack>
+                                </ScrollArea.Autosize>
+                              </>
+                            )}
                           </>
                         )}
                         {!proxmoxGuest && entitySummaries.length === 0 && <Text size="xs">{details}</Text>}
