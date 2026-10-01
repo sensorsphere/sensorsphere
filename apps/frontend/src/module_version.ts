@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.114.1";
+export const MODULE_VERSION = "1.114.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.114.2": {
+    releasedAt: "2026-10-01T22:43:39Z",
+    patch: "PR-321-history-sticky-header.patch",
+    changes: [
+      { type: "changed", description: "Keep the complete History page header visible while scrolling, including the title, view/tabs row and action buttons" },
+      { type: "changed", description: "Allow History graphs to scroll beneath one unified sticky header without separate sticky rows or overlap" }
+    ]
+  },
   "1.114.1": {
     releasedAt: "2026-10-01T22:24:27Z",
     patch: "PR-320-history-legend-solo-mode.patch",

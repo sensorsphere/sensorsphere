@@ -4614,21 +4614,22 @@ export function HistoryPanel({
   return (
     <Stack gap="sm">
 
-      <div>
-        <Group gap="xs">
-          <NavigationIcon page="history" size={24} />
-          <Title order={2}>
-            {templateLaunch
-              ? `Template History · ${templateLaunch.templateName}`
-              : "History"}
-          </Title>
-        </Group>
-        <Text c="dimmed">
-          Organize independent graph dashboards in multiple History tabs
-        </Text>
-      </div>
+      <div className="history-sticky-header">
+        <div>
+          <Group gap="xs">
+            <NavigationIcon page="history" size={24} />
+            <Title order={2}>
+              {templateLaunch
+                ? `Template History · ${templateLaunch.templateName}`
+                : "History"}
+            </Title>
+          </Group>
+          <Text c="dimmed">
+            Organize independent graph dashboards in multiple History tabs
+          </Text>
+        </div>
 
-      <div className="page-sticky-controls page-sticky-controls-gap-md history-sticky-controls">
+        <div className="page-sticky-controls-gap-md history-sticky-controls">
       <Group
         gap="xs"
         align="center"
@@ -5599,6 +5600,7 @@ export function HistoryPanel({
           </Button>
         </Group>
       </Group>
+        </div>
       </div>
 
       {graphs.length === 0 ? (

@@ -362,6 +362,18 @@ body { background: var(--ss-page-bg); }
   overflow: hidden;
 }
 
+.history-sticky-header {
+  position: sticky;
+  top: var(--app-shell-header-height, 64px);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-sm);
+  background: var(--ss-page-bg);
+  padding-bottom: var(--mantine-spacing-sm);
+  box-shadow: 0 8px 10px -10px rgba(0, 0, 0, 0.45);
+}
+
 .history-sticky-controls {
   gap: var(--mantine-spacing-xs);
 }
