@@ -39,7 +39,19 @@ require_tools() {
 }
 
 compose() {
-  (cd "$INSTALL_DIR" && docker compose --env-file .env -f docker-compose.yml "$@")
+  local env_file="$INSTALL_DIR/.env"
+  local -a clean_env=(env)
+  local line key
+
+  if [[ -f "$env_file" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || continue
+      key="${line%%=*}"
+      clean_env+=( -u "$key" )
+    done < "$env_file"
+  fi
+
+  (cd "$INSTALL_DIR" && "${clean_env[@]}" docker compose --env-file .env -f docker-compose.yml "$@")
 }
 
 set_env() {
