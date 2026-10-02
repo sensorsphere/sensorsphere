@@ -88,6 +88,7 @@ import { AgentsPanel } from "./AgentsPanel";
 import { RealtimeEntityBrowser } from "./RealtimeEntityBrowser";
 import { DeviceDiscoveryPanel } from "./DeviceDiscoveryPanel";
 import { discoveryEntityInventory } from "./DiscoveryEntityInventory";
+import { proxmoxNodeNetworkIdentities } from "./ProxmoxNetworkIdentities";
 
 
 type DeviceSortKey = "name" | "address" | "class" | "type" | "technology" | "location" | "parent" | "controlAgent" | "lastSeen" | "health" | "checks";
@@ -429,7 +430,9 @@ function upsertDiscoveredIdentity(
   identities: DeviceIdentity[],
   identityType: string,
   value: string,
-  sortOrder: number
+  sortOrder: number,
+  labelCode: string | null = "LAN",
+  label: string | null = "LAN"
 ): DeviceIdentity[] {
   if (!value) return identities;
   const normalizedType = identityType.toUpperCase();
@@ -443,8 +446,8 @@ function upsertDiscoveredIdentity(
     identityType: normalizedType,
     value,
     source: "discovery",
-    labelCode: "LAN",
-    label: "LAN",
+    labelCode,
+    label,
     isPrimary: true,
     sortOrder
   };
@@ -1054,16 +1057,27 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       )) ?? null
       : null;
 
+    const proxmoxNodeIdentities = providerName === "PROXMOX" && proxmoxKind === "PVE_NODE"
+      ? proxmoxNodeNetworkIdentities(device)
+      : [];
+    const addressIdentities: DeviceIdentity[] = proxmoxNodeIdentities.length
+      ? proxmoxNodeIdentities
+      : [
+          ...ipAddresses.map((address, index) => ({ identityType: "IP", value: address, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: index === 0, sortOrder: index })),
+          ...macAddresses.map((address, index) => ({ identityType: "MAC", value: address, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: index === 0, sortOrder: 10 + index }))
+        ];
+
     const identities: DeviceIdentity[] = [
-      ...ipAddresses.map((address, index) => ({ identityType: "IP", value: address, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: index === 0, sortOrder: index })),
-      ...macAddresses.map((address, index) => ({ identityType: "MAC", value: address, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: index === 0, sortOrder: 10 + index })),
+      ...addressIdentities,
       ...(providerName === "ESPHOME" && hostname ? [{ identityType: "FQDN", value: hostname, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 20 }] : []),
-      ...(providerName === "PROXMOX" && hostname ? [{ identityType: "HOSTNAME", value: hostname, source: "discovery", labelCode: "PROXMOX", label: "Proxmox", isPrimary: false, sortOrder: 30 }] : []),
+      ...(providerName === "PROXMOX" && hostname ? [{ identityType: "HOSTNAME", value: hostname, source: "discovery", labelCode: null, label: null, isPrimary: false, sortOrder: 30 }] : []),
       ...(providerName === "ESPHOME" && entities.length === 1 ? [{ identityType: "ESPHOME_ENTITY", value: entities[0]!, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 30 }] : []),
       ...(providerName === "YEELIGHT" && id ? [{ identityType: "YEELIGHT_ID", value: id, source: "discovery", labelCode: "LAN", label: "LAN", isPrimary: true, sortOrder: 20 }] : []),
-      ...(providerName === "PROXMOX" && proxmoxId ? [{ identityType: "PROXMOX_ID", value: proxmoxId, source: "discovery", labelCode: "PROXMOX", label: "Proxmox", isPrimary: true, sortOrder: 20 }] : [])
+      ...(providerName === "PROXMOX" && proxmoxId ? [{ identityType: "PROXMOX_ID", value: proxmoxId, source: "discovery", labelCode: null, label: null, isPrimary: true, sortOrder: 20 }] : [])
     ];
 
+    const importedIpAddresses = addressIdentities.filter(identity => identity.identityType === "IP").map(identity => identity.value);
+    const importedMacAddresses = addressIdentities.filter(identity => identity.identityType === "MAC").map(identity => identity.value);
     const proxmoxDescription = [
       endpointId ? `Endpoint: ${endpointId}` : "",
       node ? `Node: ${node}` : "",
@@ -1072,8 +1086,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
       os ? `OS: ${os}${osType && osType.toLowerCase() !== os.toLowerCase() ? ` (${osType})` : ""}` : (osType ? `OS type: ${osType}` : ""),
       guestAgent ? `Guest agent: ${guestAgent === "true" ? "enabled" : "disabled"}` : "",
       value("version") ? `Version: ${value("version")}` : "",
-      ipAddresses.length ? `IP: ${ipAddresses.join(", ")}` : "",
-      macAddresses.length ? `MAC: ${macAddresses.join(", ")}` : ""
+      importedIpAddresses.length ? `IP: ${importedIpAddresses.join(", ")}` : "",
+      importedMacAddresses.length ? `MAC: ${importedMacAddresses.join(", ")}` : ""
     ].filter(Boolean).join(" · ");
 
     return {
@@ -1219,18 +1233,34 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
     const entities = entityInventory.items.map(item => item.name);
 
     let identities = registered.identities.map(identity => ({ ...identity }));
-    identities = upsertDiscoveredIdentities(identities, "IP", ipAddresses, 0);
-    identities = upsertDiscoveredIdentities(identities, "MAC", macAddresses, 10);
+    const proxmoxNodeIdentities = providerName === "PROXMOX" && proxmoxKind === "PVE_NODE"
+      ? proxmoxNodeNetworkIdentities(device)
+      : [];
+    if (proxmoxNodeIdentities.length) {
+      identities = identities.filter(identity =>
+        !(identity.source === "discovery" && ["IP", "MAC"].includes(identity.identityType.toUpperCase()))
+      );
+      identities.push(...proxmoxNodeIdentities);
+    } else {
+      identities = upsertDiscoveredIdentities(identities, "IP", ipAddresses, 0);
+      identities = upsertDiscoveredIdentities(identities, "MAC", macAddresses, 10);
+    }
     if (providerName === "ESPHOME") {
       identities = upsertDiscoveredIdentity(identities, "FQDN", hostname, 20);
       if (entities.length === 1) identities = upsertDiscoveredIdentity(identities, "ESPHOME_ENTITY", entities[0]!, 30);
     } else if (providerName === "YEELIGHT") {
       identities = upsertDiscoveredIdentity(identities, "YEELIGHT_ID", id, 20);
     } else if (providerName === "PROXMOX") {
-      identities = upsertDiscoveredIdentity(identities, "PROXMOX_ID", proxmoxId, 20);
-      identities = upsertDiscoveredIdentity(identities, "HOSTNAME", hostname, 30);
+      identities = upsertDiscoveredIdentity(identities, "PROXMOX_ID", proxmoxId, 20, null, null);
+      identities = upsertDiscoveredIdentity(identities, "HOSTNAME", hostname, 30, null, null);
     }
     identities = dedupeDeviceIdentities(identities);
+    const effectiveProxmoxIps = proxmoxNodeIdentities.length
+      ? proxmoxNodeIdentities.filter(identity => identity.identityType === "IP").map(identity => identity.value)
+      : ipAddresses;
+    const effectiveProxmoxMacs = proxmoxNodeIdentities.length
+      ? proxmoxNodeIdentities.filter(identity => identity.identityType === "MAC").map(identity => identity.value)
+      : macAddresses;
 
     const form = deviceToForm(registered);
     form.identities = identities;
@@ -1266,8 +1296,8 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
         os ? `OS: ${os}${osType && osType.toLowerCase() !== os.toLowerCase() ? ` (${osType})` : ""}` : (osType ? `OS type: ${osType}` : ""),
         guestAgent ? `Guest agent: ${guestAgent === "true" ? "enabled" : "disabled"}` : "",
         value("version") ? `Version: ${value("version")}` : "",
-        ip ? `IP: ${ip}` : "",
-        mac ? `MAC: ${mac}` : ""
+        effectiveProxmoxIps.length ? `IP: ${effectiveProxmoxIps.join(", ")}` : "",
+        effectiveProxmoxMacs.length ? `MAC: ${effectiveProxmoxMacs.join(", ")}` : ""
       ].filter(Boolean).join(" · ");
     }
     form.controlSlotId = agent.slotId;

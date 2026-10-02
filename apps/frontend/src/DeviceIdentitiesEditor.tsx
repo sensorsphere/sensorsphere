@@ -3,7 +3,7 @@ import { ActionIcon, Badge, Button, Checkbox, Group, Modal, Select, Stack, Table
 import type { DeviceIdentity, DeviceIdentityLabelReference, DeviceRegistryDevice } from "./types";
 import { DeleteActionIcon, EditActionIcon } from "./TableActionIcons";
 
-const IDENTITY_TYPES = ["MAC", "IP", "FQDN", "IEEE", "HOSTNAME", "SERIAL", "ESPHOME_NODE", "MQTT_CLIENT_ID", "PROXMOX_VMID", "CUSTOM"];
+const IDENTITY_TYPES = ["MAC", "IP", "FQDN", "IEEE", "HOSTNAME", "SERIAL", "ESPHOME_NODE", "MQTT_CLIENT_ID", "PROXMOX_ID", "PROXMOX_VMID", "CUSTOM"];
 
 interface IdentityForm { identityType: string; labelCode: string | null; value: string; isPrimary: boolean; sortOrder: number | string; }
 const emptyIdentity = (): IdentityForm => ({ identityType: "MAC", labelCode: null, value: "", isPrimary: true, sortOrder: 100 });

@@ -892,7 +892,12 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
   return <Stack gap="sm" className="device-registry-devices-stack device-registry-discovery-panel">
     <Group justify="space-between" align="flex-end" wrap="wrap">
       <div>
-        <Text fw={600}>Device discovery</Text>
+        <Group gap="xs" align="center">
+          <Text fw={600}>Device discovery</Text>
+          <Tooltip label={proxmoxBootstrapCandidates.length > 0 ? "Configure Proxmox on a Supervisor-managed Device Agent" : "Select an enabled Device Agent with an available Supervisor"}>
+            <span><Button size="compact-xs" variant="subtle" color="orange" disabled={scanBusy || proxmoxBootstrapCandidates.length === 0} onClick={openProxmoxBootstrap}>Proxmox configuration</Button></span>
+          </Tooltip>
+        </Group>
         <Text size="xs" c="dimmed">Consolidated Yeelight, ESPHome and Proxmox discovery reported by Device Agents.</Text>
       </div>
       <Group gap="sm" align="center">
@@ -926,9 +931,6 @@ export function DeviceDiscoveryPanel({ devices, onImportDiscoveredDevice, onUpda
           />
           <Button size="compact-sm" variant="light" color="yellow" disabled={scanBusy} loading={scanMutation.isPending && scanProvider === "YEELIGHT"} onClick={() => scanMutation.mutate("YEELIGHT")}>Scan Yeelight</Button>
           <Button size="compact-sm" variant="light" color="green" disabled={scanBusy} loading={scanMutation.isPending && scanProvider === "ESPHOME"} onClick={() => scanMutation.mutate("ESPHOME")}>Scan ESPHome</Button>
-          <Tooltip label={proxmoxBootstrapCandidates.length > 0 ? "Configure Proxmox on a Supervisor-managed Device Agent" : "Select an enabled Device Agent with an available Supervisor"}>
-            <span><Button size="compact-sm" variant="light" color="orange" disabled={scanBusy || proxmoxBootstrapCandidates.length === 0} onClick={openProxmoxBootstrap}>Configure Proxmox</Button></span>
-          </Tooltip>
           <Button size="compact-sm" variant="light" color="indigo" disabled={scanBusy} loading={scanMutation.isPending && scanProvider === "PROXMOX"} onClick={() => scanMutation.mutate("PROXMOX")}>Scan Proxmox</Button>
           <Button size="compact-sm" disabled={scanBusy} loading={scanMutation.isPending && scanProvider === "ALL"} onClick={() => scanMutation.mutate("ALL")}>Scan all</Button>
         </Group>

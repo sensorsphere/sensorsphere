@@ -18,10 +18,20 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.115.0";
+export const MODULE_VERSION = "1.115.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.115.1": {
+    releasedAt: "2026-10-02T00:33:17Z",
+    patch: "PR-324-proxmox-identity-integrity.patch",
+    changes: [
+      { type: "fixed", description: "Proxmox PVE node imports no longer create MAC identities from unrelated physical interfaces when the API cannot prove an IP-to-MAC association" },
+      { type: "fixed", description: "Proxmox identity imports no longer use the invalid PROXMOX identity-label reference that caused a foreign-key error on Save" },
+      { type: "changed", description: "PVE node IP identities use interface roles such as Management and Storage when they can be derived from Proxmox interface metadata" },
+      { type: "changed", description: "Proxmox configuration is separated from the Discovery scan action sequence" }
+    ]
+  },
   "1.115.0": {
     releasedAt: "2026-10-01T23:30:44Z",
     patch: "PR-323-proxmox-node-network-inventory.patch",
