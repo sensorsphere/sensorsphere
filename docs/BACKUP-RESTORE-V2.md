@@ -32,17 +32,19 @@ The V2 architecture must **not embed backup/restore functionality into `install.
 - rollback
 - remove
 
-Backup and restore must be provided by a **separate complementary tool/program**, with its own lifecycle, versioning, tests and release process.
+Backup and restore must be provided by a **separate SensorSphere Core module**, with its own lifecycle, versioning, tests and image, while still being delivered by every compatible SensorSphere Stack Release.
 
-A possible future project/repository name is:
+The target is not a separately installed external product. The preferred architecture is a versioned backup component such as:
 
-    sensorsphere-backup
+    ghcr.io/sensorsphere/sensorsphere-backup:<version>
 
-or:
+invoked through the installed Compose project, for example:
 
-    sensorsphere-recovery
+    docker compose run --rm backup create
+    docker compose run --rm backup verify latest
+    docker compose run --rm backup restore --data <backup-id>
 
-The final naming and packaging are still to be decided.
+The exact implementation language and source-module path remain to be decided.
 
 ---
 
@@ -194,20 +196,18 @@ The following is explicitly **not** the target design:
     ./install.sh backup
     ./install.sh restore
 
-Instead, V2 should expose an independent tool, for example:
+Instead, V2 should expose a dedicated **Core backup module** from the installed Compose project. The preferred canonical execution model is:
 
-    sensorsphere-backup create
-    sensorsphere-backup list
-    sensorsphere-backup verify
-    sensorsphere-backup restore
+    docker compose run --rm backup <command> [options] [arguments]
 
-or:
+Examples:
 
-    sensorsphere-recovery backup
-    sensorsphere-recovery verify
-    sensorsphere-recovery restore
+    docker compose run --rm backup create
+    docker compose run --rm backup list
+    docker compose run --rm backup verify latest
+    docker compose run --rm backup restore --data <backup-id>
 
-The exact command name is still to be decided.
+`run --rm` is preferred to `exec` because backup operations do not require a permanently running container. If a scheduler daemon is added later, `exec` may be supported as a convenience, but the recovery engine should remain usable as a one-shot component.
 
 ### 5.1 Reasons for separation
 
@@ -223,7 +223,11 @@ This provides:
 - easier compatibility with older/newer SensorSphere Stack Releases
 - clearer operational responsibility
 
-The recovery tool may be stored in a separate repository and distributed independently from SensorSphere.
+The backup module is delivered by the SensorSphere Stack Release and should appear as its own versioned component in the Stack manifest. It may remain independently maintainable inside the SensorSphere mono-repository while being published as its own image.
+
+The detailed V7-to-V2 audit and target module architecture are documented in:
+
+    docs/BACKUP-RESTORE-V2-AUDIT.md
 
 ---
 
@@ -1491,32 +1495,29 @@ The UI is an observability and control convenience, not a recovery dependency.
 
 ---
 
-## 43. Recovery tool installation
+## 43. Recovery module delivery
 
-The recovery tool itself should be installable independently.
+The backup/recovery implementation is delivered with SensorSphere Core as a Stack Release component.
 
-Possible future models:
+The preferred model is a versioned container image referenced by the Stack manifest and Compose file:
 
-### Standalone script/package
+    ghcr.io/sensorsphere/sensorsphere-backup:<version>
 
-    curl ... | install sensorsphere-backup
+The module is not started as part of the normal application runtime. It is invoked explicitly, preferably as:
 
-### Containerized helper
+    docker compose run --rm backup ...
 
-A versioned recovery container invoked by a small host wrapper.
+A very small host-side orchestration wrapper may also be delivered in the Stack bundle for destructive restore workflows that must stop/restart sibling services. Such a wrapper remains separate from `install.sh`; the actual recovery logic stays inside the versioned backup image.
 
-### Packaged binary
+The module should minimize host dependencies while preserving access to:
 
-A self-contained binary with minimal host dependencies.
-
-The preferred implementation should minimize host dependencies while preserving easy access to:
-
-- Docker Compose
+- the Compose database network
 - instance files
+- persistent application and Mosquitto data
 - backup storage
 - systemd where scheduling is enabled
 
-This decision remains open.
+A permanent Docker socket mount is not part of the target architecture.
 
 ---
 
@@ -1568,9 +1569,11 @@ The following V7 concepts should explicitly survive into V2 unless a better impl
 
 The major V2 changes are:
 
-1. **Independent recovery product/tool**
+1. **Independent Core backup module**
    - no backup/restore implementation inside `install.sh`
-   - independent version/release/testing
+   - delivered by every compatible Stack Release
+   - independent component version/image/tests/changelog
+   - canonical one-shot CLI through `docker compose run --rm backup ...`
 
 2. **Stack Release-aware recovery**
    - restore deployed instances without a source checkout
@@ -1828,8 +1831,8 @@ Backup V2 is not considered complete merely when a backup command succeeds.
 
 Minimum definition of done:
 
-- standalone tool is independently installable
-- works against Stack Release installations
+- backup module is delivered as a versioned SensorSphere Core Stack component
+- canonical backup commands work directly from Stack Release installations
 - backs up all identified persistent state
 - secrets handled safely
 - manifest is complete
@@ -1858,10 +1861,10 @@ The strongest acceptance criterion remains:
 
 The following decisions remain intentionally open for implementation design:
 
-- final tool/project name
-- separate repository vs independently released subproject initially
+- final source-module path/name (`apps/backup` is currently preferred)
 - shell vs compiled/programmatic implementation
-- packaging/install method
+- exact Compose profile/service design
+- exact restore orchestration wrapper design
 - encryption mechanism for local secret material
 - exact restic repository model
 - exact UI-to-recovery-tool integration
@@ -1877,17 +1880,21 @@ These decisions should be resolved before implementation of the corresponding ph
 
 ## 53. Immediate next step
 
-Before coding V2, perform a focused design review of the current V7 scripts against the current Stack Release model.
+The focused V7-to-V2 design review has now been performed and is documented in:
 
-The review should produce:
+    docs/BACKUP-RESTORE-V2-AUDIT.md
 
-1. V7 functionality that can be reused unchanged
-2. V7 functionality that needs adaptation
-3. V7 functionality that must be retired
-4. exact persistent-state inventory
-5. standalone tool packaging decision
-6. V2 Recovery Bundle format version 1 specification
-7. initial restore compatibility matrix
-8. implementation/test plan
+The audit classifies the existing V7 behavior into reusable, adaptable and retired parts and establishes the target architecture: a versioned `backup` Core module delivered in the Stack Release.
 
-The existing V7 implementation is a strong baseline. V2 should evolve it rather than discard proven restore logic, while removing its dependency on a full SensorSphere source checkout.
+Before coding Phase 1, the remaining immediate decisions are:
+
+1. final module source path (`apps/backup` is currently preferred)
+2. implementation language/runtime
+3. V2 Recovery Bundle format version 1 specification
+4. Mosquitto consistency method
+5. encrypted-secret mechanism
+6. backup-root and run-state defaults
+7. Stack Release schema evolution for the backup component
+8. V7 read/restore compatibility policy
+
+The existing V7 implementation remains a strong baseline. V2 should evolve its proven database, verification, retention and Timescale restore logic while removing the dependency on a full SensorSphere source checkout.
