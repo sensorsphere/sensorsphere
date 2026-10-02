@@ -1232,31 +1232,61 @@ Only after this passes should `restore --full` be considered stable.
 
 ---
 
-## 43. Immediate technical decisions still required
+## 43. Phase 1 technical decisions
 
-Before coding Phase 1:
+The Phase 1 decisions are now frozen in:
 
-1. choose module path:
+    docs/BACKUP-RESTORE-V2-PHASE1.md
+
+The independent validation plan is:
+
+    docs/BACKUP-RESTORE-V2-TEST-PLAN.md
+
+Decisions:
+
+1. source module:
    - `apps/backup`
-   - alternative
 
-2. choose implementation language/runtime
+2. implementation:
+   - Go binary
+   - multi-stage container build
+   - PostgreSQL 17 client/runtime base
 
-3. freeze V2 Recovery Bundle format v1
+3. Recovery Bundle:
+   - format version 1
+   - canonical local representation is a verified directory
+   - atomic publication from `.incomplete`
 
-4. decide Mosquitto consistency method
+4. Mosquitto:
+   - persistence snapshot included
+   - absence of `mosquitto.db` is valid on a fresh/idle instance
+   - unreadable present data is a backup failure
+   - explicit persistence flush remains a later orchestration improvement
 
-5. decide encrypted-secret mechanism
+5. secrets:
+   - Phase 1 never stores plaintext `.env`
+   - encrypted environment capture is deferred to full-recovery work
+   - `age` is the preferred direction
 
-6. decide backup-root default
+6. backup root default:
+   - `./backups`
 
-7. decide run-state path
+7. run-state default:
+   - `./data/backup-state`
 
-8. decide Stack Release schema evolution
+8. Stack Release:
+   - Backup becomes a versioned Core component
+   - target Stack schema evolution is version 4
 
-9. decide whether backup image should contain restic immediately or in a later release
+9. remote storage:
+   - restic is not required in the initial image behavior
+   - remote/off-host support is a later phase
 
-10. decide whether V2 must read V7 backups from day one
+10. V7:
+   - Phase 1 does not require V7 restore compatibility
+   - V7 remains available until V2 restore is proven
+
+Phase 1 implementation must use the test plan as its release gate.
 
 ---
 

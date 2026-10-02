@@ -1859,20 +1859,21 @@ The strongest acceptance criterion remains:
 
 ## 52. Open design decisions
 
-The following decisions remain intentionally open for implementation design:
+The Phase 1 module architecture is now frozen in:
 
-- final source-module path/name (`apps/backup` is currently preferred)
-- shell vs compiled/programmatic implementation
-- exact Compose profile/service design
-- exact restore orchestration wrapper design
-- encryption mechanism for local secret material
-- exact restic repository model
-- exact UI-to-recovery-tool integration
-- Mosquitto online-backup consistency mechanism
-- whether logs are included in the Recovery Bundle
-- exact compatibility rules between Stack Releases
-- exact set of post-restore sanity queries
+    docs/BACKUP-RESTORE-V2-PHASE1.md
+
+The remaining open decisions belong mainly to later phases:
+
+- exact destructive restore orchestration wrapper behavior
+- final encryption/key-management workflow for protected `.env`
+- exact restic repository configuration model
+- exact UI-to-recovery-module integration
+- whether to add an explicit Mosquitto persistence flush before snapshot
+- exact compatibility policy for V7 restore/import
+- exact post-restore sanity-query set
 - exact RPO/RTO targets
+- future PITR / WAL implementation
 
 These decisions should be resolved before implementation of the corresponding phase, not guessed implicitly in code.
 
@@ -1880,21 +1881,31 @@ These decisions should be resolved before implementation of the corresponding ph
 
 ## 53. Immediate next step
 
-The focused V7-to-V2 design review has now been performed and is documented in:
+The design-review stage is complete.
+
+Reference documents:
 
     docs/BACKUP-RESTORE-V2-AUDIT.md
+    docs/BACKUP-RESTORE-V2-PHASE1.md
+    docs/BACKUP-RESTORE-V2-TEST-PLAN.md
 
-The audit classifies the existing V7 behavior into reusable, adaptable and retired parts and establishes the target architecture: a versioned `backup` Core module delivered in the Stack Release.
+Phase 1 is now specified as:
 
-Before coding Phase 1, the remaining immediate decisions are:
+- source module: `apps/backup`
+- Go implementation
+- dedicated `sensorsphere-backup` image
+- one-shot Compose CLI
+- Stack Release Core component
+- Recovery Bundle format version 1
+- atomic local publication
+- `manifest.json`
+- SHA256 validation
+- PostgreSQL custom-format dump
+- application/Mosquitto persistent-data capture
+- run state and retention
 
-1. final module source path (`apps/backup` is currently preferred)
-2. implementation language/runtime
-3. V2 Recovery Bundle format version 1 specification
-4. Mosquitto consistency method
-5. encrypted-secret mechanism
-6. backup-root and run-state defaults
-7. Stack Release schema evolution for the backup component
-8. V7 read/restore compatibility policy
+The next implementation step is **Phase 1 Slice A — module skeleton**, followed by the Stack integration and backup engine slices defined in the Phase 1 specification.
 
-The existing V7 implementation remains a strong baseline. V2 should evolve its proven database, verification, retention and Timescale restore logic while removing the dependency on a full SensorSphere source checkout.
+Every slice must be validated against the separate test plan, and Phase 1 is not complete until its DEV/DIT/TEST1 acceptance gates pass.
+
+The existing V7 implementation remains a strong baseline and stays available until V2 restore has been proven.
