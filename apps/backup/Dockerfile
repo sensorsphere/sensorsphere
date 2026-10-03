@@ -1,4 +1,4 @@
-FROM golang:1.24-bookworm AS build
+FROM --platform=$BUILDPLATFORM golang:1.24-bookworm AS build
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends zstd && \
@@ -15,9 +15,11 @@ WORKDIR /src/apps/backup
 
 RUN go test ./...
 
+ARG TARGETOS
+ARG TARGETARCH
 ARG VCS_REF=unknown
 RUN VERSION="$(tr -d '[:space:]' < VERSION)" && \
-    CGO_ENABLED=0 GOOS=linux go build \
+    CGO_ENABLED=0 GOOS="$TARGETOS" GOARCH="$TARGETARCH" go build \
       -trimpath \
       -ldflags="-s -w -X main.version=$VERSION -X main.revision=$VCS_REF" \
       -o /out/sensorsphere-backup \
