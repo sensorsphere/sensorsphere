@@ -1,5 +1,9 @@
 FROM golang:1.24-bookworm AS build
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends zstd && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /src
 
 COPY apps/backup/go.mod ./apps/backup/go.mod
@@ -19,10 +23,16 @@ RUN VERSION="$(tr -d '[:space:]' < VERSION)" && \
       -o /out/sensorsphere-backup \
       ./cmd/sensorsphere-backup
 
-FROM postgres:17-bookworm
+FROM debian:bookworm-slim
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates zstd && \
+    apt-get install -y --no-install-recommends ca-certificates wget && \
+    wget -qO /usr/share/keyrings/postgresql.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+    echo "deb [signed-by=/usr/share/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+      > /etc/apt/sources.list.d/pgdg.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends postgresql-client-17 zstd tar && \
+    apt-get purge -y --auto-remove wget && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /out/sensorsphere-backup /usr/local/bin/sensorsphere-backup

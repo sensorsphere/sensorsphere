@@ -357,6 +357,7 @@ Phase 1 is accepted only when all P0 and P1 tests in sections 10 through 20 pass
 | P1-F001 | P1 | mosquitto.db exists | Included |
 | P1-F002 | P1 | mosquitto.db absent on fresh instance | Backup still valid |
 | P1-F003 | P0 | Mosquitto source unreadable | Backup fails if source is configured/present |
+| P1-F003A | P0 | mosquitto.db mode 0600 owned by 1883:1883 | Backup still captures it through constrained root container execution |
 | P1-F004 | P1 | Empty persistence directory | Valid archive |
 | P1-F005 | P1 | Nested persistence content | Preserved |
 | P1-F006 | P1 | Archive readability | Pass |
@@ -531,7 +532,10 @@ Test dataset must include backups crossing:
 | P1-M012 | P1 | Bundle file modes | Restrictive |
 | P1-M013 | P0 | Archive symlink escape attempt | Reject unsafe path on future extract; verify flags |
 | P1-M014 | P0 | Manipulated manifest path ../ | Reject |
-| P1-M015 | P1 | Container runs non-root where possible | Validate chosen security model |
+| P1-M015 | P0 | One-shot container runs root with constrained mounts | Only backup/state writable; source mounts read-only; no Docker socket |
+| P1-M015A | P0 | Bundle ownership after root container create | Matches mounted /instance host UID/GID |
+| P1-M015B | P0 | Run-state ownership after root container create | Matches mounted /instance host UID/GID |
+| P1-M015C | P1 | Bundle directory/file modes | Directories 0700, protected files 0600 |
 | P1-M016 | P1 | DB password containing shell metacharacters | Safe, no command injection |
 | P1-M017 | P1 | Instance name containing shell metacharacters | Safe |
 | P1-M018 | P0 | Backup label containing path traversal | Sanitized/rejected |

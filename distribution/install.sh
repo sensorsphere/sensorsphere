@@ -393,7 +393,7 @@ fetch_manifest() {
 
 apply_manifest() {
   local manifest="$1"
-  local stack schema api frontend ingestion nginx migrations db_level nginx_released_at migrations_released_at
+  local stack schema api frontend ingestion nginx migrations backup db_level nginx_released_at migrations_released_at backup_released_at
 
   stack="$(manifest_top_value "$manifest" stackVersion)"
   schema="$(manifest_top_value "$manifest" schemaVersion)"
@@ -402,15 +402,21 @@ apply_manifest() {
   ingestion="$(component_value "$manifest" ingestion)"
   nginx="$(component_value "$manifest" nginx)"
   migrations="$(component_value "$manifest" migrations)"
+  backup="$(component_value "$manifest" backup)"
   nginx_released_at="$(component_metadata_value "$manifest" nginx releasedAt)"
   migrations_released_at="$(component_metadata_value "$manifest" migrations releasedAt)"
+  backup_released_at="$(component_metadata_value "$manifest" backup releasedAt)"
   db_level="$(awk '$1 == "migrationLevel:" { print $2; exit }' "$manifest")"
 
-  [[ "$schema" == "2" || "$schema" == "3" ]] || {
-    echo "ERROR: installation requires Stack Release schemaVersion 2 or 3" >&2
+  [[ "$schema" == "2" || "$schema" == "3" || "$schema" == "4" ]] || {
+    echo "ERROR: installation requires Stack Release schemaVersion 2, 3 or 4" >&2
     exit 1
   }
   [[ -n "$stack" && -n "$api" && -n "$frontend" && -n "$ingestion" && -n "$nginx" && -n "$migrations" ]]     || { echo "ERROR: incomplete Stack Release manifest" >&2; exit 1; }
+  if [[ "$schema" == "4" && -z "$backup" ]]; then
+    echo "ERROR: Stack Release schemaVersion 4 requires backup component" >&2
+    exit 1
+  fi
   [[ "$migrations" == "$db_level" ]]     || { echo "ERROR: migrations version and database migrationLevel differ" >&2; exit 1; }
 
   if [[ -n "$STACK_VERSION" && "$stack" != "$STACK_VERSION" ]]; then
@@ -424,14 +430,20 @@ apply_manifest() {
   set_env "$INSTALL_DIR/.env" SENSORSPHERE_INGESTION_VERSION "$ingestion"
   set_env "$INSTALL_DIR/.env" SENSORSPHERE_NGINX_VERSION "$nginx"
   set_env "$INSTALL_DIR/.env" SENSORSPHERE_MIGRATIONS_VERSION "$migrations"
+  if [[ -n "$backup" ]]; then
+    set_env "$INSTALL_DIR/.env" SENSORSPHERE_BACKUP_VERSION "$backup"
+  fi
   if [[ -n "$nginx_released_at" ]]; then
     set_env "$INSTALL_DIR/.env" SENSORSPHERE_NGINX_RELEASED_AT "$nginx_released_at"
   fi
   if [[ -n "$migrations_released_at" ]]; then
     set_env "$INSTALL_DIR/.env" SENSORSPHERE_MIGRATIONS_RELEASED_AT "$migrations_released_at"
   fi
+  if [[ -n "$backup_released_at" ]]; then
+    set_env "$INSTALL_DIR/.env" SENSORSPHERE_BACKUP_RELEASED_AT "$backup_released_at"
+  fi
 
-  if [[ "$schema" == "3" ]]; then
+  if [[ "$schema" == "3" || "$schema" == "4" ]]; then
     local api_contract db_min db_max
     api_contract="$(compatibility_value "$manifest" apiContractVersion)"
     db_min="$(compatibility_value "$manifest" databaseMinMigrationLevel)"
@@ -537,7 +549,7 @@ rollback_command() {
     local previous_schema previous_db_min previous_db_max
     previous_schema="$(manifest_top_value "$INSTALL_DIR/.stack-release.previous.yaml" schemaVersion)"
 
-    if [[ "$previous_schema" == "3" ]]; then
+    if [[ "$previous_schema" == "3" || "$previous_schema" == "4" ]]; then
       previous_db_min="$(compatibility_value "$INSTALL_DIR/.stack-release.previous.yaml" databaseMinMigrationLevel)"
       previous_db_max="$(compatibility_value "$INSTALL_DIR/.stack-release.previous.yaml" databaseMaxMigrationLevel)"
 

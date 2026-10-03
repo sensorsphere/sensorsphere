@@ -143,24 +143,29 @@ Preferred multi-stage build:
         +-- compile static/portable backup binary
         |
         v
-    postgres:17-bookworm
+    debian:bookworm-slim
         |
         +-- sensorsphere-backup binary
+        +-- PostgreSQL 17 client tools from the official PGDG repository
         +-- tar
         +-- zstd
         +-- ca-certificates
         +-- required runtime utilities only
 
-Using a PostgreSQL 17 runtime base guarantees compatible:
+The runtime deliberately does not use the PostgreSQL server image. That image
+inherits an exposed 5432/tcp port and a writable /var/lib/postgresql/data
+volume, which are unnecessary and violate the constrained one-shot backup
+container model.
+
+The runtime installs PostgreSQL 17 client tools only:
 
     pg_dump
     pg_restore
     psql
     pg_dumpall
 
-for the current PostgreSQL 17 / Timescale stack.
-
-A client older than the server major version must not be used.
+for the current PostgreSQL 17 / Timescale stack. A client older than the
+server major version must not be used.
 
 ---
 
@@ -461,6 +466,38 @@ The installation directory is mounted read-only.
 The backup module must whitelist the installation files it copies into a Recovery Bundle.
 
 It must **not** recursively archive the source checkout.
+
+### 11.1 Container runtime identity and host ownership
+
+The official Mosquitto image creates its persistence file as:
+
+    uid/gid 1883:1883
+    mode 0600
+
+Therefore a backup process running solely as the installation owner cannot read a valid `mosquitto.db`.
+
+The Phase 1 backup container consequently runs as root **inside the one-shot container**, but with a deliberately constrained surface:
+
+- no Docker socket
+- no published ports
+- installation mount read-only
+- application-data mount read-only
+- Mosquitto-data mount read-only
+- only backup/state mounts writable
+- database access limited to the Compose database network
+
+The engine derives the host UID/GID from the mounted:
+
+    /instance
+
+directory and recursively normalizes newly created Recovery Bundle and run-state files to that owner before returning success.
+
+This provides both:
+
+- read access to Mosquitto's mode-0600 persistence file
+- host-operable `0700/0600` backup files owned by the SensorSphere installation user
+
+A failed/incomplete run should also normalize the ownership of its generated state and incomplete workspace whenever possible.
 
 ---
 
@@ -1285,6 +1322,7 @@ No V7 backup is deleted or migrated automatically.
 
 Phase 1 requirements:
 
+- one-shot container may run as root only to read protected persistence and normalize output ownership
 - no Docker socket
 - no published port
 - instance mount read-only
@@ -1295,6 +1333,8 @@ Phase 1 requirements:
 - backup root writable only where required
 - state root writable only where required
 - generated bundle permissions restrictive
+- generated bundle/run-state ownership normalized to the installation directory owner
+- root execution must not expand writable host mounts beyond backup/state
 - no world-readable secret material
 - no source-tree archive
 

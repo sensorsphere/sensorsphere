@@ -13,6 +13,7 @@ mosquitto.db
 
 # SensorSphere runtime/persistent data
 /data/
+/backups/
 
 !data/mosquitto/data/.gitkeep
 !data/mosquitto/log/.gitkeep

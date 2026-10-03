@@ -22,7 +22,7 @@ fi
 if [[ $# -gt 0 ]]; then
   MODULES=("$@")
 else
-  MODULES=(api frontend ingestion-service nginx migrations)
+  MODULES=(api frontend ingestion-service nginx migrations backup)
 fi
 
 command -v docker >/dev/null 2>&1 || { echo "docker is required" >&2; exit 1; }
@@ -92,6 +92,12 @@ for module in "${MODULES[@]}"; do
       image_name="sensorsphere-migrations"
       version_kind="integer"
       ;;
+    backup)
+      dockerfile="apps/backup/Dockerfile"
+      version_file="apps/backup/VERSION"
+      image_name="sensorsphere-backup"
+      version_kind="semver"
+      ;;
     *)
       echo "Unknown module: $module" >&2
       exit 2
@@ -124,6 +130,9 @@ for module in "${MODULES[@]}"; do
     --label "org.opencontainers.image.revision=$REVISION"
     --label "org.opencontainers.image.version=$version"
   )
+  if [[ "$module" == "backup" ]]; then
+    args+=(--build-arg "VCS_REF=$REVISION")
+  fi
 
   if [[ "$PUSH" -eq 1 ]]; then
     assert_tag_available "$image:$version"

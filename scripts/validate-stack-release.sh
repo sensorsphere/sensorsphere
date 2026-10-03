@@ -86,7 +86,7 @@ STACK_VERSION="$(top_value stackVersion)"
 SCHEMA_VERSION="$(top_value schemaVersion)"
 
 [[ -n "$STACK_VERSION" ]] || fail "stackVersion is missing"
-[[ "$SCHEMA_VERSION" =~ ^[123]$ ]] || fail "schemaVersion must be 1, 2 or 3"
+[[ "$SCHEMA_VERSION" =~ ^[1234]$ ]] || fail "schemaVersion must be 1, 2, 3 or 4"
 
 API_VERSION="$(require_component api sensorsphere-api)"
 FRONTEND_VERSION="$(require_component frontend sensorsphere-frontend)"
@@ -94,10 +94,14 @@ INGESTION_VERSION="$(require_component ingestion sensorsphere-ingestion-service)
 
 NGINX_VERSION=""
 MIGRATIONS_VERSION=""
+BACKUP_VERSION=""
 
 if (( SCHEMA_VERSION >= 2 )); then
   NGINX_VERSION="$(require_component nginx sensorsphere-nginx)"
   MIGRATIONS_VERSION="$(require_component migrations sensorsphere-migrations)"
+fi
+if (( SCHEMA_VERSION >= 4 )); then
+  BACKUP_VERSION="$(require_component backup sensorsphere-backup)"
 fi
 
 MIGRATION_LEVEL="$(awk '$1 == "migrationLevel:" { print $2; exit }' "$MANIFEST")"
@@ -141,6 +145,11 @@ if [[ "$CHECK_SOURCE" -eq 1 ]]; then
     [[ "$MIGRATIONS_VERSION" == "$EXPECTED_MIGRATIONS" ]] || fail "migrations version $MIGRATIONS_VERSION != source $EXPECTED_MIGRATIONS"
   fi
 
+  if (( SCHEMA_VERSION >= 4 )); then
+    EXPECTED_BACKUP="$(tr -d '[:space:]' < apps/backup/VERSION)"
+    [[ "$BACKUP_VERSION" == "$EXPECTED_BACKUP" ]] || fail "backup version $BACKUP_VERSION != source $EXPECTED_BACKUP"
+  fi
+
   if (( SCHEMA_VERSION >= 3 )); then
     EXPECTED_API_CONTRACT="$(constant_integer apps/api/src/compatibility.ts API_CONTRACT_VERSION)"
     EXPECTED_FRONTEND_CONTRACT="$(constant_integer apps/frontend/src/compatibility.ts REQUIRED_API_CONTRACT_VERSION)"
@@ -162,6 +171,9 @@ echo "  Ingestion:  $INGESTION_VERSION"
 if (( SCHEMA_VERSION >= 2 )); then
   echo "  nginx:      $NGINX_VERSION"
   echo "  migrations: $MIGRATIONS_VERSION"
+fi
+if (( SCHEMA_VERSION >= 4 )); then
+  echo "  backup:     $BACKUP_VERSION"
 fi
 echo "  DB level:   $MIGRATION_LEVEL"
 if (( SCHEMA_VERSION >= 3 )); then
