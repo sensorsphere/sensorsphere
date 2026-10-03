@@ -9,18 +9,18 @@ Instance: SensorSphere [Dev]
 ## Result
 
 P1-ACC-DEV procedure: **PASS**.
+P1-ACC-DIT procedure: **PASS**.
 
-Phase 1 as a whole is **not yet declared complete**. DIT, publication checks,
-multi-architecture GHCR checks, TEST1 acceptance, and several explicit
-failure-injection/capacity cases remain separate gates.
+Phase 1 as a whole is **not yet declared complete**. TEST1 acceptance and
+several explicit failure-injection/capacity cases remain separate gates.
 
-Latest verified DEV recovery point at the end of this run:
+Latest verified DEV recovery point created by the concurrency validation:
 
-    20261003T045218Z-f1615292
+    20261003T102743Z-39b4634f
 
-Previous verified concurrency recovery point:
+Verified DIT recovery point from the published schema-4 distribution:
 
-    20261003T044803Z-25d62a6a
+    20261003T123808Z-3986d6b9
 
 ## Security correction discovered during P1-M validation
 
@@ -49,18 +49,19 @@ Revalidation after the change:
 CLI / packaging:
 
     P1-A001..P1-A011 except P1-A012
-    P1-B001, P1-B002, P1-B003, P1-B004, P1-B005, P1-B006, P1-B018
+    P1-B001..P1-B014 except P1-B015, P1-B016, P1-B017
+    P1-B018
 
 Configuration / DB:
 
-    P1-C009, P1-C017, P1-C018
+    P1-C009, P1-C013, P1-C017, P1-C018
     P1-D001..P1-D009, P1-D013, P1-D015, P1-D016
 
 Payload / metadata:
 
     P1-E001, P1-E007, P1-E010, P1-E011
     P1-F001, P1-F003A, P1-F006, P1-F010
-    P1-G004, P1-G007..P1-G015 except DIT/TEST1-specific cases
+    P1-G001, P1-G004, P1-G007..P1-G015 except TEST1-specific cases
 
 Manifest / integrity / atomicity:
 
@@ -86,7 +87,7 @@ Security:
 
 Environment / runtime / capacity:
 
-    P1-N001
+    P1-N001, P1-N002
     P1-P001, P1-P002, P1-P004, P1-P005, P1-P006, P1-P007, P1-P008, P1-P009
     P1-Q001, P1-Q004, P1-Q009, P1-Q013
 
@@ -126,15 +127,20 @@ nginx, and TimescaleDB were healthy. All inspected services reported
 
 ## Remaining gates before declaring Phase 1 complete
 
+Publication and DIT gates are complete:
+
+- official `sensorsphere-backup:0.1.0` publication verified
+- linux/amd64 and linux/arm64 manifests verified
+- OCI source/version/revision labels verified on the platform image
+- BuildKit SBOM and provenance attestations verified
+- Stack Release `2026.10.03.1` schema 4 published
+- distribution bundle and SHA-256 verified
+- DIT updated from the published bundle with no source checkout
+- real DIT backup created and independently verified
+
 Still required or intentionally deferred:
 
-- official GHCR image publication and immutable version verification
-- linux/amd64 and linux/arm64 manifest verification
-- OCI labels, SBOM and provenance verification
-- real schema-4 Stack Release publication
-- distribution bundle validation
-- DIT acceptance without a source checkout
-- TEST1 acceptance at an explicitly agreed validation time
+- TEST1 backup acceptance at an explicitly agreed validation time
 - remaining destructive/failure-injection cases from P1-O
 - remaining multi-instance isolation cases from P1-N
 - remaining detailed performance measurements from P1-Q
