@@ -1537,9 +1537,25 @@ export interface DatabaseStorageRecommendation {
   message: string;
 }
 
+export interface DatabaseStorageHistoryPoint {
+  capturedAt: string;
+  databaseBytes: number;
+  allocatedRelationBytes: number;
+  dataBytes: number;
+  indexBytes: number;
+  toastBytes: number;
+  relationCount: number;
+  hypertableCount: number;
+  chunkCount: number;
+}
+
 export interface DatabaseStorageReport {
   generatedAt: string;
   readOnly: true;
+  snapshot: {
+    snapshotIntervalHours: number;
+    snapshotRetentionDays: number;
+  };
   summary: {
     databaseBytes: number;
     allocatedRelationBytes: number;
@@ -1550,6 +1566,25 @@ export interface DatabaseStorageReport {
     hypertableCount: number;
     chunkCount: number;
   };
+  analytics: {
+    growth: {
+      bytes24h: number | null;
+      bytes7d: number | null;
+      bytes30d: number | null;
+      averageDailyBytes: number | null;
+    };
+    projection: {
+      bytes30d: number | null;
+      bytes90d: number | null;
+    };
+    budget: {
+      warningBytes: number | null;
+      criticalBytes: number | null;
+      status: "UNCONFIGURED" | "OK" | "WARNING" | "CRITICAL";
+      configurationError: string | null;
+    };
+  };
+  history: DatabaseStorageHistoryPoint[];
   relations: DatabaseStorageRelation[];
   chunks: DatabaseStorageChunk[];
   indexes: DatabaseStorageIndex[];

@@ -1,8 +1,12 @@
 # Database Storage & Retention
 
-Status: Proposed
+Status: DB-1 implemented on DEV; DB-2..DB-4 planned
 Initial baseline: DEV, 2026-10-03
 Scope: SensorSphere database storage observability, optimization and retention lifecycle
+
+DB-1 DEV acceptance results:
+
+    docs/database/storage-retention-db1-dev-results.md
 
 ## 1. Purpose
 
@@ -20,8 +24,9 @@ The objective is to provide:
 - TimescaleDB-aware optimization;
 - a path to retain useful historical information while reducing raw-data cost.
 
-The first phase is strictly read-only. No automatic purge or destructive UI
-action is introduced by DB-1.
+The first phase is read-only with respect to SensorSphere business data and
+database lifecycle policy. DB-1 writes only its own bounded operational
+storage snapshots; no automatic purge or destructive UI action is introduced.
 
 ---
 
@@ -244,10 +249,11 @@ console.
 
 ## 6.1 Goal
 
-Provide a complete read-only view of database storage and growth.
+Provide a complete read-only operator view of database storage and growth.
 
-No retention change, purge, compression or index mutation is permitted in
-DB-1.
+DB-1 may persist bounded storage-observability snapshots. No SensorSphere
+business-data mutation, retention change, purge, compression or index mutation
+is permitted in DB-1.
 
 ## 6.2 Summary cards
 
@@ -737,7 +743,7 @@ Task IDs are stable and should be referenced by future PRs.
 
 ## DB-1 — Reporting & Observability
 
-Status: NEXT
+Status: IMPLEMENTED ON DEV — acceptance tracking
 
 ### Backend / data collection
 
@@ -752,11 +758,11 @@ Status: NEXT
 - [x] DBST-009 — Report index size and observed usage statistics.
 - [x] DBST-010 — Classify known SensorSphere relations by data family.
 - [x] DBST-011 — Detect/report unknown large relations.
-- [ ] DBST-012 — Add storage snapshot persistence.
-- [ ] DBST-013 — Add bounded retention for storage snapshots.
-- [ ] DBST-014 — Calculate 24h/7d/30d growth.
-- [ ] DBST-015 — Calculate simple 30/90-day projections.
-- [ ] DBST-016 — Add storage warning/critical budget configuration.
+- [x] DBST-012 — Add storage snapshot persistence.
+- [x] DBST-013 — Add bounded retention for storage snapshots.
+- [x] DBST-014 — Calculate 24h/7d/30d growth.
+- [x] DBST-015 — Calculate simple 30/90-day projections.
+- [x] DBST-016 — Add storage warning/critical budget configuration.
 - [x] DBST-017 — Generate non-destructive recommendation objects.
 - [ ] DBST-018 — Expose latest verified backup size/age as safety context.
 
@@ -768,22 +774,22 @@ Status: NEXT
 - [x] DBST-023 — Add Timescale/chunks view.
 - [x] DBST-024 — Add indexes view.
 - [x] DBST-025 — Add retention-policy view.
-- [ ] DBST-026 — Add growth chart.
-- [ ] DBST-027 — Add storage budget status.
+- [x] DBST-026 — Add growth chart.
+- [x] DBST-027 — Add storage budget status.
 - [x] DBST-028 — Add recommendations panel.
-- [ ] DBST-029 — Add relation detail drill-down.
+- [x] DBST-029 — Add relation detail drill-down.
 - [x] DBST-030 — Clearly label all DB-1 views as diagnostic/read-only.
 
 ### Tests / acceptance
 
-- [ ] DBST-040 — Unit tests for size/report transformations.
-- [ ] DBST-041 — API authorization tests.
+- [x] DBST-040 — Unit tests for size/report transformations.
+- [x] DBST-041 — API authorization tests.
 - [ ] DBST-042 — Test on empty/small database.
-- [ ] DBST-043 — Test on DEV multi-GB database.
-- [ ] DBST-044 — Verify reporting queries do not materially impact ingestion.
-- [ ] DBST-045 — Verify snapshot retention is bounded.
-- [ ] DBST-046 — Verify no DB-1 endpoint can mutate database content.
-- [ ] DBST-047 — Establish DEV baseline screenshot/report for comparison.
+- [x] DBST-043 — Test on DEV multi-GB database.
+- [x] DBST-044 — Verify reporting queries do not materially impact ingestion.
+- [x] DBST-045 — Verify snapshot retention is bounded.
+- [x] DBST-046 — Verify no DB-1 endpoint can mutate database content.
+- [x] DBST-047 — Establish DEV baseline screenshot/report for comparison.
 
 ## DB-2 — Storage Optimization
 

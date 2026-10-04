@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.65.0";
+export const MODULE_VERSION = "1.66.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.66.0": {
+    releasedAt: "2026-10-04T02:58:09Z",
+    patch: "PR-330-database-storage-history-budgets-v1.patch",
+    changes: [
+      { type: "added", description: "Persist bounded database-storage observability snapshots and expose storage growth history, 24h/7d/30d deltas and 30/90-day projections" },
+      { type: "added", description: "Add configurable database storage warning/critical budgets and budget-aware recommendations" },
+      { type: "changed", description: "Extend API database compatibility through migration level 83 for database storage snapshots" }
+    ]
+  },
   "1.65.0": {
     releasedAt: "2026-10-04T02:43:28Z",
     patch: "PR-329-database-storage-reporting-v1.patch",

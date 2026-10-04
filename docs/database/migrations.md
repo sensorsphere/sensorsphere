@@ -109,3 +109,12 @@ Adds functional gateway locations and the metric-routing dry-run observability t
 ### 023-sensor-backup-gateways.sql
 
 Adds prioritized backup gateway assignments for sensors and records backup/failover context in metric-routing dry-run events. The existing `sensors.gateway_id` remains the primary gateway.
+
+### 083-database-storage-snapshots.sql
+
+Adds the bounded `database_storage_snapshots` operational metadata table used
+by the Admin Database Storage & Retention dashboard. Snapshots contain storage
+sizes and compact per-relation size summaries only; they do not duplicate
+SensorSphere business measurements or observation payloads. The API collector
+uses a configurable sampling interval and deletes expired snapshot metadata
+according to its bounded retention setting.

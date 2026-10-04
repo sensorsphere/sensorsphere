@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Group,
+  Modal,
   ScrollArea,
   SimpleGrid,
   Stack,
@@ -14,6 +15,7 @@ import {
   Title
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
+import ReactECharts from "echarts-for-react";
 
 import { getDatabaseStorageReport } from "./api";
 import { NavigationIcon } from "./NavigationIcon";
@@ -34,6 +36,21 @@ function formatBytes(value: number): string {
   }
   const digits = index <= 1 ? 0 : amount >= 100 ? 0 : amount >= 10 ? 1 : 2;
   return `${amount.toFixed(digits)} ${units[index]}`;
+}
+
+function formatDeltaBytes(value: number | null): string {
+  if (value === null) return "Collecting history";
+  if (value === 0) return "0 B";
+  return `${value > 0 ? "+" : "−"}${formatBytes(Math.abs(value))}`;
+}
+
+function budgetColor(
+  status: "UNCONFIGURED" | "OK" | "WARNING" | "CRITICAL"
+): string {
+  if (status === "CRITICAL") return "red";
+  if (status === "WARNING") return "orange";
+  if (status === "OK") return "green";
+  return "gray";
 }
 
 function formatRows(value: number | null): string {
@@ -82,8 +99,36 @@ export function DatabaseStoragePanel() {
     queryFn: getDatabaseStorageReport,
     staleTime: 30_000
   });
+  const [selectedRelationName, setSelectedRelationName] =
+    React.useState<string | null>(null);
 
   const report = reportQuery.data;
+  const selectedRelation =
+    report?.relations.find(relation => relation.name === selectedRelationName)
+    ?? null;
+  const selectedChunks =
+    report?.chunks.filter(chunk => chunk.hypertableName === selectedRelationName)
+    ?? [];
+  const selectedIndexes =
+    report?.indexes.filter(index => index.logicalRelation === selectedRelationName)
+    ?? [];
+
+  const chartPoints = report
+    ? [
+        ...report.history.map(point => ({
+          capturedAt: point.capturedAt,
+          databaseBytes: point.databaseBytes,
+          dataBytes: point.dataBytes,
+          indexBytes: point.indexBytes
+        })),
+        {
+          capturedAt: report.generatedAt,
+          databaseBytes: report.summary.databaseBytes,
+          dataBytes: report.summary.dataBytes,
+          indexBytes: report.summary.indexBytes
+        }
+      ]
+    : [];
 
   return (
     <Stack gap="lg">
@@ -166,6 +211,65 @@ export function DatabaseStoragePanel() {
             </Card>
           </SimpleGrid>
 
+          <SimpleGrid cols={{ base: 2, md: 3, lg: 6 }}>
+            <Card withBorder padding="sm">
+              <Text size="xs" c="dimmed">Growth · 24h</Text>
+              <Text fw={700}>{formatDeltaBytes(report.analytics.growth.bytes24h)}</Text>
+            </Card>
+            <Card withBorder padding="sm">
+              <Text size="xs" c="dimmed">Growth · 7d</Text>
+              <Text fw={700}>{formatDeltaBytes(report.analytics.growth.bytes7d)}</Text>
+            </Card>
+            <Card withBorder padding="sm">
+              <Text size="xs" c="dimmed">Growth · 30d</Text>
+              <Text fw={700}>{formatDeltaBytes(report.analytics.growth.bytes30d)}</Text>
+            </Card>
+            <Card withBorder padding="sm">
+              <Text size="xs" c="dimmed">Projection · 30d</Text>
+              <Text fw={700}>
+                {report.analytics.projection.bytes30d === null
+                  ? "Collecting history"
+                  : formatBytes(report.analytics.projection.bytes30d)}
+              </Text>
+            </Card>
+            <Card withBorder padding="sm">
+              <Text size="xs" c="dimmed">Projection · 90d</Text>
+              <Text fw={700}>
+                {report.analytics.projection.bytes90d === null
+                  ? "Collecting history"
+                  : formatBytes(report.analytics.projection.bytes90d)}
+              </Text>
+            </Card>
+            <Card
+              withBorder
+              padding="sm"
+              style={{
+                borderLeft: `4px solid var(--mantine-color-${budgetColor(report.analytics.budget.status)}-6)`
+              }}
+            >
+              <Text size="xs" c="dimmed">Storage budget</Text>
+              <Badge
+                color={budgetColor(report.analytics.budget.status)}
+                variant="light"
+              >
+                {report.analytics.budget.status}
+              </Badge>
+              <Text size="xs" c="dimmed" mt={4}>
+                W {report.analytics.budget.warningBytes === null
+                  ? "—"
+                  : formatBytes(report.analytics.budget.warningBytes)}
+                {" · "}
+                C {report.analytics.budget.criticalBytes === null
+                  ? "—"
+                  : formatBytes(report.analytics.budget.criticalBytes)}
+              </Text>
+            </Card>
+          </SimpleGrid>
+
+          <Text size="xs" c="dimmed">
+            Storage snapshots: every {report.snapshot.snapshotIntervalHours}h · retained {report.snapshot.snapshotRetentionDays} days · {report.history.length} historical point{report.history.length === 1 ? "" : "s"}
+          </Text>
+
           {report.recommendations.length > 0 && (
             <Card withBorder>
               <Stack gap="xs">
@@ -187,6 +291,7 @@ export function DatabaseStoragePanel() {
           <Tabs defaultValue="consumers">
             <Tabs.List>
               <Tabs.Tab value="consumers">Top consumers</Tabs.Tab>
+              <Tabs.Tab value="growth">Growth</Tabs.Tab>
               <Tabs.Tab value="timescale">Timescale / chunks</Tabs.Tab>
               <Tabs.Tab value="indexes">Indexes</Tabs.Tab>
               <Tabs.Tab value="retention">Retention</Tabs.Tab>
@@ -221,7 +326,14 @@ export function DatabaseStoragePanel() {
                       {report.relations.map(relation => (
                         <Table.Tr key={`${relation.schema}.${relation.name}`}>
                           <Table.Td>
-                            <Text size="sm" fw={600}>{relation.name}</Text>
+                            <Button
+                              size="compact-sm"
+                              variant="subtle"
+                              px={0}
+                              onClick={() => setSelectedRelationName(relation.name)}
+                            >
+                              {relation.name}
+                            </Button>
                             <Text size="xs" c="dimmed">{relation.schema}</Text>
                           </Table.Td>
                           <Table.Td>
@@ -260,6 +372,83 @@ export function DatabaseStoragePanel() {
                   </Table>
                 </ScrollArea>
               </Card>
+            </Tabs.Panel>
+
+            <Tabs.Panel value="growth" pt="md">
+              <Stack gap="md">
+                <Alert color="blue" title="Historical sampling">
+                  Storage snapshots are collected every {report.snapshot.snapshotIntervalHours} hours and retained for {report.snapshot.snapshotRetentionDays} days. Growth and projections remain unavailable until enough history exists.
+                </Alert>
+                <Card withBorder>
+                  <ReactECharts
+                    style={{ height: 360 }}
+                    option={{
+                      tooltip: { trigger: "axis" },
+                      legend: { data: ["Database", "Table data", "Indexes"] },
+                      grid: { left: 70, right: 24, top: 48, bottom: 70 },
+                      xAxis: {
+                        type: "category",
+                        data: chartPoints.map(point =>
+                          new Date(point.capturedAt).toLocaleString()
+                        ),
+                        axisLabel: { rotate: 35 }
+                      },
+                      yAxis: {
+                        type: "value",
+                        name: "GB",
+                        axisLabel: {
+                          formatter: (value: number) =>
+                            (value / 1024 / 1024 / 1024).toFixed(1)
+                        }
+                      },
+                      series: [
+                        {
+                          name: "Database",
+                          type: "line",
+                          showSymbol: chartPoints.length < 20,
+                          data: chartPoints.map(point => point.databaseBytes)
+                        },
+                        {
+                          name: "Table data",
+                          type: "line",
+                          showSymbol: chartPoints.length < 20,
+                          data: chartPoints.map(point => point.dataBytes)
+                        },
+                        {
+                          name: "Indexes",
+                          type: "line",
+                          showSymbol: chartPoints.length < 20,
+                          data: chartPoints.map(point => point.indexBytes)
+                        }
+                      ]
+                    }}
+                  />
+                </Card>
+                <SimpleGrid cols={{ base: 1, md: 3 }}>
+                  <Card withBorder>
+                    <Text size="xs" c="dimmed">Average daily growth</Text>
+                    <Text fw={700}>
+                      {formatDeltaBytes(report.analytics.growth.averageDailyBytes)}
+                    </Text>
+                  </Card>
+                  <Card withBorder>
+                    <Text size="xs" c="dimmed">Projected size in 30 days</Text>
+                    <Text fw={700}>
+                      {report.analytics.projection.bytes30d === null
+                        ? "Collecting history"
+                        : formatBytes(report.analytics.projection.bytes30d)}
+                    </Text>
+                  </Card>
+                  <Card withBorder>
+                    <Text size="xs" c="dimmed">Projected size in 90 days</Text>
+                    <Text fw={700}>
+                      {report.analytics.projection.bytes90d === null
+                        ? "Collecting history"
+                        : formatBytes(report.analytics.projection.bytes90d)}
+                    </Text>
+                  </Card>
+                </SimpleGrid>
+              </Stack>
             </Tabs.Panel>
 
             <Tabs.Panel value="timescale" pt="md">
@@ -417,6 +606,119 @@ export function DatabaseStoragePanel() {
               </Stack>
             </Tabs.Panel>
           </Tabs>
+
+          <Modal
+            opened={selectedRelation !== null}
+            onClose={() => setSelectedRelationName(null)}
+            title={selectedRelation ? `Storage details · ${selectedRelation.name}` : "Storage details"}
+            size="xl"
+          >
+            {selectedRelation && (
+              <Stack gap="md">
+                <SimpleGrid cols={{ base: 2, md: 4 }}>
+                  <Card withBorder padding="sm">
+                    <Text size="xs" c="dimmed">Total</Text>
+                    <Text fw={700}>{formatBytes(selectedRelation.totalBytes)}</Text>
+                  </Card>
+                  <Card withBorder padding="sm">
+                    <Text size="xs" c="dimmed">Data</Text>
+                    <Text fw={700}>{formatBytes(selectedRelation.dataBytes)}</Text>
+                  </Card>
+                  <Card withBorder padding="sm">
+                    <Text size="xs" c="dimmed">Indexes</Text>
+                    <Text fw={700}>{formatBytes(selectedRelation.indexBytes)}</Text>
+                  </Card>
+                  <Card withBorder padding="sm">
+                    <Text size="xs" c="dimmed">Index / data</Text>
+                    <Text fw={700}>{indexRatio(selectedRelation)}</Text>
+                  </Card>
+                </SimpleGrid>
+
+                <Group gap="xs">
+                  <Badge variant="light">{selectedRelation.category}</Badge>
+                  <Badge color={relationTypeColor(selectedRelation.kind)} variant="light">
+                    {selectedRelation.kind}
+                  </Badge>
+                  <Badge variant="outline">
+                    Retention: {selectedRelation.retention ?? "not detected"}
+                  </Badge>
+                  {selectedRelation.compressionEnabled !== null && (
+                    <Badge
+                      color={selectedRelation.compressionEnabled ? "green" : "orange"}
+                      variant="light"
+                    >
+                      Compression {selectedRelation.compressionEnabled ? "enabled" : "disabled"}
+                    </Badge>
+                  )}
+                </Group>
+
+                <SimpleGrid cols={{ base: 1, md: 2 }}>
+                  <Card withBorder>
+                    <Text size="xs" c="dimmed">Live / dead rows</Text>
+                    <Text size="sm">
+                      {formatRows(selectedRelation.liveRows)} / {formatRows(selectedRelation.deadRows)}
+                    </Text>
+                  </Card>
+                  <Card withBorder>
+                    <Text size="xs" c="dimmed">Observed range</Text>
+                    <Text size="sm">{formatTimestamp(selectedRelation.oldestAt)}</Text>
+                    <Text size="xs" c="dimmed">{formatTimestamp(selectedRelation.newestAt)}</Text>
+                  </Card>
+                </SimpleGrid>
+
+                {selectedChunks.length > 0 && (
+                  <Card withBorder p={0}>
+                    <ScrollArea>
+                      <Table striped verticalSpacing="xs">
+                        <Table.Thead>
+                          <Table.Tr>
+                            <Table.Th>Chunk</Table.Th>
+                            <Table.Th>Range</Table.Th>
+                            <Table.Th ta="right">Total</Table.Th>
+                            <Table.Th ta="right">Indexes</Table.Th>
+                          </Table.Tr>
+                        </Table.Thead>
+                        <Table.Tbody>
+                          {selectedChunks.map(chunk => (
+                            <Table.Tr key={chunk.chunkName}>
+                              <Table.Td><Text size="xs">{chunk.chunkName}</Text></Table.Td>
+                              <Table.Td>
+                                <Text size="xs">{formatTimestamp(chunk.rangeStart)}</Text>
+                                <Text size="xs" c="dimmed">{formatTimestamp(chunk.rangeEnd)}</Text>
+                              </Table.Td>
+                              <Table.Td ta="right">{formatBytes(chunk.totalBytes)}</Table.Td>
+                              <Table.Td ta="right">{formatBytes(chunk.indexBytes)}</Table.Td>
+                            </Table.Tr>
+                          ))}
+                        </Table.Tbody>
+                      </Table>
+                    </ScrollArea>
+                  </Card>
+                )}
+
+                <Card withBorder>
+                  <Text fw={600} mb="xs">Largest observed indexes</Text>
+                  {selectedIndexes.length === 0 ? (
+                    <Text size="sm" c="dimmed">No index statistics found.</Text>
+                  ) : (
+                    <Stack gap="xs">
+                      {selectedIndexes.slice(0, 10).map(index => (
+                        <Group key={`${index.relation}.${index.indexName}`} justify="space-between" wrap="nowrap">
+                          <div>
+                            <Text size="xs" fw={600}>{index.indexName}</Text>
+                            <Text size="xs" c="dimmed">
+                              {index.relation} · {new Intl.NumberFormat().format(index.scans)} scans
+                            </Text>
+                          </div>
+                          <Text size="sm">{formatBytes(index.indexBytes)}</Text>
+                        </Group>
+                      ))}
+                    </Stack>
+                  )}
+                </Card>
+              </Stack>
+            )}
+          </Modal>
         </>
       )}
     </Stack>

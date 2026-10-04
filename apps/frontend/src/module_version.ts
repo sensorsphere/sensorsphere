@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.116.0";
+export const MODULE_VERSION = "1.117.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.117.0": {
+    releasedAt: "2026-10-04T02:58:09Z",
+    patch: "PR-330-database-storage-history-budgets-v1.patch",
+    changes: [
+      { type: "added", description: "Add storage growth history chart, growth/projection KPIs, storage budget status and relation storage drill-down" }
+    ]
+  },
   "1.116.0": {
     releasedAt: "2026-10-04T02:43:28Z",
     patch: "PR-329-database-storage-reporting-v1.patch",

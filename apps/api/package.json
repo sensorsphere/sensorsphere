@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "test": "node --test dist/features/auth/index.test.js dist/features/database-storage/repository.test.js",
+    "test": "node --test dist/features/auth/index.test.js dist/features/database-storage/repository.test.js dist/features/database-storage/analytics.test.js dist/features/database-storage/controller.test.js",
     "start": "node dist/index.js"
   },
   "dependencies": {

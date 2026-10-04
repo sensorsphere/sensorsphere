@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import type { StorageHistoryPoint } from "./analytics.js";
 
 export type StorageCategory =
   | "Core configuration"
@@ -96,6 +97,7 @@ export function classifyRelation(name: string): StorageCategory {
     name.startsWith("auth_") ||
     name.startsWith("schema_migrations") ||
     name.startsWith("project_todo") ||
+    name === "database_storage_snapshots" ||
     name.endsWith("_operation_history")
   ) return "Audit/operational state";
   if (
@@ -441,5 +443,128 @@ export class DatabaseStorageRepository {
       materializationName: String(row.materialization_hypertable_name),
       materializedOnly: Boolean(row.materialized_only)
     }));
+  }
+
+  async getHistory(days = 90): Promise<StorageHistoryPoint[]> {
+    const boundedDays = Math.max(1, Math.min(Math.trunc(days), 3650));
+    const result = await this.pool.query(`
+      SELECT
+        captured_at,
+        database_bytes,
+        allocated_relation_bytes,
+        data_bytes,
+        index_bytes,
+        toast_bytes,
+        relation_count,
+        hypertable_count,
+        chunk_count
+      FROM database_storage_snapshots
+      WHERE captured_at >= NOW() - ($1::integer * INTERVAL '1 day')
+      ORDER BY captured_at ASC
+    `, [boundedDays]);
+
+    return result.rows.map(row => ({
+      capturedAt: toTimestamp(row.captured_at)!,
+      databaseBytes: toNumber(row.database_bytes),
+      allocatedRelationBytes: toNumber(row.allocated_relation_bytes),
+      dataBytes: toNumber(row.data_bytes),
+      indexBytes: toNumber(row.index_bytes),
+      toastBytes: toNumber(row.toast_bytes),
+      relationCount: toNumber(row.relation_count),
+      hypertableCount: toNumber(row.hypertable_count),
+      chunkCount: toNumber(row.chunk_count)
+    }));
+  }
+
+  async captureSnapshotIfDue(
+    intervalHours = 6,
+    retentionDays = 90
+  ): Promise<{ captured: boolean; deletedExpired: number }> {
+    const safeIntervalHours = Math.max(1, Math.min(Math.trunc(intervalHours), 168));
+    const safeRetentionDays = Math.max(1, Math.min(Math.trunc(retentionDays), 3650));
+
+    const latest = await this.pool.query<{ captured_at: Date | null }>(`
+      SELECT MAX(captured_at) AS captured_at
+      FROM database_storage_snapshots
+    `);
+    const latestAt = latest.rows[0]?.captured_at ?? null;
+    if (
+      latestAt &&
+      Date.now() - latestAt.getTime() < safeIntervalHours * 60 * 60 * 1000
+    ) {
+      return { captured: false, deletedExpired: 0 };
+    }
+
+    const [summary, policies, chunks] = await Promise.all([
+      this.getSummary(),
+      this.getPolicies(),
+      this.getChunks()
+    ]);
+    const relations = await this.getRelations(policies);
+
+    const relationSnapshot = relations.map(relation => ({
+      schema: relation.schema,
+      name: relation.name,
+      category: relation.category,
+      kind: relation.kind,
+      totalBytes: relation.totalBytes,
+      dataBytes: relation.dataBytes,
+      indexBytes: relation.indexBytes
+    }));
+
+    const inserted = await this.pool.query(`
+      INSERT INTO database_storage_snapshots (
+        database_bytes,
+        allocated_relation_bytes,
+        data_bytes,
+        index_bytes,
+        toast_bytes,
+        relation_count,
+        hypertable_count,
+        chunk_count,
+        relations
+      )
+      SELECT
+        $1::bigint,
+        $2::bigint,
+        $3::bigint,
+        $4::bigint,
+        $5::bigint,
+        $6::integer,
+        $7::integer,
+        $8::integer,
+        $9::jsonb
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM database_storage_snapshots
+        WHERE captured_at >= NOW() - ($10::integer * INTERVAL '1 hour')
+      )
+      RETURNING id
+    `, [
+      summary.databaseBytes,
+      summary.allocatedRelationBytes,
+      summary.dataBytes,
+      summary.indexBytes,
+      summary.toastBytes,
+      relations.length,
+      relations.filter(relation => relation.kind === "hypertable").length,
+      chunks.length,
+      JSON.stringify(relationSnapshot),
+      safeIntervalHours
+    ]);
+
+    if ((inserted.rowCount ?? 0) === 0) {
+      return { captured: false, deletedExpired: 0 };
+    }
+
+    const deleted = await this.pool.query(`
+      DELETE FROM database_storage_snapshots
+      WHERE captured_at < NOW() - ($1::integer * INTERVAL '1 day')
+    `, [safeRetentionDays]);
+
+    return {
+      captured: true,
+      deletedExpired: deleted.rowCount ?? 0
+    };
   }
 }

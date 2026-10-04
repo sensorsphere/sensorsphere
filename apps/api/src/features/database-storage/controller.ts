@@ -4,6 +4,11 @@ import type {
   DatabaseStorageRepository,
   StorageRelation
 } from "./repository.js";
+import {
+  calculateStorageAnalytics,
+  storageBudgetFromEnv
+} from "./analytics.js";
+import { databaseStorageSettings } from "./settings.js";
 
 type Recommendation = {
   level: "INFO" | "REVIEW" | "WARNING";
@@ -79,32 +84,68 @@ export class DatabaseStorageController {
   report = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     requireAdmin(request);
 
-    const [summary, policies, chunks, indexes, continuousAggregates] =
+    const generatedAt = new Date().toISOString();
+    const settings = databaseStorageSettings();
+    const [summary, policies, chunks, indexes, continuousAggregates, history] =
       await Promise.all([
         this.repository.getSummary(),
         this.repository.getPolicies(),
         this.repository.getChunks(),
         this.repository.getIndexes(),
-        this.repository.getContinuousAggregates()
+        this.repository.getContinuousAggregates(),
+        this.repository.getHistory(settings.snapshotRetentionDays)
       ]);
 
     const relations = await this.repository.getRelations(policies);
+    const analytics = calculateStorageAnalytics(
+      summary.databaseBytes,
+      generatedAt,
+      history,
+      storageBudgetFromEnv(summary.databaseBytes)
+    );
+    const reportRecommendations = recommendations(relations);
+
+    if (analytics.budget.configurationError) {
+      reportRecommendations.unshift({
+        level: "WARNING",
+        code: "storage-budget-invalid",
+        relation: null,
+        message: analytics.budget.configurationError
+      });
+    }
+
+    if (
+      analytics.projection.bytes30d !== null &&
+      analytics.budget.warningBytes !== null &&
+      analytics.projection.bytes30d >= analytics.budget.warningBytes &&
+      analytics.budget.status === "OK"
+    ) {
+      reportRecommendations.unshift({
+        level: "WARNING",
+        code: "projected-budget-warning",
+        relation: null,
+        message: "Current measured growth projects the database above the warning storage budget within 30 days."
+      });
+    }
 
     reply.send({
-      generatedAt: new Date().toISOString(),
+      generatedAt,
       readOnly: true,
+      snapshot: settings,
       summary: {
         ...summary,
         relationCount: relations.length,
         hypertableCount: relations.filter(item => item.kind === "hypertable").length,
         chunkCount: chunks.length
       },
+      analytics,
+      history,
       relations,
       chunks,
       indexes,
       policies,
       continuousAggregates,
-      recommendations: recommendations(relations)
+      recommendations: reportRecommendations
     });
   };
 }
