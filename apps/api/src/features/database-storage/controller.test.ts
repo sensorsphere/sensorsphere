@@ -15,6 +15,13 @@ function fakeRepository() {
     getPolicies: async () => [],
     getChunks: async () => [],
     getIndexes: async () => [],
+    getIndexStatsWindow: async () => ({
+      startedAt: "2026-10-01T00:00:00.000Z",
+      source: "postmaster_start" as const,
+      ageDays: 3,
+      minimumObservationDays: 30,
+      mature: false
+    }),
     getContinuousAggregates: async () => [],
     getHistory: async () => [],
     getRelations: async () => []
@@ -61,4 +68,11 @@ test("database storage report accepts an admin and remains read-only", async () 
   assert.equal(sent.length, 1);
   assert.equal(sent[0]?.readOnly, true);
   assert.deepEqual(sent[0]?.history, []);
+  assert.deepEqual(sent[0]?.indexStats, {
+    startedAt: "2026-10-01T00:00:00.000Z",
+    source: "postmaster_start",
+    ageDays: 3,
+    minimumObservationDays: 30,
+    mature: false
+  });
 });

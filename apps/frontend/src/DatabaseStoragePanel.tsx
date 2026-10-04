@@ -549,8 +549,33 @@ export function DatabaseStoragePanel() {
             </Tabs.Panel>
 
             <Tabs.Panel value="indexes" pt="md">
-              <Alert color="blue" mb="md" title="Usage counters are observational">
-                Low or zero scan counts are review signals only. DB-1 never marks an index safe to remove automatically.
+              <Alert
+                color={report.indexStats.mature ? "blue" : "orange"}
+                mb="md"
+                title="Usage counters are observational"
+              >
+                <Stack gap={4}>
+                  <Group gap="xs">
+                    <Badge
+                      color={report.indexStats.mature ? "green" : "orange"}
+                      variant="light"
+                    >
+                      {report.indexStats.mature
+                        ? "Observation window mature"
+                        : "Collecting usage history"}
+                    </Badge>
+                    <Text size="sm">
+                      {report.indexStats.ageDays.toFixed(1)} days observed · minimum {report.indexStats.minimumObservationDays} days
+                    </Text>
+                  </Group>
+                  <Text size="sm">
+                    Counters are observed since {formatTimestamp(report.indexStats.startedAt)}
+                    {report.indexStats.source === "postmaster_start"
+                      ? " (PostgreSQL start)"
+                      : " (statistics reset)"}.
+                    {" "}Low or zero scan counts are review signals only; SensorSphere never marks an index safe to remove automatically.
+                  </Text>
+                </Stack>
               </Alert>
               <Card withBorder p={0}>
                 <ScrollArea>

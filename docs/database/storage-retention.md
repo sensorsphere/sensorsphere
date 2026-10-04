@@ -793,21 +793,24 @@ Status: IMPLEMENTED ON DEV — acceptance tracking
 
 ## DB-2 — Storage Optimization
 
-Status: PLANNED
+Status: IN PROGRESS — DEV rollout / acceptance
 
-- [ ] DBST-100 — Benchmark Timescale compression on observations.
-- [ ] DBST-101 — Benchmark Timescale compression on BLE observations.
-- [ ] DBST-102 — Benchmark Timescale compression on measurements.
-- [ ] DBST-103 — Compare backup size/duration before/after compression.
-- [ ] DBST-104 — Validate restore compatibility with compressed chunks.
-- [ ] DBST-105 — Define recent uncompressed window per hypertable.
-- [ ] DBST-106 — Audit large indexes and map each to application queries.
-- [ ] DBST-107 — Establish minimum observation period before calling an index low-use.
-- [ ] DBST-108 — Prototype event tables as Timescale hypertables/partitions.
-- [ ] DBST-109 — Validate 48h event retention using chunk/partition drop.
-- [ ] DBST-110 — Compare DELETE vs chunk-drop vacuum/bloat behavior.
-- [ ] DBST-111 — Define safe physical-space reclamation runbook.
-- [ ] DBST-112 — Add optimization recommendations to dashboard.
+Measured DEV results, event-table prototypes and the physical-space runbook are
+recorded in `docs/database/storage-retention-db2-dev-results.md`.
+
+- [x] DBST-100 — Benchmark Timescale compression on observations.
+- [x] DBST-101 — Benchmark Timescale compression on BLE observations.
+- [x] DBST-102 — Benchmark Timescale compression on measurements.
+- [x] DBST-103 — Compare backup size/duration before/after compression.
+- [x] DBST-104 — Validate restore compatibility with compressed chunks.
+- [x] DBST-105 — Define recent uncompressed window per hypertable (7-day policy; effective ~7–14 days with current chunks).
+- [x] DBST-106 — Audit large indexes and map each to application queries.
+- [x] DBST-107 — Establish minimum observation period before calling an index low-use (30 days minimum; 90 days preferred).
+- [x] DBST-108 — Prototype event tables as Timescale hypertables/partitions.
+- [x] DBST-109 — Validate 48h event retention using chunk/partition drop.
+- [x] DBST-110 — Compare DELETE vs chunk-drop vacuum/bloat behavior.
+- [x] DBST-111 — Define safe physical-space reclamation runbook.
+- [ ] DBST-112 — Add and validate optimization recommendations in dashboard.
 
 ## DB-3 — Retention Management
 

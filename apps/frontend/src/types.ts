@@ -1513,6 +1513,14 @@ export interface DatabaseStorageIndex {
   definition: string | null;
 }
 
+export interface DatabaseStorageIndexStatsWindow {
+  startedAt: string;
+  source: "stats_reset" | "postmaster_start";
+  ageDays: number;
+  minimumObservationDays: number;
+  mature: boolean;
+}
+
 export interface DatabaseStoragePolicy {
   jobId: number;
   kind: "retention" | "compression" | "continuous_aggregate_refresh" | "other";
@@ -1590,6 +1598,7 @@ export interface DatabaseStorageReport {
   relations: DatabaseStorageRelation[];
   chunks: DatabaseStorageChunk[];
   indexes: DatabaseStorageIndex[];
+  indexStats: DatabaseStorageIndexStatsWindow;
   policies: DatabaseStoragePolicy[];
   continuousAggregates: DatabaseStorageContinuousAggregate[];
   recommendations: DatabaseStorageRecommendation[];

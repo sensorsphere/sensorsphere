@@ -28,6 +28,31 @@ test("classifies unrecognized relations explicitly", () => {
   assert.equal(classifyRelation("future_large_relation"), "Unknown");
 });
 
+test("index statistics require a meaningful observation window", async () => {
+  const pool = {
+    query: async (sql: string) => {
+      assert.match(sql, /pg_stat_database/);
+      return {
+        rows: [{
+          started_at: new Date("2026-09-25T13:28:23.000Z"),
+          source: "postmaster_start",
+          age_days: "9.25"
+        }],
+        rowCount: 1
+      };
+    }
+  } as unknown as Pool;
+
+  const repository = new DatabaseStorageRepository(pool);
+  const result = await repository.getIndexStatsWindow(30);
+
+  assert.equal(result.source, "postmaster_start");
+  assert.equal(result.ageDays, 9.25);
+  assert.equal(result.minimumObservationDays, 30);
+  assert.equal(result.mature, false);
+  assert.equal(result.startedAt, "2026-09-25T13:28:23.000Z");
+});
+
 test("snapshot capture prunes metadata outside the configured retention", async () => {
   const calls: Array<{ sql: string; params: unknown[] | undefined }> = [];
   const pool = {

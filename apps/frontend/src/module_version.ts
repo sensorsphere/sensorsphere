@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.118.0";
+export const MODULE_VERSION = "1.119.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.119.0": {
+    releasedAt: "2026-10-04T17:40:21Z",
+    patch: "PR-332-database-storage-optimization-v1.patch",
+    changes: [
+      { type: "added", description: "Show the PostgreSQL index-statistics observation window and maturity in Database Storage & Retention" },
+      { type: "changed", description: "Surface DB-2 compression and event-retention optimization recommendations in the database dashboard" }
+    ]
+  },
   "1.118.0": {
     releasedAt: "2026-10-04T16:20:32Z",
     patch: "PR-331-database-storage-long-term-projections-v1.patch",

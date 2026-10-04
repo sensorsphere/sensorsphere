@@ -56,6 +56,14 @@ export interface StorageIndex {
   definition: string | null;
 }
 
+export interface StorageIndexStatsWindow {
+  startedAt: string;
+  source: "stats_reset" | "postmaster_start";
+  ageDays: number;
+  minimumObservationDays: number;
+  mature: boolean;
+}
+
 export interface StoragePolicy {
   jobId: number;
   kind: "retention" | "compression" | "continuous_aggregate_refresh" | "other";
@@ -343,6 +351,21 @@ export class DatabaseStorageRepository {
 
   async getChunks(): Promise<StorageChunk[]> {
     const result = await this.pool.query(`
+      WITH chunk_sizes AS (
+        SELECT
+          h.hypertable_schema,
+          h.hypertable_name,
+          size.chunk_schema,
+          size.chunk_name,
+          size.table_bytes,
+          size.index_bytes,
+          size.toast_bytes,
+          size.total_bytes
+        FROM timescaledb_information.hypertables h
+        CROSS JOIN LATERAL chunks_detailed_size(
+          format('%I.%I', h.hypertable_schema, h.hypertable_name)::regclass
+        ) size
+      )
       SELECT
         c.hypertable_schema,
         c.hypertable_name,
@@ -351,28 +374,16 @@ export class DatabaseStorageRepository {
         c.range_start,
         c.range_end,
         c.is_compressed,
-        pg_relation_size(
-          format('%I.%I', c.chunk_schema, c.chunk_name)::regclass
-        )::bigint AS table_bytes,
-        pg_indexes_size(
-          format('%I.%I', c.chunk_schema, c.chunk_name)::regclass
-        )::bigint AS index_bytes,
-        GREATEST(
-          pg_total_relation_size(
-            format('%I.%I', c.chunk_schema, c.chunk_name)::regclass
-          )
-          - pg_relation_size(
-            format('%I.%I', c.chunk_schema, c.chunk_name)::regclass
-          )
-          - pg_indexes_size(
-            format('%I.%I', c.chunk_schema, c.chunk_name)::regclass
-          ),
-          0
-        )::bigint AS toast_bytes,
-        pg_total_relation_size(
-          format('%I.%I', c.chunk_schema, c.chunk_name)::regclass
-        )::bigint AS total_bytes
+        COALESCE(size.table_bytes, 0)::bigint AS table_bytes,
+        COALESCE(size.index_bytes, 0)::bigint AS index_bytes,
+        COALESCE(size.toast_bytes, 0)::bigint AS toast_bytes,
+        COALESCE(size.total_bytes, 0)::bigint AS total_bytes
       FROM timescaledb_information.chunks c
+      LEFT JOIN chunk_sizes size
+        ON size.hypertable_schema = c.hypertable_schema
+       AND size.hypertable_name = c.hypertable_name
+       AND size.chunk_schema = c.chunk_schema
+       AND size.chunk_name = c.chunk_name
       ORDER BY c.hypertable_schema, c.hypertable_name, c.range_start
     `);
 
@@ -422,6 +433,42 @@ export class DatabaseStorageRepository {
       unique: Boolean(row.is_unique),
       definition: row.definition ? String(row.definition) : null
     }));
+  }
+
+  async getIndexStatsWindow(
+    minimumObservationDays = 30
+  ): Promise<StorageIndexStatsWindow> {
+    const safeMinimumDays = Math.max(
+      1,
+      Math.min(Math.trunc(minimumObservationDays), 3650)
+    );
+    const result = await this.pool.query(`
+      SELECT
+        COALESCE(stats_reset, pg_postmaster_start_time()) AS started_at,
+        CASE
+          WHEN stats_reset IS NULL THEN 'postmaster_start'
+          ELSE 'stats_reset'
+        END AS source,
+        EXTRACT(
+          EPOCH FROM (
+            NOW() - COALESCE(stats_reset, pg_postmaster_start_time())
+          )
+        ) / 86400.0 AS age_days
+      FROM pg_stat_database
+      WHERE datname = current_database()
+    `);
+    const row = result.rows[0] ?? {};
+    const startedAt =
+      toTimestamp(row.started_at) ?? new Date(0).toISOString();
+    const ageDays = Math.max(0, toNumber(row.age_days));
+
+    return {
+      startedAt,
+      source: row.source === "stats_reset" ? "stats_reset" : "postmaster_start",
+      ageDays,
+      minimumObservationDays: safeMinimumDays,
+      mature: ageDays >= safeMinimumDays
+    };
   }
 
   async getContinuousAggregates(): Promise<StorageContinuousAggregate[]> {

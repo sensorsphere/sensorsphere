@@ -2,6 +2,8 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { requireAdmin } from "../auth/index.js";
 import type {
   DatabaseStorageRepository,
+  StorageChunk,
+  StoragePolicy,
   StorageRelation
 } from "./repository.js";
 import {
@@ -17,8 +19,36 @@ type Recommendation = {
   message: string;
 };
 
-function recommendations(relations: StorageRelation[]): Recommendation[] {
+function recommendations(
+  relations: StorageRelation[],
+  policies: StoragePolicy[],
+  chunks: StorageChunk[]
+): Recommendation[] {
   const result: Recommendation[] = [];
+  const validatedCompressionCandidates = new Set([
+    "observations",
+    "gateway_device_ble_observations",
+    "measurements"
+  ]);
+  const compressionPolicyRelations = new Set(
+    policies
+      .filter(policy => policy.kind === "compression" && policy.relationName)
+      .map(policy => policy.relationName!)
+  );
+  const chunkCounts = new Map<
+    string,
+    { total: number; compressed: number }
+  >();
+
+  for (const chunk of chunks) {
+    const current = chunkCounts.get(chunk.hypertableName) ?? {
+      total: 0,
+      compressed: 0
+    };
+    current.total += 1;
+    if (chunk.compressed) current.compressed += 1;
+    chunkCounts.set(chunk.hypertableName, current);
+  }
 
   for (const relation of relations) {
     if (
@@ -28,10 +58,41 @@ function recommendations(relations: StorageRelation[]): Recommendation[] {
     ) {
       result.push({
         level: "REVIEW",
-        code: "compression-disabled",
+        code: validatedCompressionCandidates.has(relation.name)
+          ? "compression-validated-candidate"
+          : "compression-disabled",
         relation: relation.name,
-        message: `${relation.name} uses significant storage with Timescale compression disabled.`
+        message: validatedCompressionCandidates.has(relation.name)
+          ? `${relation.name} is a validated DB-2 compression candidate; representative DEV chunks were reduced by about 97% while tested history queries showed no regression.`
+          : `${relation.name} uses significant storage with Timescale compression disabled.`
       });
+    }
+
+    if (
+      relation.kind === "hypertable" &&
+      relation.compressionEnabled === true &&
+      validatedCompressionCandidates.has(relation.name)
+    ) {
+      const counts = chunkCounts.get(relation.name) ?? {
+        total: relation.chunks ?? 0,
+        compressed: 0
+      };
+
+      if (!compressionPolicyRelations.has(relation.name)) {
+        result.push({
+          level: "REVIEW",
+          code: "compression-policy-missing",
+          relation: relation.name,
+          message: `${relation.name} has compression enabled but no recurring compression policy was detected.`
+        });
+      } else {
+        result.push({
+          level: "INFO",
+          code: "compression-policy-active",
+          relation: relation.name,
+          message: `${relation.name} compression policy is active with a 7-day threshold; ${counts.compressed}/${counts.total} chunks are currently compressed.`
+        });
+      }
     }
 
     if (
@@ -73,6 +134,20 @@ function recommendations(relations: StorageRelation[]): Recommendation[] {
         message: `${relation.name} has no detected Timescale retention policy.`
       });
     }
+
+    if (
+      relation.kind === "table" &&
+      (relation.name === "gateway_traffic_events" ||
+        relation.name === "metric_routing_events") &&
+      relation.totalBytes >= 100 * 1024 * 1024
+    ) {
+      result.push({
+        level: "REVIEW",
+        code: "event-row-delete-retention",
+        relation: relation.name,
+        message: `${relation.name} still uses row-by-row 48-hour retention. The DB-2 one-hour hypertable prototype reclaimed expired physical storage immediately with chunk drop and no dead-tuple accumulation.`
+      });
+    }
   }
 
   return result;
@@ -86,15 +161,23 @@ export class DatabaseStorageController {
 
     const generatedAt = new Date().toISOString();
     const settings = databaseStorageSettings();
-    const [summary, policies, chunks, indexes, continuousAggregates, history] =
-      await Promise.all([
-        this.repository.getSummary(),
-        this.repository.getPolicies(),
-        this.repository.getChunks(),
-        this.repository.getIndexes(),
-        this.repository.getContinuousAggregates(),
-        this.repository.getHistory(settings.snapshotRetentionDays)
-      ]);
+    const [
+      summary,
+      policies,
+      chunks,
+      indexes,
+      indexStats,
+      continuousAggregates,
+      history
+    ] = await Promise.all([
+      this.repository.getSummary(),
+      this.repository.getPolicies(),
+      this.repository.getChunks(),
+      this.repository.getIndexes(),
+      this.repository.getIndexStatsWindow(),
+      this.repository.getContinuousAggregates(),
+      this.repository.getHistory(settings.snapshotRetentionDays)
+    ]);
 
     const relations = await this.repository.getRelations(policies);
     const analytics = calculateStorageAnalytics(
@@ -103,7 +186,20 @@ export class DatabaseStorageController {
       history,
       storageBudgetFromEnv(summary.databaseBytes)
     );
-    const reportRecommendations = recommendations(relations);
+    const reportRecommendations = recommendations(
+      relations,
+      policies,
+      chunks
+    );
+
+    if (!indexStats.mature) {
+      reportRecommendations.push({
+        level: "INFO",
+        code: "index-observation-window-short",
+        relation: null,
+        message: `Index usage counters cover only ${indexStats.ageDays.toFixed(1)} days; DB-2 requires at least ${indexStats.minimumObservationDays} days before an index can be classified as low observed usage.`
+      });
+    }
 
     if (analytics.budget.configurationError) {
       reportRecommendations.unshift({
@@ -143,6 +239,7 @@ export class DatabaseStorageController {
       relations,
       chunks,
       indexes,
+      indexStats,
       policies,
       continuousAggregates,
       recommendations: reportRecommendations

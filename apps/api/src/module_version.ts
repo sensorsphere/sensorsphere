@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.67.0";
+export const MODULE_VERSION = "1.68.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.68.0": {
+    releasedAt: "2026-10-04T17:40:21Z",
+    patch: "PR-332-database-storage-optimization-v1.patch",
+    changes: [
+      { type: "added", description: "Add DB-2 Timescale compression policy reporting, validated optimization recommendations and a minimum index-usage observation window" },
+      { type: "fixed", description: "Report physical chunk sizes correctly for compressed Timescale chunks" },
+      { type: "changed", description: "Extend API database compatibility through migration level 84 for validated storage compression policies" }
+    ]
+  },
   "1.67.0": {
     releasedAt: "2026-10-04T16:20:32Z",
     patch: "PR-331-database-storage-long-term-projections-v1.patch",
