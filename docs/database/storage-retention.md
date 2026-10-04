@@ -741,38 +741,38 @@ Status: NEXT
 
 ### Backend / data collection
 
-- [ ] DBST-001 — Define storage report DTO/API contract.
-- [ ] DBST-002 — Implement total database/data/index size reporting.
-- [ ] DBST-003 — Implement top relation storage reporting.
-- [ ] DBST-004 — Report live/dead tuple estimates and vacuum metadata.
-- [ ] DBST-005 — Report Timescale hypertables/chunks and chunk sizes.
-- [ ] DBST-006 — Report Timescale retention policies.
-- [ ] DBST-007 — Report Timescale compression state.
-- [ ] DBST-008 — Report continuous aggregates and refresh/retention policies.
-- [ ] DBST-009 — Report index size and observed usage statistics.
-- [ ] DBST-010 — Classify known SensorSphere relations by data family.
-- [ ] DBST-011 — Detect/report unknown large relations.
+- [x] DBST-001 — Define storage report DTO/API contract.
+- [x] DBST-002 — Implement total database/data/index size reporting.
+- [x] DBST-003 — Implement top relation storage reporting.
+- [x] DBST-004 — Report live/dead tuple estimates and vacuum metadata.
+- [x] DBST-005 — Report Timescale hypertables/chunks and chunk sizes.
+- [x] DBST-006 — Report Timescale retention policies.
+- [x] DBST-007 — Report Timescale compression state.
+- [x] DBST-008 — Report continuous aggregates and refresh/retention policies.
+- [x] DBST-009 — Report index size and observed usage statistics.
+- [x] DBST-010 — Classify known SensorSphere relations by data family.
+- [x] DBST-011 — Detect/report unknown large relations.
 - [ ] DBST-012 — Add storage snapshot persistence.
 - [ ] DBST-013 — Add bounded retention for storage snapshots.
 - [ ] DBST-014 — Calculate 24h/7d/30d growth.
 - [ ] DBST-015 — Calculate simple 30/90-day projections.
 - [ ] DBST-016 — Add storage warning/critical budget configuration.
-- [ ] DBST-017 — Generate non-destructive recommendation objects.
+- [x] DBST-017 — Generate non-destructive recommendation objects.
 - [ ] DBST-018 — Expose latest verified backup size/age as safety context.
 
 ### UI
 
-- [ ] DBST-020 — Add Admin Database Storage & Retention page.
-- [ ] DBST-021 — Add summary cards.
-- [ ] DBST-022 — Add Top storage consumers table.
-- [ ] DBST-023 — Add Timescale/chunks view.
-- [ ] DBST-024 — Add indexes view.
-- [ ] DBST-025 — Add retention-policy view.
+- [x] DBST-020 — Add Admin Database Storage & Retention page.
+- [x] DBST-021 — Add summary cards.
+- [x] DBST-022 — Add Top storage consumers table.
+- [x] DBST-023 — Add Timescale/chunks view.
+- [x] DBST-024 — Add indexes view.
+- [x] DBST-025 — Add retention-policy view.
 - [ ] DBST-026 — Add growth chart.
 - [ ] DBST-027 — Add storage budget status.
-- [ ] DBST-028 — Add recommendations panel.
+- [x] DBST-028 — Add recommendations panel.
 - [ ] DBST-029 — Add relation detail drill-down.
-- [ ] DBST-030 — Clearly label all DB-1 views as diagnostic/read-only.
+- [x] DBST-030 — Clearly label all DB-1 views as diagnostic/read-only.
 
 ### Tests / acceptance
 

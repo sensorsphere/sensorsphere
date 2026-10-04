@@ -228,6 +228,7 @@ import {
   NavigationIcon,
   type PageKey
 } from "./NavigationIcon";
+import { DatabaseStoragePanel } from "./DatabaseStoragePanel";
 import { defaultMetricColor } from "./metricVisuals";
 
 function ThemeSelector() {
@@ -298,6 +299,9 @@ Record<PageKey, string> = {
   "gateway-coverage":
     "Gateway Coverage",
 
+  "database-storage":
+    "Database Storage & Retention",
+
   users:
     "Administration · Users",
 
@@ -326,6 +330,7 @@ function isPageKey(
     value === "gateways" ||
     value === "metric-routing" ||
     value === "gateway-coverage" ||
+    value === "database-storage" ||
     value === "users" ||
     value === "versions" ||
     value === "todos"
@@ -941,7 +946,7 @@ function Dashboard() {
     if (
       authContextQuery.data &&
       !authContextQuery.data.isAdmin &&
-      activePage === "users"
+      (activePage === "users" || activePage === "database-storage")
     ) {
       setActivePage("dashboard");
     }
@@ -2952,6 +2957,33 @@ function Dashboard() {
         </Stack>
 
         <Stack gap="xs" mt="auto" pt="md">
+          {authContextQuery.data?.isAdmin && (
+            <NavLink
+              label={
+                navbarCollapsed
+                  ? null
+                  : "Database Storage"
+              }
+              leftSection={
+                <NavigationIcon
+                  page="database-storage"
+                />
+              }
+              title="Database Storage & Retention"
+              aria-label="Database Storage & Retention"
+              active={
+                activePage ===
+                "database-storage"
+              }
+              onClick={
+                () =>
+                  navigateTo(
+                    "database-storage"
+                  )
+              }
+            />
+          )}
+
           {authContextQuery.data?.isAdmin && (
             <NavLink
               label={
@@ -5670,6 +5702,14 @@ function Dashboard() {
               activePage ===
                 "gateway-coverage" && (
                 <GatewayCoveragePanel />
+              )
+            }
+
+            {
+              authContextQuery.data?.isAdmin &&
+              activePage ===
+                "database-storage" && (
+                <DatabaseStoragePanel />
               )
             }
 

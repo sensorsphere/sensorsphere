@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.64.0";
+export const MODULE_VERSION = "1.65.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.65.0": {
+    releasedAt: "2026-10-04T02:43:28Z",
+    patch: "PR-329-database-storage-reporting-v1.patch",
+    changes: [
+      { type: "added", description: "Add Admin read-only database storage reporting for database size, relation data/index usage, Timescale chunks, retention/compression policies and index statistics" },
+      { type: "added", description: "Add non-destructive database storage recommendations for compression, index/data ratios, dead tuples and undefined retention" }
+    ]
+  },
   "1.64.0": {
     releasedAt: "2026-10-01T01:17:10Z",
     patch: "PR-316-registered-vs-discovered-entity-inventory.patch",

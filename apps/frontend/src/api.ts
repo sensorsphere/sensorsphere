@@ -87,7 +87,8 @@ import type {
   SensorSphereRole,
   IdentityProvider,
   UserSummary,
-  AuthAuditEntry
+  AuthAuditEntry,
+  DatabaseStorageReport
 } from "./types";
 
 async function readJson<T>(
@@ -2309,4 +2310,16 @@ export async function updateMonitoringCheck(id: string, input: UpdateMonitoringC
 export async function deleteMonitoringCheck(id: string): Promise<void> {
   const response = await fetch(`/api/v1/monitoring/checks/${id}`, { method: "DELETE" });
   if (!response.ok) await readJson<unknown>(response);
+}
+
+export async function getDatabaseStorageReport(): Promise<DatabaseStorageReport> {
+  return readJson<DatabaseStorageReport>(
+    await fetch(
+      "/api/v1/admin/database/storage",
+      {
+        cache: "no-store",
+        headers: devAuthHeaders()
+      }
+    )
+  );
 }

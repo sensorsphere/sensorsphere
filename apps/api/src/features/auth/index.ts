@@ -145,7 +145,7 @@ function requestRole(request: FastifyRequest): SensorSphereRole | null {
   if (requested === "admin" || requested === "user") return requested;
   return settings.defaultRole;
 }
-function requireAdmin(request: FastifyRequest): void {
+export function requireAdmin(request: FastifyRequest): void {
   const sessionUser = (request as FastifyRequest & {
     sensorSphereUser?: SessionUser;
   }).sensorSphereUser;

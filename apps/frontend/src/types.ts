@@ -1457,3 +1457,103 @@ export interface RealtimeEntityRecord {
   removed: boolean;
   removedAt: string | null;
 }
+
+export type DatabaseStorageCategory =
+  | "Core configuration"
+  | "Measurements"
+  | "Observations"
+  | "BLE discovery/coverage"
+  | "Routing diagnostics"
+  | "Gateway diagnostics"
+  | "Aggregates"
+  | "Audit/operational state"
+  | "Database internal"
+  | "Unknown";
+
+export interface DatabaseStorageRelation {
+  schema: string;
+  name: string;
+  category: DatabaseStorageCategory;
+  kind: "table" | "hypertable" | "materialized";
+  totalBytes: number;
+  dataBytes: number;
+  indexBytes: number;
+  toastBytes: number;
+  liveRows: number | null;
+  deadRows: number | null;
+  oldestAt: string | null;
+  newestAt: string | null;
+  chunks: number | null;
+  compressionEnabled: boolean | null;
+  retention: string | null;
+}
+
+export interface DatabaseStorageChunk {
+  hypertableSchema: string;
+  hypertableName: string;
+  chunkSchema: string;
+  chunkName: string;
+  rangeStart: string | null;
+  rangeEnd: string | null;
+  totalBytes: number;
+  dataBytes: number;
+  indexBytes: number;
+  toastBytes: number;
+  compressed: boolean;
+}
+
+export interface DatabaseStorageIndex {
+  schema: string;
+  relation: string;
+  logicalRelation: string;
+  indexName: string;
+  indexBytes: number;
+  scans: number;
+  unique: boolean;
+  definition: string | null;
+}
+
+export interface DatabaseStoragePolicy {
+  jobId: number;
+  kind: "retention" | "compression" | "continuous_aggregate_refresh" | "other";
+  relationSchema: string | null;
+  relationName: string | null;
+  scheduleInterval: string;
+  config: Record<string, unknown> | null;
+}
+
+export interface DatabaseStorageContinuousAggregate {
+  viewSchema: string;
+  viewName: string;
+  materializationSchema: string;
+  materializationName: string;
+  materializedOnly: boolean;
+}
+
+export interface DatabaseStorageRecommendation {
+  level: "INFO" | "REVIEW" | "WARNING";
+  code: string;
+  relation: string | null;
+  message: string;
+}
+
+export interface DatabaseStorageReport {
+  generatedAt: string;
+  readOnly: true;
+  summary: {
+    databaseBytes: number;
+    allocatedRelationBytes: number;
+    dataBytes: number;
+    indexBytes: number;
+    toastBytes: number;
+    relationCount: number;
+    hypertableCount: number;
+    chunkCount: number;
+  };
+  relations: DatabaseStorageRelation[];
+  chunks: DatabaseStorageChunk[];
+  indexes: DatabaseStorageIndex[];
+  policies: DatabaseStoragePolicy[];
+  continuousAggregates: DatabaseStorageContinuousAggregate[];
+  recommendations: DatabaseStorageRecommendation[];
+}

@@ -44,6 +44,10 @@ import {
 } from "./features/project-todos/index.js";
 
 import {
+  registerDatabaseStorageFeature
+} from "./features/database-storage/index.js";
+
+import {
   registerAuthFeature
 } from "./features/auth/index.js";
 import {
@@ -1122,6 +1126,13 @@ await registerMetricRoutingFeature(
 );
 
 await registerProjectTodoFeature(
+  app,
+  {
+    pool
+  }
+);
+
+await registerDatabaseStorageFeature(
   app,
   {
     pool

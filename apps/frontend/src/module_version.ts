@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.115.1";
+export const MODULE_VERSION = "1.116.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.116.0": {
+    releasedAt: "2026-10-04T02:43:28Z",
+    patch: "PR-329-database-storage-reporting-v1.patch",
+    changes: [
+      { type: "added", description: "Add Admin Database Storage & Retention dashboard with read-only storage summary, top consumers, Timescale chunks, indexes, retention policies and recommendations" }
+    ]
+  },
   "1.115.1": {
     releasedAt: "2026-10-02T00:33:17Z",
     patch: "PR-324-proxmox-identity-integrity.patch",
