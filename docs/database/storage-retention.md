@@ -793,7 +793,7 @@ Status: IMPLEMENTED ON DEV — acceptance tracking
 
 ## DB-2 — Storage Optimization
 
-Status: DEV ACCEPTED — DIT validation pending
+Status: ACCEPTED — DEV + DIT
 
 Measured DEV results, event-table prototypes and the physical-space runbook are
 recorded in `docs/database/storage-retention-db2-dev-results.md`.

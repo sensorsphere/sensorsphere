@@ -450,3 +450,56 @@ The production gateway/routing event tables remain unchanged normal PostgreSQL
 tables at this stage. Their conversion to Timescale hypertables requires a
 dedicated migration/swap change because the primary key must become
 (occurred_at, id) and ingestion continuity must be protected.
+
+
+## 12. DIT acceptance
+
+DIT was protected by a fresh verified Recovery Point before the DB-2 update:
+
+    pre-update backup
+      backupId        20261004T185451Z-49c9c8ef
+      status          VERIFIED
+      size            289,523 bytes
+      duration        688 ms
+
+DIT was then updated from the published immutable Stack Release bundle:
+
+    Stack       2026.10.04.2
+    API         1.68.0
+    Frontend    1.119.0
+    Migrations  84
+    Backup      0.1.0
+
+Migration level 84 is applied and all three Timescale compression policies are
+present with a one-hour schedule and a seven-day compression threshold.
+
+The DIT instance currently has zero chunks in observations, BLE observations and
+measurements, so there was no historical data to compress. The migration/policy
+integration is nevertheless present and the real compression behavior was
+validated on DEV.
+
+DIT health after the update:
+
+    timescaledb  healthy
+    api          healthy
+    frontend     healthy
+    nginx        healthy
+    ingestion    running
+
+The Database Storage Admin endpoint correctly remains protected when accessed
+without an authenticated DIT Admin session and returned HTTP 401.
+
+A post-update Recovery Point was then created and verified:
+
+    post-update backup
+      backupId        20261004T185732Z-8d7f1ae9
+      status          VERIFIED
+      size            292,957 bytes
+      duration        753 ms
+
+Its manifest reports Stack 2026.10.04.2, API 1.68.0, Frontend 1.119.0,
+Migrations 84, Backup 0.1.0, PostgreSQL 17.5 and TimescaleDB 2.21.3.
+
+DB-2 is therefore accepted on DEV and DIT.
+
+TEST1 was not modified during DB-2 acceptance.
