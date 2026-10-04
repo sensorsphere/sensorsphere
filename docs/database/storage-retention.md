@@ -270,7 +270,7 @@ Display at minimum:
 - latest verified backup size;
 - storage warning budget;
 - storage critical budget;
-- estimated size in 30/90 days from observed trend.
+- estimated size in 30/90/180/365 days from observed trend.
 
 Example:
 
@@ -729,7 +729,7 @@ An administrator must be able to answer, without direct SQL:
 5. How long is each data family retained?
 6. Which Timescale chunks consume the space?
 7. Is compression active?
-8. What will the database size likely be in 30/90 days?
+8. What will the database size likely be in 30/90 days, 6 months and 1 year?
 9. What can be optimized without losing data?
 10. What data would be lost before I approve a retention change?
 11. Is a recent verified backup available before a destructive action?
@@ -761,7 +761,7 @@ Status: IMPLEMENTED ON DEV — acceptance tracking
 - [x] DBST-012 — Add storage snapshot persistence.
 - [x] DBST-013 — Add bounded retention for storage snapshots.
 - [x] DBST-014 — Calculate 24h/7d/30d growth.
-- [x] DBST-015 — Calculate simple 30/90-day projections.
+- [x] DBST-015 — Calculate simple 30/90-day plus 6-month/1-year projections.
 - [x] DBST-016 — Add storage warning/critical budget configuration.
 - [x] DBST-017 — Generate non-destructive recommendation objects.
 - [ ] DBST-018 — Expose latest verified backup size/age as safety context.

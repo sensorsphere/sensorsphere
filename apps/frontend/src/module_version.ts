@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.117.0";
+export const MODULE_VERSION = "1.118.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.118.0": {
+    releasedAt: "2026-10-04T16:20:32Z",
+    patch: "PR-331-database-storage-long-term-projections-v1.patch",
+    changes: [
+      { type: "added", description: "Display database storage projections at 6 months and 1 year in summary and Growth views" }
+    ]
+  },
   "1.117.0": {
     releasedAt: "2026-10-04T02:58:09Z",
     patch: "PR-330-database-storage-history-budgets-v1.patch",

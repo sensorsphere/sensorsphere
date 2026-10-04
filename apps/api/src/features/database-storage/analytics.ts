@@ -27,6 +27,8 @@ export interface StorageAnalytics {
   projection: {
     bytes30d: number | null;
     bytes90d: number | null;
+    bytes180d: number | null;
+    bytes365d: number | null;
   };
   budget: StorageBudget;
 }
@@ -162,7 +164,15 @@ export function calculateStorageAnalytics(
       bytes90d:
         nonNegativeDaily === null
           ? null
-          : Math.round(currentBytes + nonNegativeDaily * 90)
+          : Math.round(currentBytes + nonNegativeDaily * 90),
+      bytes180d:
+        nonNegativeDaily === null
+          ? null
+          : Math.round(currentBytes + nonNegativeDaily * 180),
+      bytes365d:
+        nonNegativeDaily === null
+          ? null
+          : Math.round(currentBytes + nonNegativeDaily * 365)
     },
     budget
   };

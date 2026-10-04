@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.66.0";
+export const MODULE_VERSION = "1.67.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.67.0": {
+    releasedAt: "2026-10-04T16:20:32Z",
+    patch: "PR-331-database-storage-long-term-projections-v1.patch",
+    changes: [
+      { type: "added", description: "Extend database storage projections with 6-month and 1-year estimates using the measured average daily growth rate" }
+    ]
+  },
   "1.66.0": {
     releasedAt: "2026-10-04T02:58:09Z",
     patch: "PR-330-database-storage-history-budgets-v1.patch",

@@ -42,6 +42,8 @@ test("calculates growth from snapshots at or before each requested window", () =
   assert.ok(result.growth.averageDailyBytes !== null);
   assert.ok(result.projection.bytes30d !== null);
   assert.ok(result.projection.bytes90d !== null);
+  assert.ok(result.projection.bytes180d !== null);
+  assert.ok(result.projection.bytes365d !== null);
 });
 
 test("does not project growth from less than twelve hours of history", () => {
@@ -54,6 +56,8 @@ test("does not project growth from less than twelve hours of history", () => {
   assert.equal(result.growth.averageDailyBytes, null);
   assert.equal(result.projection.bytes30d, null);
   assert.equal(result.projection.bytes90d, null);
+  assert.equal(result.projection.bytes180d, null);
+  assert.equal(result.projection.bytes365d, null);
 });
 
 test("calculates storage budget states and validates ordering", () => {

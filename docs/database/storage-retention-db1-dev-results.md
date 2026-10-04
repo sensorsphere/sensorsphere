@@ -207,7 +207,7 @@ Includes:
 - current database/data/index summary;
 - relation/hypertable/chunk counts;
 - 24h/7d/30d growth cards;
-- 30d/90d projection cards;
+- 30d/90d/6-month/1-year projection cards;
 - storage-budget status;
 - recommendations;
 - Top consumers tab;

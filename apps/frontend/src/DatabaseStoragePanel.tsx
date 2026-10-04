@@ -211,7 +211,7 @@ export function DatabaseStoragePanel() {
             </Card>
           </SimpleGrid>
 
-          <SimpleGrid cols={{ base: 2, md: 3, lg: 6 }}>
+          <SimpleGrid cols={{ base: 2, md: 4, lg: 4 }}>
             <Card withBorder padding="sm">
               <Text size="xs" c="dimmed">Growth · 24h</Text>
               <Text fw={700}>{formatDeltaBytes(report.analytics.growth.bytes24h)}</Text>
@@ -238,6 +238,22 @@ export function DatabaseStoragePanel() {
                 {report.analytics.projection.bytes90d === null
                   ? "Collecting history"
                   : formatBytes(report.analytics.projection.bytes90d)}
+              </Text>
+            </Card>
+            <Card withBorder padding="sm">
+              <Text size="xs" c="dimmed">Projection · 6 months</Text>
+              <Text fw={700}>
+                {report.analytics.projection.bytes180d === null
+                  ? "Collecting history"
+                  : formatBytes(report.analytics.projection.bytes180d)}
+              </Text>
+            </Card>
+            <Card withBorder padding="sm">
+              <Text size="xs" c="dimmed">Projection · 1 year</Text>
+              <Text fw={700}>
+                {report.analytics.projection.bytes365d === null
+                  ? "Collecting history"
+                  : formatBytes(report.analytics.projection.bytes365d)}
               </Text>
             </Card>
             <Card
@@ -424,7 +440,7 @@ export function DatabaseStoragePanel() {
                     }}
                   />
                 </Card>
-                <SimpleGrid cols={{ base: 1, md: 3 }}>
+                <SimpleGrid cols={{ base: 1, md: 3, lg: 5 }}>
                   <Card withBorder>
                     <Text size="xs" c="dimmed">Average daily growth</Text>
                     <Text fw={700}>
@@ -445,6 +461,22 @@ export function DatabaseStoragePanel() {
                       {report.analytics.projection.bytes90d === null
                         ? "Collecting history"
                         : formatBytes(report.analytics.projection.bytes90d)}
+                    </Text>
+                  </Card>
+                  <Card withBorder>
+                    <Text size="xs" c="dimmed">Projected size in 6 months</Text>
+                    <Text fw={700}>
+                      {report.analytics.projection.bytes180d === null
+                        ? "Collecting history"
+                        : formatBytes(report.analytics.projection.bytes180d)}
+                    </Text>
+                  </Card>
+                  <Card withBorder>
+                    <Text size="xs" c="dimmed">Projected size in 1 year</Text>
+                    <Text fw={700}>
+                      {report.analytics.projection.bytes365d === null
+                        ? "Collecting history"
+                        : formatBytes(report.analytics.projection.bytes365d)}
                     </Text>
                   </Card>
                 </SimpleGrid>

@@ -1576,6 +1576,8 @@ export interface DatabaseStorageReport {
     projection: {
       bytes30d: number | null;
       bytes90d: number | null;
+      bytes180d: number | null;
+      bytes365d: number | null;
     };
     budget: {
       warningBytes: number | null;
