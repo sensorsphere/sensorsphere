@@ -793,7 +793,7 @@ Status: IMPLEMENTED ON DEV — acceptance tracking
 
 ## DB-2 — Storage Optimization
 
-Status: IN PROGRESS — DEV rollout / acceptance
+Status: DEV ACCEPTED — DIT validation pending
 
 Measured DEV results, event-table prototypes and the physical-space runbook are
 recorded in `docs/database/storage-retention-db2-dev-results.md`.
@@ -810,7 +810,7 @@ recorded in `docs/database/storage-retention-db2-dev-results.md`.
 - [x] DBST-109 — Validate 48h event retention using chunk/partition drop.
 - [x] DBST-110 — Compare DELETE vs chunk-drop vacuum/bloat behavior.
 - [x] DBST-111 — Define safe physical-space reclamation runbook.
-- [ ] DBST-112 — Add and validate optimization recommendations in dashboard.
+- [x] DBST-112 — Add and validate optimization recommendations in dashboard.
 
 ## DB-3 — Retention Management
 

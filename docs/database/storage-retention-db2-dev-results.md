@@ -371,3 +371,82 @@ each compression job once, then verify:
 
 DIT should only receive DB-2 after this DEV acceptance. TEST1 remains untouched
 unless explicitly authorized.
+
+
+## 11. Live DEV acceptance
+
+Migration 084 was applied to the real DEV database only after creating and
+verifying a fresh Backup V2 Recovery Point:
+
+    pre-compression backup
+      backupId        20261004T184544Z-111b4f4d
+      status          VERIFIED
+      size            135,487,953 bytes
+      duration        35,886 ms
+
+The three compression policies were created as jobs 1004, 1005 and 1006.
+Their first automatic runs all completed successfully with zero failures:
+
+    observations                    15.23 s
+    gateway_device_ble_observations 11.71 s
+    measurements                     3.38 s
+
+Real DEV chunk state after the first policy runs:
+
+    observations                    7 / 9 chunks compressed
+    gateway_device_ble_observations 3 / 5 chunks compressed
+    measurements                    7 / 9 chunks compressed
+
+The most recent pre-DB-2 storage snapshot recorded approximately
+3,811,798,163 database bytes. After compression the live report returned
+approximately 2,113,342,611 bytes. Because normal ingestion continued between
+the two measurements, this is treated as an approximate real-world reduction
+of 44–45%, not a laboratory ratio.
+
+Live hypertable totals changed approximately as follows:
+
+| Hypertable | Before | After first policy run |
+|---|---:|---:|
+| gateway_device_ble_observations | ~1137 MB | ~410 MB |
+| observations | ~1033 MB | ~263 MB |
+| measurements | ~174 MB | ~45 MB |
+
+A second real Backup V2 Recovery Point was then created:
+
+    post-compression backup
+      backupId        20261004T185124Z-42f037ba
+      status          VERIFIED
+      size            104,092,494 bytes
+      duration        17,114 ms
+
+Compared with the immediately preceding safety backup, this run was
+approximately 23% smaller and approximately 52% faster.
+
+The post-compression backup manifest correctly reports:
+
+    Stack       2026.10.04.2
+    API         1.68.0
+    Frontend    1.119.0
+    Migrations  84
+    Backup      0.1.0
+    PostgreSQL  17.5
+    TimescaleDB 2.21.3
+
+DEV runtime health remained green for API, frontend, nginx and TimescaleDB,
+while ingestion continued running.
+
+The Database Storage & Retention API correctly reports compressed physical
+chunk sizes and emits DB-2 recommendations including:
+
+- compression-policy-active;
+- indexes-larger-than-data;
+- event-row-delete-retention;
+- dead-tuples;
+- index-observation-window-short.
+
+DBST-112 is therefore accepted on DEV.
+
+The production gateway/routing event tables remain unchanged normal PostgreSQL
+tables at this stage. Their conversion to Timescale hypertables requires a
+dedicated migration/swap change because the primary key must become
+(occurred_at, id) and ingestion continuity must be protected.
