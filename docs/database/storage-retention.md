@@ -814,20 +814,39 @@ recorded in `docs/database/storage-retention-db2-dev-results.md`.
 
 ## DB-3 — Retention Management
 
-Status: PLANNED
+Status: ACCEPTED — DEV + DIT (2026-10-05)
 
-- [ ] DBST-200 — Define supported per-data-family retention settings.
-- [ ] DBST-201 — Add retention configuration validation.
-- [ ] DBST-202 — Implement retention dry-run/preview.
-- [ ] DBST-203 — Estimate affected time range/chunks/rows/bytes.
-- [ ] DBST-204 — Add LOW RISK / REVIEW REQUIRED / DESTRUCTIVE classification.
-- [ ] DBST-205 — Add retention-change confirmation UI.
-- [ ] DBST-206 — Evaluate recent-verified-backup safety gate.
-- [ ] DBST-207 — Implement explicit retention apply operation.
-- [ ] DBST-208 — Add audit log of retention changes.
-- [ ] DBST-209 — Test interruption/failure behavior.
-- [ ] DBST-210 — Validate no cross-instance retention operation is possible.
-- [ ] DBST-211 — Document physical versus logical space after retention.
+Validation details:
+`docs/database/storage-retention-db3-dev-dit-results.md`.
+
+- [x] DBST-200 — Define supported per-data-family retention settings.
+- [x] DBST-201 — Add retention configuration validation.
+- [x] DBST-202 — Implement retention dry-run/preview.
+- [x] DBST-203 — Estimate affected time range/chunks/rows/bytes.
+- [x] DBST-204 — Add LOW RISK / REVIEW REQUIRED / DESTRUCTIVE classification.
+- [x] DBST-205 — Add retention-change confirmation UI.
+- [x] DBST-206 — Evaluate recent-verified-backup safety gate.
+- [x] DBST-207 — Implement explicit retention apply operation.
+- [x] DBST-208 — Add audit log of retention changes.
+- [x] DBST-209 — Test interruption/failure behavior.
+- [x] DBST-210 — Validate no cross-instance retention operation is possible.
+- [x] DBST-211 — Document physical versus logical space after retention.
+
+DB-3 operational semantics:
+
+- shortening a retention window is `DESTRUCTIVE` and requires a recent
+  successful Backup V2 Recovery Point;
+- extending a window or switching to Unlimited is `REVIEW_REQUIRED`;
+- apply requires the exact confirmation text `APPLY RETENTION`;
+- apply re-checks the current effective policy and rejects stale previews;
+- Timescale retention reclaims physical storage when complete chunks are
+  dropped;
+- ordinary PostgreSQL DELETE retention makes pages reusable but normally does
+  not shrink the table file immediately;
+- diagnostic-table DELETE work remains asynchronous in the ingestion service,
+  not inside the Admin HTTP request;
+- the API cannot target another SensorSphere instance, arbitrary relation,
+  database DSN or filesystem path.
 
 ## DB-4 — Historical Aggregation & Tiered Retention
 

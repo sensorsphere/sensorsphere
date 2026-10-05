@@ -278,6 +278,7 @@ snapshot_bundle() {
 
   [[ -d "$INSTALL_DIR/config" ]] && cp -a "$INSTALL_DIR/config" "$destination/config"
   [[ -d "$INSTALL_DIR/init" ]] && cp -a "$INSTALL_DIR/init" "$destination/init"
+  return 0
 }
 
 restore_bundle() {

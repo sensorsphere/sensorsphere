@@ -22,3 +22,16 @@ mosquitto.db
 infrastructure/mosquitto/data/
 infrastructure/mosquitto/log/
 infrastructure/timescaledb/data/
+
+# Distribution installer state when a source checkout is also used as an
+# installation directory. These files may include previous environment values
+# and must never be committed.
+/.env.previous
+/.env.failed
+/.stack-release.yaml
+/.stack-release.previous.yaml
+/.bundle.previous/
+/.bundle.failed/
+/install.sh
+/config/
+/init/
