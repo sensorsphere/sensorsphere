@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "ingestion-service";
-export const MODULE_VERSION = "1.0.1";
+export const MODULE_VERSION = "1.0.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.0.2": {
+    releasedAt: "2026-10-05T22:17:23Z",
+    patch: "PR-333-database-retention-management-v1.patch",
+    changes: [
+      { type: "changed", description: "Read gateway traffic and metric routing retention from persistent DB-3 settings before every hourly retention pass" },
+      { type: "added", description: "Support unlimited diagnostic-event retention as an explicit no-purge policy" }
+    ]
+  },
   "1.0.1": {
     releasedAt: "2026-09-29T06:30:25+02:00",
     patch: "PR-287-auth-ux-device-agent-recreate-v1.patch",

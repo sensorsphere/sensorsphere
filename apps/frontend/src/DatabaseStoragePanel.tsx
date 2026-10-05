@@ -4,22 +4,38 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   Group,
   Modal,
+  NumberInput,
   ScrollArea,
   SimpleGrid,
   Stack,
   Table,
   Tabs,
   Text,
+  TextInput,
   Title
 } from "@mantine/core";
-import { useQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery
+} from "@tanstack/react-query";
 import ReactECharts from "echarts-for-react";
 
-import { getDatabaseStorageReport } from "./api";
+import {
+  applyDatabaseRetention,
+  getDatabaseRetentionAudit,
+  getDatabaseRetentionState,
+  getDatabaseStorageReport,
+  previewDatabaseRetention
+} from "./api";
 import { NavigationIcon } from "./NavigationIcon";
 import type {
+  DatabaseRetentionPolicy,
+  DatabaseRetentionPolicyKey,
+  DatabaseRetentionPreview,
+  DatabaseRetentionRisk,
   DatabaseStoragePolicy,
   DatabaseStorageRecommendation,
   DatabaseStorageRelation
@@ -93,14 +109,104 @@ function relationTypeColor(kind: DatabaseStorageRelation["kind"]): string {
   return "gray";
 }
 
+function retentionRiskColor(risk: DatabaseRetentionRisk): string {
+  if (risk === "DESTRUCTIVE") return "red";
+  if (risk === "REVIEW_REQUIRED") return "orange";
+  return "green";
+}
+
+function retentionUnitSeconds(
+  policy: DatabaseRetentionPolicy
+): number {
+  return policy.preferredUnit === "days" ? 86400 : 3600;
+}
+
+function formatRetentionSeconds(value: number | null): string {
+  if (value === null) return "Unlimited";
+  if (value % 86400 === 0) {
+    const days = value / 86400;
+    return days === 1 ? "1 day" : `${days} days`;
+  }
+  if (value % 3600 === 0) {
+    const hours = value / 3600;
+    return hours === 1 ? "1 hour" : `${hours} hours`;
+  }
+  return `${value} seconds`;
+}
+
+type RetentionDraft = {
+  value: number;
+  unlimited: boolean;
+};
+
 export function DatabaseStoragePanel() {
   const reportQuery = useQuery({
     queryKey: ["database-storage-report"],
     queryFn: getDatabaseStorageReport,
     staleTime: 30_000
   });
+  const retentionQuery = useQuery({
+    queryKey: ["database-retention-state"],
+    queryFn: getDatabaseRetentionState,
+    staleTime: 15_000
+  });
+  const retentionAuditQuery = useQuery({
+    queryKey: ["database-retention-audit"],
+    queryFn: () => getDatabaseRetentionAudit(50),
+    staleTime: 15_000
+  });
   const [selectedRelationName, setSelectedRelationName] =
     React.useState<string | null>(null);
+  const [retentionDrafts, setRetentionDrafts] =
+    React.useState<Partial<Record<DatabaseRetentionPolicyKey, RetentionDraft>>>({});
+  const [retentionPreview, setRetentionPreview] =
+    React.useState<DatabaseRetentionPreview | null>(null);
+  const [retentionConfirmation, setRetentionConfirmation] =
+    React.useState("");
+
+  const previewMutation = useMutation({
+    mutationFn: previewDatabaseRetention,
+    onSuccess: preview => {
+      setRetentionPreview(preview);
+      setRetentionConfirmation("");
+    }
+  });
+
+  const applyMutation = useMutation({
+    mutationFn: applyDatabaseRetention,
+    onSuccess: async () => {
+      setRetentionPreview(null);
+      setRetentionConfirmation("");
+      setRetentionDrafts({});
+      await Promise.all([
+        retentionQuery.refetch(),
+        retentionAuditQuery.refetch(),
+        reportQuery.refetch()
+      ]);
+    }
+  });
+
+  React.useEffect(() => {
+    const policies = retentionQuery.data?.policies;
+    if (!policies) return;
+
+    setRetentionDrafts(previous => {
+      const next = { ...previous };
+      for (const policy of policies) {
+        if (next[policy.key]) continue;
+        const unitSeconds = retentionUnitSeconds(policy);
+        const initialSeconds =
+          policy.actualSeconds ??
+          policy.defaultSeconds ??
+          policy.minimumSeconds;
+        next[policy.key] = {
+          value: Math.max(1, Math.round(initialSeconds / unitSeconds)),
+          unlimited: policy.actualSeconds === null
+        };
+      }
+      return next;
+    });
+  }, [retentionQuery.data?.generatedAt]);
 
   const report = reportQuery.data;
   const selectedRelation =
@@ -112,6 +218,40 @@ export function DatabaseStoragePanel() {
   const selectedIndexes =
     report?.indexes.filter(index => index.logicalRelation === selectedRelationName)
     ?? [];
+
+  const setRetentionDraft = (
+    policyKey: DatabaseRetentionPolicyKey,
+    patch: Partial<RetentionDraft>
+  ) => {
+    setRetentionDrafts(previous => ({
+      ...previous,
+      [policyKey]: {
+        value: previous[policyKey]?.value ?? 1,
+        unlimited: previous[policyKey]?.unlimited ?? false,
+        ...patch
+      }
+    }));
+  };
+
+  const requestedRetentionSeconds = (
+    policy: DatabaseRetentionPolicy
+  ): number | null => {
+    const draft = retentionDrafts[policy.key];
+    if (!draft) return policy.actualSeconds;
+    if (draft.unlimited) return null;
+    return Math.round(
+      draft.value * retentionUnitSeconds(policy)
+    );
+  };
+
+  const openRetentionPreview = (
+    policy: DatabaseRetentionPolicy
+  ) => {
+    previewMutation.mutate({
+      policyKey: policy.key,
+      retentionSeconds: requestedRetentionSeconds(policy)
+    });
+  };
 
   const chartPoints = report
     ? [
@@ -137,17 +277,25 @@ export function DatabaseStoragePanel() {
           <Group gap="xs">
             <NavigationIcon page="database-storage" size={24} />
             <Title order={2}>Database Storage & Retention</Title>
-            <Badge color="green" variant="light">READ ONLY</Badge>
+            <Badge color="blue" variant="light">REPORTING + RETENTION CONTROL</Badge>
           </Group>
           <Text c="dimmed">
-            Inspect database size, Timescale chunks, indexes and effective retention without changing data.
+            Inspect storage and safely preview retention changes. Only an explicit confirmed Apply can modify retention policy.
           </Text>
         </div>
         <Stack gap={4} align="flex-end">
           <Button
             variant="light"
-            loading={reportQuery.isFetching}
-            onClick={() => void reportQuery.refetch()}
+            loading={
+              reportQuery.isFetching ||
+              retentionQuery.isFetching ||
+              retentionAuditQuery.isFetching
+            }
+            onClick={() => {
+              void reportQuery.refetch();
+              void retentionQuery.refetch();
+              void retentionAuditQuery.refetch();
+            }}
           >
             Refresh
           </Button>
@@ -613,56 +761,393 @@ export function DatabaseStoragePanel() {
 
             <Tabs.Panel value="retention" pt="md">
               <Stack gap="md">
-                <Alert color="green" title="Diagnostic only">
-                  These policies are reported from the current database/runtime. This page cannot change or apply retention.
+                <Alert
+                  color={retentionQuery.data?.backupSafety.ok ? "green" : "orange"}
+                  title="Destructive-change backup gate"
+                >
+                  {retentionQuery.data?.backupSafety.ok
+                    ? `Recovery Point ${retentionQuery.data.backupSafety.backupId ?? "available"} · ${retentionQuery.data.backupSafety.ageHours?.toFixed(1) ?? "?"}h old. Destructive retention changes are allowed up to ${retentionQuery.data.backupSafety.maxAgeHours}h.`
+                    : retentionQuery.data?.backupSafety.reason
+                      ?? "Checking Backup V2 state…"}
                 </Alert>
+
+                {retentionQuery.isError && (
+                  <Alert color="red" title="Retention management unavailable">
+                    {retentionQuery.error instanceof Error
+                      ? retentionQuery.error.message
+                      : "Unable to read retention configuration."}
+                  </Alert>
+                )}
+
+                {previewMutation.isError && (
+                  <Alert color="red" title="Preview failed">
+                    {previewMutation.error instanceof Error
+                      ? previewMutation.error.message
+                      : "Unable to preview retention."}
+                  </Alert>
+                )}
+
+                <SimpleGrid cols={{ base: 1, lg: 2 }}>
+                  {retentionQuery.data?.policies.map(policy => {
+                    const draft = retentionDrafts[policy.key];
+                    const unitSeconds = retentionUnitSeconds(policy);
+                    const minimum = Math.ceil(policy.minimumSeconds / unitSeconds);
+                    const maximum = Math.floor(policy.maximumSeconds / unitSeconds);
+
+                    return (
+                      <Card key={policy.key} withBorder>
+                        <Stack gap="sm">
+                          <Group justify="space-between" align="start">
+                            <div>
+                              <Text fw={700}>{policy.label}</Text>
+                              <Text size="xs" c="dimmed">
+                                {policy.mechanism === "timescale"
+                                  ? "Timescale retention policy"
+                                  : "Ingestion-service retention"}
+                              </Text>
+                            </div>
+                            <Group gap={6}>
+                              <Badge
+                                color={policy.inSync ? "green" : "orange"}
+                                variant="light"
+                              >
+                                {policy.inSync ? "IN SYNC" : "DRIFT"}
+                              </Badge>
+                              <Badge variant="outline">
+                                {formatRetentionSeconds(policy.actualSeconds)}
+                              </Badge>
+                            </Group>
+                          </Group>
+
+                          <Text size="sm">
+                            Effective retention: <strong>{formatRetentionSeconds(policy.actualSeconds)}</strong>
+                            {policy.configuredSeconds !== policy.actualSeconds
+                              ? ` · configured ${formatRetentionSeconds(policy.configuredSeconds)}`
+                              : ""}
+                          </Text>
+
+                          <Group align="end">
+                            <NumberInput
+                              label={policy.preferredUnit === "days" ? "Days" : "Hours"}
+                              value={draft?.value ?? minimum}
+                              min={minimum}
+                              max={maximum}
+                              step={1}
+                              allowDecimal={false}
+                              disabled={draft?.unlimited ?? false}
+                              onChange={value =>
+                                setRetentionDraft(policy.key, {
+                                  value: typeof value === "number"
+                                    ? value
+                                    : minimum
+                                })
+                              }
+                              style={{ width: 150 }}
+                            />
+                            <Checkbox
+                              label="Unlimited"
+                              checked={draft?.unlimited ?? false}
+                              onChange={event =>
+                                setRetentionDraft(policy.key, {
+                                  unlimited: event.currentTarget.checked
+                                })
+                              }
+                            />
+                            <Button
+                              variant="light"
+                              loading={
+                                previewMutation.isPending &&
+                                previewMutation.variables?.policyKey === policy.key
+                              }
+                              onClick={() => openRetentionPreview(policy)}
+                            >
+                              Preview
+                            </Button>
+                          </Group>
+
+                          <Text size="xs" c="dimmed">
+                            Allowed: {minimum}–{maximum} {policy.preferredUnit}
+                            {policy.allowUnlimited ? " or Unlimited" : ""}.
+                          </Text>
+                          {policy.notes.map(note => (
+                            <Text key={note} size="xs" c="dimmed">
+                              {note}
+                            </Text>
+                          ))}
+                        </Stack>
+                      </Card>
+                    );
+                  })}
+                </SimpleGrid>
+
+                <Title order={4}>Runtime retention jobs</Title>
                 <Card withBorder p={0}>
-                  <Table striped highlightOnHover verticalSpacing="xs">
-                    <Table.Thead>
-                      <Table.Tr>
-                        <Table.Th>Kind</Table.Th>
-                        <Table.Th>Relation</Table.Th>
-                        <Table.Th>Policy/window</Table.Th>
-                        <Table.Th>Schedule</Table.Th>
-                        <Table.Th>Job</Table.Th>
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                      {report.policies.map(policy => (
-                        <Table.Tr key={policy.jobId}>
-                          <Table.Td>
-                            <Badge variant="light">{policy.kind}</Badge>
-                          </Table.Td>
-                          <Table.Td>
-                            {policy.relationName
-                              ? `${policy.relationSchema ?? "public"}.${policy.relationName}`
-                              : "Internal / aggregate"}
-                          </Table.Td>
-                          <Table.Td>{retentionLabel(policy)}</Table.Td>
-                          <Table.Td>{policy.scheduleInterval}</Table.Td>
-                          <Table.Td>{policy.jobId}</Table.Td>
+                  <ScrollArea>
+                    <Table striped highlightOnHover verticalSpacing="xs">
+                      <Table.Thead>
+                        <Table.Tr>
+                          <Table.Th>Kind</Table.Th>
+                          <Table.Th>Relation</Table.Th>
+                          <Table.Th>Policy/window</Table.Th>
+                          <Table.Th>Schedule</Table.Th>
+                          <Table.Th>Job</Table.Th>
                         </Table.Tr>
-                      ))}
-                      <Table.Tr>
-                        <Table.Td><Badge variant="light">application retention</Badge></Table.Td>
-                        <Table.Td>public.gateway_traffic_events</Table.Td>
-                        <Table.Td>48 hours</Table.Td>
-                        <Table.Td>hourly</Table.Td>
-                        <Table.Td>ingestion service</Table.Td>
-                      </Table.Tr>
-                      <Table.Tr>
-                        <Table.Td><Badge variant="light">application retention</Badge></Table.Td>
-                        <Table.Td>public.metric_routing_events</Table.Td>
-                        <Table.Td>48 hours</Table.Td>
-                        <Table.Td>hourly</Table.Td>
-                        <Table.Td>ingestion service</Table.Td>
-                      </Table.Tr>
-                    </Table.Tbody>
-                  </Table>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {report.policies
+                          .filter(policy =>
+                            policy.kind === "retention" ||
+                            policy.kind === "compression"
+                          )
+                          .map(policy => (
+                            <Table.Tr key={policy.jobId}>
+                              <Table.Td>
+                                <Badge variant="light">{policy.kind}</Badge>
+                              </Table.Td>
+                              <Table.Td>
+                                {policy.relationName
+                                  ? `${policy.relationSchema ?? "public"}.${policy.relationName}`
+                                  : "Internal / aggregate"}
+                              </Table.Td>
+                              <Table.Td>{retentionLabel(policy)}</Table.Td>
+                              <Table.Td>{policy.scheduleInterval}</Table.Td>
+                              <Table.Td>{policy.jobId}</Table.Td>
+                            </Table.Tr>
+                          ))}
+                      </Table.Tbody>
+                    </Table>
+                  </ScrollArea>
+                </Card>
+
+                <Title order={4}>Retention audit</Title>
+                <Card withBorder p={0}>
+                  <ScrollArea>
+                    <Table striped highlightOnHover verticalSpacing="xs" style={{ minWidth: 900 }}>
+                      <Table.Thead>
+                        <Table.Tr>
+                          <Table.Th>Time</Table.Th>
+                          <Table.Th>Policy</Table.Th>
+                          <Table.Th>Change</Table.Th>
+                          <Table.Th>Risk</Table.Th>
+                          <Table.Th>Status</Table.Th>
+                          <Table.Th>Actor</Table.Th>
+                          <Table.Th>Error</Table.Th>
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {(retentionAuditQuery.data ?? []).map(entry => (
+                          <Table.Tr key={entry.id}>
+                            <Table.Td>{formatTimestamp(entry.createdAt)}</Table.Td>
+                            <Table.Td>{entry.policyKey}</Table.Td>
+                            <Table.Td>
+                              {formatRetentionSeconds(entry.previousRetentionSeconds)}
+                              {" → "}
+                              {formatRetentionSeconds(entry.requestedRetentionSeconds)}
+                            </Table.Td>
+                            <Table.Td>
+                              <Badge color={retentionRiskColor(entry.risk)} variant="light">
+                                {entry.risk}
+                              </Badge>
+                            </Table.Td>
+                            <Table.Td>
+                              <Badge
+                                color={entry.status === "APPLIED" ? "green" : "red"}
+                                variant="light"
+                              >
+                                {entry.status}
+                              </Badge>
+                            </Table.Td>
+                            <Table.Td>
+                              {entry.actorRole ?? "system"}
+                              {entry.actorUserId ? ` · ${entry.actorUserId}` : ""}
+                            </Table.Td>
+                            <Table.Td>{entry.error ?? "—"}</Table.Td>
+                          </Table.Tr>
+                        ))}
+                        {(retentionAuditQuery.data?.length ?? 0) === 0 && (
+                          <Table.Tr>
+                            <Table.Td colSpan={7}>
+                              <Text c="dimmed" ta="center">No retention changes recorded.</Text>
+                            </Table.Td>
+                          </Table.Tr>
+                        )}
+                      </Table.Tbody>
+                    </Table>
+                  </ScrollArea>
                 </Card>
               </Stack>
             </Tabs.Panel>
           </Tabs>
+
+          <Modal
+            opened={retentionPreview !== null}
+            onClose={() => {
+              if (!applyMutation.isPending) {
+                setRetentionPreview(null);
+                setRetentionConfirmation("");
+              }
+            }}
+            title={
+              retentionPreview
+                ? `Retention preview · ${retentionPreview.policy.label}`
+                : "Retention preview"
+            }
+            size="lg"
+            closeOnClickOutside={!applyMutation.isPending}
+            closeOnEscape={!applyMutation.isPending}
+          >
+            {retentionPreview && (
+              <Stack gap="md">
+                <Group justify="space-between">
+                  <Badge
+                    color={retentionRiskColor(retentionPreview.risk)}
+                    variant="filled"
+                  >
+                    {retentionPreview.risk}
+                  </Badge>
+                  <Text size="sm" c="dimmed">
+                    {retentionPreview.policy.mechanism === "timescale"
+                      ? "Timescale policy"
+                      : "Ingestion retention"}
+                  </Text>
+                </Group>
+
+                <SimpleGrid cols={{ base: 2, md: 3 }}>
+                  <Card withBorder padding="sm">
+                    <Text size="xs" c="dimmed">Current</Text>
+                    <Text fw={700}>
+                      {formatRetentionSeconds(retentionPreview.policy.actualSeconds)}
+                    </Text>
+                  </Card>
+                  <Card withBorder padding="sm">
+                    <Text size="xs" c="dimmed">Requested</Text>
+                    <Text fw={700}>
+                      {formatRetentionSeconds(retentionPreview.requestedSeconds)}
+                    </Text>
+                  </Card>
+                  <Card withBorder padding="sm">
+                    <Text size="xs" c="dimmed">Newly eligible rows</Text>
+                    <Text fw={700}>
+                      {new Intl.NumberFormat().format(retentionPreview.impact.eligibleRows)}
+                    </Text>
+                  </Card>
+                  <Card withBorder padding="sm">
+                    <Text size="xs" c="dimmed">Newly eligible chunks</Text>
+                    <Text fw={700}>{retentionPreview.impact.eligibleChunks}</Text>
+                  </Card>
+                  <Card withBorder padding="sm">
+                    <Text size="xs" c="dimmed">Allocated bytes affected</Text>
+                    <Text fw={700}>
+                      {formatBytes(retentionPreview.impact.estimatedAllocatedBytes)}
+                    </Text>
+                  </Card>
+                  <Card withBorder padding="sm">
+                    <Text size="xs" c="dimmed">Physical reclaim</Text>
+                    <Text fw={700}>
+                      {retentionPreview.impact.physicalReclaimExpected
+                        ? "Expected with chunk drop"
+                        : "Not immediate"}
+                    </Text>
+                  </Card>
+                </SimpleGrid>
+
+                {retentionPreview.impact.oldestAffectedAt && (
+                  <Alert color="orange" title="Affected historical range">
+                    {formatTimestamp(retentionPreview.impact.oldestAffectedAt)}
+                    {" → "}
+                    {formatTimestamp(retentionPreview.impact.newestAffectedAt)}
+                    {" · "}
+                    estimate method: {retentionPreview.impact.estimateMethod}
+                  </Alert>
+                )}
+
+                {retentionPreview.warnings.map(warning => (
+                  <Alert key={warning} color="orange" title="Review">
+                    {warning}
+                  </Alert>
+                ))}
+
+                {retentionPreview.risk === "DESTRUCTIVE" && (
+                  <Alert
+                    color={retentionPreview.backupSafety.ok ? "green" : "red"}
+                    title="Recovery Point safety gate"
+                  >
+                    {retentionPreview.backupSafety.ok
+                      ? `Verified Backup V2 create ${retentionPreview.backupSafety.backupId ?? ""} completed ${retentionPreview.backupSafety.ageHours?.toFixed(1) ?? "?"}h ago.`
+                      : retentionPreview.backupSafety.reason
+                        ?? "A recent verified Recovery Point is required."}
+                  </Alert>
+                )}
+
+                {!retentionPreview.changed && (
+                  <Alert color="blue" title="No change">
+                    The requested retention already matches the effective policy.
+                  </Alert>
+                )}
+
+                {retentionPreview.requiredConfirmation && (
+                  <TextInput
+                    label={
+                      `Type "${retentionPreview.requiredConfirmation}" to confirm`
+                    }
+                    value={retentionConfirmation}
+                    onChange={event =>
+                      setRetentionConfirmation(event.currentTarget.value)
+                    }
+                    disabled={applyMutation.isPending}
+                  />
+                )}
+
+                {applyMutation.isError && (
+                  <Alert color="red" title="Apply failed">
+                    {applyMutation.error instanceof Error
+                      ? applyMutation.error.message
+                      : "Unable to apply retention policy."}
+                  </Alert>
+                )}
+
+                <Group justify="flex-end">
+                  <Button
+                    variant="default"
+                    disabled={applyMutation.isPending}
+                    onClick={() => {
+                      setRetentionPreview(null);
+                      setRetentionConfirmation("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    color={
+                      retentionPreview.risk === "DESTRUCTIVE"
+                        ? "red"
+                        : retentionPreview.risk === "REVIEW_REQUIRED"
+                          ? "orange"
+                          : "green"
+                    }
+                    loading={applyMutation.isPending}
+                    disabled={
+                      !retentionPreview.canApply ||
+                      retentionPreview.requiredConfirmation === null ||
+                      retentionConfirmation !==
+                        retentionPreview.requiredConfirmation
+                    }
+                    onClick={() =>
+                      applyMutation.mutate({
+                        policyKey: retentionPreview.policy.key,
+                        retentionSeconds: retentionPreview.requestedSeconds,
+                        expectedCurrentSeconds:
+                          retentionPreview.policy.actualSeconds,
+                        confirmation: retentionConfirmation
+                      })
+                    }
+                  >
+                    Apply retention
+                  </Button>
+                </Group>
+              </Stack>
+            )}
+          </Modal>
 
           <Modal
             opened={selectedRelation !== null}

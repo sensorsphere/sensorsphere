@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.68.0";
+export const MODULE_VERSION = "1.69.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.69.0": {
+    releasedAt: "2026-10-05T22:17:23Z",
+    patch: "PR-333-database-retention-management-v1.patch",
+    changes: [
+      { type: "added", description: "Add DB-3 retention state, preview, explicit apply and audit endpoints with per-family validation and impact estimates" },
+      { type: "security", description: "Require a recent Backup V2 Recovery Point and typed confirmation before destructive retention reductions" },
+      { type: "changed", description: "Extend API database compatibility through migration level 85 for persistent retention configuration and audit" }
+    ]
+  },
   "1.68.0": {
     releasedAt: "2026-10-04T17:40:21Z",
     patch: "PR-332-database-storage-optimization-v1.patch",

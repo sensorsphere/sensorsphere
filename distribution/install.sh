@@ -247,6 +247,20 @@ prepare_bundle() {
   set_env "$INSTALL_DIR/.env" SENSORSPHERE_INSTALL_DIR "$INSTALL_DIR"
   set_env "$INSTALL_DIR/.env" SENSORSPHERE_COMPOSE_PROJECT "$compose_project"
 
+  # DB-3 exposes Backup V2 run-state metadata read-only to the API.
+  # Pre-create the bind-mount source as the installation owner so Docker never
+  # creates a root-owned backup-state directory on a fresh installation.
+  local data_root backup_state_root
+  data_root="$(get_env "$INSTALL_DIR/.env" DATA_ROOT)"
+  data_root="${data_root:-./data}"
+  backup_state_root="$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_BACKUP_STATE_ROOT)"
+  backup_state_root="${backup_state_root:-${data_root%/}/backup-state}"
+  if [[ "$backup_state_root" != /* ]]; then
+    backup_state_root="$INSTALL_DIR/${backup_state_root#./}"
+  fi
+  mkdir -p "$backup_state_root"
+  chmod 0700 "$backup_state_root"
+
   configure_and_validate_auth
 }
 

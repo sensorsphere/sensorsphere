@@ -88,7 +88,12 @@ import type {
   IdentityProvider,
   UserSummary,
   AuthAuditEntry,
-  DatabaseStorageReport
+  DatabaseStorageReport,
+  DatabaseRetentionState,
+  DatabaseRetentionPreview,
+  DatabaseRetentionApplyResult,
+  DatabaseRetentionAuditEntry,
+  DatabaseRetentionPolicyKey
 } from "./types";
 
 async function readJson<T>(
@@ -2316,6 +2321,74 @@ export async function getDatabaseStorageReport(): Promise<DatabaseStorageReport>
   return readJson<DatabaseStorageReport>(
     await fetch(
       "/api/v1/admin/database/storage",
+      {
+        cache: "no-store",
+        headers: devAuthHeaders()
+      }
+    )
+  );
+}
+
+export async function getDatabaseRetentionState():
+Promise<DatabaseRetentionState> {
+  return readJson<DatabaseRetentionState>(
+    await fetch(
+      "/api/v1/admin/database/storage/retention",
+      {
+        cache: "no-store",
+        headers: devAuthHeaders()
+      }
+    )
+  );
+}
+
+export async function previewDatabaseRetention(input: {
+  policyKey: DatabaseRetentionPolicyKey;
+  retentionSeconds: number | null;
+}): Promise<DatabaseRetentionPreview> {
+  return readJson<DatabaseRetentionPreview>(
+    await fetch(
+      "/api/v1/admin/database/storage/retention/preview",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...devAuthHeaders()
+        },
+        body: JSON.stringify(input)
+      }
+    )
+  );
+}
+
+export async function applyDatabaseRetention(input: {
+  policyKey: DatabaseRetentionPolicyKey;
+  retentionSeconds: number | null;
+  expectedCurrentSeconds: number | null;
+  confirmation: string;
+}): Promise<DatabaseRetentionApplyResult> {
+  return readJson<DatabaseRetentionApplyResult>(
+    await fetch(
+      "/api/v1/admin/database/storage/retention/apply",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...devAuthHeaders()
+        },
+        body: JSON.stringify(input)
+      }
+    )
+  );
+}
+
+export async function getDatabaseRetentionAudit(
+  limit = 100
+): Promise<DatabaseRetentionAuditEntry[]> {
+  return readJson<DatabaseRetentionAuditEntry[]>(
+    await fetch(
+      "/api/v1/admin/database/storage/retention/audit?limit=" +
+        encodeURIComponent(String(limit)),
       {
         cache: "no-store",
         headers: devAuthHeaders()

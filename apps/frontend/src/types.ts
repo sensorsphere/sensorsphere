@@ -1545,6 +1545,117 @@ export interface DatabaseStorageRecommendation {
   message: string;
 }
 
+export type DatabaseRetentionPolicyKey =
+  | "observations"
+  | "gateway_device_ble_observations"
+  | "measurements"
+  | "observation_hourly"
+  | "gateway_traffic_events"
+  | "metric_routing_events";
+
+export type DatabaseRetentionRisk =
+  | "LOW_RISK"
+  | "REVIEW_REQUIRED"
+  | "DESTRUCTIVE";
+
+export interface DatabaseRetentionPolicy {
+  key: DatabaseRetentionPolicyKey;
+  label: string;
+  relation: string;
+  mechanism: "timescale" | "application";
+  preferredUnit: "hours" | "days";
+  defaultSeconds: number | null;
+  minimumSeconds: number;
+  maximumSeconds: number;
+  allowUnlimited: boolean;
+  notes: string[];
+  configuredSeconds: number | null;
+  actualSeconds: number | null;
+  inSync: boolean;
+  updatedAt: string | null;
+  updatedByUserId: string | null;
+  updatedByRole: string | null;
+}
+
+export interface DatabaseRetentionBackupSafety {
+  required: boolean;
+  requiredFor?: "DESTRUCTIVE";
+  ok: boolean;
+  maxAgeHours: number;
+  statePath: string;
+  backupId: string | null;
+  completedAt: string | null;
+  ageHours: number | null;
+  reason: string | null;
+  verificationBasis: "successful-create" | null;
+}
+
+export interface DatabaseRetentionState {
+  generatedAt: string;
+  requiredConfirmation: string;
+  backupSafety: DatabaseRetentionBackupSafety;
+  policies: DatabaseRetentionPolicy[];
+}
+
+export interface DatabaseRetentionImpact {
+  eligibleRows: number;
+  eligibleChunks: number;
+  estimatedAllocatedBytes: number;
+  oldestAffectedAt: string | null;
+  newestAffectedAt: string | null;
+  physicalReclaimExpected: boolean;
+  estimateMethod:
+    | "chunk-metadata+exact-row-count"
+    | "exact-row-count"
+    | "none";
+}
+
+export interface DatabaseRetentionPreview {
+  generatedAt: string;
+  policy: DatabaseRetentionPolicy;
+  requestedSeconds: number | null;
+  risk: DatabaseRetentionRisk;
+  changed: boolean;
+  impact: DatabaseRetentionImpact;
+  backupSafety: DatabaseRetentionBackupSafety;
+  warnings: string[];
+  requiredConfirmation: string | null;
+  canApply: boolean;
+}
+
+export interface DatabaseRetentionApplyResult {
+  status: "APPLIED";
+  policyKey: DatabaseRetentionPolicyKey;
+  previousRetentionSeconds: number | null;
+  requestedRetentionSeconds: number | null;
+  risk: DatabaseRetentionRisk;
+  impact: DatabaseRetentionImpact;
+  backupSafety: DatabaseRetentionBackupSafety;
+  effective: {
+    key: DatabaseRetentionPolicyKey;
+    configuredSeconds: number | null;
+    actualSeconds: number | null;
+    inSync: boolean;
+    updatedAt: string | null;
+    updatedByUserId: string | null;
+    updatedByRole: string | null;
+  };
+}
+
+export interface DatabaseRetentionAuditEntry {
+  id: number;
+  createdAt: string;
+  actorUserId: string | null;
+  actorRole: string | null;
+  policyKey: DatabaseRetentionPolicyKey;
+  previousRetentionSeconds: number | null;
+  requestedRetentionSeconds: number | null;
+  risk: DatabaseRetentionRisk;
+  status: "APPLIED" | "FAILED";
+  preview: Record<string, unknown>;
+  error: string | null;
+}
+
 export interface DatabaseStorageHistoryPoint {
   capturedAt: string;
   databaseBytes: number;

@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import { DatabaseStorageRepository } from "./repository.js";
 import { DatabaseStorageController } from "./controller.js";
+import { DatabaseRetentionController } from "./retention-controller.js";
+import { DatabaseRetentionRepository } from "./retention-repository.js";
 import { registerDatabaseStorageRoutes } from "./routes.js";
 import { databaseStorageSettings } from "./settings.js";
 
@@ -14,11 +16,16 @@ export async function registerDatabaseStorageFeature(
 ): Promise<void> {
   const repository = new DatabaseStorageRepository(options.pool);
   const controller = new DatabaseStorageController(repository);
+  const retentionRepository =
+    new DatabaseRetentionRepository(options.pool);
+  const retentionController =
+    new DatabaseRetentionController(retentionRepository);
   const settings = databaseStorageSettings();
 
   await app.register(registerDatabaseStorageRoutes, {
     prefix: "/api/v1",
-    controller
+    controller,
+    retentionController
   });
 
   const collect = async (): Promise<void> => {

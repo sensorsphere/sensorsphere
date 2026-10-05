@@ -164,13 +164,30 @@ Promise<void> {
     );
   }
 
-  const purgedGatewayTraffic =
-    await repository.purgeGatewayTrafficEvents(48);
+  const purgeGatewayTrafficByPolicy =
+    async (): Promise<{
+      purged: number;
+      retentionHours: number | null;
+    }> => {
+      const retentionHours =
+        await repository.getRetentionHours(
+          "gateway_traffic_events",
+          48
+        );
+      const purged =
+        await repository.purgeGatewayTrafficEvents(
+          retentionHours
+        );
+      return { purged, retentionHours };
+    };
+
+  const gatewayTrafficInitial =
+    await purgeGatewayTrafficByPolicy();
 
   logger.info(
     {
-      purgedGatewayTraffic,
-      retentionHours: 48
+      purgedGatewayTraffic: gatewayTrafficInitial.purged,
+      retentionHours: gatewayTrafficInitial.retentionHours
     },
     "Gateway traffic monitor initialized"
   );
@@ -178,8 +195,7 @@ Promise<void> {
   const gatewayTrafficRetentionTimer =
     setInterval(
       () => {
-        void repository
-          .purgeGatewayTrafficEvents(48)
+        void purgeGatewayTrafficByPolicy()
           .catch(error => {
             logger.error(
               { error },
@@ -197,23 +213,40 @@ Promise<void> {
   );
 
   if (metricRoutingMode !== "legacy") {
-    const purged =
-      await repository.purgeMetricRoutingEvents(48);
+    const purgeMetricRoutingByPolicy =
+      async (): Promise<{
+        purged: number;
+        retentionHours: number | null;
+      }> => {
+        const retentionHours =
+          await repository.getRetentionHours(
+            "metric_routing_events",
+            48
+          );
+        const purged =
+          await repository.purgeMetricRoutingEvents(
+            retentionHours
+          );
+        return { purged, retentionHours };
+      };
+
+    const routingInitial =
+      await purgeMetricRoutingByPolicy();
 
     logger.info(
       {
         metricRoutingMode,
-        purgedRoutingEvents: purged,
-        retentionHours: 48,
+        purgedRoutingEvents: routingInitial.purged,
+        retentionHours: routingInitial.retentionHours,
         dedupWindowMs: METRIC_ROUTING_DEDUP_WINDOW_MS
       },
       "Metric routing initialized"
     );
+
     const retentionTimer =
       setInterval(
         () => {
-          void repository
-            .purgeMetricRoutingEvents(48)
+          void purgeMetricRoutingByPolicy()
             .catch(error => {
               logger.error(
                 { error },
@@ -224,6 +257,7 @@ Promise<void> {
         60 * 60 * 1000
       );
 
+    retentionTimer.unref();
   }
 
   const cache =
