@@ -19,6 +19,16 @@ test("retention risk distinguishes extensions from destructive reductions", () =
   assert.equal(retentionRisk(null, 30 * 86400), "DESTRUCTIVE");
 });
 
+test("diagnostic event retention is owned by TimescaleDB", () => {
+  const gatewayTraffic = retentionDefinition("gateway_traffic_events");
+  const metricRouting = retentionDefinition("metric_routing_events");
+
+  assert.equal(gatewayTraffic.mechanism, "timescale");
+  assert.equal(metricRouting.mechanism, "timescale");
+  assert.equal(gatewayTraffic.defaultSeconds, 48 * 3600);
+  assert.equal(metricRouting.defaultSeconds, 48 * 3600);
+});
+
 test("retention validation enforces per-family bounds and unlimited", () => {
   const observations = retentionDefinition("observations");
   assert.equal(

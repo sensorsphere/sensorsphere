@@ -107,28 +107,28 @@ export const RETENTION_DEFINITIONS: RetentionDefinition[] = [
     key: "gateway_traffic_events",
     label: "Gateway traffic diagnostics",
     relation: "gateway_traffic_events",
-    mechanism: "application",
+    mechanism: "timescale",
     preferredUnit: "hours",
     defaultSeconds: 48 * HOUR,
     minimumSeconds: 6 * HOUR,
     maximumSeconds: 90 * DAY,
     allowUnlimited: true,
     notes: [
-      "The ingestion service evaluates this setting hourly; DELETE frees reusable PostgreSQL space but does not normally shrink the relation file."
+      "TimescaleDB enforces this retention with one-hour chunks; expired chunks are dropped physically instead of row-by-row DELETE."
     ]
   },
   {
     key: "metric_routing_events",
     label: "Metric routing diagnostics",
     relation: "metric_routing_events",
-    mechanism: "application",
+    mechanism: "timescale",
     preferredUnit: "hours",
     defaultSeconds: 48 * HOUR,
     minimumSeconds: 6 * HOUR,
     maximumSeconds: 90 * DAY,
     allowUnlimited: true,
     notes: [
-      "The ingestion service evaluates this setting hourly; DELETE frees reusable PostgreSQL space but does not normally shrink the relation file."
+      "TimescaleDB enforces this retention with one-hour chunks; expired chunks are dropped physically instead of row-by-row DELETE."
     ]
   }
 ];

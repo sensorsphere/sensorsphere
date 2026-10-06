@@ -94,20 +94,6 @@ function toTimestamp(value: unknown): string | null {
   return String(value);
 }
 
-function formatRetentionSeconds(value: unknown): string {
-  if (value === null || value === undefined) return "unlimited";
-  const seconds = toNumber(value);
-  if (seconds % 86400 === 0) {
-    const days = seconds / 86400;
-    return days === 1 ? "1 day" : String(days) + " days";
-  }
-  if (seconds % 3600 === 0) {
-    const hours = seconds / 3600;
-    return hours === 1 ? "1 hour" : String(hours) + " hours";
-  }
-  return String(seconds) + " seconds";
-}
-
 export function classifyRelation(name: string): StorageCategory {
   if (name === "measurements") return "Measurements";
   if (name === "observations") return "Observations";
@@ -224,7 +210,7 @@ export class DatabaseStorageRepository {
   }
 
   async getRelations(policies: StoragePolicy[]): Promise<StorageRelation[]> {
-    const [hypertables, regular, eventRanges, retentionSettings] =
+    const [hypertables, regular, eventRanges] =
       await Promise.all([
       this.pool.query(`
         SELECT
@@ -302,14 +288,6 @@ export class DatabaseStorageRepository {
                MIN(occurred_at),
                MAX(occurred_at)
         FROM metric_routing_events
-      `),
-      this.pool.query(`
-        SELECT policy_key, retention_seconds
-        FROM database_retention_settings
-        WHERE policy_key IN (
-          'gateway_traffic_events',
-          'metric_routing_events'
-        )
       `)
     ]);
 
@@ -322,13 +300,6 @@ export class DatabaseStorageRepository {
         typeof dropAfter === "string" ? dropAfter : "configured"
       );
     }
-    for (const row of retentionSettings.rows) {
-      retentionByRelation.set(
-        String(row.policy_key),
-        formatRetentionSeconds(row.retention_seconds)
-      );
-    }
-
     const eventRangeByName = new Map(
       eventRanges.rows.map(row => [
         String(row.name),

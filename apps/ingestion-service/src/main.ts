@@ -164,101 +164,27 @@ Promise<void> {
     );
   }
 
-  const purgeGatewayTrafficByPolicy =
-    async (): Promise<{
-      purged: number;
-      retentionHours: number | null;
-    }> => {
-      const retentionHours =
-        await repository.getRetentionHours(
-          "gateway_traffic_events",
-          48
-        );
-      const purged =
-        await repository.purgeGatewayTrafficEvents(
-          retentionHours
-        );
-      return { purged, retentionHours };
-    };
-
-  const gatewayTrafficInitial =
-    await purgeGatewayTrafficByPolicy();
-
   logger.info(
     {
-      purgedGatewayTraffic: gatewayTrafficInitial.purged,
-      retentionHours: gatewayTrafficInitial.retentionHours
+      retentionOwner: "timescaledb",
+      retentionPolicyKey: "gateway_traffic_events"
     },
-    "Gateway traffic monitor initialized"
+    "Gateway traffic retention managed by TimescaleDB"
   );
-
-  const gatewayTrafficRetentionTimer =
-    setInterval(
-      () => {
-        void purgeGatewayTrafficByPolicy()
-          .catch(error => {
-            logger.error(
-              { error },
-              "Unable to purge gateway traffic events"
-            );
-          });
-      },
-      60 * 60 * 1000
-    );
-
-  gatewayTrafficRetentionTimer.unref();
 
   await repository.setMetricRoutingMode(
     metricRoutingMode
   );
 
-  if (metricRoutingMode !== "legacy") {
-    const purgeMetricRoutingByPolicy =
-      async (): Promise<{
-        purged: number;
-        retentionHours: number | null;
-      }> => {
-        const retentionHours =
-          await repository.getRetentionHours(
-            "metric_routing_events",
-            48
-          );
-        const purged =
-          await repository.purgeMetricRoutingEvents(
-            retentionHours
-          );
-        return { purged, retentionHours };
-      };
-
-    const routingInitial =
-      await purgeMetricRoutingByPolicy();
-
-    logger.info(
-      {
-        metricRoutingMode,
-        purgedRoutingEvents: routingInitial.purged,
-        retentionHours: routingInitial.retentionHours,
-        dedupWindowMs: METRIC_ROUTING_DEDUP_WINDOW_MS
-      },
-      "Metric routing initialized"
-    );
-
-    const retentionTimer =
-      setInterval(
-        () => {
-          void purgeMetricRoutingByPolicy()
-            .catch(error => {
-              logger.error(
-                { error },
-                "Unable to purge metric routing events"
-              );
-            });
-        },
-        60 * 60 * 1000
-      );
-
-    retentionTimer.unref();
-  }
+  logger.info(
+    {
+      metricRoutingMode,
+      retentionOwner: "timescaledb",
+      retentionPolicyKey: "metric_routing_events",
+      dedupWindowMs: METRIC_ROUTING_DEDUP_WINDOW_MS
+    },
+    "Metric routing initialized"
+  );
 
   const cache =
     new SensorCache();

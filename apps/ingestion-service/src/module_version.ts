@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "ingestion-service";
-export const MODULE_VERSION = "1.0.2";
+export const MODULE_VERSION = "1.0.3";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.0.3": {
+    releasedAt: "2026-10-06T12:32:24Z",
+    patch: "PR-335-diagnostic-event-timescale-retention-v1.patch",
+    changes: [
+      { type: "changed", description: "Remove row-by-row gateway traffic and metric routing retention loops; retention is now owned exclusively by TimescaleDB policies" },
+      { type: "changed", description: "Keep diagnostic event ingestion writes unchanged while native one-hour Timescale chunks handle expiry" }
+    ]
+  },
   "1.0.2": {
     releasedAt: "2026-10-05T22:17:23Z",
     patch: "PR-333-database-retention-management-v1.patch",

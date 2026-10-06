@@ -164,15 +164,6 @@ export class DatabaseRetentionController {
       );
     }
 
-    if (
-      definition.mechanism === "application" &&
-      risk === "DESTRUCTIVE"
-    ) {
-      warnings.push(
-        "Expired rows will be deleted by the ingestion service on its next hourly retention pass; PostgreSQL relation files normally do not shrink immediately."
-      );
-    }
-
     reply.send({
       generatedAt: new Date().toISOString(),
       policy: {

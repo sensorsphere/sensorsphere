@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.70.0";
+export const MODULE_VERSION = "1.71.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.71.0": {
+    releasedAt: "2026-10-06T12:32:24Z",
+    patch: "PR-335-diagnostic-event-timescale-retention-v1.patch",
+    changes: [
+      { type: "changed", description: "Manage gateway traffic and metric routing retention as native TimescaleDB policies with one-hour schedules" },
+      { type: "changed", description: "Report effective diagnostic-event retention from Timescale jobs and preview destructive changes using chunk metadata plus exact row counts" },
+      { type: "changed", description: "Extend API database compatibility through migration level 87 for diagnostic event hypertables" }
+    ]
+  },
   "1.70.0": {
     releasedAt: "2026-10-06T04:35:06Z",
     patch: "PR-334-database-historical-tiering-v1.patch",

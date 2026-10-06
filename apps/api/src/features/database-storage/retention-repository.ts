@@ -84,11 +84,7 @@ export class DatabaseRetentionRepository {
       "SELECT",
       "  settings.policy_key,",
       "  settings.retention_seconds AS configured_seconds,",
-      "  CASE",
-      "    WHEN settings.policy_key IN ('gateway_traffic_events', 'metric_routing_events')",
-      "      THEN settings.retention_seconds",
-      "    ELSE actual.actual_seconds",
-      "  END AS actual_seconds,",
+      "  actual.actual_seconds AS actual_seconds,",
       "  settings.updated_at,",
       "  settings.updated_by_user_id,",
       "  settings.updated_by_role",
@@ -270,7 +266,10 @@ export class DatabaseRetentionRepository {
     const timeColumn =
       definition.key === "observation_hourly"
         ? "bucket_start"
-        : "time";
+        : definition.key === "gateway_traffic_events" ||
+            definition.key === "metric_routing_events"
+          ? "occurred_at"
+          : "time";
     const logicalRelation = "public." + definition.relation;
     const countSql = [
       "SELECT COUNT(*)::bigint AS eligible_rows",
@@ -367,16 +366,26 @@ export class DatabaseRetentionRepository {
         );
 
         if (input.requestedSeconds !== null) {
+          const scheduleSeconds =
+            input.definition.key === "gateway_traffic_events" ||
+            input.definition.key === "metric_routing_events"
+              ? 60 * 60
+              : 24 * 60 * 60;
+
           await client.query(
             [
               "SELECT add_retention_policy(",
               "  $1::regclass,",
               "  drop_after => make_interval(secs => $2::double precision),",
               "  if_not_exists => TRUE,",
-              "  schedule_interval => INTERVAL '1 day'",
+              "  schedule_interval => make_interval(secs => $3::double precision)",
               ")"
             ].join("\n"),
-            [relation, input.requestedSeconds]
+            [
+              relation,
+              input.requestedSeconds,
+              scheduleSeconds
+            ]
           );
         }
       }

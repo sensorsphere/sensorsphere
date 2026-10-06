@@ -73,3 +73,59 @@ test("retention apply rolls back and audits a failed Timescale policy change", a
   assert.equal(poolCalls.length, 1);
   assert.equal(released, true);
 });
+
+test("diagnostic event retention uses an hourly Timescale schedule", async () => {
+  const clientCalls: Array<{ sql: string; params?: unknown[] }> = [];
+  let released = false;
+
+  const client = {
+    query: async (sql: string, params?: unknown[]) => {
+      clientCalls.push({ sql, params });
+
+      if (
+        sql === "BEGIN" ||
+        sql === "COMMIT" ||
+        sql.includes("remove_retention_policy") ||
+        sql.includes("add_retention_policy") ||
+        sql.includes("UPDATE database_retention_settings") ||
+        sql.includes("INSERT INTO database_retention_audit")
+      ) {
+        return { rows: [], rowCount: 1 };
+      }
+
+      throw new Error("Unexpected client SQL: " + sql);
+    },
+    release: () => {
+      released = true;
+    }
+  };
+
+  const pool = {
+    connect: async () => client
+  };
+
+  const repository =
+    new DatabaseRetentionRepository(pool as never);
+
+  await repository.applyPolicy({
+    definition: retentionDefinition("gateway_traffic_events"),
+    previousSeconds: 48 * 3600,
+    requestedSeconds: 72 * 3600,
+    risk: "REVIEW_REQUIRED",
+    actor: { userId: null, role: "admin" },
+    preview: { test: true }
+  });
+
+  const addCall = clientCalls.find(call =>
+    call.sql.includes("add_retention_policy")
+  );
+
+  assert.ok(addCall);
+  assert.deepEqual(addCall.params, [
+    "public.gateway_traffic_events",
+    72 * 3600,
+    3600
+  ]);
+  assert.ok(clientCalls.some(call => call.sql === "COMMIT"));
+  assert.equal(released, true);
+});

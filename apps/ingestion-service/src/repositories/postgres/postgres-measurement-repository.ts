@@ -44,33 +44,6 @@ implements MeasurementRepository {
     );
   }
 
-  async getRetentionHours(
-    policyKey:
-      | "gateway_traffic_events"
-      | "metric_routing_events",
-    fallbackHours = 48
-  ): Promise<number | null> {
-    const result = await this.pool.query<{
-      retention_seconds: string | number | null;
-    }>(
-      `
-      SELECT retention_seconds
-      FROM database_retention_settings
-      WHERE policy_key = $1
-      LIMIT 1
-      `,
-      [policyKey]
-    );
-
-    if (!result.rows[0]) return fallbackHours;
-    if (result.rows[0].retention_seconds === null) return null;
-
-    const seconds = Number(result.rows[0].retention_seconds);
-    return Number.isFinite(seconds) && seconds > 0
-      ? seconds / 3600
-      : fallbackHours;
-  }
-
   async reportComponentBuild(
     component: string,
     buildDate: string,
@@ -135,19 +108,6 @@ implements MeasurementRepository {
         input.sourceTopic
       ]
     );
-  }
-
-  async purgeGatewayTrafficEvents(
-    retentionHours: number | null = 48
-  ): Promise<number> {
-    if (retentionHours === null) return 0;
-
-    const result = await this.pool.query(
-      `DELETE FROM gateway_traffic_events
-       WHERE occurred_at < NOW() - ($1 * INTERVAL '1 hour')`,
-      [retentionHours]
-    );
-    return result.rowCount ?? 0;
   }
 
   async setMetricRoutingMode(
@@ -255,19 +215,6 @@ implements MeasurementRepository {
         input.dedupKey ?? null, input.dedupAgeMs ?? null
       ]
     );
-  }
-
-  async purgeMetricRoutingEvents(
-    retentionHours: number | null = 48
-  ): Promise<number> {
-    if (retentionHours === null) return 0;
-
-    const result = await this.pool.query(
-      `DELETE FROM metric_routing_events
-       WHERE occurred_at < NOW() - ($1 * INTERVAL '1 hour')`,
-      [retentionHours]
-    );
-    return result.rowCount ?? 0;
   }
 
   async ensureGatewayExists(

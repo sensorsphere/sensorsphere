@@ -882,6 +882,41 @@ DB-4 operational semantics:
   420.7 MB steady-state with the current DEV ingestion profile;
 - no daily or BLE aggregate is introduced in DB-4.
 
+## DB-5 — Diagnostic Event Tables / Timescale Retention
+
+Status: IN PROGRESS — DEV
+
+Goal: replace row-by-row 48-hour DELETE retention for the two high-volume
+diagnostic event tables with native one-hour Timescale chunks and 48-hour
+retention policies, while preserving API pagination, IDs, filters and ingestion
+continuity.
+
+- [ ] DBST-400 — Audit final schemas, constraints, indexes, sequences and application queries.
+- [ ] DBST-401 — Define and validate the safe conversion/cutover strategy.
+- [ ] DBST-402 — Convert gateway_traffic_events to a one-hour Timescale hypertable.
+- [ ] DBST-403 — Convert metric_routing_events to a one-hour Timescale hypertable.
+- [ ] DBST-404 — Preserve IDs/sequences and cursor pagination semantics.
+- [ ] DBST-405 — Replace application DELETE retention with Timescale 48-hour policies.
+- [ ] DBST-406 — Integrate DB-3 retention preview/apply with the Timescale event policies.
+- [ ] DBST-407 — Validate migration failure/rollback and interrupted-write behavior.
+- [ ] DBST-408 — Benchmark reads, filters, pagination and ingestion before/after.
+- [ ] DBST-409 — Compare dead tuples, allocated storage and physical reclamation.
+- [ ] DBST-410 — Validate Backup V2 create/verify with converted event hypertables.
+- [ ] DBST-411 — Accept on DEV.
+- [ ] DBST-412 — Accept on DIT.
+- [ ] DBST-413 — Validate on TEST1 only after explicit approval.
+
+DB-5 safety rules:
+
+- no TEST1 modification without explicit approval;
+- create a fresh verified Recovery Point before converting DEV or DIT;
+- migration 087 must be self-transactional because the migration runner does
+  not wrap SQL files in a transaction;
+- preserve existing event IDs and sequence continuity;
+- preserve the public API tuple cursor `(occurred_at, id)`;
+- do not retain an application DELETE loop after Timescale retention is active;
+- DB-3 remains the control plane for changing the 48-hour retention window.
+
 ---
 
 # 15. Explicit non-goals for DB-1
