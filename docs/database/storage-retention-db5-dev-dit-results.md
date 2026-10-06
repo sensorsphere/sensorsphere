@@ -466,5 +466,31 @@ verification.
 
 DBST-400 through DBST-412 are complete.
 
-DBST-413 remains intentionally pending because TEST1 requires explicit user
-approval and was not modified during DB-5.
+DBST-413 remains intentionally pending.
+
+The first user-initiated TEST1 update attempt to Stack 2026.10.06.3 stopped
+before manifest application or migration execution because the legacy TEST1
+`data/` directory is root-owned and `data/backup-state` did not yet exist:
+
+    mkdir: cannot create directory .../data/backup-state: Permission denied
+
+TEST1 therefore remained on its previous Stack / database level.
+
+This exposed an upgrade-path installer defect: the DB-3 backup-state bind mount
+was pre-created with a normal host `mkdir`, which cannot create a child under
+a legacy root-owned 0755 data directory.
+
+Stack 2026.10.06.4 is an installer-only superseding release. Its installer
+first attempts normal creation; if a legacy bind-mount parent is not writable,
+it uses a root Docker helper limited to that parent to create only
+`backup-state`, chown that new directory to the invoking installation user,
+and set mode 0700. The parent ownership/mode and all existing database,
+Mosquitto and application data remain unchanged.
+
+The exact TEST1 permission shape was reproduced on a temporary path:
+
+    parent before/after   root:root 0755
+    backup-state result   ubuntu:ubuntu 0700
+
+The fallback completed successfully. DBST-413 remains open until TEST1 is
+re-run with Stack 2026.10.06.4 and functionally validated.

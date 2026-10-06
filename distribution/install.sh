@@ -110,6 +110,44 @@ bool_true() {
   [[ "${1,,}" =~ ^(1|true|yes|on)$ ]]
 }
 
+ensure_install_owned_directory() {
+  local target="$1" mode="${2:-0700}"
+  local owner_uid owner_gid parent name
+
+  owner_uid="$(id -u)"
+  owner_gid="$(id -g)"
+
+  if mkdir -p "$target" 2>/dev/null; then
+    chmod "$mode" "$target"
+    return 0
+  fi
+
+  parent="$(dirname "$target")"
+  name="$(basename "$target")"
+
+  [[ -d "$parent" ]] || {
+    echo "ERROR: unable to create $target because parent $parent does not exist or is not writable." >&2
+    return 1
+  }
+
+  echo "Repairing legacy bind-mount permissions for $target..."
+
+  docker run --rm \
+    --user 0:0 \
+    --volume "$parent:/host-parent" \
+    --entrypoint sh \
+    eclipse-mosquitto:2 \
+    -c 'mkdir -p "/host-parent/$1" &&
+        chown "$2:$3" "/host-parent/$1" &&
+        chmod "$4" "/host-parent/$1"' \
+    _ "$name" "$owner_uid" "$owner_gid" "$mode"
+
+  [[ -d "$target" && -w "$target" ]] || {
+    echo "ERROR: unable to prepare writable directory $target" >&2
+    return 1
+  }
+}
+
 configure_and_validate_auth() {
   local env_name auth_enabled providers public_url bootstrap provider
   env_name="$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_ENVIRONMENT)"
@@ -258,8 +296,7 @@ prepare_bundle() {
   if [[ "$backup_state_root" != /* ]]; then
     backup_state_root="$INSTALL_DIR/${backup_state_root#./}"
   fi
-  mkdir -p "$backup_state_root"
-  chmod 0700 "$backup_state_root"
+  ensure_install_owned_directory "$backup_state_root" 0700
 
   configure_and_validate_auth
 }

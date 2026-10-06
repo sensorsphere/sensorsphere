@@ -907,7 +907,7 @@ continuity.
 - [x] DBST-410 — Validate Backup V2 create/verify with converted event hypertables.
 - [x] DBST-411 — Accept on DEV.
 - [x] DBST-412 — Accept on DIT.
-- [ ] DBST-413 — Validate on TEST1 only after explicit approval.
+- [ ] DBST-413 — Validate on TEST1 with installer-fixed Stack 2026.10.06.4; first 2026.10.06.3 attempt stopped before migration on legacy root-owned data/backup-state creation.
 
 DB-5 safety rules:
 
