@@ -39,6 +39,7 @@ export interface BackupSafetyStatus {
   backupId: string | null;
   completedAt: string | null;
   ageHours: number | null;
+  sizeBytes: number | null;
   reason: string | null;
   verificationBasis: "successful-create" | null;
 }
@@ -219,6 +220,9 @@ interface BackupRunState {
   status?: unknown;
   phase?: unknown;
   backupId?: unknown;
+  details?: {
+    sizeBytes?: unknown;
+  };
 }
 
 export async function readBackupSafetyStatus(
@@ -235,6 +239,7 @@ export async function readBackupSafetyStatus(
     backupId: null,
     completedAt: null,
     ageHours: null,
+    sizeBytes: null,
     reason: null,
     verificationBasis: null
   };
@@ -248,6 +253,7 @@ export async function readBackupSafetyStatus(
       backupId: string;
       completedAt: string;
       completedMs: number;
+      sizeBytes: number | null;
     }> = [];
 
     for (const entry of entries) {
@@ -266,10 +272,15 @@ export async function readBackupSafetyStatus(
         }
         const completedMs = Date.parse(run.completedAt);
         if (!Number.isFinite(completedMs)) continue;
+        const parsedSize = Number(run.details?.sizeBytes);
         successfulCreates.push({
           backupId: run.backupId,
           completedAt: run.completedAt,
-          completedMs
+          completedMs,
+          sizeBytes:
+            Number.isFinite(parsedSize) && parsedSize >= 0
+              ? parsedSize
+              : null
         });
       } catch {
         // Ignore a malformed historical state file and continue safely.
@@ -300,6 +311,7 @@ export async function readBackupSafetyStatus(
       backupId: latest.backupId,
       completedAt: latest.completedAt,
       ageHours,
+      sizeBytes: latest.sizeBytes,
       reason: ok
         ? null
         : "Latest verified Recovery Point is older than " +

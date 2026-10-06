@@ -1586,6 +1586,7 @@ export interface DatabaseRetentionBackupSafety {
   backupId: string | null;
   completedAt: string | null;
   ageHours: number | null;
+  sizeBytes: number | null;
   reason: string | null;
   verificationBasis: "successful-create" | null;
 }
@@ -1685,6 +1686,7 @@ export interface DatabaseStorageReport {
     hypertableCount: number;
     chunkCount: number;
   };
+  backupSafety: DatabaseRetentionBackupSafety;
   analytics: {
     growth: {
       bytes24h: number | null;

@@ -359,6 +359,52 @@ export function DatabaseStoragePanel() {
             </Card>
           </SimpleGrid>
 
+          <Card
+            withBorder
+            padding="sm"
+            style={{
+              borderLeft: `4px solid var(--mantine-color-${report.backupSafety.ok ? "green" : "orange"}-6)`
+            }}
+          >
+            <Group justify="space-between" align="start">
+              <div>
+                <Text size="xs" c="dimmed">Latest verified Recovery Point</Text>
+                <Text fw={700}>
+                  {report.backupSafety.backupId ?? "Unavailable"}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {report.backupSafety.completedAt
+                    ? `Completed ${formatTimestamp(report.backupSafety.completedAt)}`
+                    : report.backupSafety.reason ?? "No successful Backup V2 create run found."}
+                </Text>
+              </div>
+              <Group gap="lg">
+                <div>
+                  <Text size="xs" c="dimmed">Backup size</Text>
+                  <Text fw={700}>
+                    {report.backupSafety.sizeBytes === null
+                      ? "—"
+                      : formatBytes(report.backupSafety.sizeBytes)}
+                  </Text>
+                </div>
+                <div>
+                  <Text size="xs" c="dimmed">Age</Text>
+                  <Text fw={700}>
+                    {report.backupSafety.ageHours === null
+                      ? "—"
+                      : `${report.backupSafety.ageHours.toFixed(1)} h`}
+                  </Text>
+                </div>
+                <Badge
+                  color={report.backupSafety.ok ? "green" : "orange"}
+                  variant="light"
+                >
+                  {report.backupSafety.ok ? "RECENT" : "STALE / UNAVAILABLE"}
+                </Badge>
+              </Group>
+            </Group>
+          </Card>
+
           <SimpleGrid cols={{ base: 2, md: 4, lg: 4 }}>
             <Card withBorder padding="sm">
               <Text size="xs" c="dimmed">Growth · 24h</Text>

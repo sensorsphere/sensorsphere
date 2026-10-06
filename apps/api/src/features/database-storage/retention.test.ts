@@ -69,7 +69,10 @@ test("backup safety gate accepts only a recent successful create run", async () 
       completedAt: "2026-10-05T18:00:00Z",
       status: "SUCCESS",
       phase: "COMPLETE",
-      backupId: "valid-backup"
+      backupId: "valid-backup",
+      details: {
+        sizeBytes: 123456789
+      }
     })
   );
 
@@ -78,6 +81,7 @@ test("backup safety gate accepts only a recent successful create run", async () 
     assert.equal(status.ok, true);
     assert.equal(status.backupId, "valid-backup");
     assert.equal(status.ageHours, 2);
+    assert.equal(status.sizeBytes, 123456789);
     assert.equal(status.verificationBasis, "successful-create");
   } finally {
     await rm(root, { recursive: true, force: true });

@@ -743,7 +743,7 @@ Task IDs are stable and should be referenced by future PRs.
 
 ## DB-1 — Reporting & Observability
 
-Status: IMPLEMENTED ON DEV — acceptance tracking
+Status: IMPLEMENTED + DEV ACCEPTED — final DIT validation pending
 
 ### Backend / data collection
 
@@ -764,7 +764,7 @@ Status: IMPLEMENTED ON DEV — acceptance tracking
 - [x] DBST-015 — Calculate simple 30/90-day plus 6-month/1-year projections.
 - [x] DBST-016 — Add storage warning/critical budget configuration.
 - [x] DBST-017 — Generate non-destructive recommendation objects.
-- [ ] DBST-018 — Expose latest verified backup size/age as safety context.
+- [x] DBST-018 — Expose latest verified backup size/age as safety context.
 
 ### UI
 
@@ -784,7 +784,7 @@ Status: IMPLEMENTED ON DEV — acceptance tracking
 
 - [x] DBST-040 — Unit tests for size/report transformations.
 - [x] DBST-041 — API authorization tests.
-- [ ] DBST-042 — Test on empty/small database.
+- [x] DBST-042 — Test on empty/small database.
 - [x] DBST-043 — Test on DEV multi-GB database.
 - [x] DBST-044 — Verify reporting queries do not materially impact ingestion.
 - [x] DBST-045 — Verify snapshot retention is bounded.

@@ -11,6 +11,10 @@ import {
   storageBudgetFromEnv
 } from "./analytics.js";
 import { databaseStorageSettings } from "./settings.js";
+import {
+  readBackupSafetyStatus,
+  retentionManagementSettings
+} from "./retention.js";
 
 type Recommendation = {
   level: "INFO" | "REVIEW" | "WARNING";
@@ -161,6 +165,7 @@ export class DatabaseStorageController {
 
     const generatedAt = new Date().toISOString();
     const settings = databaseStorageSettings();
+    const retentionSettings = retentionManagementSettings();
     const [
       summary,
       policies,
@@ -168,7 +173,8 @@ export class DatabaseStorageController {
       indexes,
       indexStats,
       continuousAggregates,
-      history
+      history,
+      backupSafety
     ] = await Promise.all([
       this.repository.getSummary(),
       this.repository.getPolicies(),
@@ -176,7 +182,12 @@ export class DatabaseStorageController {
       this.repository.getIndexes(),
       this.repository.getIndexStatsWindow(),
       this.repository.getContinuousAggregates(),
-      this.repository.getHistory(settings.snapshotRetentionDays)
+      this.repository.getHistory(settings.snapshotRetentionDays),
+      readBackupSafetyStatus(
+        retentionSettings.backupStatePath,
+        retentionSettings.backupMaxAgeHours,
+        true
+      )
     ]);
 
     const relations = await this.repository.getRelations(policies);
@@ -235,6 +246,7 @@ export class DatabaseStorageController {
         chunkCount: chunks.length
       },
       analytics,
+      backupSafety,
       history,
       relations,
       chunks,

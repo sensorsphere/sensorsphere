@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.120.0";
+export const MODULE_VERSION = "1.121.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.121.0": {
+    releasedAt: "2026-10-06T23:49:58Z",
+    patch: "PR-336-database-storage-db1-completion-v1.patch",
+    changes: [
+      { type: "added", description: "Show the latest verified Recovery Point ID, size, completion time and age in Database Storage & Retention" }
+    ]
+  },
   "1.120.0": {
     releasedAt: "2026-10-05T22:17:23Z",
     patch: "PR-333-database-retention-management-v1.patch",

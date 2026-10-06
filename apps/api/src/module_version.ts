@@ -18,10 +18,18 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.71.0";
+export const MODULE_VERSION = "1.72.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.72.0": {
+    releasedAt: "2026-10-06T23:49:58Z",
+    patch: "PR-336-database-storage-db1-completion-v1.patch",
+    changes: [
+      { type: "added", description: "Expose latest verified Backup V2 Recovery Point age and size in the Database Storage report" },
+      { type: "changed", description: "Reuse the DB-3 read-only backup-state safety reader for DB-1 storage context without adding Docker or backup-payload access" }
+    ]
+  },
   "1.71.0": {
     releasedAt: "2026-10-06T12:32:24Z",
     patch: "PR-335-diagnostic-event-timescale-retention-v1.patch",

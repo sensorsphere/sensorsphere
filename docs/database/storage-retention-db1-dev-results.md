@@ -217,17 +217,66 @@ Includes:
 - Retention tab;
 - relation detail drill-down with matching chunks and indexes.
 
-## Remaining DB-1 validation/deferred items
+## DB-1 completion — DBST-018 / DBST-042
 
-Not yet marked complete:
+DBST-018 is complete.
 
-- DBST-018 — latest verified backup size/age as optional safety context.
-  This remains intentionally decoupled until a clean read-only integration
-  with Backup V2 state is designed; the API must not receive Docker socket
-  access.
-- DBST-042 — dedicated empty/small-database acceptance environment.
+The main Database Storage report now reuses the DB-3 Backup V2 safety-state
+reader through the existing read-only `/backup-state` mount. The API receives
+no Docker socket and no access to backup dump payloads.
 
-Neither item blocks use of the DEV reporting dashboard.
+The report exposes the latest successful Backup V2 create run:
+
+    backupId
+    completedAt
+    ageHours
+    sizeBytes
+    verificationBasis
+
+The Database Storage & Retention summary UI displays the Recovery Point ID,
+completion time, backup size, age and RECENT / STALE-UNAVAILABLE state.
+
+DEV runtime validation returned:
+
+    backupId   20261006T215225Z-65f854b6
+    sizeBytes  111,230,871
+    age        ~2.1 hours
+    basis      successful-create
+
+DBST-042 is complete.
+
+A disposable TimescaleDB 2.21.3 / PostgreSQL 17 instance was created with the
+same SensorSphere bootstrap SQL as a fresh installation. Migrations 002 through
+087 were applied, then the real DB-1 controller and repository from API 1.72.0
+were executed against the fresh small database.
+
+Observed report:
+
+    migrationLevel          87
+    databaseBytes           13,823,123
+    allocatedRelationBytes   3,432,448
+    relationCount           75
+    hypertableCount          5
+    chunkCount               0
+    historyPoints            0
+
+No Backup V2 state existed in the isolated instance and the report degraded
+cleanly to:
+
+    backupId   null
+    sizeBytes  null
+    reason     Backup V2 state is unavailable to the API
+
+The disposable database container and Docker network were removed after the
+test.
+
+Final automated validation for this completion patch:
+
+    API       32 / 32 passed
+    Frontend   7 / 7 passed
+
+Production Docker builds for API and Frontend passed.
 
 DB-1 continues to prohibit data purge, chunk drop, compression changes,
-VACUUM FULL, index mutation, or retention-policy changes.
+VACUUM FULL, index mutation, or retention-policy changes. DB-1 reporting
+remains read-only; explicit DB-3 retention controls are a separate operation.
