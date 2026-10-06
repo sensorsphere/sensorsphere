@@ -160,7 +160,7 @@ export class DatabaseRetentionController {
       risk === "DESTRUCTIVE"
     ) {
       warnings.push(
-        "DB-4 history routing is not complete; shortening raw observations can reduce the historical range available to current API queries."
+        "Shortening raw observations reduces the exact-sample /observations/history range. DB-4 aggregate tiering does not preserve per-sample source/quality fields."
       );
     }
 

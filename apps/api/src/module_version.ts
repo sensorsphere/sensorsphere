@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.69.0";
+export const MODULE_VERSION = "1.70.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.70.0": {
+    releasedAt: "2026-10-06T04:35:06Z",
+    patch: "PR-334-database-historical-tiering-v1.patch",
+    changes: [
+      { type: "changed", description: "Route eligible 1-hour, 6-hour and 1-day observation aggregate queries through the hourly Timescale continuous aggregate while preserving exact raw boundary semantics" },
+      { type: "changed", description: "Keep latest observations, alert evaluation, exact observation history and fine 1/5/15-minute aggregates on raw observations" },
+      { type: "changed", description: "Extend API database compatibility through migration level 86 for real-time hourly continuous aggregate routing" }
+    ]
+  },
   "1.69.0": {
     releasedAt: "2026-10-05T22:17:23Z",
     patch: "PR-333-database-retention-management-v1.patch",

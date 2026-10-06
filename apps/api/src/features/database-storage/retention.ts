@@ -58,7 +58,7 @@ export const RETENTION_DEFINITIONS: RetentionDefinition[] = [
     maximumSeconds: 3650 * DAY,
     allowUnlimited: true,
     notes: [
-      "Long-range history still reads raw observations until DB-4 aggregation routing is complete."
+      "Exact /observations/history samples remain a 90-day raw-data contract; DB-4 routes only eligible aggregate queries through observation_hourly."
     ]
   },
   {
@@ -100,7 +100,7 @@ export const RETENTION_DEFINITIONS: RetentionDefinition[] = [
     maximumSeconds: 3650 * DAY,
     allowUnlimited: true,
     notes: [
-      "Hourly aggregate history is the long-term tier planned for DB-4."
+      "Hourly aggregate history is the DB-4 long-term tier for 1-hour, 6-hour and 1-day aggregate queries."
     ]
   },
   {

@@ -41,6 +41,21 @@ export interface ObservationAggregateRecord {
   sample_count: string;
 }
 
+const HOURLY_TIER_BUCKETS =
+  new Set([
+    "1 hour",
+    "6 hours",
+    "1 day"
+  ]);
+
+export function observationAggregateTier(
+  bucket: string
+): "raw" | "hourly" {
+  return HOURLY_TIER_BUCKETS.has(bucket)
+    ? "hourly"
+    : "raw";
+}
+
 export interface ObservationRepository {
   findLatest(
     assetId?: string
@@ -171,23 +186,136 @@ implements ObservationRepository {
     query: ObservationAggregateQuery
   ): Promise<ObservationAggregateRecord[]> {
 
+    if (
+      observationAggregateTier(
+        query.bucket
+      ) === "raw"
+    ) {
+      const result =
+        await this.pool.query<ObservationAggregateRecord>(
+          `
+          SELECT
+            time_bucket(
+              $4::interval,
+              o.time
+            ) AS bucket_start,
+            MIN(o.value_double) AS min_value,
+            MAX(o.value_double) AS max_value,
+            AVG(o.value_double) AS avg_value,
+            COUNT(o.value_double)::text AS sample_count
+          FROM observations o
+          WHERE o.asset_metric_id = $1
+            AND o.time >= $2
+            AND o.time <= $3
+            AND o.value_double IS NOT NULL
+          GROUP BY bucket_start
+          ORDER BY bucket_start ASC
+          `,
+          [
+            query.metricId,
+            query.from,
+            query.to,
+            query.bucket
+          ]
+        );
+
+      return result.rows;
+    }
+
     const result =
       await this.pool.query<ObservationAggregateRecord>(
         `
+        WITH hourly_segments AS (
+          SELECT
+            h.bucket_start AS segment_time,
+            h.min_value,
+            h.max_value,
+            h.avg_value,
+            h.sample_count::bigint AS sample_count
+          FROM observation_hourly h
+          WHERE h.asset_metric_id = $1
+            AND h.bucket_start >=
+              CASE
+                WHEN $2::timestamptz =
+                  time_bucket(
+                    INTERVAL '1 hour',
+                    $2::timestamptz
+                  )
+                  THEN $2::timestamptz
+                ELSE
+                  time_bucket(
+                    INTERVAL '1 hour',
+                    $2::timestamptz
+                  ) + INTERVAL '1 hour'
+              END
+            AND h.bucket_start <
+              time_bucket(
+                INTERVAL '1 hour',
+                $3::timestamptz
+              )
+        ),
+        raw_boundary_segments AS (
+          SELECT
+            time_bucket(
+              INTERVAL '1 hour',
+              o.time
+            ) AS segment_time,
+            MIN(o.value_double) AS min_value,
+            MAX(o.value_double) AS max_value,
+            AVG(o.value_double) AS avg_value,
+            COUNT(o.value_double)::bigint AS sample_count
+          FROM observations o
+          WHERE o.asset_metric_id = $1
+            AND o.time >= $2::timestamptz
+            AND o.time <= $3::timestamptz
+            AND o.value_double IS NOT NULL
+            AND (
+              o.time <
+                CASE
+                  WHEN $2::timestamptz =
+                    time_bucket(
+                      INTERVAL '1 hour',
+                      $2::timestamptz
+                    )
+                    THEN $2::timestamptz
+                  ELSE
+                    time_bucket(
+                      INTERVAL '1 hour',
+                      $2::timestamptz
+                    ) + INTERVAL '1 hour'
+                END
+              OR o.time >=
+                time_bucket(
+                  INTERVAL '1 hour',
+                  $3::timestamptz
+                )
+            )
+          GROUP BY segment_time
+        ),
+        segments AS (
+          SELECT * FROM hourly_segments
+          UNION ALL
+          SELECT * FROM raw_boundary_segments
+        )
         SELECT
           time_bucket(
             $4::interval,
-            o.time
+            segment_time
           ) AS bucket_start,
-          MIN(o.value_double) AS min_value,
-          MAX(o.value_double) AS max_value,
-          AVG(o.value_double) AS avg_value,
-          COUNT(o.value_double)::text AS sample_count
-        FROM observations o
-        WHERE o.asset_metric_id = $1
-          AND o.time >= $2
-          AND o.time <= $3
-          AND o.value_double IS NOT NULL
+          MIN(min_value) AS min_value,
+          MAX(max_value) AS max_value,
+          CASE
+            WHEN SUM(sample_count) > 0
+              THEN
+                SUM(
+                  avg_value *
+                  sample_count
+                ) /
+                SUM(sample_count)
+            ELSE NULL
+          END AS avg_value,
+          SUM(sample_count)::text AS sample_count
+        FROM segments
         GROUP BY bucket_start
         ORDER BY bucket_start ASC
         `,
