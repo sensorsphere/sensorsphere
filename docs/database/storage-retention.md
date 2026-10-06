@@ -891,17 +891,17 @@ diagnostic event tables with native one-hour Timescale chunks and 48-hour
 retention policies, while preserving API pagination, IDs, filters and ingestion
 continuity.
 
-- [ ] DBST-400 — Audit final schemas, constraints, indexes, sequences and application queries.
-- [ ] DBST-401 — Define and validate the safe conversion/cutover strategy.
-- [ ] DBST-402 — Convert gateway_traffic_events to a one-hour Timescale hypertable.
-- [ ] DBST-403 — Convert metric_routing_events to a one-hour Timescale hypertable.
-- [ ] DBST-404 — Preserve IDs/sequences and cursor pagination semantics.
-- [ ] DBST-405 — Replace application DELETE retention with Timescale 48-hour policies.
-- [ ] DBST-406 — Integrate DB-3 retention preview/apply with the Timescale event policies.
-- [ ] DBST-407 — Validate migration failure/rollback and interrupted-write behavior.
-- [ ] DBST-408 — Benchmark reads, filters, pagination and ingestion before/after.
+- [x] DBST-400 — Audit final schemas, constraints, indexes, sequences and application queries.
+- [x] DBST-401 — Define and validate the safe conversion/cutover strategy.
+- [x] DBST-402 — Convert gateway_traffic_events to a one-hour Timescale hypertable.
+- [x] DBST-403 — Convert metric_routing_events to a one-hour Timescale hypertable.
+- [x] DBST-404 — Preserve IDs/sequences and cursor pagination semantics.
+- [x] DBST-405 — Replace application DELETE retention with Timescale 48-hour policies.
+- [x] DBST-406 — Integrate DB-3 retention preview/apply with the Timescale event policies.
+- [x] DBST-407 — Validate migration failure/rollback and interrupted-write behavior.
+- [x] DBST-408 — Benchmark reads, filters, pagination and ingestion before/after.
 - [ ] DBST-409 — Compare dead tuples, allocated storage and physical reclamation.
-- [ ] DBST-410 — Validate Backup V2 create/verify with converted event hypertables.
+- [x] DBST-410 — Validate Backup V2 create/verify with converted event hypertables.
 - [ ] DBST-411 — Accept on DEV.
 - [ ] DBST-412 — Accept on DIT.
 - [ ] DBST-413 — Validate on TEST1 only after explicit approval.
