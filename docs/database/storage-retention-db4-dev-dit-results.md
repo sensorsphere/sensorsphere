@@ -1,8 +1,8 @@
-# Database Storage & Retention — DB-4 DEV Results
+# Database Storage & Retention — DB-4 DEV / DIT Results
 
 Date: 2026-10-06
 
-Status: DEV IMPLEMENTATION VALIDATED
+Status: ACCEPTED — DEV + DIT
 
 Scope: Historical Aggregation & Tiered Retention.
 
@@ -363,17 +363,165 @@ New DB-4 tests cover:
 
 Migration 086 applied successfully on DEV and reports real-time mode enabled.
 
-## 13. Version plan
+## 13. Released versions
 
 DB-4 release versions:
 
+    Stack       2026.10.06.1
     API         1.70.0
-    Frontend    unchanged at 1.120.0
-    Ingestion   unchanged at 1.0.2
+    Frontend    1.120.0
+    Ingestion   1.0.2
     Migrations  86
+    nginx       1.0.0
     Backup      0.1.0
 
-A Stack Release will be created after final container/build checks and then
-validated on DIT.
+The DB-4 API and migrations images were published and verified for:
 
-TEST1 remains unchanged.
+    linux/amd64
+    linux/arm64
+
+The Stack Release schema is 4 with database compatibility:
+
+    API contract  1
+    DB range      72..86
+
+## 14. Official DEV acceptance
+
+DEV was updated through the normal distribution installer to:
+
+    Stack       2026.10.06.1
+    API         1.70.0
+    Frontend    1.120.0
+    Ingestion   1.0.2
+    Migrations  86
+
+Post-update health:
+
+    timescaledb  healthy
+    api          healthy
+    frontend     healthy
+    nginx        healthy
+    ingestion    running
+    migrations   exited 0
+
+Database invariants after the official update:
+
+    migration 086 present
+    observation_hourly materialized_only = false
+    observations retention = 90 days
+
+No DB-4 operation shortened retention or deleted business data.
+
+A first post-update Backup V2 attempt was rejected before backup creation by
+the free-space safety preflight:
+
+    available  2,471,403,520 bytes
+    required   2,750,401,683 bytes
+
+No safety control was bypassed. Only unused Docker/Buildx build cache was
+pruned; no SensorSphere volume, Recovery Point or application data was removed.
+
+The cache cleanup reclaimed approximately:
+
+    7.657 GB
+
+and increased filesystem free space from roughly 2.4 GB to roughly 20 GB.
+
+The backup was then retried once and completed successfully:
+
+    backupId   20261006T052031Z-626b1a7b
+    status     VERIFIED
+    size       108,076,648 bytes
+    duration   23,637 ms
+
+Its manifest reports:
+
+    Stack       2026.10.06.1
+    API         1.70.0
+    Migrations  86
+    DB level    86
+
+Verification:
+
+    checksumStatus     OK
+    dumpCatalogStatus  OK
+    archiveStatus      OK
+
+## 15. DIT acceptance
+
+DIT pre-update state:
+
+    Stack       2026.10.05.1
+    API         1.69.0
+    Frontend    1.120.0
+    Ingestion   1.0.2
+    Migrations  85
+
+A verified Recovery Point was created before the update:
+
+    backupId  20261006T052127Z-867fc410
+    status    VERIFIED
+    size      301,500 bytes
+    duration  844 ms
+
+DIT was then updated through the normal distribution installer to:
+
+    Stack       2026.10.06.1
+    API         1.70.0
+    Frontend    1.120.0
+    Ingestion   1.0.2
+    Migrations  86
+
+All installer health checks passed.
+
+Post-update database validation:
+
+    migration 086 present
+    observation_hourly materialized_only = false
+    observations Timescale retention = 90 days
+    observations desired retention = 7,776,000 seconds
+    observation_hourly desired retention = 31,536,000 seconds
+    database_retention_audit rows = 0
+
+DIT currently contains no rows in:
+
+    observations
+    observation_hourly
+    gateway_device_ble_observations
+
+Therefore the large-data fidelity and performance validation remains the DEV
+acceptance test, while DIT proves installation/migration/runtime compatibility
+on a packaged Stack Release installation.
+
+A verified post-update Recovery Point was created:
+
+    backupId  20261006T052227Z-d1ca6f7c
+    status    VERIFIED
+    size      302,631 bytes
+    duration  894 ms
+
+Its manifest reports Stack 2026.10.06.1, API 1.70.0 and migration level 86 with
+checksum, PostgreSQL dump catalog and archive verification all OK.
+
+## 16. Acceptance conclusion
+
+DB-4 is accepted on DEV and DIT.
+
+The production semantics are:
+
+- latest observations, alert evaluation and exact observation history use raw
+  data;
+- 1/5/15-minute aggregate requests use raw observations;
+- 1-hour, 6-hour and 1-day aggregate requests use the hourly tier plus exact raw
+  edge segments;
+- the hourly continuous aggregate is real-time;
+- the public aggregate API contract is unchanged;
+- raw observation retention remains 90 days;
+- hourly aggregate retention remains one year;
+- no daily aggregate is justified for the current <=30-day UI horizon;
+- no BLE aggregate is introduced until delete/reset coherency or a longer BLE
+  history requirement justifies it;
+- normalized raw + hourly observation storage is projected at approximately
+  420.7 MB steady-state under the current DEV ingestion profile.
+
+TEST1 was not modified.

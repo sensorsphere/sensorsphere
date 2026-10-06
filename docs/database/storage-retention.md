@@ -1,6 +1,6 @@
 # Database Storage & Retention
 
-Status: DB-1 implemented on DEV; DB-2..DB-4 planned
+Status: DB-1 implemented; DB-2, DB-3 and DB-4 accepted on DEV + DIT
 Initial baseline: DEV, 2026-10-03
 Scope: SensorSphere database storage observability, optimization and retention lifecycle
 
@@ -850,19 +850,37 @@ DB-3 operational semantics:
 
 ## DB-4 — Historical Aggregation & Tiered Retention
 
-Status: PLANNED
+Status: ACCEPTED — DEV + DIT (2026-10-06)
 
-- [ ] DBST-300 — Inventory all API consumers of raw observations.
-- [ ] DBST-301 — Define range/resolution selection rules.
-- [ ] DBST-302 — Use observation_hourly for eligible history queries.
-- [ ] DBST-303 — Validate chart fidelity raw versus hourly.
-- [ ] DBST-304 — Validate exports and API contracts.
-- [ ] DBST-305 — Evaluate daily continuous aggregate.
-- [ ] DBST-306 — Define new safe raw-observation retention target.
-- [ ] DBST-307 — Define BLE long-term information requirements.
-- [ ] DBST-308 — Prototype BLE hourly/daily aggregate if required.
-- [ ] DBST-309 — Reduce raw retention only after functional acceptance.
-- [ ] DBST-310 — Validate resulting steady-state storage budget.
+Validation details:
+`docs/database/storage-retention-db4-dev-dit-results.md`.
+
+- [x] DBST-300 — Inventory all API consumers of raw observations.
+- [x] DBST-301 — Define range/resolution selection rules.
+- [x] DBST-302 — Use observation_hourly for eligible history queries.
+- [x] DBST-303 — Validate chart fidelity raw versus hourly.
+- [x] DBST-304 — Validate exports and API contracts.
+- [x] DBST-305 — Evaluate daily continuous aggregate; not required for the current <=30-day UI horizon.
+- [x] DBST-306 — Define a safe raw-observation retention target; retain 90 days under the current exact-history contract.
+- [x] DBST-307 — Define BLE long-term information requirements.
+- [x] DBST-308 — Evaluate BLE hourly/daily aggregation; defer until delete/reset coherency or a longer history horizon justifies it.
+- [x] DBST-309 — Evaluate raw-retention reduction after functional acceptance; no reduction applied because no contract-safe lower target was selected.
+- [x] DBST-310 — Validate resulting steady-state storage budget.
+
+DB-4 operational semantics:
+
+- latest observations, alert evaluation and exact observation history remain on
+  raw observations;
+- 1/5/15-minute aggregate requests use raw observations;
+- 1-hour, 6-hour and 1-day aggregate requests use
+  `observation_hourly` plus exact raw boundary segments;
+- the hourly continuous aggregate runs in Timescale real-time mode;
+- public observation API response contracts are unchanged;
+- raw observation retention remains 90 days and hourly retention remains one
+  year;
+- normalized raw + hourly observation storage is projected at approximately
+  420.7 MB steady-state with the current DEV ingestion profile;
+- no daily or BLE aggregate is introduced in DB-4.
 
 ---
 
