@@ -527,7 +527,87 @@ A verified post-update Recovery Point was created:
 Its manifest reports Stack 2026.10.06.1, API 1.70.0 and migration level 86 with
 checksum, PostgreSQL dump catalog and archive verification all OK.
 
-## 16. Acceptance conclusion
+## 16. Final Stack 2026.10.06.2 distribution acceptance
+
+Stack 2026.10.06.2 was published after the functional DB-4 acceptance. It
+contains the same immutable component images as 2026.10.06.1 and only changes
+the distribution installer so nginx is force-recreated after the main Compose
+convergence.
+
+The corrected installer was then executed on both DEV and DIT.
+
+DEV final state:
+
+    Stack       2026.10.06.2
+    API         1.70.0
+    Frontend    1.120.0
+    Ingestion   1.0.2
+    Migrations  86
+    nginx       1.0.0
+    Backup      0.1.0
+
+The DEV update log explicitly showed:
+
+    Container sensorsphere-nginx-1 Recreate
+    Health OK: timescaledb
+    Health OK: api
+    Health OK: frontend
+    Health OK: nginx
+    Updated to Stack Release 2026.10.06.2
+
+A request issued from inside the nginx container returned HTTP 200 for the
+frontend and HTTP 200 for the DEV Admin database-storage API. No HTTP 502 entry
+was present in the recent nginx logs.
+
+A final DEV Recovery Point was created:
+
+    backupId  20261006T055719Z-69b22ce3
+    status    VERIFIED
+    size      108,146,394 bytes
+    duration  18,607 ms
+
+Its manifest reports Stack 2026.10.06.2, API 1.70.0, Frontend 1.120.0,
+Ingestion 1.0.2 and migration level 86. Checksum, PostgreSQL dump catalog and
+archive verification are all OK.
+
+DIT was also updated with the corrected installer. Its log explicitly showed
+nginx recreation before the health checks and completed with:
+
+    Updated to Stack Release 2026.10.06.2
+
+Post-update proxy validation returned:
+
+    frontend through nginx          HTTP 200
+    Admin API without auth session  HTTP 401
+    recent nginx HTTP 502 entries   none
+
+The 401 is the expected DIT authentication behavior and proves that the
+request reached the API rather than a stale nginx upstream.
+
+DIT DB-4 invariants after the final distribution update remain:
+
+    migration 086 present
+    observation_hourly materialized_only = false
+    observations retention = 90 days
+    observation_hourly retention = 1 year
+    observations desired retention = 7,776,000 seconds
+    observation_hourly desired retention = 31,536,000 seconds
+    database_retention_audit rows = 0
+
+A final DIT Recovery Point was created:
+
+    backupId  20261006T055754Z-61a234ac
+    status    VERIFIED
+    size      302,619 bytes
+    duration  764 ms
+
+Its manifest also reports Stack 2026.10.06.2, API 1.70.0, Frontend 1.120.0,
+Ingestion 1.0.2 and migration level 86 with checksum, dump catalog and archive
+verification all OK.
+
+TEST1 was not modified during the final Stack 2026.10.06.2 validation.
+
+## 17. Acceptance conclusion
 
 DB-4 is accepted on DEV and DIT.
 
