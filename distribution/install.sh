@@ -511,6 +511,15 @@ run_stack() {
   fi
 
   compose up -d
+
+  # nginx resolves the Docker DNS name "api" when its configuration is loaded.
+  # An update can recreate the API while Compose legitimately reuses an
+  # unchanged nginx container. In that case nginx can keep proxying to the old
+  # container IP even though the new API is healthy. Recreate nginx after the
+  # stack converges so its upstream always resolves to the current API before
+  # health validation.
+  compose up -d --no-deps --force-recreate nginx
+
   wait_for_health
 }
 

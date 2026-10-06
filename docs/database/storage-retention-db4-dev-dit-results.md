@@ -367,13 +367,17 @@ Migration 086 applied successfully on DEV and reports real-time mode enabled.
 
 DB-4 release versions:
 
-    Stack       2026.10.06.1
+    Stack       2026.10.06.2
     API         1.70.0
     Frontend    1.120.0
     Ingestion   1.0.2
     Migrations  86
     nginx       1.0.0
     Backup      0.1.0
+
+Stack 2026.10.06.1 introduced the DB-4 component set. Stack 2026.10.06.2
+supersedes it with the same immutable component images and a distribution-only
+installer fix that refreshes nginx after API container replacement.
 
 The DB-4 API and migrations images were published and verified for:
 
@@ -411,6 +415,26 @@ Database invariants after the official update:
     observations retention = 90 days
 
 No DB-4 operation shortened retention or deleted business data.
+
+### Installer nginx upstream refresh
+
+A final DEV health check exposed an installer/runtime edge case after the API
+container had been recreated. The unchanged nginx container had retained the
+previous Docker IP for the `api` upstream and began returning HTTP 502 even
+though the new API container itself was healthy.
+
+Recreating nginx alone immediately restored a healthy proxy path. The
+distribution installer was therefore hardened so `run_stack()` explicitly
+recreates nginx after the main Compose convergence and before health
+validation. This forces nginx to resolve the current API container address and
+also prevents the health check from accepting a stale pre-update nginx health
+state.
+
+DIT did not exhibit the stale-upstream condition during the initial DB-4
+update, but the corrected installer is shipped in the final 2026.10.06.2
+distribution bundle.
+
+### Backup free-space preflight
 
 A first post-update Backup V2 attempt was rejected before backup creation by
 the free-space safety preflight:
