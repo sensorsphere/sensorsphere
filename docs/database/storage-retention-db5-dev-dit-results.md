@@ -1,10 +1,10 @@
-# Database Storage & Retention — DB-5 DEV / DIT Results
+# Database Storage & Retention — DB-5 DEV / DIT / TEST1 Results
 
-Date: 2026-10-06
+Date: 2026-10-07
 
-Status: DEV + DIT validation complete; final physical-retention observation pending
+Status: ACCEPTED — DEV + DIT + TEST1
 
-TEST1 was not modified.
+TEST1 was not modified during the initial DEV/DIT implementation phase.
 
 ## 1. Scope
 
@@ -437,18 +437,22 @@ DIT post-update Recovery Point:
     backupId  20261006T215431Z-c9401d7b
     status    VERIFIED
 
-TEST1 was not modified.
+TEST1 had not yet been modified at this stage.
 
 ## 14. Final acceptance
 
-DB-5 is accepted on DEV and DIT.
+DB-5 is accepted on DEV, DIT and TEST1.
 
 The final production DEV chunk-retention observation confirmed immediate
 physical reclamation with zero dead tuples, completing DBST-409.
 
 Final Stack Release:
 
-    2026.10.06.3
+    2026.10.06.4
+
+Stack 2026.10.06.4 supersedes 2026.10.06.3 with an installer-only legacy
+backup-state permission fix. Component images and database migration level are
+unchanged from 2026.10.06.3.
 
 Final DEV Recovery Point:
 
@@ -460,13 +464,13 @@ Final DIT Recovery Point:
     20261006T215431Z-c9401d7b
     VERIFIED
 
-Both final manifests report Stack 2026.10.06.3, API 1.71.0, Ingestion 1.0.3,
-migration level 87 and successful checksum, dump-catalog and archive
-verification.
+The final DEV/DIT Recovery Points were created immediately before the
+installer-only 2026.10.06.4 superseding release, so their manifests report
+Stack 2026.10.06.3. They contain the same application images and database level
+as 2026.10.06.4: API 1.71.0, Ingestion 1.0.3 and migration level 87, with
+successful checksum, dump-catalog and archive verification.
 
-DBST-400 through DBST-412 are complete.
-
-DBST-413 remains intentionally pending.
+DBST-400 through DBST-413 are complete.
 
 The first user-initiated TEST1 update attempt to Stack 2026.10.06.3 stopped
 before manifest application or migration execution because the legacy TEST1
@@ -492,5 +496,60 @@ The exact TEST1 permission shape was reproduced on a temporary path:
     parent before/after   root:root 0755
     backup-state result   ubuntu:ubuntu 0700
 
-The fallback completed successfully. DBST-413 remains open until TEST1 is
-re-run with Stack 2026.10.06.4 and functionally validated.
+The fallback completed successfully. TEST1 was then re-run by the user with Stack 2026.10.06.4 and the update
+completed successfully.
+
+Post-update TEST1 status:
+
+    Stack       2026.10.06.4
+    API         1.71.0
+    Frontend    1.120.0
+    Ingestion   1.0.3
+    Migrations  87
+    nginx       1.0.0
+
+Runtime health:
+
+    api          healthy
+    frontend     healthy
+    nginx        healthy
+    timescaledb  healthy
+    migrations   exited 0
+    ingestion    running
+
+The legacy directory shape is now exactly as intended:
+
+    data                root:root   0755
+    data/backup-state   ubuntu:ubuntu 0700
+
+Read-only database validation on TEST1 confirmed:
+
+    migration 087 present
+    gateway_traffic_events is a hypertable
+    metric_routing_events is a hypertable
+    both diagnostic retention jobs use drop_after = 48 hours
+    both diagnostic retention jobs run every 1 hour
+    both desired retention settings are 172800 seconds
+    database_retention_audit rows = 0
+
+TEST1 currently has no diagnostic event chunks, which is expected for this
+instance, but both hypertables and their retention jobs are installed and
+active.
+
+Ingestion logs confirm:
+
+    gateway traffic retention owner = timescaledb
+    metric routing retention owner  = timescaledb
+
+The Admin retention endpoint reports all six managed policies IN SYNC.
+
+This TEST1 instance is currently configured with:
+
+    SENSORSPHERE_ENVIRONMENT=TEST1
+    SENSORSPHERE_AUTH_ENABLED=false
+    SENSORSPHERE_AUTH_DEV_ROLE_SWITCH_ENABLED=true
+
+so the Admin endpoint responds without a login on this instance. DB-5 did not
+change those authentication settings.
+
+DBST-413 is complete.
