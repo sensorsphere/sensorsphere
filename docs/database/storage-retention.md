@@ -1,6 +1,6 @@
 # Database Storage & Retention
 
-Status: DB-1 implemented; DB-2, DB-3 and DB-4 accepted on DEV + DIT
+Status: DB-1 implemented; DB-2, DB-3, DB-4 and DB-5 accepted on DEV + DIT
 Initial baseline: DEV, 2026-10-03
 Scope: SensorSphere database storage observability, optimization and retention lifecycle
 
@@ -884,7 +884,10 @@ DB-4 operational semantics:
 
 ## DB-5 — Diagnostic Event Tables / Timescale Retention
 
-Status: IN PROGRESS — DEV
+Status: ACCEPTED — DEV + DIT (2026-10-06)
+
+Validation details:
+`docs/database/storage-retention-db5-dev-dit-results.md`.
 
 Goal: replace row-by-row 48-hour DELETE retention for the two high-volume
 diagnostic event tables with native one-hour Timescale chunks and 48-hour
@@ -900,10 +903,10 @@ continuity.
 - [x] DBST-406 — Integrate DB-3 retention preview/apply with the Timescale event policies.
 - [x] DBST-407 — Validate migration failure/rollback and interrupted-write behavior.
 - [x] DBST-408 — Benchmark reads, filters, pagination and ingestion before/after.
-- [ ] DBST-409 — Compare dead tuples, allocated storage and physical reclamation.
+- [x] DBST-409 — Compare dead tuples, allocated storage and physical reclamation.
 - [x] DBST-410 — Validate Backup V2 create/verify with converted event hypertables.
-- [ ] DBST-411 — Accept on DEV.
-- [ ] DBST-412 — Accept on DIT.
+- [x] DBST-411 — Accept on DEV.
+- [x] DBST-412 — Accept on DIT.
 - [ ] DBST-413 — Validate on TEST1 only after explicit approval.
 
 DB-5 safety rules:

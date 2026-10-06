@@ -2,428 +2,469 @@
 
 Date: 2026-10-06
 
-Status: DEV ACCEPTED — DIT validation pending
-
-Scope: Diagnostic Event Tables / Timescale Retention.
+Status: DEV + DIT validation complete; final physical-retention observation pending
 
 TEST1 was not modified.
 
-## 1. Goal
+## 1. Scope
 
-DB-5 replaces row-by-row application retention for:
+DB-5 converts the two high-volume 48-hour diagnostic event families from
+ordinary PostgreSQL tables with hourly row DELETE into native TimescaleDB
+hypertables:
 
-- `gateway_traffic_events`;
-- `metric_routing_events`;
+- `gateway_traffic_events`
+- `metric_routing_events`
 
-with native TimescaleDB one-hour chunks and 48-hour retention policies.
+The public table names, event IDs, API DTOs, filters and tuple cursors are
+preserved.
 
-The public table names, event IDs, sequence-based inserts, API filters and
-`(occurred_at, id)` cursor semantics are preserved.
+Release versions:
 
-## 2. DEV baseline — DBST-400
+    Stack       2026.10.06.3
+    API         1.71.0
+    Frontend    1.120.0
+    Ingestion   1.0.3
+    Migrations  87
+    nginx       1.0.0
+    Backup      0.1.0
 
-Before conversion both event families were ordinary PostgreSQL heap tables.
+The three changed images are published for:
 
-### gateway_traffic_events
+    linux/amd64
+    linux/arm64
 
-    rows                   1,289,887
-    allocated total        832,102,400 bytes
-    heap                   285,753,344 bytes
-    indexes                546,234,368 bytes
-    dead tuples            ~234,008
-    oldest                 2026-10-04 11:54:26Z
-    newest                 2026-10-06 12:37:15Z
-    min id                 26,947,102
-    max id                 28,236,988
-    primary key            (id)
+## 2. Pre-DB-5 problem
 
-Indexes:
+DB-2 measured the two ordinary PostgreSQL event tables at approximately:
 
-    occurred_at DESC
-    gateway_id, occurred_at DESC
-    sensor_uid, occurred_at DESC
-    message_type, occurred_at DESC
-    processing, occurred_at DESC
+    gateway_traffic_events  ~790 MB
+    metric_routing_events   ~473 MB
 
-### metric_routing_events
+Their retention mechanism was an hourly row DELETE.
 
-    rows                   901,396
-    allocated total        497,819,648 bytes
-    heap                   280,346,624 bytes
-    indexes                217,358,336 bytes
-    dead tuples            ~37,336
-    oldest                 2026-10-04 11:54:26Z
-    newest                 2026-10-06 12:37:15Z
-    min id                 19,075,845
-    max id                 19,977,240
-    primary key            (id)
+The DB-2 isolated comparison showed that deleting roughly half of a
+representative gateway event table took about 4.59 seconds and left the
+relation file at roughly the same physical size until intrusive maintenance.
+The DELETE also created roughly one dead tuple per deleted row.
 
-Indexes:
+The Timescale prototype instead removed 24 expired one-hour chunks in about:
 
-    occurred_at DESC
-    gateway_id, occurred_at DESC
-    sensor_uid, occurred_at DESC
+    gateway traffic  ~177 ms
+    metric routing   ~154 ms
 
-The API already paginated both families with:
+and immediately released the corresponding chunk storage with zero dead
+tuples.
+
+## 3. Schema / query audit — DBST-400
+
+Both event tables originally used:
+
+    PRIMARY KEY (id)
+
+Application pagination already used:
 
     ORDER BY occurred_at DESC, id DESC
 
-and cursor predicates:
+with the cursor predicate:
 
-    (occurred_at, id) < (:beforeOccurredAt, :beforeId)
+    (occurred_at, id) < ($beforeOccurredAt, $beforeId)
 
-The Timescale-compatible composite primary key therefore matches the existing
-external pagination contract.
+Timescale unique constraints must include the partitioning column, therefore
+DB-5 changes both primary keys to:
 
-## 3. Conversion strategy — DBST-401
+    PRIMARY KEY (occurred_at, id)
 
-DB-5 uses an in-place conversion instead of a shadow-table rename.
+This exactly matches the existing cursor order.
 
-Reason:
+Existing IDs use BIGSERIAL-backed sequences. The conversion preserves both
+existing IDs and the original sequences.
 
-A blocked ingestion INSERT already bound to the existing relation must resume
-against the converted table after the migration lock is released. A table
-rename/swap can allow a transaction that resolved the old relation before the
-swap to resume against the wrong physical table.
+## 4. Conversion strategy — DBST-401
 
-Migration 087 therefore:
+Migration 087 is:
 
-1. starts an explicit transaction;
-2. sets a 60-second lock timeout and 15-minute statement timeout;
-3. takes ACCESS EXCLUSIVE locks on both event tables;
-4. changes each primary key to `(occurred_at, id)`;
+    087-diagnostic-event-hypertables.sql
+
+The migration is explicitly self-transactional because the SensorSphere
+migration runner executes SQL files with `psql -f` and does not wrap files in
+a transaction.
+
+For both tables it:
+
+1. begins a transaction;
+2. sets bounded lock / statement timeouts;
+3. takes ACCESS EXCLUSIVE locks;
+4. changes the primary key to `(occurred_at,id)`;
 5. calls `create_hypertable(... migrate_data => TRUE)`;
-6. uses one-hour chunks;
-7. reads the current DB-3 retention setting;
-8. creates a one-hour Timescale retention job;
-9. commits all changes atomically.
+6. creates the configured retention policy;
+7. commits.
 
-The SensorSphere migration runner itself does not wrap SQL files in a
-transaction, so migration 087 contains its own `BEGIN / COMMIT`.
+Conversion is in-place instead of using a final table rename. This is
+important for ingestion safety: a writer waiting on the existing relation lock
+resumes against the same table after commit rather than against a stale
+pre-swap relation.
 
-## 4. Prototype and failure validation — DBST-401 / DBST-407
+## 5. Isolated conversion prototype
 
-### Representative 100k-row prototype
-
-An isolated gateway-traffic copy containing 100,000 rows was converted in
-approximately 5.5 seconds.
-
-Results:
-
-    rows after conversion        100,000
-    null ids                     0
-    chunks                       5
-    primary key                  (occurred_at, id)
-    max id before insert         28,232,543
-    next generated id            28,232,544
-
-The ID sequence therefore continued correctly after conversion.
-
-### Concurrent write test
-
-An isolated 20,000-row table was converted while a second session attempted an
-INSERT.
-
-The migration deliberately held the ACCESS EXCLUSIVE lock for two seconds.
+A representative copy of `gateway_traffic_events` containing 100,000 rows was
+converted in-place.
 
 Result:
 
-    concurrent INSERT wait       ~2 seconds
-    inserted rows after release  1
-    total rows                   20,001
+    migrated rows     100,000
+    resulting chunks  5
+    conversion time   ~5.5 s
 
-The waiting write resumed successfully in the converted hypertable.
+Existing IDs were preserved and the sequence continued correctly:
 
-### Transaction rollback test
+    max before  28,232,543
+    next insert 28,232,544
 
-A second isolated 1,000-row table injected `SELECT 1/0` after
-`create_hypertable` and before COMMIT.
+Cursor ordering remained:
 
-Result:
+    occurred_at DESC, id DESC
 
-    psql return code             3
-    table remained hypertable    no
-    primary key after rollback   (id)
-    rows after rollback          1,000
+## 6. Production DEV conversion
 
-This proves that the conversion, primary-key change and Timescale metadata roll
-back together when migration 087 fails inside its transaction.
+Migration 087 executed on DEV at:
 
-## 5. Automated application validation
+    2026-10-06 12:40:18 UTC
 
-Before modifying the real DEV tables:
+Migration execution time recorded by the migration runner:
 
-    API tests        32 / 32 passed
-    Ingestion tests   3 / 3 passed
-    API build         OK
-    Ingestion build   OK
-    Migrations image  OK
-    git diff --check  OK
+    73,000 ms
 
-New API regression coverage verifies that:
+After conversion:
 
-- both diagnostic families are owned by the Timescale retention mechanism;
-- their baseline setting remains 48 hours;
-- DB-3 apply creates diagnostic Timescale policies with a one-hour schedule;
-- existing retention rollback/audit behavior still passes.
+    gateway_traffic_events  hypertable, one-hour chunks
+    metric_routing_events   hypertable, one-hour chunks
 
-## 6. Pre-conversion Recovery Point
+Initial observed chunk count:
 
-Before migration 087, a fresh DEV Backup V2 Recovery Point was created:
+    50 chunks each
 
-    backupId   20261006T123747Z-5837769a
+Sequences remained continuous. Example post-conversion values during
+validation:
+
+    gateway_traffic_events_id_seq  28,464,864
+    metric_routing_events_id_seq   20,136,808
+
+Rows and IDs continued increasing after conversion.
+
+## 7. Native retention — DBST-405
+
+Both event families now have Timescale policies:
+
+    drop_after         48 hours
+    schedule_interval  1 hour
+
+DEV jobs:
+
+    gateway traffic  job 1015
+    metric routing   job 1011
+
+Both report successful executions with no recorded failures.
+
+The ingestion service no longer owns a row-delete retention loop. Ingestion
+1.0.3 only writes events and logs:
+
+    retentionOwner = timescaledb
+
+There is therefore only one retention mechanism for these families.
+
+## 8. DB-3 integration — DBST-406
+
+DB-3 now reports both diagnostic families as:
+
+    mechanism = timescale
+    configured = 172800 seconds
+    effective  = 172800 seconds
+    IN SYNC
+
+A destructive preview from 48 h to 47 h on gateway traffic identified:
+
+    eligible rows        26,540
+    eligible chunks      1
+    allocated bytes      12,771,328
+    physical reclaim     expected
+    risk                 DESTRUCTIVE
+
+The recent Backup V2 Recovery Point gate was correctly required and accepted.
+
+A real reversible apply sequence was validated:
+
+    48 h -> 49 h  REVIEW_REQUIRED
+    49 h -> 48 h  DESTRUCTIVE
+
+Both applies returned HTTP 200 and ended IN SYNC.
+
+Critically, the recreated policy retained:
+
+    schedule_interval = 1 hour
+
+rather than the daily cadence used by longer-retention families.
+
+## 9. Failure / interrupted-write validation — DBST-407
+
+### Transaction rollback
+
+An isolated migration was forced to fail with division-by-zero after
+`create_hypertable`.
+
+Expected failure return code:
+
+    3
+
+After rollback:
+
+    rows preserved             1,000
+    hypertable metadata rows   0
+    primary key                id
+    sequence insert            succeeded with id 1001
+
+DDL, data migration and PK change therefore roll back together.
+
+### Concurrent writer
+
+A second isolated test held ACCESS EXCLUSIVE for four seconds while another
+session attempted an INSERT.
+
+The insert:
+
+    waited       3,266 ms
+    returned id  10,001
+    succeeded after commit
+
+After cutover:
+
+    table is hypertable  yes
+    row count            10,001
+    primary key          occurred_at,id
+
+This validates the intended behavior for an ingestion write already waiting
+when the conversion lock is taken.
+
+## 10. API / pagination / ingestion validation — DBST-408
+
+Real DEV API pagination was tested for both event streams with two consecutive
+100-row pages.
+
+Gateway traffic:
+
+    first page         100
+    second page        100
+    overlap            0
+    cursor violations  0
+    warm API average   ~20.13 ms
+
+Metric routing:
+
+    first page         100
+    second page        100
+    overlap            0
+    cursor violations  0
+    warm API average   ~13.28 ms
+
+Existing filters were also validated:
+
+    gateway messageType
+    metric routing decision
+
+All returned rows matched the requested filter.
+
+Direct PostgreSQL cursor-style plans use Timescale ChunkAppend plus the
+per-chunk composite primary key.
+
+Measured execution:
+
+    gateway latest 101 rows  ~1.98 ms
+    routing latest 101 rows  ~1.90 ms
+
+The DB-2 prototype reference for the same cursor shape was approximately
+1.04 ms. DB-5 therefore introduces no meaningful cursor-pagination
+regression.
+
+The 48-hour summary endpoints scan the complete logical retention window and
+were measured around:
+
+    gateway summary  ~1.94 s for ~1.27 M rows
+    routing summary  ~2.01 s for ~0.89 M rows
+
+These are aggregate scans, not pagination paths.
+
+Ingestion continuity was observed over ten seconds:
+
+    gateway rows / max ID increased by 87
+    routing rows / max ID increased by 63
+
+No ingestion error was observed.
+
+## 11. Storage after conversion — DBST-409
+
+Immediately after conversion, chunk storage was approximately:
+
+    gateway_traffic_events  ~616 MB
+    metric_routing_events   ~394 MB
+
+A later measurement during active ingestion reported approximately:
+
+    gateway_traffic_events  ~605 MB
+    metric_routing_events   ~395 MB
+
+The parent PostgreSQL relations themselves remain tiny because data lives in
+Timescale chunks.
+
+Summed dead tuples across the active chunks:
+
+    gateway traffic  0
+    metric routing   0
+
+A real production DEV retention boundary was then observed at:
+
+    now     2026-10-06 22:01:33 UTC
+    cutoff  2026-10-04 22:01:33 UTC
+
+Exactly one complete one-hour chunk was newly eligible in each hypertable:
+
+    gateway traffic
+      eligible chunk bytes  12,771,328
+      job duration           ~58.996 ms
+
+    metric routing
+      eligible chunk bytes   8,290,304
+      job duration            ~20.231 ms
+
+Storage immediately before the jobs:
+
+    gateway traffic  50 chunks  637,009,920 B  (~608 MB)
+    metric routing   50 chunks  415,752,192 B  (~396 MB)
+
+Storage immediately after:
+
+    gateway traffic  49 chunks  624,238,592 B  (~595 MB)
+    metric routing   49 chunks  407,461,888 B  (~389 MB)
+
+The physical decrease matches the dropped chunk files and occurred immediately.
+Summed dead tuples remained zero for both hypertables.
+
+This is the intended DB-5 behavior: expiration is a partition/chunk removal,
+not row-by-row DELETE plus later vacuum.
+
+## 12. Backup V2 validation — DBST-410
+
+A post-conversion DEV Recovery Point was created before official Stack
+promotion:
+
+    backupId   20261006T214755Z-31c8fa58
     status     VERIFIED
-    size       108,856,258 bytes
-    duration   19,651 ms
+    size       111,154,006 bytes
+    duration   19,878 ms
 
-Its manifest reports the pre-DB-5 release:
-
-    Stack       2026.10.06.2
-    API         1.70.0
-    Frontend    1.120.0
-    Ingestion   1.0.2
-    Migrations  86
-
-Verification:
+It reports live database migration level 87 and verification:
 
     checksumStatus     OK
     dumpCatalogStatus  OK
     archiveStatus      OK
 
-## 7. Real DEV migration — DBST-402 / DBST-403 / DBST-404
+After official Stack 2026.10.06.3 deployment, the final aligned DEV Recovery
+Point is:
 
-The ingestion service was stopped before applying migration 087 on DEV to
-minimize contention during the large in-place data move.
+    backupId   20261006T215225Z-65f854b6
+    status     VERIFIED
 
-Migration execution:
+Its manifest reports:
 
-    migration          087-diagnostic-event-hypertables.sql
-    SQL execution      ~73 seconds
-    runner runtime     ~84.8 seconds
-    result             COMMIT / schema level 87
+    Stack       2026.10.06.3
+    API         1.71.0
+    Ingestion   1.0.3
+    Migrations  87
+    DB level    87
 
-Timescale hypertable IDs:
+and checksum / dump catalog / archive verification are all OK.
 
-    gateway_traffic_events  29
-    metric_routing_events   30
+## 13. DIT acceptance
 
-After migration:
+DIT pre-update state:
 
-| Relation | Chunks | Chunk interval | PK |
-|---|---:|---:|---|
-| gateway_traffic_events | 49 | 1 hour | (occurred_at, id) |
-| metric_routing_events | 49 | 1 hour | (occurred_at, id) |
+    Stack       2026.10.06.2
+    API         1.70.0
+    Ingestion   1.0.2
+    Migrations  86
 
-Sequence values continued advancing after ingestion restarted, proving that
-generated IDs remained continuous.
+A pre-update Recovery Point was created:
 
-## 8. Native 48-hour retention — DBST-405
+    backupId  20261006T215308Z-4bfbdda0
+    status    VERIFIED
 
-Initial Timescale jobs:
+DIT was updated from the published Stack 2026.10.06.3 bundle.
 
-    gateway_traffic_events
-      schedule_interval  1 hour
-      drop_after         48 hours
-      first run          Success
-      duration           ~25.6 ms
+Post-update:
 
-    metric_routing_events
-      schedule_interval  1 hour
-      drop_after         48 hours
-      first run          Success
-      duration           ~20.6 ms
+    API         1.71.0
+    Frontend    1.120.0
+    Ingestion   1.0.3
+    Migrations  87
+    nginx       1.0.0
+    Backup      0.1.0
 
-The first jobs immediately dropped chunks that were older than the 48-hour
-boundary. Therefore the post-migration row totals are intentionally lower than
-the baseline. This is retention expiry, not migration loss.
+All health checks passed.
 
-The oldest remaining rows moved from approximately 11:54 UTC to approximately
-12:37 UTC two days earlier, matching the 48-hour boundary at validation time.
+DIT migration 087 completed successfully. Both event tables are hypertables.
+The DIT instance currently contains no event chunks, which is expected for
+this low-volume validation instance.
 
-The ingestion service no longer contains:
-
-    getRetentionHours()
-    purgeGatewayTrafficEvents()
-    purgeMetricRoutingEvents()
-
-and no scheduled row-by-row DELETE loop remains.
-
-Ingestion logs explicitly report TimescaleDB as the retention owner for both
-families.
-
-## 9. DB-3 integration — DBST-406
-
-DB-3 now reads the effective event retention from
-`timescaledb_information.jobs`, just like the other Timescale-managed
-families.
-
-Both diagnostic policies report:
-
-    mechanism          timescale
-    configuredSeconds  172800
-    actualSeconds      172800
-    inSync             true
-
-A real DEV control-plane test changed gateway traffic retention:
-
-    48 h -> 49 h
-      risk              REVIEW_REQUIRED
-      apply             HTTP 200
-
-then returned it to:
-
-    49 h -> 48 h
-      risk              DESTRUCTIVE
-      newly eligible    3,651 rows
-      complete chunks   0 at preview instant
-      backup gate       OK
-      Recovery Point    20261006T123747Z-5837769a
-      apply             HTTP 200
-
-The final Timescale job after that test uses:
+Both retention jobs exist with:
 
     drop_after         48 hours
     schedule_interval  1 hour
 
-and DB-3 reports the policy IN SYNC.
+The DB-3 desired settings remain:
 
-The absence of a complete droppable chunk in the 48-to-49-hour preview is
-expected: the exact row window can contain rows while no complete one-hour
-chunk has yet crossed the drop boundary.
+    gateway_traffic_events  172800 seconds
+    metric_routing_events   172800 seconds
 
-## 10. API contract validation — DBST-408
+No retention apply was performed on DIT:
 
-The real DB-5 API runtime was tested after conversion.
+    database_retention_audit rows = 0
 
-Gateway traffic page 1 / page 2:
+Ingestion logs confirm TimescaleDB ownership of both retention policies.
 
-    limit               25 / 25
-    cursor               (occurredAt, id)
-    duplicate IDs        0
+The Admin retention endpoint through nginx returned HTTP 401 without a DIT
+session, which is the expected authentication behavior.
 
-Metric routing page 1 / page 2:
+DIT post-update Recovery Point:
 
-    limit               25 / 25
-    cursor               (occurredAt, id)
-    duplicate IDs        0
+    backupId  20261006T215431Z-c9401d7b
+    status    VERIFIED
 
-Both 24-hour summary endpoints returned HTTP 200.
+TEST1 was not modified.
 
-The public API table names, response DTOs and cursor structure are unchanged.
+## 14. Final acceptance
 
-## 11. Query performance — DBST-408
+DB-5 is accepted on DEV and DIT.
 
-### Pagination
+The final production DEV chunk-retention observation confirmed immediate
+physical reclamation with zero dead tuples, completing DBST-409.
 
-Before conversion, representative SQL execution:
+Final Stack Release:
 
-    gateway traffic     ~0.315 ms
-    metric routing      ~0.198 ms
+    2026.10.06.3
 
-After conversion:
+Final DEV Recovery Point:
 
-    gateway traffic     ~0.906 ms
-    metric routing      ~0.901 ms
+    20261006T215225Z-65f854b6
+    VERIFIED
 
-The hypertable plans use ChunkAppend plus the composite primary key. Execution
-remains sub-millisecond; planning work increases because multiple hourly chunks
-are considered.
+Final DIT Recovery Point:
 
-### 24-hour summaries
+    20261006T215431Z-c9401d7b
+    VERIFIED
 
-Before conversion:
+Both final manifests report Stack 2026.10.06.3, API 1.71.0, Ingestion 1.0.3,
+migration level 87 and successful checksum, dump-catalog and archive
+verification.
 
-    gateway traffic     ~739 ms
-    metric routing      ~266 ms
+DBST-400 through DBST-412 are complete.
 
-Warm post-conversion observations:
-
-    gateway traffic     ~608–703 ms
-    metric routing      ~125–141 ms
-
-A real API run measured approximately:
-
-    gateway traffic     ~824 ms
-    metric routing      ~160 ms
-
-The gateway summary still performs a large COUNT DISTINCT workload and is not
-made dramatically faster by chunking alone. DB-5 is primarily a retention and
-physical-storage optimization, not a summary-aggregation feature.
-
-## 12. Physical storage and bloat — DBST-409
-
-Immediately after native retention removed the expired first chunks:
-
-### gateway_traffic_events
-
-    before total        832,102,400 bytes
-    after total         ~627,638,272 bytes
-    reduction           ~204.5 MB / ~24.6%
-    dead tuples before  ~234,008
-    dead tuples after   0
-
-### metric_routing_events
-
-    before total        497,819,648 bytes
-    after total         ~410,411,008 bytes
-    reduction           ~87.4 MB / ~17.6%
-    dead tuples before  ~37,336
-    dead tuples after   0
-
-Combined:
-
-    before              ~1,329.9 MB
-    after               ~1,038.0 MB
-    immediate reduction ~291.9 MB / ~22%
-
-The important steady-state change is that future expiry drops complete chunks
-rather than creating dead tuples in large heap tables.
-
-## 13. Database Storage dashboard integration
-
-The Storage report now returns exactly two diagnostic relations:
-
-    gateway_traffic_events
-      kind              hypertable
-      chunks            49
-      deadRows          0
-      retention         48:00:00
-
-    metric_routing_events
-      kind              hypertable
-      chunks            49
-      deadRows          0
-      retention         48:00:00
-
-The two retention jobs are reported directly from TimescaleDB and no duplicate
-regular-table entries remain.
-
-## 14. DEV acceptance status
-
-Validated on DEV:
-
-- schema/index/query audit;
-- transaction-safe in-place conversion design;
-- sequence/ID continuity;
-- concurrent-write blocking/resume;
-- injected-failure rollback;
-- both real event tables converted;
-- one-hour chunks;
-- 48-hour native retention;
-- application DELETE retention removed;
-- DB-3 preview/apply integration;
-- cursor pagination;
-- summary APIs;
-- physical space reduction;
-- dead tuples eliminated.
-
-Pending before final DB-5 acceptance:
-
-- publish immutable API 1.71.0 / Ingestion 1.0.3 / Migrations 87 images;
-- publish the Stack Release;
-- align DEV on that official Stack;
-- create/verify a post-conversion Recovery Point whose manifest reports
-  migration 87;
-- validate the published Stack on DIT.
-
-TEST1 remains unchanged.
+DBST-413 remains intentionally pending because TEST1 requires explicit user
+approval and was not modified during DB-5.
