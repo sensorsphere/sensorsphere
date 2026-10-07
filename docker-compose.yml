@@ -165,7 +165,7 @@ services:
 
 
   backup:
-    image: ${SENSORSPHERE_IMAGE_REGISTRY:-ghcr.io}/${SENSORSPHERE_IMAGE_NAMESPACE:-sensorsphere}/sensorsphere-backup:${SENSORSPHERE_BACKUP_VERSION:-0.1.0}
+    image: ${SENSORSPHERE_IMAGE_REGISTRY:-ghcr.io}/${SENSORSPHERE_IMAGE_NAMESPACE:-sensorsphere}/sensorsphere-backup:${SENSORSPHERE_BACKUP_VERSION:-0.2.0}
     profiles:
       - backup
 
@@ -187,7 +187,7 @@ services:
       SENSORSPHERE_INGESTION_VERSION: ${SENSORSPHERE_INGESTION_VERSION:-}
       SENSORSPHERE_NGINX_VERSION: ${SENSORSPHERE_NGINX_VERSION:-}
       SENSORSPHERE_MIGRATIONS_VERSION: ${SENSORSPHERE_MIGRATIONS_VERSION:-}
-      SENSORSPHERE_BACKUP_VERSION: ${SENSORSPHERE_BACKUP_VERSION:-0.1.0}
+      SENSORSPHERE_BACKUP_VERSION: ${SENSORSPHERE_BACKUP_VERSION:-0.2.0}
       SENSORSPHERE_IMAGE_REGISTRY: ${SENSORSPHERE_IMAGE_REGISTRY:-ghcr.io}
       SENSORSPHERE_IMAGE_NAMESPACE: ${SENSORSPHERE_IMAGE_NAMESPACE:-sensorsphere}
 
@@ -208,6 +208,51 @@ services:
       - ${DATA_ROOT:-./data}/mosquitto:/source/mosquitto:ro
       - ${SENSORSPHERE_BACKUP_ROOT:-./backups}:/backups
       - ${SENSORSPHERE_BACKUP_STATE_ROOT:-./data/backup-state}:/state
+
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+
+    networks:
+      - database
+
+
+  restore:
+    image: ${SENSORSPHERE_IMAGE_REGISTRY:-ghcr.io}/${SENSORSPHERE_IMAGE_NAMESPACE:-sensorsphere}/sensorsphere-backup:${SENSORSPHERE_BACKUP_VERSION:-0.2.0}
+    profiles:
+      - restore
+
+    environment:
+      DB_HOST: timescaledb
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-sensorsphere}
+      DB_USER: ${POSTGRES_USER:-sensorsphere}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be defined}
+
+      INSTANCE_NAME: ${INSTANCE_NAME:-SensorSphere}
+      SENSORSPHERE_ENVIRONMENT: ${SENSORSPHERE_ENVIRONMENT:-DEFAULT}
+      SENSORSPHERE_INSTALL_HOST: ${SENSORSPHERE_INSTALL_HOST:-}
+      SENSORSPHERE_INSTALL_DIR: ${SENSORSPHERE_INSTALL_DIR:-}
+      SENSORSPHERE_COMPOSE_PROJECT: ${SENSORSPHERE_COMPOSE_PROJECT:-}
+      SENSORSPHERE_STACK_VERSION: ${SENSORSPHERE_STACK_VERSION:-}
+      SENSORSPHERE_MIGRATIONS_VERSION: ${SENSORSPHERE_MIGRATIONS_VERSION:-}
+      SENSORSPHERE_BACKUP_VERSION: ${SENSORSPHERE_BACKUP_VERSION:-0.2.0}
+      SENSORSPHERE_DATA_ROOT: ${DATA_ROOT:-./data}
+      SENSORSPHERE_DATABASE_MIN_MIGRATION_LEVEL: ${SENSORSPHERE_DATABASE_MIN_MIGRATION_LEVEL:-72}
+      SENSORSPHERE_DATABASE_MAX_MIGRATION_LEVEL: ${SENSORSPHERE_DATABASE_MAX_MIGRATION_LEVEL:-87}
+
+      BACKUP_ROOT: /backups
+      BACKUP_STATE_ROOT: /restore-state
+      INSTANCE_ROOT: /instance
+      APP_DATA_ROOT: /target/app
+      MOSQUITTO_DATA_ROOT: /target/mosquitto
+
+    volumes:
+      - .:/instance:ro
+      - ${SENSORSPHERE_BACKUP_ROOT:-./backups}:/backups:ro
+      - ${SENSORSPHERE_RESTORE_STATE_ROOT:-./data/restore-state}:/restore-state
+      - ${DATA_ROOT:-./data}/app:/target/app
+      - ${DATA_ROOT:-./data}/mosquitto:/target/mosquitto
 
     depends_on:
       timescaledb:

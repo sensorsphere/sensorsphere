@@ -14,6 +14,7 @@ import (
 	"github.com/sensorsphere/sensorsphere/apps/backup/internal/config"
 	"github.com/sensorsphere/sensorsphere/apps/backup/internal/manifest"
 	"github.com/sensorsphere/sensorsphere/apps/backup/internal/repository"
+	restoreop "github.com/sensorsphere/sensorsphere/apps/backup/internal/restore"
 	"github.com/sensorsphere/sensorsphere/apps/backup/internal/retention"
 	"github.com/sensorsphere/sensorsphere/apps/backup/internal/runstate"
 	"github.com/sensorsphere/sensorsphere/apps/backup/internal/verify"
@@ -73,6 +74,7 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, "  status [options]         Show backup health/status")
 	fmt.Fprintln(w, "  verify <id|latest>       Verify a Recovery Bundle")
 	fmt.Fprintln(w, "  prune [options]          Plan/apply local retention")
+	fmt.Fprintln(w, "  restore [options]        Preflight/restore a Recovery Bundle")
 	fmt.Fprintln(w, "  help                     Show this help")
 }
 
@@ -104,6 +106,8 @@ func Run(args []string, stdout, stderr io.Writer, info BuildInfo) int {
 		return runVerify(args[1:], stdout, stderr)
 	case "prune":
 		return runPrune(args[1:], stdout, stderr)
+	case "restore":
+		return runRestore(args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "ERROR: unknown command: %s\n\n", args[0])
 		usage(stderr)
@@ -213,6 +217,92 @@ func runCreate(args []string, stdout, stderr io.Writer, info BuildInfo) int {
 	fmt.Fprintf(stdout, "Size................ %d bytes\n", result.SizeBytes)
 	fmt.Fprintf(stdout, "Duration............ %d ms\n", result.DurationMillis)
 	fmt.Fprintf(stdout, "Path................ %s\n", result.Path)
+	return 0
+}
+
+func runRestore(args []string, stdout, stderr io.Writer) int {
+	if isHelp(args) {
+		fmt.Fprintln(stdout, "Usage: sensorsphere-backup restore (--data|--full) <backup-id> --preflight [--json]")
+		return 0
+	}
+	var mode restoreop.Mode
+	backupID := ""
+	preflight := false
+	jsonMode := false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--data":
+			if mode != "" {
+				fmt.Fprintln(stderr, "ERROR: choose exactly one restore mode: --data or --full")
+				return 2
+			}
+			mode = restoreop.ModeData
+		case "--full":
+			if mode != "" {
+				fmt.Fprintln(stderr, "ERROR: choose exactly one restore mode: --data or --full")
+				return 2
+			}
+			mode = restoreop.ModeFull
+		case "--preflight":
+			preflight = true
+		case "--json":
+			jsonMode = true
+		default:
+			if strings.HasPrefix(args[i], "-") {
+				fmt.Fprintf(stderr, "ERROR: unknown restore option: %s\n", args[i])
+				return 2
+			}
+			if backupID != "" {
+				fmt.Fprintln(stderr, "ERROR: restore accepts one explicit backup id")
+				return 2
+			}
+			backupID = args[i]
+		}
+	}
+	if mode == "" {
+		fmt.Fprintln(stderr, "ERROR: restore requires exactly one mode: --data or --full")
+		return 2
+	}
+	if backupID == "" || backupID == "latest" {
+		fmt.Fprintln(stderr, "ERROR: restore requires an explicit backup id (latest is not allowed)")
+		return 2
+	}
+	if !preflight {
+		fmt.Fprintln(stderr, "ERROR: destructive restore execution is not enabled yet; run with --preflight")
+		return 2
+	}
+
+	cfg, code := loadConfig(stderr)
+	if code != 0 {
+		return code
+	}
+	result, err := restoreop.Preflight(cfg, mode, backupID)
+	if err != nil {
+		code := restoreop.ErrorCode(err)
+		if jsonMode {
+			_ = encodeJSON(stdout, stderr, map[string]any{"status": "FAILED", "code": code, "error": err.Error()})
+		} else {
+			fmt.Fprintf(stderr, "ERROR: %v\n", err)
+		}
+		return code
+	}
+	if jsonMode {
+		return encodeJSON(stdout, stderr, result)
+	}
+	fmt.Fprintln(stdout, "SensorSphere Restore Preflight")
+	fmt.Fprintln(stdout)
+	fmt.Fprintf(stdout, "Status.............. %s\n", result.Status)
+	fmt.Fprintf(stdout, "Mode................ %s\n", result.Mode)
+	fmt.Fprintf(stdout, "Backup ID........... %s\n", result.BackupID)
+	fmt.Fprintf(stdout, "Source.............. %s / %s\n", result.Source.Environment, result.Source.InstanceName)
+	fmt.Fprintf(stdout, "Source Stack........ %s\n", result.SourceStack.StackVersion)
+	fmt.Fprintf(stdout, "Source DB........... PostgreSQL %d / TimescaleDB %s / migration %d\n", result.SourceDB.ServerMajor, result.SourceDB.TimescaleVersion, result.SourceDB.MigrationLevel)
+	fmt.Fprintf(stdout, "Target.............. %s / %s\n", result.Target.Environment, result.Target.InstanceName)
+	fmt.Fprintf(stdout, "Target Stack........ %s\n", result.Target.StackVersion)
+	fmt.Fprintf(stdout, "Target DB........... PostgreSQL %d / TimescaleDB %s / migration %d\n", result.Target.PostgresMajor, result.Target.TimescaleVersion, result.Target.MigrationLevel)
+	fmt.Fprintf(stdout, "DB compatibility.... %d..%d\n", result.Target.DatabaseMinMigrationLevel, result.Target.DatabaseMaxMigrationLevel)
+	fmt.Fprintf(stdout, "Confirmation........ %s\n", result.Confirmation)
+	fmt.Fprintln(stdout, "Mutation............ none (preflight only)")
 	return 0
 }
 

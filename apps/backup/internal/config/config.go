@@ -7,35 +7,38 @@ import (
 )
 
 type Config struct {
-	BackupRoot        string
-	StateRoot         string
-	InstanceRoot      string
-	AppRoot           string
-	MosquittoRoot     string
-	DBHost            string
-	DBPort            int
-	DBName            string
-	DBUser            string
-	DBPassword        string
-	InstanceName      string
-	Environment       string
-	InstallHost       string
-	InstallDir        string
-	ComposeProject    string
-	StackVersion      string
-	APIVersion        string
-	FrontendVersion   string
-	IngestionVersion  string
-	NginxVersion      string
-	MigrationsVersion string
-	BackupVersion     string
-	ImageRegistry     string
-	ImageNamespace    string
-	RetentionDaily    int
-	RetentionWeekly   int
-	RetentionMonthly  int
-	WarningAgeHours   int
-	CriticalAgeHours  int
+	BackupRoot                string
+	StateRoot                 string
+	InstanceRoot              string
+	AppRoot                   string
+	MosquittoRoot             string
+	DBHost                    string
+	DBPort                    int
+	DBName                    string
+	DBUser                    string
+	DBPassword                string
+	InstanceName              string
+	Environment               string
+	InstallHost               string
+	InstallDir                string
+	ComposeProject            string
+	StackVersion              string
+	APIVersion                string
+	FrontendVersion           string
+	IngestionVersion          string
+	NginxVersion              string
+	MigrationsVersion         string
+	BackupVersion             string
+	ImageRegistry             string
+	ImageNamespace            string
+	DataRoot                  string
+	DatabaseMinMigrationLevel int
+	DatabaseMaxMigrationLevel int
+	RetentionDaily            int
+	RetentionWeekly           int
+	RetentionMonthly          int
+	WarningAgeHours           int
+	CriticalAgeHours          int
 }
 
 func envDefault(key, fallback string) string {
@@ -79,40 +82,52 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	migrationFallback, _ := strconv.Atoi(envDefault("SENSORSPHERE_MIGRATIONS_VERSION", "0"))
+	databaseMinMigrationLevel, err := envInt("SENSORSPHERE_DATABASE_MIN_MIGRATION_LEVEL", 72)
+	if err != nil {
+		return Config{}, err
+	}
+	databaseMaxMigrationLevel, err := envInt("SENSORSPHERE_DATABASE_MAX_MIGRATION_LEVEL", migrationFallback)
+	if err != nil {
+		return Config{}, err
+	}
 	if criticalAgeHours > 0 && warningAgeHours > criticalAgeHours {
 		return Config{}, fmt.Errorf("SENSORSPHERE_BACKUP_WARNING_AGE_HOURS must be <= SENSORSPHERE_BACKUP_CRITICAL_AGE_HOURS")
 	}
 
 	return Config{
-		BackupRoot:        envDefault("BACKUP_ROOT", "/backups"),
-		StateRoot:         envDefault("BACKUP_STATE_ROOT", "/state"),
-		InstanceRoot:      envDefault("INSTANCE_ROOT", "/instance"),
-		AppRoot:           envDefault("APP_DATA_ROOT", "/source/app"),
-		MosquittoRoot:     envDefault("MOSQUITTO_DATA_ROOT", "/source/mosquitto"),
-		DBHost:            envDefault("DB_HOST", "timescaledb"),
-		DBPort:            port,
-		DBName:            envDefault("DB_NAME", envDefault("POSTGRES_DB", "sensorsphere")),
-		DBUser:            envDefault("DB_USER", envDefault("POSTGRES_USER", "sensorsphere")),
-		DBPassword:        envDefault("DB_PASSWORD", envDefault("POSTGRES_PASSWORD", "")),
-		InstanceName:      envDefault("INSTANCE_NAME", "SensorSphere"),
-		Environment:       envDefault("SENSORSPHERE_ENVIRONMENT", "DEFAULT"),
-		InstallHost:       envDefault("SENSORSPHERE_INSTALL_HOST", ""),
-		InstallDir:        envDefault("SENSORSPHERE_INSTALL_DIR", ""),
-		ComposeProject:    envDefault("SENSORSPHERE_COMPOSE_PROJECT", envDefault("COMPOSE_PROJECT_NAME", "")),
-		StackVersion:      envDefault("SENSORSPHERE_STACK_VERSION", ""),
-		APIVersion:        envDefault("SENSORSPHERE_API_VERSION", ""),
-		FrontendVersion:   envDefault("SENSORSPHERE_FRONTEND_VERSION", ""),
-		IngestionVersion:  envDefault("SENSORSPHERE_INGESTION_VERSION", ""),
-		NginxVersion:      envDefault("SENSORSPHERE_NGINX_VERSION", ""),
-		MigrationsVersion: envDefault("SENSORSPHERE_MIGRATIONS_VERSION", ""),
-		BackupVersion:     envDefault("SENSORSPHERE_BACKUP_VERSION", ""),
-		ImageRegistry:     envDefault("SENSORSPHERE_IMAGE_REGISTRY", "ghcr.io"),
-		ImageNamespace:    envDefault("SENSORSPHERE_IMAGE_NAMESPACE", "sensorsphere"),
-		RetentionDaily:    retentionDaily,
-		RetentionWeekly:   retentionWeekly,
-		RetentionMonthly:  retentionMonthly,
-		WarningAgeHours:   warningAgeHours,
-		CriticalAgeHours:  criticalAgeHours,
+		BackupRoot:                envDefault("BACKUP_ROOT", "/backups"),
+		StateRoot:                 envDefault("BACKUP_STATE_ROOT", "/state"),
+		InstanceRoot:              envDefault("INSTANCE_ROOT", "/instance"),
+		AppRoot:                   envDefault("APP_DATA_ROOT", "/source/app"),
+		MosquittoRoot:             envDefault("MOSQUITTO_DATA_ROOT", "/source/mosquitto"),
+		DBHost:                    envDefault("DB_HOST", "timescaledb"),
+		DBPort:                    port,
+		DBName:                    envDefault("DB_NAME", envDefault("POSTGRES_DB", "sensorsphere")),
+		DBUser:                    envDefault("DB_USER", envDefault("POSTGRES_USER", "sensorsphere")),
+		DBPassword:                envDefault("DB_PASSWORD", envDefault("POSTGRES_PASSWORD", "")),
+		InstanceName:              envDefault("INSTANCE_NAME", "SensorSphere"),
+		Environment:               envDefault("SENSORSPHERE_ENVIRONMENT", "DEFAULT"),
+		InstallHost:               envDefault("SENSORSPHERE_INSTALL_HOST", ""),
+		InstallDir:                envDefault("SENSORSPHERE_INSTALL_DIR", ""),
+		ComposeProject:            envDefault("SENSORSPHERE_COMPOSE_PROJECT", envDefault("COMPOSE_PROJECT_NAME", "")),
+		StackVersion:              envDefault("SENSORSPHERE_STACK_VERSION", ""),
+		APIVersion:                envDefault("SENSORSPHERE_API_VERSION", ""),
+		FrontendVersion:           envDefault("SENSORSPHERE_FRONTEND_VERSION", ""),
+		IngestionVersion:          envDefault("SENSORSPHERE_INGESTION_VERSION", ""),
+		NginxVersion:              envDefault("SENSORSPHERE_NGINX_VERSION", ""),
+		MigrationsVersion:         envDefault("SENSORSPHERE_MIGRATIONS_VERSION", ""),
+		BackupVersion:             envDefault("SENSORSPHERE_BACKUP_VERSION", ""),
+		ImageRegistry:             envDefault("SENSORSPHERE_IMAGE_REGISTRY", "ghcr.io"),
+		ImageNamespace:            envDefault("SENSORSPHERE_IMAGE_NAMESPACE", "sensorsphere"),
+		DataRoot:                  envDefault("SENSORSPHERE_DATA_ROOT", ""),
+		DatabaseMinMigrationLevel: databaseMinMigrationLevel,
+		DatabaseMaxMigrationLevel: databaseMaxMigrationLevel,
+		RetentionDaily:            retentionDaily,
+		RetentionWeekly:           retentionWeekly,
+		RetentionMonthly:          retentionMonthly,
+		WarningAgeHours:           warningAgeHours,
+		CriticalAgeHours:          criticalAgeHours,
 	}, nil
 }
 
@@ -125,6 +140,22 @@ func (c Config) ValidateForCreate() error {
 	}
 	if c.AppRoot == "" || c.InstanceRoot == "" {
 		return fmt.Errorf("application and instance roots are required")
+	}
+	return nil
+}
+
+func (c Config) ValidateForRestorePreflight() error {
+	if c.DBPassword == "" {
+		return fmt.Errorf("POSTGRES_PASSWORD/DB_PASSWORD is required")
+	}
+	if c.BackupRoot == "" {
+		return fmt.Errorf("backup root is required")
+	}
+	if c.InstanceName == "" || c.Environment == "" || c.InstallDir == "" || c.ComposeProject == "" || c.DataRoot == "" || c.StackVersion == "" {
+		return fmt.Errorf("target restore identity is incomplete")
+	}
+	if c.DatabaseMinMigrationLevel <= 0 || c.DatabaseMaxMigrationLevel <= 0 || c.DatabaseMinMigrationLevel > c.DatabaseMaxMigrationLevel {
+		return fmt.Errorf("target database compatibility range is invalid")
 	}
 	return nil
 }

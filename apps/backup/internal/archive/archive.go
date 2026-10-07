@@ -69,6 +69,34 @@ func VerifyZstd(path string) error {
 	return nil
 }
 
+func VerifyRestoreSafeZstd(path string) error {
+	if err := VerifyZstd(path); err != nil {
+		return err
+	}
+	cmd := exec.Command("tar", "--zstd", "-tvf", path)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("archive detailed catalog unreadable %s: %w: %s", path, err, string(output))
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(output))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		switch line[0] {
+		case 'l', 'h':
+			return fmt.Errorf("archive contains link entry and is unsafe for restore: %s", line)
+		case 'b', 'c', 'p', 's':
+			return fmt.Errorf("archive contains special entry and is unsafe for restore: %s", line)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("read detailed archive catalog %s: %w", path, err)
+	}
+	return nil
+}
+
 func validateSourceTree(root string) error {
 	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {

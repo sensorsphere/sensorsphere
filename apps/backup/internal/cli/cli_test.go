@@ -133,3 +133,27 @@ func TestHelpRejectsArguments(t *testing.T) {
 		t.Fatalf("expected help argument error, got %q", stderr.String())
 	}
 }
+
+func TestRestoreRequiresMode(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"restore", "backup-1", "--preflight"}, &stdout, &stderr, testBuild)
+	if code != 2 || !strings.Contains(stderr.String(), "requires exactly one mode") {
+		t.Fatalf("unexpected result code=%d stderr=%q", code, stderr.String())
+	}
+}
+
+func TestRestoreRequiresExplicitID(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"restore", "--data", "latest", "--preflight"}, &stdout, &stderr, testBuild)
+	if code != 2 || !strings.Contains(stderr.String(), "explicit backup id") {
+		t.Fatalf("unexpected result code=%d stderr=%q", code, stderr.String())
+	}
+}
+
+func TestRestoreRefusesMutationUntilEnabled(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"restore", "--data", "backup-1"}, &stdout, &stderr, testBuild)
+	if code != 2 || !strings.Contains(stderr.String(), "not enabled yet") {
+		t.Fatalf("unexpected result code=%d stderr=%q", code, stderr.String())
+	}
+}

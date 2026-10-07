@@ -2,6 +2,7 @@ package archive
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -48,5 +49,27 @@ func TestSafeArchivePath(t *testing.T) {
 		if !safeArchivePath(good) {
 			t.Fatalf("expected safe: %q", good)
 		}
+	}
+}
+
+func TestVerifyRestoreSafeZstdRejectsSymlinkArchive(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	if err := os.MkdirAll(source, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "data.txt"), []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("data.txt", filepath.Join(source, "link")); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(root, "unsafe.tar.zst")
+	cmd := exec.Command("tar", "--zstd", "-cf", dest, "-C", source, ".")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("tar: %v: %s", err, output)
+	}
+	if err := VerifyRestoreSafeZstd(dest); err == nil {
+		t.Fatal("expected restore-safe verification to reject symlink entry")
 	}
 }
