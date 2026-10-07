@@ -280,3 +280,43 @@ Production Docker builds for API and Frontend passed.
 DB-1 continues to prohibit data purge, chunk drop, compression changes,
 VACUUM FULL, index mutation, or retention-policy changes. DB-1 reporting
 remains read-only; explicit DB-3 retention controls are a separate operation.
+
+
+## Final DB-1 Stack / DIT acceptance
+
+DB-1 completion is released in:
+
+    Stack       2026.10.07.1
+    API         1.72.0
+    Frontend    1.121.0
+    Ingestion   1.0.3
+    Migrations  87
+
+API 1.72.0 and Frontend 1.121.0 were published as official multi-architecture
+images for linux/amd64 and linux/arm64.
+
+DEV was updated to Stack 2026.10.07.1 and all installer health gates passed.
+
+DIT was then updated to the same Stack and all installer health gates passed.
+
+The real DIT Database Storage controller, using the DIT database and its
+read-only Backup V2 state mount, reported:
+
+    databaseBytes     16,346,259
+    backupId          20261006T215431Z-c9401d7b
+    completedAt       2026-10-06T21:54:32.69249832Z
+    ageHours          ~2.31
+    sizeBytes         304,410
+    safety status     OK
+    verificationBasis successful-create
+
+This proves that DBST-018 is instance-local: DIT reports its own Recovery Point
+rather than DEV backup state.
+
+Final acceptance status:
+
+    DBST-001..018  complete
+    DBST-020..030  complete
+    DBST-040..047  complete
+
+DB-1 is accepted on DEV and DIT.

@@ -1,6 +1,6 @@
 # Database Storage & Retention
 
-Status: DB-1 implemented; DB-2, DB-3 and DB-4 accepted on DEV + DIT; DB-5 accepted on DEV + DIT + TEST1
+Status: DB-1, DB-2, DB-3 and DB-4 accepted on DEV + DIT; DB-5 accepted on DEV + DIT + TEST1
 Initial baseline: DEV, 2026-10-03
 Scope: SensorSphere database storage observability, optimization and retention lifecycle
 
@@ -743,7 +743,7 @@ Task IDs are stable and should be referenced by future PRs.
 
 ## DB-1 — Reporting & Observability
 
-Status: IMPLEMENTED + DEV ACCEPTED — final DIT validation pending
+Status: ACCEPTED — DEV + DIT (2026-10-07)
 
 ### Backend / data collection
 
