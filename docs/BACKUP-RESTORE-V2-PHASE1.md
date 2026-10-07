@@ -2,7 +2,7 @@
 
 > **Status:** implementation specification
 > **Scope:** Phase 1 — versioned Core backup module, local Recovery Bundle, verification, retention and operational state
-> **Related documents:** `BACKUP-RESTORE.md`, `BACKUP-RESTORE-V2.md`, `BACKUP-RESTORE-V2-AUDIT.md`, `BACKUP-RESTORE-V2-TEST-PLAN.md`
+> **Related documents:** `BACKUP-RESTORE.md`, `BACKUP-RESTORE-V2.md`, `BACKUP-RESTORE-V2-AUDIT.md`, `BACKUP-RESTORE-V2-TEST-PLAN.md`, `BACKUP-RESTORE-V2-PHASE2.md`
 
 ---
 

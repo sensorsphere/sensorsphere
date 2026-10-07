@@ -2,7 +2,7 @@
 
 > **Status:** master validation plan
 > **Scope:** complete validation of Backup / Restore V2 from the first Core backup module through scheduling, restore, off-host copy, monitoring and deep verification
-> **Related documents:** `BACKUP-RESTORE.md`, `BACKUP-RESTORE-V2.md`, `BACKUP-RESTORE-V2-AUDIT.md`, `BACKUP-RESTORE-V2-PHASE1.md`
+> **Related documents:** `BACKUP-RESTORE.md`, `BACKUP-RESTORE-V2.md`, `BACKUP-RESTORE-V2-AUDIT.md`, `BACKUP-RESTORE-V2-PHASE1.md`, `BACKUP-RESTORE-V2-PHASE2.md`
 
 ---
 
