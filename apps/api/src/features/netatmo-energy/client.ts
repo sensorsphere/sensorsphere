@@ -31,7 +31,7 @@ export async function discover(config: NetatmoConfig, accessToken: string): Prom
       unique.add(key);
       const thermostat = module.type === 'NATherm1';
       const parentClientKey = thermostat && module.bridge ? `${home.id}:${module.bridge}` : null;
-      devices.push({ clientKey: key, parentClientKey, device: { name: module.name || (thermostat ? 'Netatmo Thermostat' : 'Netatmo Relay'), deviceClass: 'SMART_HOME', deviceType: thermostat ? 'THERMOSTAT' : 'GATEWAY', technology: 'NETATMO_ENERGY', manufacturer: 'Netatmo', model: module.type, description: `Netatmo Energy home ${home.id}`, identities: [{ identityType: 'NETATMO_MODULE_ID', value: module.id, source: 'NETATMO_ENERGY', isPrimary: true }] } });
+      devices.push({ clientKey: key, parentClientKey, device: { name: module.name || (thermostat ? 'Netatmo Thermostat' : 'Netatmo Relay'), deviceClass: thermostat ? 'IOT' : 'INFRASTRUCTURE', deviceType: thermostat ? 'thermostat' : 'gateway', technology: 'http', manufacturer: 'Netatmo', model: module.type, description: `Netatmo Energy home ${home.id}`, identities: [{ identityType: 'NETATMO_MODULE_ID', value: `${home.id}:${module.id}`, source: 'NETATMO_ENERGY', isPrimary: true }] } });
     }
   }
   devices.sort((a,b) => Number(a.parentClientKey !== null) - Number(b.parentClientKey !== null));

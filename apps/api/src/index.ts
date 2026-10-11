@@ -112,7 +112,7 @@ const app = Fastify({
 });
 
 installAuthGuard(app, pool);
-registerNetatmoEnergyFeature(app);
+registerNetatmoEnergyFeature(app, pool);
 
 const healthHandler = async () => {
   await pool.query("SELECT 1");
