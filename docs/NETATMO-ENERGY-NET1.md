@@ -39,3 +39,7 @@ Next: dedicated credential storage, callback flow, idempotent database upsert wi
 ## NET-1.5.1 registry linking
 
 Telemetry rooms are mapped to their first thermostat module via `homesdata.rooms[].module_ids` when available. The resulting module asset is linked to an already-imported Device Registry module via `device_registry_links` (`target_type=asset`), using the stable `NETATMO_MODULE_ID` identity. Missing registry modules leave observations intact without creating a dangling link. Rooms without module mapping keep a separate room asset. This mapping has unit tests but still needs real PostgreSQL E2E validation.
+
+## DEV database compatibility check (2026-10-11)
+
+A transaction-only SQL smoke test against the running DEV TimescaleDB verified insertion into `assets`, `asset_metrics` and `observations`, then issued `ROLLBACK`; no test rows were retained. This caught a mismatch between the migration source and the deployed schema: deployed `assets` has `description` but **not** `name`. NET-1.5 ingestion now uses `description` on insert and preserves existing descriptions on conflict. This is a database-schema smoke test, not an end-to-end test of the live API or OAuth flow.

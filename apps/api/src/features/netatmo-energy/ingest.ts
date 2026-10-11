@@ -10,7 +10,7 @@ export async function ingestNetatmoReadings(pool: Pool, readings: Readings): Pro
     await client.query("SELECT pg_advisory_xact_lock(hashtext('sensorsphere:netatmo:telemetry'))");
     const record = async (externalId: string, name: string, key: string, label: string, unit: string | null, value: string | number | boolean | null, moduleIdentity?: string) => {
       if (value === null || !Number.isFinite(typeof value === 'number' ? value : 0)) return;
-      const asset = await client.query<{ id: string }>(`INSERT INTO assets (id, external_id, name, manufacturer, asset_type, protocol) VALUES (gen_random_uuid(),$1,$2,'Netatmo','sensor','http') ON CONFLICT (external_id) DO UPDATE SET name=EXCLUDED.name, updated_at=NOW() RETURNING id`, [externalId,name]);
+      const asset = await client.query<{ id: string }>(`INSERT INTO assets (id, external_id, description, manufacturer, asset_type, protocol) VALUES (gen_random_uuid(),$1,$2,'Netatmo','sensor','http') ON CONFLICT (external_id) DO UPDATE SET updated_at=NOW() RETURNING id`, [externalId,name]);
       const assetId = asset.rows[0]!.id;
       assets.add(assetId);
       if (moduleIdentity) await client.query(`INSERT INTO device_registry_links (device_id,target_type,target_id) SELECT i.device_id,'asset',$2::uuid FROM device_registry_identities i WHERE i.identity_type='NETATMO_MODULE_ID' AND i.value=$1 ON CONFLICT (device_id,target_type,target_id) DO NOTHING`, [moduleIdentity,assetId]);
