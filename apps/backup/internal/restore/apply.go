@@ -84,7 +84,19 @@ func Apply(cfg config.Config, mode Mode, backupID string, opts ApplyOptions) (re
 	if !ok || !dbItem.Included || dbItem.Path == "" {
 		return fail("DATABASE_PREPARE", 20, fmt.Errorf("Recovery Bundle database payload is missing"))
 	}
+	globalsItem, ok := sourceVerified.Manifest.Payload["globals"]
+	if !ok || !globalsItem.Included || globalsItem.Path == "" {
+		return fail("DATABASE_PREPARE", 20, fmt.Errorf("Recovery Bundle globals payload is missing"))
+	}
 	dumpPath := filepath.Join(sourcePath, filepath.FromSlash(dbItem.Path))
+	globalsPath := filepath.Join(sourcePath, filepath.FromSlash(globalsItem.Path))
+
+	if err := tracker.Phase("DATABASE_GLOBALS"); err != nil {
+		return fail("DATABASE_GLOBALS", 80, err)
+	}
+	if _, err := RestoreMissingRoles(cfg, globalsPath); err != nil {
+		return fail("DATABASE_GLOBALS", 50, err)
+	}
 
 	if err := tracker.Phase("DATABASE_RESTORE"); err != nil {
 		return fail("DATABASE_RESTORE", 80, err)

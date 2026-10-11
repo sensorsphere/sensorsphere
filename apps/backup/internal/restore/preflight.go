@@ -96,6 +96,13 @@ func Preflight(cfg config.Config, mode Mode, backupID string) (PreflightResult, 
 			return PreflightResult{}, &Error{Code: 20, Err: fmt.Errorf("Mosquitto archive is unsafe for restore: %w", err)}
 		}
 	}
+	globalsItem, ok := verified.Manifest.Payload["globals"]
+	if !ok || !globalsItem.Included || globalsItem.Path == "" {
+		return PreflightResult{}, &Error{Code: 20, Err: fmt.Errorf("Recovery Bundle globals payload is missing")}
+	}
+	if err := ValidateGlobalsRoles(filepath.Join(path, filepath.FromSlash(globalsItem.Path))); err != nil {
+		return PreflightResult{}, &Error{Code: 20, Err: fmt.Errorf("globals dump is not safe/supported for restore: %w", err)}
+	}
 
 	dbMeta, err := database.ReadMetadata(database.Config{
 		Host: cfg.DBHost, Port: cfg.DBPort, Name: cfg.DBName, User: cfg.DBUser, Password: cfg.DBPassword,
