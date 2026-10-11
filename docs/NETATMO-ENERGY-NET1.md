@@ -35,3 +35,7 @@ Next: dedicated credential storage, callback flow, idempotent database upsert wi
 ## NET-1.5 telemetry ingestion (manual, administrator only)
 
 `POST /api/v1/integrations/netatmo/telemetry/ingest` with `{ "accessToken": "..." }` reads the simulator and writes a timestamped sample into existing `assets`, `asset_metrics` and `observations`. Rooms and modules use distinct stable external IDs. Ingestion uses a transaction and advisory lock. No scheduler, stored credentials, UI, or DEV deployment is included. The generated telemetry assets are distinct from Device Registry devices; linking these objects remains pending. End-to-end database tests remain pending.
+
+## NET-1.5.1 registry linking
+
+Telemetry rooms are mapped to their first thermostat module via `homesdata.rooms[].module_ids` when available. The resulting module asset is linked to an already-imported Device Registry module via `device_registry_links` (`target_type=asset`), using the stable `NETATMO_MODULE_ID` identity. Missing registry modules leave observations intact without creating a dangling link. Rooms without module mapping keep a separate room asset. This mapping has unit tests but still needs real PostgreSQL E2E validation.
