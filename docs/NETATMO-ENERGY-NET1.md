@@ -27,3 +27,7 @@ Next: dedicated credential storage, callback flow, idempotent database upsert wi
 - Repeated imports update existing devices instead of duplicating them. Any error rolls back the transaction.
 - Relay uses registered `gateway`/`INFRASTRUCTURE`; thermostat uses `thermostat`/`IOT`; technology `http`. A dedicated Netatmo technology can be introduced later through a migration.
 - **Not yet exercised against a running SensorSphere database.** Requires authenticated end-to-end test and a production deployment decision.
+
+## NET-1.4 read-only telemetry preview
+
+`POST /api/v1/integrations/netatmo/telemetry/preview` with `{ "accessToken": "..." }` retrieves `/api/homesdata` and `/api/homestatus?home_id=...` for each home. Returns room temperatures, setpoints and modes plus module heating, reachability and battery readings. Invalid and absent values are represented as null. This is a read-only preview: no automatic polling, metric ingestion or database writes yet.

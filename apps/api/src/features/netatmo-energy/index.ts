@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { importNetatmoDiscovery } from './registry.js';
+import { readTelemetry } from './telemetry.js';
 import { z } from 'zod';
 import { discover, exchangeCode, netatmoConfig } from './client.js';
 const codeSchema = z.object({ code: z.string().min(1).max(2048) }).strict();
@@ -24,6 +25,11 @@ export function registerNetatmoEnergyFeature(app: FastifyInstance, pool: Pool): 
     const config = netatmoConfig(); if (!config) return reply.code(503).send({ error: 'Netatmo connector not configured' });
     const parsed = tokenSchema.safeParse(request.body); if (!parsed.success) return reply.code(400).send({ error: 'Invalid access token' });
     try { return await importNetatmoDiscovery(pool, await discover(config, parsed.data.accessToken)); } catch { return reply.code(502).send({ error: 'Netatmo import failed; transaction rolled back' }); }
+  });
+  app.post('/api/v1/integrations/netatmo/telemetry/preview', async (request, reply) => {
+    const config = netatmoConfig(); if (!config) return reply.code(503).send({ error: 'Netatmo connector not configured' });
+    const parsed = tokenSchema.safeParse(request.body); if (!parsed.success) return reply.code(400).send({ error: 'Invalid access token' });
+    try { return await readTelemetry(config, parsed.data.accessToken); } catch { return reply.code(502).send({ error: 'Netatmo telemetry read failed' }); }
   });
   app.post('/api/v1/integrations/netatmo/discovery/preview', async (request, reply) => {
     const config = netatmoConfig(); if (!config) return reply.code(503).send({ error: 'Netatmo connector not configured' });
