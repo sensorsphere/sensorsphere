@@ -81,7 +81,9 @@ apply_environment_overrides() {
     SENSORSPHERE_ENVIRONMENT \
     INSTANCE_NAME \
     INSTANCE_NAME_COLOR \
+    WEB_BIND_ADDRESS \
     WEB_PORT \
+    MQTT_BIND_ADDRESS \
     MQTT_PORT \
     SENSORSPHERE_PROJECT_TODOS_ENABLED \
     SENSORSPHERE_AUTH_ENABLED \
@@ -165,7 +167,7 @@ configure_and_validate_auth() {
   fi
 
   local unauthenticated_environment_allowed=0
-  if [[ "$env_name" == "DEV" || "$env_name" == TEST* || "$env_name" == TST* ]]; then
+  if [[ "$env_name" == "DEV" || "$env_name" == "RECOVERY" || "$env_name" == TEST* || "$env_name" == TST* ]]; then
     unauthenticated_environment_allowed=1
   fi
 
