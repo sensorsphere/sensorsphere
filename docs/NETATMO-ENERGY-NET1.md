@@ -31,3 +31,7 @@ Next: dedicated credential storage, callback flow, idempotent database upsert wi
 ## NET-1.4 read-only telemetry preview
 
 `POST /api/v1/integrations/netatmo/telemetry/preview` with `{ "accessToken": "..." }` retrieves `/api/homesdata` and `/api/homestatus?home_id=...` for each home. Returns room temperatures, setpoints and modes plus module heating, reachability and battery readings. Invalid and absent values are represented as null. This is a read-only preview: no automatic polling, metric ingestion or database writes yet.
+
+## NET-1.5 telemetry ingestion (manual, administrator only)
+
+`POST /api/v1/integrations/netatmo/telemetry/ingest` with `{ "accessToken": "..." }` reads the simulator and writes a timestamped sample into existing `assets`, `asset_metrics` and `observations`. Rooms and modules use distinct stable external IDs. Ingestion uses a transaction and advisory lock. No scheduler, stored credentials, UI, or DEV deployment is included. The generated telemetry assets are distinct from Device Registry devices; linking these objects remains pending. End-to-end database tests remain pending.
