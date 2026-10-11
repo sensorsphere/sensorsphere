@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { registerNetatmoEnergyFeature } from "./features/netatmo-energy/index.js";
 
 import {
   mkdir,
@@ -111,6 +112,7 @@ const app = Fastify({
 });
 
 installAuthGuard(app, pool);
+registerNetatmoEnergyFeature(app);
 
 const healthHandler = async () => {
   await pool.query("SELECT 1");
