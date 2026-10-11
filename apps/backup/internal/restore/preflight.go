@@ -1,7 +1,9 @@
 package restore
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -11,6 +13,7 @@ import (
 	"github.com/sensorsphere/sensorsphere/apps/backup/internal/database"
 	"github.com/sensorsphere/sensorsphere/apps/backup/internal/manifest"
 	"github.com/sensorsphere/sensorsphere/apps/backup/internal/repository"
+	"github.com/sensorsphere/sensorsphere/apps/backup/internal/runstate"
 	"github.com/sensorsphere/sensorsphere/apps/backup/internal/verify"
 )
 
@@ -33,22 +36,26 @@ type TargetIdentity struct {
 	PostgresVersion           string `json:"postgresVersion"`
 	TimescaleVersion          string `json:"timescaleVersion,omitempty"`
 	MigrationLevel            int    `json:"migrationLevel"`
+	MigrationLevelKnown       bool   `json:"migrationLevelKnown"`
+	DatabaseState             string `json:"databaseState"`
 	DatabaseMinMigrationLevel int    `json:"databaseMinMigrationLevel"`
 	DatabaseMaxMigrationLevel int    `json:"databaseMaxMigrationLevel"`
 }
 
 type PreflightResult struct {
-	Status        string                 `json:"status"`
-	Mode          Mode                   `json:"mode"`
-	BackupID      string                 `json:"backupId"`
-	BundlePath    string                 `json:"bundlePath"`
-	Source        manifest.Source        `json:"source"`
-	SourceStack   manifest.Stack         `json:"sourceStack"`
-	SourceDB      manifest.Database      `json:"sourceDatabase"`
-	Target        TargetIdentity         `json:"target"`
-	Compatibility compatibility.Decision `json:"compatibility"`
-	Confirmation  string                 `json:"confirmation"`
-	MutatesTarget bool                   `json:"mutatesTarget"`
+	Status              string                 `json:"status"`
+	Mode                Mode                   `json:"mode"`
+	BackupID            string                 `json:"backupId"`
+	BundlePath          string                 `json:"bundlePath"`
+	Source              manifest.Source        `json:"source"`
+	SourceStack         manifest.Stack         `json:"sourceStack"`
+	SourceDB            manifest.Database      `json:"sourceDatabase"`
+	Target              TargetIdentity         `json:"target"`
+	Compatibility       compatibility.Decision `json:"compatibility"`
+	Confirmation        string                 `json:"confirmation"`
+	MutatesTarget       bool                   `json:"mutatesTarget"`
+	DegradedRetry       bool                   `json:"degradedRetry"`
+	RetrySafetyBackupID string                 `json:"retrySafetyBackupId,omitempty"`
 }
 
 type Error struct {
@@ -104,12 +111,10 @@ func Preflight(cfg config.Config, mode Mode, backupID string) (PreflightResult, 
 		return PreflightResult{}, &Error{Code: 20, Err: fmt.Errorf("globals dump is not safe/supported for restore: %w", err)}
 	}
 
-	dbMeta, err := database.ReadMetadata(database.Config{
+	targetDBCfg := database.Config{
 		Host: cfg.DBHost, Port: cfg.DBPort, Name: cfg.DBName, User: cfg.DBUser, Password: cfg.DBPassword,
-	})
-	if err != nil {
-		return PreflightResult{}, &Error{Code: 10, Err: fmt.Errorf("read target database metadata: %w", err)}
 	}
+	dbMeta, dbMetaErr := database.ReadMetadata(targetDBCfg)
 
 	target := TargetIdentity{
 		InstanceName:              cfg.InstanceName,
@@ -119,12 +124,39 @@ func Preflight(cfg config.Config, mode Mode, backupID string) (PreflightResult, 
 		ComposeProject:            cfg.ComposeProject,
 		DataRoot:                  cfg.DataRoot,
 		StackVersion:              cfg.StackVersion,
-		PostgresMajor:             dbMeta.ServerMajor,
-		PostgresVersion:           dbMeta.ServerVersion,
-		TimescaleVersion:          dbMeta.TimescaleVersion,
-		MigrationLevel:            dbMeta.MigrationLevel,
 		DatabaseMinMigrationLevel: cfg.DatabaseMinMigrationLevel,
 		DatabaseMaxMigrationLevel: cfg.DatabaseMaxMigrationLevel,
+	}
+
+	var retryRun *runstate.Run
+	if dbMetaErr == nil {
+		target.PostgresMajor = dbMeta.ServerMajor
+		target.PostgresVersion = dbMeta.ServerVersion
+		target.TimescaleVersion = dbMeta.TimescaleVersion
+		target.MigrationLevel = dbMeta.MigrationLevel
+		target.MigrationLevelKnown = true
+		target.DatabaseState = "READY"
+	} else {
+		retryRun, err = degradedRetryRun(cfg, backupID)
+		if err != nil {
+			return PreflightResult{}, &Error{Code: 10, Err: fmt.Errorf("target database is degraded and retry state is invalid: %w", err)}
+		}
+		if retryRun == nil {
+			return PreflightResult{}, &Error{Code: 10, Err: fmt.Errorf("read target database metadata: %w", dbMetaErr)}
+		}
+		if err := verifySafetyBackup(cfg, retryRun.SafetyBackupID, backupID); err != nil {
+			return PreflightResult{}, &Error{Code: 30, Err: fmt.Errorf("previous restore safety backup is not usable for retry: %w", err)}
+		}
+		clusterMeta, clusterErr := database.ReadClusterMetadata(targetDBCfg)
+		if clusterErr != nil {
+			return PreflightResult{}, &Error{Code: 10, Err: fmt.Errorf("read degraded target cluster metadata: %w", clusterErr)}
+		}
+		target.PostgresMajor = clusterMeta.ServerMajor
+		target.PostgresVersion = clusterMeta.ServerVersion
+		target.TimescaleVersion = clusterMeta.TimescaleVersion
+		target.MigrationLevel = 0
+		target.MigrationLevelKnown = false
+		target.DatabaseState = "DEGRADED_RETRY"
 	}
 
 	if verified.Manifest.Source.InstallDir != "" &&
@@ -163,7 +195,47 @@ func Preflight(cfg config.Config, mode Mode, backupID string) (PreflightResult, 
 		Compatibility: decision,
 		Confirmation:  confirmation,
 		MutatesTarget: false,
+		DegradedRetry: retryRun != nil,
+		RetrySafetyBackupID: func() string {
+			if retryRun == nil {
+				return ""
+			}
+			return retryRun.SafetyBackupID
+		}(),
 	}, nil
+}
+
+func degradedRetryRun(cfg config.Config, backupID string) (*runstate.Run, error) {
+	data, err := os.ReadFile(filepath.Join(cfg.StateRoot, "current.json"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read restore state: %w", err)
+	}
+	var run runstate.Run
+	if err := json.Unmarshal(data, &run); err != nil {
+		return nil, fmt.Errorf("parse restore state: %w", err)
+	}
+	if run.Command != "restore" {
+		return nil, nil
+	}
+	if run.Status != runstate.StatusFailed && run.Status != runstate.StatusInterrupted {
+		return nil, nil
+	}
+	if run.SourceBackupID != backupID {
+		return nil, fmt.Errorf("previous failed restore used source backup %s, requested retry uses %s", run.SourceBackupID, backupID)
+	}
+	if !strings.EqualFold(run.TargetEnvironment, cfg.Environment) {
+		return nil, fmt.Errorf("previous restore target environment %s does not match %s", run.TargetEnvironment, cfg.Environment)
+	}
+	if filepath.Clean(run.TargetInstallDir) != filepath.Clean(cfg.InstallDir) {
+		return nil, fmt.Errorf("previous restore target install dir %s does not match %s", run.TargetInstallDir, cfg.InstallDir)
+	}
+	if strings.TrimSpace(run.SafetyBackupID) == "" {
+		return nil, fmt.Errorf("previous failed restore has no safety backup id")
+	}
+	return &run, nil
 }
 
 func ErrorCode(err error) int {

@@ -97,6 +97,46 @@ func ReadMetadata(cfg Config) (Metadata, error) {
 	}, nil
 }
 
+type ClusterMetadata struct {
+	ServerVersion    string
+	ServerMajor      int
+	TimescaleVersion string
+}
+
+func ReadClusterMetadata(cfg Config) (ClusterMetadata, error) {
+	maintenance := cfg
+	maintenance.Name = "postgres"
+
+	serverVersion, err := Query(maintenance, "SHOW server_version;")
+	if err != nil {
+		return ClusterMetadata{}, err
+	}
+	serverNumText, err := Query(maintenance, "SHOW server_version_num;")
+	if err != nil {
+		return ClusterMetadata{}, err
+	}
+	serverNum, err := strconv.Atoi(strings.TrimSpace(serverNumText))
+	if err != nil {
+		return ClusterMetadata{}, fmt.Errorf("parse PostgreSQL server_version_num: %w", err)
+	}
+	timescaleVersion, err := Query(
+		maintenance,
+		"SELECT COALESCE((SELECT default_version FROM pg_available_extensions WHERE name='timescaledb'),'');",
+	)
+	if err != nil {
+		return ClusterMetadata{}, err
+	}
+	if strings.TrimSpace(timescaleVersion) == "" {
+		return ClusterMetadata{}, fmt.Errorf("TimescaleDB extension is not available on target cluster")
+	}
+
+	return ClusterMetadata{
+		ServerVersion:    serverVersion,
+		ServerMajor:      serverNum / 10000,
+		TimescaleVersion: strings.TrimSpace(timescaleVersion),
+	}, nil
+}
+
 func Dump(cfg Config, destination string) error {
 	if err := os.MkdirAll(filepath.Dir(destination), 0o700); err != nil {
 		return fmt.Errorf("create dump directory: %w", err)

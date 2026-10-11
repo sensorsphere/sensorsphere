@@ -332,8 +332,16 @@ func runRestore(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "Source DB........... PostgreSQL %d / TimescaleDB %s / migration %d\n", result.SourceDB.ServerMajor, result.SourceDB.TimescaleVersion, result.SourceDB.MigrationLevel)
 		fmt.Fprintf(stdout, "Target.............. %s / %s\n", result.Target.Environment, result.Target.InstanceName)
 		fmt.Fprintf(stdout, "Target Stack........ %s\n", result.Target.StackVersion)
-		fmt.Fprintf(stdout, "Target DB........... PostgreSQL %d / TimescaleDB %s / migration %d\n", result.Target.PostgresMajor, result.Target.TimescaleVersion, result.Target.MigrationLevel)
+		if result.Target.MigrationLevelKnown {
+			fmt.Fprintf(stdout, "Target DB........... PostgreSQL %d / TimescaleDB %s / migration %d\n", result.Target.PostgresMajor, result.Target.TimescaleVersion, result.Target.MigrationLevel)
+		} else {
+			fmt.Fprintf(stdout, "Target DB........... PostgreSQL %d / TimescaleDB %s / migration unknown\n", result.Target.PostgresMajor, result.Target.TimescaleVersion)
+		}
+		fmt.Fprintf(stdout, "Target DB state..... %s\n", result.Target.DatabaseState)
 		fmt.Fprintf(stdout, "DB compatibility.... %d..%d\n", result.Target.DatabaseMinMigrationLevel, result.Target.DatabaseMaxMigrationLevel)
+		if result.DegradedRetry {
+			fmt.Fprintf(stdout, "Retry safety backup. %s\n", result.RetrySafetyBackupID)
+		}
 		fmt.Fprintf(stdout, "Confirmation........ %s\n", result.Confirmation)
 		fmt.Fprintln(stdout, "Mutation............ none (preflight only)")
 		return 0

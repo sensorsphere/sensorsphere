@@ -99,6 +99,8 @@ printf '%s
 ' "$preflight_output"
 confirmation="$(printf '%s
 ' "$preflight_output" | sed -n 's/^Confirmation[. ]*//p' | tail -1)"
+retry_safety_id="$(printf '%s
+' "$preflight_output" | sed -n 's/^Retry safety backup[. ]*//p' | tail -1)"
 [[ -n "$confirmation" ]] || { echo "ERROR: preflight did not return a confirmation phrase" >&2; exit 20; }
 
 if [[ "$PREFLIGHT_ONLY" -eq 1 ]]; then
@@ -108,7 +110,7 @@ if [[ "$PREFLIGHT_ONLY" -eq 1 ]]; then
 fi
 
 [[ "$MODE" == "data" ]] || {
-  echo "ERROR: full restore execution is not implemented in Backup/Restore V2 0.2.0; use --preflight-only." >&2
+  echo "ERROR: full restore execution is not implemented in Backup/Restore V2 0.2.x; use --preflight-only." >&2
   exit 2
 }
 
@@ -128,15 +130,22 @@ else
 fi
 
 echo
-echo "Creating mandatory pre-restore safety backup..."
-safety_output="$(compose --profile backup run --rm backup create --label "pre-restore safety backup for $BACKUP_ID")"
-printf '%s
+if [[ -n "$retry_safety_id" ]]; then
+  echo "Degraded retry detected. Reusing prior pre-restore safety backup..."
+  safety_id="$retry_safety_id"
+  compose --profile backup run --rm backup verify "$safety_id"
+  echo "Prior safety backup re-verified: $safety_id"
+else
+  echo "Creating mandatory pre-restore safety backup..."
+  safety_output="$(compose --profile backup run --rm backup create --label "pre-restore safety backup for $BACKUP_ID")"
+  printf '%s
 ' "$safety_output"
-safety_id="$(printf '%s
+  safety_id="$(printf '%s
 ' "$safety_output" | sed -n 's/^Backup ID[. ]*//p' | tail -1)"
-[[ -n "$safety_id" ]] || { echo "ERROR: safety backup did not return an ID" >&2; exit 30; }
-compose --profile backup run --rm backup verify "$safety_id"
-echo "Safety backup verified: $safety_id"
+  [[ -n "$safety_id" ]] || { echo "ERROR: safety backup did not return an ID" >&2; exit 30; }
+  compose --profile backup run --rm backup verify "$safety_id"
+  echo "Safety backup verified: $safety_id"
+fi
 
 echo
 echo "Quiescing writers and external access..."
