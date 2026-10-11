@@ -23,14 +23,19 @@ test("allows authentication to be disabled in TST* environments", () => {
   }
 });
 
+test("allows authentication to be disabled in RECOVERY", () => {
+  assert.equal(canDisableAuthentication("RECOVERY"), true);
+  assert.equal(canDisableAuthentication(" recovery "), true);
+});
+
 test("rejects disabling authentication in production-like environments", () => {
   for (const environment of ["DEFAULT", "DIT", "FIT", "PROD", "STAGING", "DEVELOPMENT"]) {
     assert.equal(canDisableAuthentication(environment), false, environment);
   }
 });
 
-test("enables the unauthenticated role switch in DEV, TEST* and TST*", () => {
-  for (const environment of ["DEV", "TEST", "TEST1", "TEST-LAB", "TST", "TST1", "TST-LAB"]) {
+test("enables the unauthenticated role switch in DEV, TEST*, TST* and RECOVERY", () => {
+  for (const environment of ["DEV", "TEST", "TEST1", "TEST-LAB", "TST", "TST1", "TST-LAB", "RECOVERY"]) {
     assert.equal(
       shouldEnableUnauthenticatedRoleSwitch(environment, false, true),
       true,

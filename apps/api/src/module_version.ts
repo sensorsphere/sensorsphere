@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.72.0";
+export const MODULE_VERSION = "1.73.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.73.0": {
+    releasedAt: "2026-10-11T10:06:11Z",
+    patch: "PR-337-backup-restore-v2-recovery-auth-v1.patch",
+    changes: [
+      { type: "changed", description: "Treat RECOVERY as an explicit non-production environment where authentication may be disabled for isolated Backup/Restore V2 validation" }
+    ]
+  },
   "1.72.0": {
     releasedAt: "2026-10-06T23:49:58Z",
     patch: "PR-336-database-storage-db1-completion-v1.patch",

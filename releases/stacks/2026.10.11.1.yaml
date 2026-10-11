@@ -3,8 +3,9 @@ schemaVersion: 4
 
 components:
   api:
-    version: 1.72.0
-    image: ghcr.io/sensorsphere/sensorsphere-api:1.72.0
+    version: 1.73.0
+    image: ghcr.io/sensorsphere/sensorsphere-api:1.73.0
+    releasedAt: 2026-10-11T10:06:11Z
   frontend:
     version: 1.121.0
     image: ghcr.io/sensorsphere/sensorsphere-frontend:1.121.0

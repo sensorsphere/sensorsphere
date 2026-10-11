@@ -79,6 +79,7 @@ function authSettings() {
 export function canDisableAuthentication(environment: string): boolean {
   const normalizedEnvironment = environment.trim().toUpperCase();
   return normalizedEnvironment === "DEV"
+    || normalizedEnvironment === "RECOVERY"
     || normalizedEnvironment.startsWith("TEST")
     || normalizedEnvironment.startsWith("TST");
 }
