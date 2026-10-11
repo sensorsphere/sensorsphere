@@ -262,7 +262,8 @@ prepare_bundle() {
   if [[ "$(readlink -f "$SCRIPT_DIR")" != "$(readlink -f "$INSTALL_DIR")" ]]; then
     cp "$SCRIPT_DIR/docker-compose.yml" "$INSTALL_DIR/docker-compose.yml"
     cp "$SCRIPT_DIR/install.sh" "$INSTALL_DIR/install.sh"
-    chmod 0755 "$INSTALL_DIR/install.sh"
+    cp "$SCRIPT_DIR/restore.sh" "$INSTALL_DIR/restore.sh"
+    chmod 0755 "$INSTALL_DIR/install.sh" "$INSTALL_DIR/restore.sh"
     cp "$SCRIPT_DIR/.env.example" "$INSTALL_DIR/.env.example"
     cp "$SCRIPT_DIR/config/mosquitto/mosquitto.conf" "$INSTALL_DIR/config/mosquitto/mosquitto.conf"
     cp "$SCRIPT_DIR/init/timescaledb/01-init.sql" "$INSTALL_DIR/init/timescaledb/01-init.sql"
@@ -288,15 +289,24 @@ prepare_bundle() {
   # DB-3 exposes Backup V2 run-state metadata read-only to the API.
   # Pre-create the bind-mount source as the installation owner so Docker never
   # creates a root-owned backup-state directory on a fresh installation.
-  local data_root backup_state_root
+  local data_root backup_state_root restore_state_root recovery_lock_root
   data_root="$(get_env "$INSTALL_DIR/.env" DATA_ROOT)"
   data_root="${data_root:-./data}"
+
   backup_state_root="$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_BACKUP_STATE_ROOT)"
   backup_state_root="${backup_state_root:-${data_root%/}/backup-state}"
-  if [[ "$backup_state_root" != /* ]]; then
-    backup_state_root="$INSTALL_DIR/${backup_state_root#./}"
-  fi
-  ensure_install_owned_directory "$backup_state_root" 0700
+  restore_state_root="$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_RESTORE_STATE_ROOT)"
+  restore_state_root="${restore_state_root:-${data_root%/}/restore-state}"
+  recovery_lock_root="$(get_env "$INSTALL_DIR/.env" SENSORSPHERE_RECOVERY_LOCK_ROOT)"
+  recovery_lock_root="${recovery_lock_root:-${data_root%/}/recovery-lock}"
+
+  local state_path
+  for state_path in "$backup_state_root" "$restore_state_root" "$recovery_lock_root"; do
+    if [[ "$state_path" != /* ]]; then
+      state_path="$INSTALL_DIR/${state_path#./}"
+    fi
+    ensure_install_owned_directory "$state_path" 0700
+  done
 
   configure_and_validate_auth
 }
@@ -307,7 +317,7 @@ snapshot_bundle() {
   mkdir -p "$destination"
 
   local file
-  for file in docker-compose.yml install.sh .env.example; do
+  for file in docker-compose.yml install.sh restore.sh .env.example; do
     if [[ -f "$INSTALL_DIR/$file" ]]; then
       cp "$INSTALL_DIR/$file" "$destination/$file"
     fi
@@ -323,7 +333,7 @@ restore_bundle() {
   [[ -d "$source" ]] || return 0
 
   local file dir
-  for file in docker-compose.yml install.sh .env.example; do
+  for file in docker-compose.yml install.sh restore.sh .env.example; do
     if [[ -f "$source/$file" ]]; then
       cp "$source/$file" "$INSTALL_DIR/$file"
     else
@@ -336,13 +346,13 @@ restore_bundle() {
     [[ -d "$source/$dir" ]] && cp -a "$source/$dir" "$INSTALL_DIR/$dir"
   done
 
-  chmod 0755 "$INSTALL_DIR/install.sh" 2>/dev/null || true
+  chmod 0755 "$INSTALL_DIR/install.sh" "$INSTALL_DIR/restore.sh" 2>/dev/null || true
 }
 
 managed_bundle_changes() {
   local source="$1"
   local path
-  for path in install.sh docker-compose.yml .env.example config init; do
+  for path in install.sh restore.sh docker-compose.yml .env.example config init; do
     if [[ ! -e "$source/$path" && ! -e "$INSTALL_DIR/$path" ]]; then
       continue
     fi

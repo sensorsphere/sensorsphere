@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 )
 
@@ -84,16 +85,30 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	migrationFallback, _ := strconv.Atoi(envDefault("SENSORSPHERE_MIGRATIONS_VERSION", "0"))
-	databaseMinMigrationLevel, err := envInt("SENSORSPHERE_DATABASE_MIN_MIGRATION_LEVEL", 72)
+	databaseMinFallback, _ := strconv.Atoi(envDefault("SENSORSPHERE_DB_MIN_MIGRATION_LEVEL", "72"))
+	databaseMaxFallback, _ := strconv.Atoi(envDefault("SENSORSPHERE_DB_MAX_MIGRATION_LEVEL", strconv.Itoa(migrationFallback)))
+	databaseMinMigrationLevel, err := envInt("SENSORSPHERE_DATABASE_MIN_MIGRATION_LEVEL", databaseMinFallback)
 	if err != nil {
 		return Config{}, err
 	}
-	databaseMaxMigrationLevel, err := envInt("SENSORSPHERE_DATABASE_MAX_MIGRATION_LEVEL", migrationFallback)
+	databaseMaxMigrationLevel, err := envInt("SENSORSPHERE_DATABASE_MAX_MIGRATION_LEVEL", databaseMaxFallback)
 	if err != nil {
 		return Config{}, err
 	}
 	if criticalAgeHours > 0 && warningAgeHours > criticalAgeHours {
 		return Config{}, fmt.Errorf("SENSORSPHERE_BACKUP_WARNING_AGE_HOURS must be <= SENSORSPHERE_BACKUP_CRITICAL_AGE_HOURS")
+	}
+
+	installDir := envDefault("SENSORSPHERE_INSTALL_DIR", "")
+	dataRoot := envDefault("SENSORSPHERE_DATA_ROOT", "")
+	if installDir != "" {
+		installDir = filepath.Clean(installDir)
+	}
+	if dataRoot != "" {
+		if !filepath.IsAbs(dataRoot) && installDir != "" {
+			dataRoot = filepath.Join(installDir, dataRoot)
+		}
+		dataRoot = filepath.Clean(dataRoot)
 	}
 
 	return Config{
@@ -111,7 +126,7 @@ func Load() (Config, error) {
 		InstanceName:              envDefault("INSTANCE_NAME", "SensorSphere"),
 		Environment:               envDefault("SENSORSPHERE_ENVIRONMENT", "DEFAULT"),
 		InstallHost:               envDefault("SENSORSPHERE_INSTALL_HOST", ""),
-		InstallDir:                envDefault("SENSORSPHERE_INSTALL_DIR", ""),
+		InstallDir:                installDir,
 		ComposeProject:            envDefault("SENSORSPHERE_COMPOSE_PROJECT", envDefault("COMPOSE_PROJECT_NAME", "")),
 		StackVersion:              envDefault("SENSORSPHERE_STACK_VERSION", ""),
 		APIVersion:                envDefault("SENSORSPHERE_API_VERSION", ""),
@@ -122,7 +137,7 @@ func Load() (Config, error) {
 		BackupVersion:             envDefault("SENSORSPHERE_BACKUP_VERSION", ""),
 		ImageRegistry:             envDefault("SENSORSPHERE_IMAGE_REGISTRY", "ghcr.io"),
 		ImageNamespace:            envDefault("SENSORSPHERE_IMAGE_NAMESPACE", "sensorsphere"),
-		DataRoot:                  envDefault("SENSORSPHERE_DATA_ROOT", ""),
+		DataRoot:                  dataRoot,
 		DatabaseMinMigrationLevel: databaseMinMigrationLevel,
 		DatabaseMaxMigrationLevel: databaseMaxMigrationLevel,
 		RetentionDaily:            retentionDaily,
@@ -155,6 +170,9 @@ func (c Config) ValidateForRestorePreflight() error {
 	}
 	if c.InstanceName == "" || c.Environment == "" || c.InstallDir == "" || c.ComposeProject == "" || c.DataRoot == "" || c.StackVersion == "" {
 		return fmt.Errorf("target restore identity is incomplete")
+	}
+	if !filepath.IsAbs(c.InstallDir) || !filepath.IsAbs(c.DataRoot) {
+		return fmt.Errorf("target install directory and DATA_ROOT must resolve to absolute paths")
 	}
 	if c.DatabaseMinMigrationLevel <= 0 || c.DatabaseMaxMigrationLevel <= 0 || c.DatabaseMinMigrationLevel > c.DatabaseMaxMigrationLevel {
 		return fmt.Errorf("target database compatibility range is invalid")

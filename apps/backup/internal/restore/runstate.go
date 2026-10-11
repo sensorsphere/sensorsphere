@@ -3,8 +3,11 @@ package restore
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"os"
 	"os/user"
+	"path/filepath"
 	"time"
 
 	"github.com/sensorsphere/sensorsphere/apps/backup/internal/config"
@@ -87,6 +90,31 @@ func (t *RunTracker) Interrupt(step string, err error) error {
 		t.Run.ErrorSummary = err.Error()
 	}
 	t.Run.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	return runstate.Write(t.root, t.Run)
+}
+
+func LoadRunTracker(stateRoot, runID string) (*RunTracker, error) {
+	if runID == "" {
+		return nil, fmt.Errorf("restore run id is required")
+	}
+	data, err := os.ReadFile(filepath.Join(stateRoot, "runs", runID+".json"))
+	if err != nil {
+		return nil, fmt.Errorf("read restore run %s: %w", runID, err)
+	}
+	var run runstate.Run
+	if err := json.Unmarshal(data, &run); err != nil {
+		return nil, fmt.Errorf("parse restore run %s: %w", runID, err)
+	}
+	if run.Command != "restore" || run.RunID != runID {
+		return nil, fmt.Errorf("invalid restore run record: %s", runID)
+	}
+	return &RunTracker{root: stateRoot, Run: run}, nil
+}
+
+func (t *RunTracker) EngineComplete(migrationLevel int) error {
+	t.Run.Status = runstate.StatusRunning
+	t.Run.Phase = "ENGINE_COMPLETE"
+	t.Run.RestoredMigrationLevel = migrationLevel
 	return runstate.Write(t.root, t.Run)
 }
 

@@ -150,10 +150,10 @@ func TestRestoreRequiresExplicitID(t *testing.T) {
 	}
 }
 
-func TestRestoreRefusesMutationUntilEnabled(t *testing.T) {
+func TestRestoreRequiresExplicitAction(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := Run([]string{"restore", "--data", "backup-1"}, &stdout, &stderr, testBuild)
-	if code != 2 || !strings.Contains(stderr.String(), "not enabled yet") {
+	if code != 2 || !strings.Contains(stderr.String(), "choose exactly one restore action") {
 		t.Fatalf("unexpected result code=%d stderr=%q", code, stderr.String())
 	}
 }

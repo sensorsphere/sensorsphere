@@ -51,3 +51,15 @@ func TestValidateForCreateRequiresPassword(t *testing.T) {
 		t.Fatal("expected missing password error")
 	}
 }
+
+func TestLoadResolvesRelativeDataRootAgainstInstallDir(t *testing.T) {
+	t.Setenv("SENSORSPHERE_INSTALL_DIR", "/srv/sensorsphere-recovery")
+	t.Setenv("SENSORSPHERE_DATA_ROOT", "./data")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DataRoot != "/srv/sensorsphere-recovery/data" {
+		t.Fatalf("unexpected resolved DATA_ROOT: %q", cfg.DataRoot)
+	}
+}

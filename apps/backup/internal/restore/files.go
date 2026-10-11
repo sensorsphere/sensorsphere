@@ -16,26 +16,41 @@ type PersistentRestoreResult struct {
 	MosquittoRestored bool `json:"mosquittoRestored"`
 }
 
-func RestorePersistentData(cfg config.Config, bundlePath string, m manifest.Manifest) (PersistentRestoreResult, error) {
+func RestoreApplicationData(cfg config.Config, bundlePath string, m manifest.Manifest) error {
 	appItem, ok := m.Payload["appData"]
 	if !ok || !appItem.Included || appItem.Path == "" {
-		return PersistentRestoreResult{}, fmt.Errorf("Recovery Bundle appData payload is missing")
+		return fmt.Errorf("Recovery Bundle appData payload is missing")
 	}
 	appArchive := filepath.Join(bundlePath, filepath.FromSlash(appItem.Path))
 	if err := ReplaceArchiveContents(appArchive, cfg.AppRoot); err != nil {
-		return PersistentRestoreResult{}, fmt.Errorf("restore application data: %w", err)
+		return fmt.Errorf("restore application data: %w", err)
 	}
-	result := PersistentRestoreResult{AppDataRestored: true}
+	return nil
+}
 
+func RestoreMosquittoData(cfg config.Config, bundlePath string, m manifest.Manifest) (bool, error) {
 	mqttItem, ok := m.Payload["mosquitto"]
 	if !ok || !mqttItem.Included {
-		return result, nil
+		return false, nil
 	}
 	mqttArchive := filepath.Join(bundlePath, filepath.FromSlash(mqttItem.Path))
 	if err := ReplaceArchiveContents(mqttArchive, cfg.MosquittoRoot); err != nil {
-		return result, fmt.Errorf("restore Mosquitto data: %w", err)
+		return false, fmt.Errorf("restore Mosquitto data: %w", err)
 	}
-	result.MosquittoRestored = true
+	return true, nil
+}
+
+func RestorePersistentData(cfg config.Config, bundlePath string, m manifest.Manifest) (PersistentRestoreResult, error) {
+	if err := RestoreApplicationData(cfg, bundlePath, m); err != nil {
+		return PersistentRestoreResult{}, err
+	}
+	result := PersistentRestoreResult{AppDataRestored: true}
+
+	mosquittoRestored, err := RestoreMosquittoData(cfg, bundlePath, m)
+	if err != nil {
+		return result, err
+	}
+	result.MosquittoRestored = mosquittoRestored
 	return result, nil
 }
 

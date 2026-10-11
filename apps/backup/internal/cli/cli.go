@@ -221,14 +221,28 @@ func runCreate(args []string, stdout, stderr io.Writer, info BuildInfo) int {
 }
 
 func runRestore(args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "finalize" {
+		return runRestoreFinalize(args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "fail" {
+		return runRestoreFail(args[1:], stdout, stderr)
+	}
 	if isHelp(args) {
-		fmt.Fprintln(stdout, "Usage: sensorsphere-backup restore (--data|--full) <backup-id> --preflight [--json]")
+		fmt.Fprintln(stdout, "Usage:")
+		fmt.Fprintln(stdout, "  sensorsphere-backup restore (--data|--full) <backup-id> --preflight [--json]")
+		fmt.Fprintln(stdout, "  sensorsphere-backup restore --data <backup-id> --apply --confirm <phrase> --safety-backup-id <id> --writers-quiesced [--json]")
+		fmt.Fprintln(stdout, "  sensorsphere-backup restore finalize <run-id> [--json]")
+		fmt.Fprintln(stdout, "  sensorsphere-backup restore fail <run-id> --step <step> --code <n> --message <text> [--json]")
 		return 0
 	}
 	var mode restoreop.Mode
 	backupID := ""
 	preflight := false
+	apply := false
 	jsonMode := false
+	confirmation := ""
+	safetyBackupID := ""
+	writersQuiesced := false
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--data":
@@ -245,8 +259,26 @@ func runRestore(args []string, stdout, stderr io.Writer) int {
 			mode = restoreop.ModeFull
 		case "--preflight":
 			preflight = true
+		case "--apply":
+			apply = true
+		case "--writers-quiesced":
+			writersQuiesced = true
 		case "--json":
 			jsonMode = true
+		case "--confirm":
+			i++
+			if i >= len(args) {
+				fmt.Fprintln(stderr, "ERROR: --confirm requires a value")
+				return 2
+			}
+			confirmation = args[i]
+		case "--safety-backup-id":
+			i++
+			if i >= len(args) {
+				fmt.Fprintln(stderr, "ERROR: --safety-backup-id requires a value")
+				return 2
+			}
+			safetyBackupID = args[i]
 		default:
 			if strings.HasPrefix(args[i], "-") {
 				fmt.Fprintf(stderr, "ERROR: unknown restore option: %s\n", args[i])
@@ -267,8 +299,8 @@ func runRestore(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "ERROR: restore requires an explicit backup id (latest is not allowed)")
 		return 2
 	}
-	if !preflight {
-		fmt.Fprintln(stderr, "ERROR: destructive restore execution is not enabled yet; run with --preflight")
+	if preflight == apply {
+		fmt.Fprintln(stderr, "ERROR: choose exactly one restore action: --preflight or --apply")
 		return 2
 	}
 
@@ -276,7 +308,40 @@ func runRestore(args []string, stdout, stderr io.Writer) int {
 	if code != 0 {
 		return code
 	}
-	result, err := restoreop.Preflight(cfg, mode, backupID)
+	if preflight {
+		result, err := restoreop.Preflight(cfg, mode, backupID)
+		if err != nil {
+			code := restoreop.ErrorCode(err)
+			if jsonMode {
+				_ = encodeJSON(stdout, stderr, map[string]any{"status": "FAILED", "code": code, "error": err.Error()})
+			} else {
+				fmt.Fprintf(stderr, "ERROR: %v\n", err)
+			}
+			return code
+		}
+		if jsonMode {
+			return encodeJSON(stdout, stderr, result)
+		}
+		fmt.Fprintln(stdout, "SensorSphere Restore Preflight")
+		fmt.Fprintln(stdout)
+		fmt.Fprintf(stdout, "Status.............. %s\n", result.Status)
+		fmt.Fprintf(stdout, "Mode................ %s\n", result.Mode)
+		fmt.Fprintf(stdout, "Backup ID........... %s\n", result.BackupID)
+		fmt.Fprintf(stdout, "Source.............. %s / %s\n", result.Source.Environment, result.Source.InstanceName)
+		fmt.Fprintf(stdout, "Source Stack........ %s\n", result.SourceStack.StackVersion)
+		fmt.Fprintf(stdout, "Source DB........... PostgreSQL %d / TimescaleDB %s / migration %d\n", result.SourceDB.ServerMajor, result.SourceDB.TimescaleVersion, result.SourceDB.MigrationLevel)
+		fmt.Fprintf(stdout, "Target.............. %s / %s\n", result.Target.Environment, result.Target.InstanceName)
+		fmt.Fprintf(stdout, "Target Stack........ %s\n", result.Target.StackVersion)
+		fmt.Fprintf(stdout, "Target DB........... PostgreSQL %d / TimescaleDB %s / migration %d\n", result.Target.PostgresMajor, result.Target.TimescaleVersion, result.Target.MigrationLevel)
+		fmt.Fprintf(stdout, "DB compatibility.... %d..%d\n", result.Target.DatabaseMinMigrationLevel, result.Target.DatabaseMaxMigrationLevel)
+		fmt.Fprintf(stdout, "Confirmation........ %s\n", result.Confirmation)
+		fmt.Fprintln(stdout, "Mutation............ none (preflight only)")
+		return 0
+	}
+
+	result, err := restoreop.Apply(cfg, mode, backupID, restoreop.ApplyOptions{
+		Confirmation: confirmation, SafetyBackupID: safetyBackupID, WritersQuiesced: writersQuiesced,
+	})
 	if err != nil {
 		code := restoreop.ErrorCode(err)
 		if jsonMode {
@@ -289,20 +354,110 @@ func runRestore(args []string, stdout, stderr io.Writer) int {
 	if jsonMode {
 		return encodeJSON(stdout, stderr, result)
 	}
-	fmt.Fprintln(stdout, "SensorSphere Restore Preflight")
-	fmt.Fprintln(stdout)
+	fmt.Fprintln(stdout, "SensorSphere Restore Engine")
+	fmt.Fprintf(stdout, "Run ID.............. %s\n", result.RunID)
 	fmt.Fprintf(stdout, "Status.............. %s\n", result.Status)
-	fmt.Fprintf(stdout, "Mode................ %s\n", result.Mode)
-	fmt.Fprintf(stdout, "Backup ID........... %s\n", result.BackupID)
-	fmt.Fprintf(stdout, "Source.............. %s / %s\n", result.Source.Environment, result.Source.InstanceName)
-	fmt.Fprintf(stdout, "Source Stack........ %s\n", result.SourceStack.StackVersion)
-	fmt.Fprintf(stdout, "Source DB........... PostgreSQL %d / TimescaleDB %s / migration %d\n", result.SourceDB.ServerMajor, result.SourceDB.TimescaleVersion, result.SourceDB.MigrationLevel)
-	fmt.Fprintf(stdout, "Target.............. %s / %s\n", result.Target.Environment, result.Target.InstanceName)
-	fmt.Fprintf(stdout, "Target Stack........ %s\n", result.Target.StackVersion)
-	fmt.Fprintf(stdout, "Target DB........... PostgreSQL %d / TimescaleDB %s / migration %d\n", result.Target.PostgresMajor, result.Target.TimescaleVersion, result.Target.MigrationLevel)
-	fmt.Fprintf(stdout, "DB compatibility.... %d..%d\n", result.Target.DatabaseMinMigrationLevel, result.Target.DatabaseMaxMigrationLevel)
-	fmt.Fprintf(stdout, "Confirmation........ %s\n", result.Confirmation)
-	fmt.Fprintln(stdout, "Mutation............ none (preflight only)")
+	fmt.Fprintf(stdout, "Phase............... %s\n", result.Phase)
+	fmt.Fprintf(stdout, "Safety backup....... %s\n", result.SafetyBackupID)
+	fmt.Fprintf(stdout, "Migration level..... %d\n", result.RestoredMigrationLevel)
+	return 0
+}
+
+func runRestoreFinalize(args []string, stdout, stderr io.Writer) int {
+	runID := ""
+	jsonMode := false
+	for _, arg := range args {
+		if arg == "--json" {
+			jsonMode = true
+			continue
+		}
+		if strings.HasPrefix(arg, "-") || runID != "" {
+			fmt.Fprintf(stderr, "ERROR: invalid restore finalize argument: %s\n", arg)
+			return 2
+		}
+		runID = arg
+	}
+	if runID == "" {
+		fmt.Fprintln(stderr, "ERROR: restore finalize requires <run-id>")
+		return 2
+	}
+	cfg, code := loadConfig(stderr)
+	if code != 0 {
+		return code
+	}
+	if err := restoreop.FinalizeRun(cfg, runID); err != nil {
+		if jsonMode {
+			_ = encodeJSON(stdout, stderr, map[string]any{"status": "FAILED", "code": 80, "error": err.Error()})
+		} else {
+			fmt.Fprintf(stderr, "ERROR: %v\n", err)
+		}
+		return 80
+	}
+	if jsonMode {
+		return encodeJSON(stdout, stderr, map[string]any{"status": "SUCCESS", "runId": runID})
+	}
+	fmt.Fprintf(stdout, "Restore run %s: SUCCESS\n", runID)
+	return 0
+}
+
+func runRestoreFail(args []string, stdout, stderr io.Writer) int {
+	runID, step, message := "", "", ""
+	errorCode := 70
+	jsonMode := false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--json":
+			jsonMode = true
+		case "--step":
+			i++
+			if i >= len(args) {
+				fmt.Fprintln(stderr, "ERROR: --step requires a value")
+				return 2
+			}
+			step = args[i]
+		case "--code":
+			i++
+			if i >= len(args) {
+				fmt.Fprintln(stderr, "ERROR: --code requires a value")
+				return 2
+			}
+			value, err := strconv.Atoi(args[i])
+			if err != nil || value <= 0 {
+				fmt.Fprintln(stderr, "ERROR: --code must be a positive integer")
+				return 2
+			}
+			errorCode = value
+		case "--message":
+			i++
+			if i >= len(args) {
+				fmt.Fprintln(stderr, "ERROR: --message requires a value")
+				return 2
+			}
+			message = args[i]
+		default:
+			if strings.HasPrefix(args[i], "-") || runID != "" {
+				fmt.Fprintf(stderr, "ERROR: invalid restore fail argument: %s\n", args[i])
+				return 2
+			}
+			runID = args[i]
+		}
+	}
+	if runID == "" || message == "" {
+		fmt.Fprintln(stderr, "ERROR: restore fail requires <run-id> and --message")
+		return 2
+	}
+	cfg, code := loadConfig(stderr)
+	if code != 0 {
+		return code
+	}
+	if err := restoreop.FailRun(cfg, runID, step, errorCode, message); err != nil {
+		fmt.Fprintf(stderr, "ERROR: %v\n", err)
+		return 80
+	}
+	if jsonMode {
+		return encodeJSON(stdout, stderr, map[string]any{"status": "FAILED", "runId": runID, "code": errorCode, "step": step})
+	}
+	fmt.Fprintf(stdout, "Restore run %s marked FAILED at %s\n", runID, step)
 	return 0
 }
 
