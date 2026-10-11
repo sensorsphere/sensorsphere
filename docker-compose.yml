@@ -193,6 +193,7 @@ services:
 
       BACKUP_ROOT: /backups
       BACKUP_STATE_ROOT: /state
+      RECOVERY_LOCK_ROOT: /recovery-lock
       INSTANCE_ROOT: /instance
       APP_DATA_ROOT: /source/app
       MOSQUITTO_DATA_ROOT: /source/mosquitto
@@ -208,6 +209,7 @@ services:
       - ${DATA_ROOT:-./data}/mosquitto:/source/mosquitto:ro
       - ${SENSORSPHERE_BACKUP_ROOT:-./backups}:/backups
       - ${SENSORSPHERE_BACKUP_STATE_ROOT:-./data/backup-state}:/state
+      - ${SENSORSPHERE_RECOVERY_LOCK_ROOT:-./data/recovery-lock}:/recovery-lock
 
     depends_on:
       timescaledb:
@@ -243,6 +245,7 @@ services:
 
       BACKUP_ROOT: /backups
       BACKUP_STATE_ROOT: /restore-state
+      RECOVERY_LOCK_ROOT: /recovery-lock
       INSTANCE_ROOT: /instance
       APP_DATA_ROOT: /target/app
       MOSQUITTO_DATA_ROOT: /target/mosquitto
@@ -251,6 +254,7 @@ services:
       - .:/instance:ro
       - ${SENSORSPHERE_BACKUP_ROOT:-./backups}:/backups:ro
       - ${SENSORSPHERE_RESTORE_STATE_ROOT:-./data/restore-state}:/restore-state
+      - ${SENSORSPHERE_RECOVERY_LOCK_ROOT:-./data/recovery-lock}:/recovery-lock
       - ${DATA_ROOT:-./data}/app:/target/app
       - ${DATA_ROOT:-./data}/mosquitto:/target/mosquitto
 

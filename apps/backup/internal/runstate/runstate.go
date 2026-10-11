@@ -12,23 +12,38 @@ import (
 type Status string
 
 const (
-	StatusStarting Status = "STARTING"
-	StatusRunning  Status = "RUNNING"
-	StatusSuccess  Status = "SUCCESS"
-	StatusFailed   Status = "FAILED"
+	StatusStarting    Status = "STARTING"
+	StatusRunning     Status = "RUNNING"
+	StatusSuccess     Status = "SUCCESS"
+	StatusFailed      Status = "FAILED"
+	StatusInterrupted Status = "INTERRUPTED"
 )
 
 type Run struct {
-	RunID        string         `json:"runId"`
-	Command      string         `json:"command"`
-	StartedAt    string         `json:"startedAt"`
-	CompletedAt  string         `json:"completedAt,omitempty"`
-	Status       Status         `json:"status"`
-	Phase        string         `json:"phase,omitempty"`
-	BackupID     string         `json:"backupId,omitempty"`
-	ErrorCode    int            `json:"errorCode,omitempty"`
-	ErrorMessage string         `json:"errorMessage,omitempty"`
-	Details      map[string]any `json:"details,omitempty"`
+	RunID                    string         `json:"runId"`
+	Command                  string         `json:"command"`
+	StartedAt                string         `json:"startedAt"`
+	CompletedAt              string         `json:"completedAt,omitempty"`
+	Status                   Status         `json:"status"`
+	Phase                    string         `json:"phase,omitempty"`
+	BackupID                 string         `json:"backupId,omitempty"`
+	Mode                     string         `json:"mode,omitempty"`
+	SourceBackupID           string         `json:"sourceBackupId,omitempty"`
+	SourceInstance           string         `json:"sourceInstance,omitempty"`
+	TargetInstance           string         `json:"targetInstance,omitempty"`
+	TargetEnvironment        string         `json:"targetEnvironment,omitempty"`
+	TargetInstallDir         string         `json:"targetInstallDir,omitempty"`
+	SafetyBackupID           string         `json:"safetyBackupId,omitempty"`
+	FailedStep               string         `json:"failedStep,omitempty"`
+	ErrorCode                int            `json:"errorCode,omitempty"`
+	ErrorMessage             string         `json:"errorMessage,omitempty"`
+	ErrorSummary             string         `json:"errorSummary,omitempty"`
+	SourceStackVersion       string         `json:"sourceStackVersion,omitempty"`
+	TargetStackVersionBefore string         `json:"targetStackVersionBefore,omitempty"`
+	TargetStackVersionAfter  string         `json:"targetStackVersionAfter,omitempty"`
+	RestoredMigrationLevel   int            `json:"restoredMigrationLevel,omitempty"`
+	OperatingSystemUser      string         `json:"operatingSystemUser,omitempty"`
+	Details                  map[string]any `json:"details,omitempty"`
 }
 
 type Lock struct {
@@ -71,7 +86,7 @@ func Acquire(root string) (*Lock, error) {
 	}
 	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		file.Close()
-		return nil, fmt.Errorf("another mutating backup operation is already running")
+		return nil, fmt.Errorf("another mutating recovery operation is already running")
 	}
 	return &Lock{file: file}, nil
 }

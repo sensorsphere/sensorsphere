@@ -571,7 +571,7 @@ func runPrune(args []string, stdout, stderr io.Writer) int {
 	var lock *runstate.Lock
 	var err error
 	if apply {
-		lock, err = runstate.Acquire(cfg.StateRoot)
+		lock, err = runstate.Acquire(cfg.RecoveryLockRoot)
 		if err != nil {
 			fmt.Fprintf(stderr, "ERROR: %v\n", err)
 			return 11

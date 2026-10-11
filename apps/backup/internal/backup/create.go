@@ -101,7 +101,7 @@ func Create(cfg config.Config, build BuildInfo, opts CreateOptions) (result Resu
 	}
 	_ = runstate.Write(cfg.StateRoot, run)
 
-	lock, err := runstate.Acquire(cfg.StateRoot)
+	lock, err := runstate.Acquire(cfg.RecoveryLockRoot)
 	if err != nil {
 		run.Status = runstate.StatusFailed
 		run.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)

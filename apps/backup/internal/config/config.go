@@ -9,6 +9,7 @@ import (
 type Config struct {
 	BackupRoot                string
 	StateRoot                 string
+	RecoveryLockRoot          string
 	InstanceRoot              string
 	AppRoot                   string
 	MosquittoRoot             string
@@ -98,6 +99,7 @@ func Load() (Config, error) {
 	return Config{
 		BackupRoot:                envDefault("BACKUP_ROOT", "/backups"),
 		StateRoot:                 envDefault("BACKUP_STATE_ROOT", "/state"),
+		RecoveryLockRoot:          envDefault("RECOVERY_LOCK_ROOT", envDefault("BACKUP_STATE_ROOT", "/state")),
 		InstanceRoot:              envDefault("INSTANCE_ROOT", "/instance"),
 		AppRoot:                   envDefault("APP_DATA_ROOT", "/source/app"),
 		MosquittoRoot:             envDefault("MOSQUITTO_DATA_ROOT", "/source/mosquitto"),
