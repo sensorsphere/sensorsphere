@@ -265,7 +265,8 @@ prepare_bundle() {
     cp "$SCRIPT_DIR/docker-compose.yml" "$INSTALL_DIR/docker-compose.yml"
     cp "$SCRIPT_DIR/install.sh" "$INSTALL_DIR/install.sh"
     cp "$SCRIPT_DIR/restore.sh" "$INSTALL_DIR/restore.sh"
-    chmod 0755 "$INSTALL_DIR/install.sh" "$INSTALL_DIR/restore.sh"
+    cp "$SCRIPT_DIR/recover.sh" "$INSTALL_DIR/recover.sh"
+    chmod 0755 "$INSTALL_DIR/install.sh" "$INSTALL_DIR/restore.sh" "$INSTALL_DIR/recover.sh"
     cp "$SCRIPT_DIR/.env.example" "$INSTALL_DIR/.env.example"
     cp "$SCRIPT_DIR/config/mosquitto/mosquitto.conf" "$INSTALL_DIR/config/mosquitto/mosquitto.conf"
     cp "$SCRIPT_DIR/init/timescaledb/01-init.sql" "$INSTALL_DIR/init/timescaledb/01-init.sql"
@@ -319,7 +320,7 @@ snapshot_bundle() {
   mkdir -p "$destination"
 
   local file
-  for file in docker-compose.yml install.sh restore.sh .env.example; do
+  for file in docker-compose.yml install.sh restore.sh recover.sh .env.example; do
     if [[ -f "$INSTALL_DIR/$file" ]]; then
       cp "$INSTALL_DIR/$file" "$destination/$file"
     fi
@@ -335,7 +336,7 @@ restore_bundle() {
   [[ -d "$source" ]] || return 0
 
   local file dir
-  for file in docker-compose.yml install.sh restore.sh .env.example; do
+  for file in docker-compose.yml install.sh restore.sh recover.sh .env.example; do
     if [[ -f "$source/$file" ]]; then
       cp "$source/$file" "$INSTALL_DIR/$file"
     else
@@ -348,13 +349,13 @@ restore_bundle() {
     [[ -d "$source/$dir" ]] && cp -a "$source/$dir" "$INSTALL_DIR/$dir"
   done
 
-  chmod 0755 "$INSTALL_DIR/install.sh" "$INSTALL_DIR/restore.sh" 2>/dev/null || true
+  chmod 0755 "$INSTALL_DIR/install.sh" "$INSTALL_DIR/restore.sh" "$INSTALL_DIR/recover.sh" 2>/dev/null || true
 }
 
 managed_bundle_changes() {
   local source="$1"
   local path
-  for path in install.sh restore.sh docker-compose.yml .env.example config init; do
+  for path in install.sh restore.sh recover.sh docker-compose.yml .env.example config init; do
     if [[ ! -e "$source/$path" && ! -e "$INSTALL_DIR/$path" ]]; then
       continue
     fi
