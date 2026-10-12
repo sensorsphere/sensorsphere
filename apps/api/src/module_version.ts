@@ -18,10 +18,19 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.73.0";
+export const MODULE_VERSION = "1.74.0";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.74.0": {
+    releasedAt: "2026-10-12T06:45:00Z",
+    patch: "NET-1.5.1-netatmo-energy-preview.patch",
+    changes: [
+      { type: "added", description: "Introduce Netatmo Energy simulator OAuth, discovery preview and admin-only registry import" },
+      { type: "added", description: "Add manual Netatmo telemetry preview and transactional observation ingestion linked to Device Registry" },
+      { type: "changed", description: "Expose optional Netatmo simulator connection settings to the API container" }
+    ]
+  },
   "1.73.0": {
     releasedAt: "2026-10-11T10:06:11Z",
     patch: "PR-337-backup-restore-v2-recovery-auth-v1.patch",
