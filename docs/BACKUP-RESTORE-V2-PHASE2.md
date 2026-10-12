@@ -794,10 +794,46 @@ Acceptance report:
     docs/BACKUP-RESTORE-V2-PHASE2-RECOVERY-RESULTS.md
 
 ### BR2-012 — Full restore foundation
-- recover exact Stack Release bundle;
-- reconstruct a new installation;
-- no source checkout dependency;
-- validate deployed-instance backup into new installation.
+
+Status:
+
+    IMPLEMENTED / REAL ACCEPTANCE BLOCKED BY GHCR PACKAGE ACTIONS ACCESS
+
+Implemented:
+
+- standalone `recover.sh` bootstrap shipped in the distribution;
+- verify the off-host Recovery Bundle before target creation;
+- retrieve and checksum the exact Stack Release archive;
+- require the downloaded Stack Release manifest to exactly match the backed-up
+  manifest;
+- verify all immutable Stack Release images are remotely available before
+  target creation;
+- require an operator recovery env file for deployment-specific configuration
+  and secrets because normal Recovery Bundles keep
+  `instanceSecrets.included=false`;
+- generate a new target PostgreSQL password when the operator does not supply
+  one;
+- seed the backed-up non-secret logical identity unless explicitly overridden;
+- install the exact Stack Release into a brand-new absolute install path;
+- copy the verified Recovery Bundle into the new backup repository;
+- invoke the accepted data-restore workflow including safety backup;
+- no source checkout dependency.
+
+Automated bootstrap test:
+
+    scripts/tests/test-recover-full-bootstrap.sh
+    PASS
+
+A real deployed-instance backup from Stack 2026.10.11.1 demonstrated why image
+availability must be a preflight requirement: API 1.73.0 and Backup 0.2.0 are
+not retrievable from GHCR. The hardened preflight now rejects that release
+before creating the target.
+
+Replacement Stack 2026.10.13.1 is prepared with API 1.74.0 and Backup 0.2.1.
+Its normal release workflow is currently blocked by package-side GitHub Actions
+write access. See:
+
+    docs/BACKUP-RESTORE-V2-PHASE2-FULL-RESTORE-RESULTS.md
 
 ---
 

@@ -930,6 +930,64 @@ Phase 2 Restore Foundation:
 
 BR2-012 Full Restore Foundation remains a separate follow-up.
 
+## 39.1 P2-K — Full Restore / host reconstruction
+
+| ID | Pri | Test | Expected | Current result |
+| --- | --- | --- | --- | --- |
+| P2-K001 | P0 | Full preflight from off-host bundle | READY, no target creation | PASS |
+| P2-K002 | P0 | Exact Stack Release archive checksum | Valid | PASS |
+| P2-K003 | P0 | Downloaded Stack manifest differs from backup | Refuse before target creation | PASS by implementation/test |
+| P2-K004 | P0 | Required Stack image unavailable | Refuse before target creation | PASS |
+| P2-K005 | P0 | Operator env/secrets required | Explicit external recovery config | PASS |
+| P2-K006 | P1 | POSTGRES_PASSWORD omitted by operator | Generate new target secret | PASS |
+| P2-K007 | P1 | Source logical identity defaults | Environment/name restored unless overridden | PASS |
+| P2-K008 | P1 | Operator deployment override | Explicit Compose project/ports preserved | PASS |
+| P2-K009 | P0 | No source checkout dependency | Bootstrap + bundle + release artifacts only | PASS |
+| P2-K010 | P0 | Deployed-instance backup -> brand-new installation | Full recovery SUCCESS | BLOCKED by GHCR publication |
+| P2-K011 | P0 | Full-recovered runtime health | All required services healthy | PENDING P2-K010 |
+| P2-K012 | P0 | Full-recovered data equivalence | Equivalent to source cutoff | PENDING P2-K010 |
+| P2-K013 | P1 | Release unavailable | Clear failure, no target mutation | PASS |
+| P2-K014 | P1 | Non-empty/already-installed target | Refuse | PASS by implementation |
+| P2-K015 | P1 | Confirmation mismatch/cancel | No installation mutation | PASS by implementation/test |
+
+Automated bootstrap:
+
+    scripts/tests/test-recover-full-bootstrap.sh
+    PASS
+
+Real deployed-source Recovery Point:
+
+    20261012T232819Z-b3a412cf
+    Stack 2026.10.11.1
+    Backup 0.2.0
+    VERIFIED
+
+The real test exposed missing immutable GHCR tags in Stack 2026.10.11.1.
+The hardened full preflight now detects this before target creation.
+
+Replacement Stack:
+
+    2026.10.13.1
+    API 1.74.0
+    Backup 0.2.1
+
+Publication attempt:
+
+    GitHub Actions run 38322630126
+    FAILED: permission_denied: write_package
+
+The remaining P0 acceptance test P2-K010 requires package-side GitHub Actions
+write access for the `sensorsphere/sensorsphere` repository and public access
+to the Backup container package.
+
+Detailed evidence:
+
+    docs/BACKUP-RESTORE-V2-PHASE2-FULL-RESTORE-RESULTS.md
+
+BR2-012 status:
+
+    IMPLEMENTED / NOT YET ACCEPTED
+
 No Phase 2 release is accepted without this scenario.
 
 ---
