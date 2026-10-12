@@ -119,3 +119,35 @@ func TestRestoreDatabaseRejectsUnsafeIdentityBeforeCommands(t *testing.T) {
 		t.Fatalf("expected no commands, got %#v", runner.commands)
 	}
 }
+
+func TestRestoreDatabaseTargetsOnlyConfiguredDatabase(t *testing.T) {
+	cfg := validRestoreConfig()
+	cfg.DBName = "targetdb"
+	runner := &fakeRunner{}
+	_, err := restoreDatabaseWith(
+		cfg,
+		"/backups/id/database/database.dump",
+		runner,
+		func(string) error { return nil },
+		func(database.Config) (database.Metadata, error) {
+			return database.Metadata{ServerVersion: "17.6", ServerMajor: 17, TimescaleVersion: "2.21.3", MigrationLevel: 87}, nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trace := ""
+	for _, command := range runner.commands {
+		trace += command.name + " " + strings.Join(command.args, " ") + "\n"
+	}
+	for _, expected := range []string{
+		"datname = 'targetdb'",
+		`DROP DATABASE IF EXISTS "targetdb"`,
+		`CREATE DATABASE "targetdb"`,
+		"pg_restore -h timescaledb -p 5432 -U sensorsphere -d targetdb",
+	} {
+		if !strings.Contains(trace, expected) {
+			t.Fatalf("missing target database constraint %q in trace:\n%s", expected, trace)
+		}
+	}
+}

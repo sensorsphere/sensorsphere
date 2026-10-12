@@ -125,7 +125,10 @@ else
   echo "This operation will replace the RECOVERY target database and persistent app/Mosquitto data."
   echo "Type the exact confirmation phrase:"
   echo "  $confirmation"
-  read -r entered
+  if ! read -r entered; then
+    echo "Restore cancelled; no target mutation was performed."
+    exit 40
+  fi
   [[ "$entered" == "$confirmation" ]] || { echo "Restore cancelled; no target mutation was performed."; exit 40; }
 fi
 

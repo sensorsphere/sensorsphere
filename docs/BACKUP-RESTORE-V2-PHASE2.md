@@ -758,17 +758,40 @@ Stable implementation IDs:
 - MQTT ingestion proof.
 
 ### BR2-010 — Failure injection
+
+Status:
+
+    DONE / PASS
+
+Validated on isolated RECOVERY-FI:
+
 - pg_restore failure;
 - DB create failure;
 - post_restore failure;
 - archive write failure;
 - migration/health failure;
+- ENOSPC;
 - process kill / retry semantics.
 
+P2-J001 through P2-J010 all pass. Evidence is retained in
+`BACKUP-RESTORE-V2-PHASE2-RECOVERY-RESULTS.md`.
+
 ### BR2-011 — RECOVERY acceptance
-- create isolated target;
+
+Status:
+
+    ACCEPTED
+
+Validated:
+
+- isolated RECOVERY target;
 - DEV -> RECOVERY P2-ACC-001;
-- retain evidence/report.
+- all mandatory Phase 2 P0/P1 exit-gate coverage;
+- retained evidence/report.
+
+Acceptance report:
+
+    docs/BACKUP-RESTORE-V2-PHASE2-RECOVERY-RESULTS.md
 
 ### BR2-012 — Full restore foundation
 - recover exact Stack Release bundle;
@@ -872,5 +895,14 @@ Phase 2 Restore Foundation is accepted only when:
 - no Docker socket is permanently mounted;
 - no TEST1 destructive restore was required for acceptance.
 
-The Phase 2 acceptance report will be stored separately from this
-specification.
+Acceptance result:
+
+    ACCEPTED — 2026-10-13
+
+BR2-010 is DONE/PASS and BR2-011 is ACCEPTED. All mandatory Phase 2 Restore
+Foundation P0/P1 criteria and P2-ACC-001 are satisfied. The acceptance report is:
+
+    docs/BACKUP-RESTORE-V2-PHASE2-RECOVERY-RESULTS.md
+
+BR2-012 Full Restore Foundation remains a separate follow-up after this accepted
+data-restore foundation and is not claimed complete by this gate.

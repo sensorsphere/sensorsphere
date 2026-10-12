@@ -63,3 +63,33 @@ func TestLoadResolvesRelativeDataRootAgainstInstallDir(t *testing.T) {
 		t.Fatalf("unexpected resolved DATA_ROOT: %q", cfg.DataRoot)
 	}
 }
+
+func TestValidateForRestorePreflightRejectsIncompleteOrRelativeIdentity(t *testing.T) {
+	base := Config{
+		DBPassword:                "secret",
+		BackupRoot:                "/backups",
+		InstanceName:              "Recovery",
+		Environment:               "RECOVERY",
+		InstallDir:                "/srv/recovery",
+		ComposeProject:            "recovery",
+		DataRoot:                  "/srv/recovery/data",
+		StackVersion:              "2026.10.11.1",
+		DatabaseMinMigrationLevel: 72,
+		DatabaseMaxMigrationLevel: 87,
+	}
+	tests := map[string]func(*Config){
+		"missing data root":       func(c *Config) { c.DataRoot = "" },
+		"relative data root":      func(c *Config) { c.DataRoot = "./data" },
+		"relative install dir":    func(c *Config) { c.InstallDir = "./recovery" },
+		"missing compose project": func(c *Config) { c.ComposeProject = "" },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			cfg := base
+			mutate(&cfg)
+			if err := cfg.ValidateForRestorePreflight(); err == nil {
+				t.Fatal("expected restore preflight identity rejection")
+			}
+		})
+	}
+}

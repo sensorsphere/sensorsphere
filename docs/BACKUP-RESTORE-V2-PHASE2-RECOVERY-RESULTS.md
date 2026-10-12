@@ -1,10 +1,10 @@
 # SensorSphere — Backup / Restore V2 — Phase 2 RECOVERY results
 
-> **Date:** 2026-10-11
-> **Status:** P2-ACC-001 PASSED; P2-J001/P2-J009/P2-J010 PASSED; Phase 2 remains open for remaining P2-J failure injection
+> **Date:** 2026-10-13
+> **Status:** PHASE 2 RESTORE FOUNDATION ACCEPTED; P2-ACC-001 PASS; P2-J001..P2-J010 PASS
 > **Source:** DEV
 > **Target:** isolated RECOVERY
-> **Restore module:** 0.2.0
+> **Restore module:** 0.2.0 acceptance baseline; 0.2.1 final hardening/tests
 > **Backup format:** 1
 
 ---
@@ -373,7 +373,7 @@ No TEST1 destructive restore was performed.
 
 ---
 
-## 11. BR2-010 failure-injection progress
+## 11. BR2-010 failure-injection acceptance
 
 Phase 2 is not yet globally accepted, but three P0 P2-J scenarios now have real
 RECOVERY-FI evidence.
@@ -392,6 +392,36 @@ Evidence:
 
     /home/ubuntu/tmp/sensorsphere-recovery-evidence/
       p2-j001-pg-restore-failure.log
+
+### P2-J002..P2-J008 — remaining destructive failure classes
+
+Result:
+
+    PASS
+
+Each scenario was executed against the disposable RECOVERY-FI target with a
+fresh target reset between tests:
+
+| Test | Injection | Observed result |
+| --- | --- | --- |
+| P2-J002 | CREATE DATABASE failure | FAILED / DATABASE_RESTORE / code 50; safety backup retained |
+| P2-J003 | timescaledb_post_restore failure | FAILED / DATABASE_RESTORE / code 50; safety backup retained |
+| P2-J004 | app-data extraction failure | FAILED / code 60; writers stopped; safety backup retained |
+| P2-J005 | migration failure | FAILED at MIGRATIONS; safety backup retained |
+| P2-J006 | API health failure | FAILED at HEALTH_CHECK; no false SUCCESS |
+| P2-J007 | Nginx health failure | FAILED at HEALTH_CHECK; no false SUCCESS |
+| P2-J008 | ENOSPC during app-data extraction | FAILED / code 60; safety backup retained |
+
+Evidence:
+
+    /home/ubuntu/tmp/sensorsphere-recovery-evidence/
+      p2-j002-db-create-failure.log
+      p2-j003-post-restore-failure.log
+      p2-j004-app-data-failure.log
+      p2-j005-migration-failure.log
+      p2-j006-api-health-failure.log
+      p2-j007-nginx-health-failure.log
+      p2-j008-enospc-failure.log
 
 ### P2-J009 — process killed mid-restore
 
@@ -472,11 +502,133 @@ Evidence:
       p2-j010-retry-after-pg-restore-failure.log
       p2-j010-retry-after-interruption.log
 
-### Remaining Phase 2 gate
+### BR2-010 result
 
-BR2-010 is still open for the remaining mandatory P0 failure-injection cases,
-notably DB creation failure, Timescale post-restore failure, app-data restore
-failure, migration/runtime health failures and disk-full handling.
+BR2-010 is complete.
 
-After the remaining mandatory P2-J cases are evidenced, the Phase 2 exit gate
-can be evaluated and BR2-011 can be closed formally.
+    P2-J001..P2-J010: PASS
+
+Failure semantics were exercised for database creation, pg_restore,
+Timescale post-restore cleanup, app-data extraction, migration, API health,
+Nginx health, ENOSPC, process interruption and safe retry.
+
+---
+
+## 12. Phase 2 P0/P1 acceptance matrix
+
+All mandatory P0 and P1 cases in P2-A through P2-J are covered by live
+RECOVERY/RECOVERY-FI execution, Docker-based module tests, or an explicit
+non-applicable condition documented below.
+
+| Group | Result | Evidence summary |
+| --- | --- | --- |
+| P2-A Restore CLI safety | PASS | Live refusal/cancel/preflight evidence plus config/compatibility tests |
+| P2-B Pre-restore safety backup | PASS | Main restore safety backup; forced verify failure; forced ENOSPC before quiesce |
+| P2-C Database sequence | PASS | Main restore; failure injection; strict target-DB test; live migration-86 -> 87 restore |
+| P2-D Application data | PASS | Exact History restore; archive/path tests; replacement tests; live empty-app restore |
+| P2-E Mosquitto | PASS | Main mosquitto.db restore; corrupt archive refusal; live no-mosquitto.db continuity |
+| P2-F Target preservation | PASS | Target instance/environment/ports/project/install dir/Stack preserved; source secrets excluded |
+| P2-G Migration/runtime | PASS | Migration exit 0/level 87; Timescale/API/Frontend/Nginx healthy; ingestion/Mosquitto running |
+| P2-H Data equivalence | PASS | Source/target snapshots, cutoff comparison, History SHA/checksum, pve-1 and lifecycle checks |
+| P2-I Post-restore ingestion | PASS | MQTT -> routing -> ingestion -> DB -> API; pre-backup History API read; authenticated agent heartbeat |
+| P2-J Failure injection | PASS | P2-J001 through P2-J010 real RECOVERY-FI evidence |
+
+Additional explicit evidence produced during final gate closure:
+
+    p2-a-negative-smoke.txt
+    p2-a003-corrupt-refusal.txt
+    p2-a004-unverified-refusal.txt
+    p2-a006-a011-cancel-after-fix.txt
+    p2-a009-ambiguous-data-root.txt
+    p2-a012-preflight.json
+    p2-b002-safety-verify-failure.log
+    p2-b003-safety-enospc.log
+    p2-c016-forward-migration.log
+    p2-d006-e002-empty-persistent.log
+    p2-e003-corrupt-mosquitto.txt
+    p2-i005-i006-api-heartbeat.json
+    p2-phase2-final-gate.txt
+
+Notable P1 proofs:
+
+- P2-A011: EOF/cancel exits 40, prints an explicit cancellation message and
+  leaves restore state byte-for-byte unchanged.
+- P2-A012: JSON preflight returns READY and `mutatesTarget=false`.
+- P2-B004/B005: safety backup manifest identifies the target-before-restore and
+  the verified COMPLETE bundle remains retained after success.
+- P2-C009: ANALYZE completed in the successful database sequence.
+- P2-C016: a migration-86 source bundle was restored to a migration-87 target;
+  migration 087 was applied once and the final run completed SUCCESS at level 87.
+- P2-D006/P2-E002: a valid fixture with empty app data and no mosquitto.db
+  restored successfully with defined empty continuity state.
+- P2-I005: an observation from 2026-08-09 was read through the History API
+  after restore.
+- P2-I006: a temporary monitoring agent sent an authenticated heartbeat,
+  last_seen_at advanced, online=true was observed, and the fixture agent was
+  deleted afterward.
+
+Applicability notes:
+
+- P2-E006 is P2 priority and is not a mandatory Phase 2 exit-gate test.
+- P2-F003 public URL preservation is structurally covered by data-restore write
+  boundaries: the target .env/instance configuration is never replaced. The
+  acceptance RECOVERY target has auth disabled and therefore no public URL to
+  compare live.
+- P2-H013 lifecycle/exclusion data was empty at source and remained empty after
+  restore. No non-empty lifecycle fixture existed in the accepted DEV source.
+- P2-H014 is covered by the source/target user/admin counts (2 users, 1 admin).
+- P2-H015 is covered by preserved Device/Monitoring/Supervisor agent records and
+  slot counts in the equivalence snapshot.
+
+---
+
+## 13. Phase 2 exit gate
+
+Result:
+
+    ACCEPTED
+
+The Phase 2 Restore Foundation exit criteria are satisfied:
+
+- all mandatory P0 P2-A through P2-J tests pass;
+- all mandatory P1 tests pass or have an explicit applicability note;
+- P2-ACC-001 DEV -> clean RECOVERY passes;
+- the verified target safety backup remains retained;
+- database, application and Mosquitto restore semantics pass;
+- target identity and target Stack are preserved for data restore;
+- migrations and runtime health checks pass;
+- post-restore MQTT ingestion is proven;
+- FAILED and INTERRUPTED failure semantics are proven;
+- safe retry from failed/interrupted targets is proven;
+- no Docker socket is permanently mounted;
+- no destructive TEST1 restore was used for acceptance.
+
+Main final-gate evidence:
+
+    /home/ubuntu/tmp/sensorsphere-recovery-evidence/
+      p2-phase2-final-gate.txt
+
+BR2-010:
+
+    DONE / PASS
+
+BR2-011:
+
+    ACCEPTED
+
+P2-ACC-001:
+
+    PASS
+
+---
+
+## 14. Follow-up
+
+BR2-012 remains intentionally open:
+
+    Full restore foundation
+
+It follows the accepted data-restore foundation and is not claimed complete by
+this acceptance. Its scope remains exact Stack Release recovery, reconstruction
+of a new installation without source-checkout dependency, and deployed-instance
+backup recovery into a new installation.

@@ -68,3 +68,16 @@ func TestEvaluateRejectsOlderTargetStack(t *testing.T) {
 		t.Fatalf("expected incompatible")
 	}
 }
+
+func TestEvaluateRejectsTimescaleMismatch(t *testing.T) {
+	got := Evaluate(sourceManifest(), Target{
+		StackVersion:              "2026.10.07.1",
+		PostgresMajor:             17,
+		TimescaleVersion:          "2.20.0",
+		DatabaseMinMigrationLevel: 72,
+		DatabaseMaxMigrationLevel: 87,
+	})
+	if got.Compatible {
+		t.Fatalf("expected incompatible TimescaleDB version")
+	}
+}

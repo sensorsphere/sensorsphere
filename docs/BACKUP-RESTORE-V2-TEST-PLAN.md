@@ -879,6 +879,15 @@ Compare after restore:
 | P2-J009 | P0 | Process killed mid-restore | State indicates interrupted/failed |
 | P2-J010 | P0 | Retry after failed restore | Defined safe behavior |
 
+Execution result:
+
+    P2-J001..P2-J010: PASS
+
+All ten failure-injection scenarios were executed against isolated RECOVERY-FI
+targets. Evidence and exact safety/run-state results are retained in:
+
+    docs/BACKUP-RESTORE-V2-PHASE2-RECOVERY-RESULTS.md
+
 ---
 
 # 39. Phase 2 acceptance scenario
@@ -905,6 +914,21 @@ Steps:
 Expected:
 
     PASS
+
+Execution result:
+
+    PASS — 2026-10-13
+
+The DEV -> isolated RECOVERY scenario, full mandatory P0/P1 matrix and Phase 2
+Restore Foundation exit gate are documented in:
+
+    docs/BACKUP-RESTORE-V2-PHASE2-RECOVERY-RESULTS.md
+
+Phase 2 Restore Foundation:
+
+    ACCEPTED
+
+BR2-012 Full Restore Foundation remains a separate follow-up.
 
 No Phase 2 release is accepted without this scenario.
 
