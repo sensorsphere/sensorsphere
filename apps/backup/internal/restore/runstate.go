@@ -127,6 +127,37 @@ func (t *RunTracker) Complete(targetStack string, migrationLevel int) error {
 	return runstate.Write(t.root, t.Run)
 }
 
+func InterruptCurrentRun(cfg config.Config, step, summary string) (string, bool, error) {
+	data, err := os.ReadFile(filepath.Join(cfg.StateRoot, "current.json"))
+	if err != nil {
+		return "", false, fmt.Errorf("read current restore run: %w", err)
+	}
+	var run runstate.Run
+	if err := json.Unmarshal(data, &run); err != nil {
+		return "", false, fmt.Errorf("parse current restore run: %w", err)
+	}
+	if run.Command != "restore" || run.RunID == "" {
+		return "", false, fmt.Errorf("current run is not a restore operation")
+	}
+	if run.Status == runstate.StatusFailed || run.Status == runstate.StatusSuccess || run.Status == runstate.StatusInterrupted {
+		return run.RunID, false, nil
+	}
+	if run.Status != runstate.StatusStarting && run.Status != runstate.StatusRunning {
+		return run.RunID, false, fmt.Errorf("restore run %s has unsupported status %s", run.RunID, run.Status)
+	}
+	if step == "" {
+		step = "RESTORE_ENGINE"
+	}
+	if summary == "" {
+		summary = "restore engine was interrupted"
+	}
+	tracker := &RunTracker{root: cfg.StateRoot, Run: run}
+	if err := tracker.Interrupt(step, fmt.Errorf("%s", summary)); err != nil {
+		return run.RunID, false, err
+	}
+	return run.RunID, true, nil
+}
+
 func AcquireMutationLock(cfg config.Config) (*runstate.Lock, error) {
 	return runstate.Acquire(cfg.RecoveryLockRoot)
 }

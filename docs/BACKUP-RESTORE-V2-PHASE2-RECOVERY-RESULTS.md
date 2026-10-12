@@ -1,7 +1,7 @@
 # SensorSphere — Backup / Restore V2 — Phase 2 RECOVERY results
 
 > **Date:** 2026-10-11
-> **Status:** P2-ACC-001 PASSED; Phase 2 remains open pending P2-J failure injection
+> **Status:** P2-ACC-001 PASSED; P2-J001/P2-J009/P2-J010 PASSED; Phase 2 remains open for remaining P2-J failure injection
 > **Source:** DEV
 > **Target:** isolated RECOVERY
 > **Restore module:** 0.2.0
@@ -373,17 +373,110 @@ No TEST1 destructive restore was performed.
 
 ---
 
-## 11. Remaining Phase 2 gate
+## 11. BR2-010 failure-injection progress
 
-Phase 2 is not yet globally accepted.
+Phase 2 is not yet globally accepted, but three P0 P2-J scenarios now have real
+RECOVERY-FI evidence.
 
-The next mandatory work package is:
+### P2-J001 — forced pg_restore failure
 
-    BR2-010 — P2-J failure injection
+Result:
 
-P0 scenarios still requiring real evidence include forced restore/database/file
-failures, runtime health failures, interruption semantics and retry after an
-interrupted/failed restore.
+    PASS
 
-After BR2-010, the Phase 2 exit gate can be evaluated and BR2-011 can be closed
-formally.
+The restore engine was forced to fail inside `pg_restore`. The wrapper returned
+exit class 50, did not print a success-looking summary, left writers stopped and
+retained the verified safety backup.
+
+Evidence:
+
+    /home/ubuntu/tmp/sensorsphere-recovery-evidence/
+      p2-j001-pg-restore-failure.log
+
+### P2-J009 — process killed mid-restore
+
+Result:
+
+    PASS
+
+A restore run was started against the isolated `RECOVERY-FI` target and the
+restore container was killed with exit 137 while the recorded phase was:
+
+    DATABASE_RESTORE
+
+The wrapper's interruption fallback then converted the active run to:
+
+    status      INTERRUPTED
+    phase       INTERRUPTED
+    failedStep  RESTORE_ENGINE
+    errorCode   80
+
+The source backup remained:
+
+    20261011T133418Z-5855a25c
+
+The retained safety backup was:
+
+    20261012T063900Z-57de37a3
+
+All target writers remained stopped and the safety backup was re-verified after
+the interruption.
+
+Evidence:
+
+    /home/ubuntu/tmp/sensorsphere-recovery-evidence/
+      p2-j009-interrupted-restore.log
+      p2-j009-interrupted-state.json
+
+The test exposed and fixed one additional retry-safety defect: a partially
+restored database could still answer metadata queries with migration level 0,
+which previously caused preflight to label the target `READY` and omit the
+prior safety-backup linkage. Preflight now evaluates failed/interrupted restore
+state independently from target DB metadata availability. The same interrupted
+target is therefore reported as:
+
+    Target DB state      DEGRADED_RETRY
+    Retry safety backup  20261012T063900Z-57de37a3
+
+Evidence:
+
+    /home/ubuntu/tmp/sensorsphere-recovery-evidence/
+      p2-j009-retry-preflight-after-fix.txt
+
+### P2-J010 — retry after failed/interrupted restore
+
+Result:
+
+    PASS
+
+Two recovery paths have now been exercised:
+
+- retry after an injected `pg_restore` failure;
+- retry after a real container kill during `DATABASE_RESTORE`.
+
+For the interrupted case, the retry re-verified and reused the original safety
+backup instead of creating a new backup from the degraded target:
+
+    20261012T063900Z-57de37a3
+
+The retry completed the restore, migrations, runtime restart and health checks,
+then finalized with:
+
+    status                  SUCCESS
+    phase                   COMPLETE
+    restoredMigrationLevel  87
+
+Evidence:
+
+    /home/ubuntu/tmp/sensorsphere-recovery-evidence/
+      p2-j010-retry-after-pg-restore-failure.log
+      p2-j010-retry-after-interruption.log
+
+### Remaining Phase 2 gate
+
+BR2-010 is still open for the remaining mandatory P0 failure-injection cases,
+notably DB creation failure, Timescale post-restore failure, app-data restore
+failure, migration/runtime health failures and disk-full handling.
+
+After the remaining mandatory P2-J cases are evidenced, the Phase 2 exit gate
+can be evaluated and BR2-011 can be closed formally.

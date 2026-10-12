@@ -85,3 +85,58 @@ func TestAcquireMutationLockUsesRecoveryRoot(t *testing.T) {
 		t.Fatal("expected shared recovery lock rejection")
 	}
 }
+
+func TestInterruptCurrentRunMarksRunningRestoreInterrupted(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "restore-state")
+	cfg := config.Config{StateRoot: root}
+	run := runstate.Run{
+		RunID:     "restore-running",
+		Command:   "restore",
+		Status:    runstate.StatusRunning,
+		Phase:     "DATABASE_RESTORE",
+		StartedAt: "2026-10-11T00:00:00Z",
+	}
+	if err := runstate.Write(root, run); err != nil {
+		t.Fatal(err)
+	}
+	runID, changed, err := InterruptCurrentRun(cfg, "RESTORE_ENGINE", "engine disappeared")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runID != run.RunID || !changed {
+		t.Fatalf("unexpected interrupt result runId=%q changed=%v", runID, changed)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "current.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got runstate.Run
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != runstate.StatusInterrupted || got.Phase != "INTERRUPTED" || got.FailedStep != "RESTORE_ENGINE" || got.ErrorCode != 80 {
+		t.Fatalf("unexpected interrupted state: %#v", got)
+	}
+}
+
+func TestInterruptCurrentRunLeavesTerminalStateUnchanged(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "restore-state")
+	cfg := config.Config{StateRoot: root}
+	run := runstate.Run{
+		RunID:     "restore-failed",
+		Command:   "restore",
+		Status:    runstate.StatusFailed,
+		Phase:     "FAILED",
+		StartedAt: "2026-10-11T00:00:00Z",
+	}
+	if err := runstate.Write(root, run); err != nil {
+		t.Fatal(err)
+	}
+	runID, changed, err := InterruptCurrentRun(cfg, "RESTORE_ENGINE", "ignored")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runID != run.RunID || changed {
+		t.Fatalf("terminal state must remain unchanged runId=%q changed=%v", runID, changed)
+	}
+}

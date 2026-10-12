@@ -227,12 +227,16 @@ func runRestore(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "fail" {
 		return runRestoreFail(args[1:], stdout, stderr)
 	}
+	if len(args) > 0 && args[0] == "interrupt-current" {
+		return runRestoreInterruptCurrent(args[1:], stdout, stderr)
+	}
 	if isHelp(args) {
 		fmt.Fprintln(stdout, "Usage:")
 		fmt.Fprintln(stdout, "  sensorsphere-backup restore (--data|--full) <backup-id> --preflight [--json]")
 		fmt.Fprintln(stdout, "  sensorsphere-backup restore --data <backup-id> --apply --confirm <phrase> --safety-backup-id <id> --writers-quiesced [--json]")
 		fmt.Fprintln(stdout, "  sensorsphere-backup restore finalize <run-id> [--json]")
 		fmt.Fprintln(stdout, "  sensorsphere-backup restore fail <run-id> --step <step> --code <n> --message <text> [--json]")
+		fmt.Fprintln(stdout, "  sensorsphere-backup restore interrupt-current [--step <step>] [--message <text>] [--json]")
 		return 0
 	}
 	var mode restoreop.Mode
@@ -466,6 +470,61 @@ func runRestoreFail(args []string, stdout, stderr io.Writer) int {
 		return encodeJSON(stdout, stderr, map[string]any{"status": "FAILED", "runId": runID, "code": errorCode, "step": step})
 	}
 	fmt.Fprintf(stdout, "Restore run %s marked FAILED at %s\n", runID, step)
+	return 0
+}
+
+func runRestoreInterruptCurrent(args []string, stdout, stderr io.Writer) int {
+	step := "RESTORE_ENGINE"
+	message := "restore engine was interrupted"
+	jsonMode := false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--json":
+			jsonMode = true
+		case "--step":
+			i++
+			if i >= len(args) {
+				fmt.Fprintln(stderr, "ERROR: --step requires a value")
+				return 2
+			}
+			step = args[i]
+		case "--message":
+			i++
+			if i >= len(args) {
+				fmt.Fprintln(stderr, "ERROR: --message requires a value")
+				return 2
+			}
+			message = args[i]
+		default:
+			fmt.Fprintf(stderr, "ERROR: invalid restore interrupt-current argument: %s\n", args[i])
+			return 2
+		}
+	}
+	cfg, code := loadConfig(stderr)
+	if code != 0 {
+		return code
+	}
+	runID, changed, err := restoreop.InterruptCurrentRun(cfg, step, message)
+	if err != nil {
+		if jsonMode {
+			_ = encodeJSON(stdout, stderr, map[string]any{"status": "FAILED", "code": 80, "error": err.Error()})
+		} else {
+			fmt.Fprintf(stderr, "ERROR: %v\n", err)
+		}
+		return 80
+	}
+	status := "UNCHANGED"
+	if changed {
+		status = "INTERRUPTED"
+	}
+	if jsonMode {
+		return encodeJSON(stdout, stderr, map[string]any{"status": status, "runId": runID, "changed": changed, "step": step})
+	}
+	if changed {
+		fmt.Fprintf(stdout, "Restore run %s marked INTERRUPTED at %s\n", runID, step)
+	} else {
+		fmt.Fprintf(stdout, "Restore run %s already terminal; state unchanged\n", runID)
+	}
 	return 0
 }
 

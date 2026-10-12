@@ -128,7 +128,16 @@ func Preflight(cfg config.Config, mode Mode, backupID string) (PreflightResult, 
 		DatabaseMaxMigrationLevel: cfg.DatabaseMaxMigrationLevel,
 	}
 
-	var retryRun *runstate.Run
+	retryRun, err := degradedRetryRun(cfg, backupID)
+	if err != nil {
+		return PreflightResult{}, &Error{Code: 10, Err: fmt.Errorf("target retry state is invalid: %w", err)}
+	}
+	if retryRun != nil {
+		if err := verifySafetyBackup(cfg, retryRun.SafetyBackupID, backupID); err != nil {
+			return PreflightResult{}, &Error{Code: 30, Err: fmt.Errorf("previous restore safety backup is not usable for retry: %w", err)}
+		}
+	}
+
 	if dbMetaErr == nil {
 		target.PostgresMajor = dbMeta.ServerMajor
 		target.PostgresVersion = dbMeta.ServerVersion
@@ -136,16 +145,12 @@ func Preflight(cfg config.Config, mode Mode, backupID string) (PreflightResult, 
 		target.MigrationLevel = dbMeta.MigrationLevel
 		target.MigrationLevelKnown = true
 		target.DatabaseState = "READY"
-	} else {
-		retryRun, err = degradedRetryRun(cfg, backupID)
-		if err != nil {
-			return PreflightResult{}, &Error{Code: 10, Err: fmt.Errorf("target database is degraded and retry state is invalid: %w", err)}
+		if retryRun != nil {
+			target.DatabaseState = "DEGRADED_RETRY"
 		}
+	} else {
 		if retryRun == nil {
 			return PreflightResult{}, &Error{Code: 10, Err: fmt.Errorf("read target database metadata: %w", dbMetaErr)}
-		}
-		if err := verifySafetyBackup(cfg, retryRun.SafetyBackupID, backupID); err != nil {
-			return PreflightResult{}, &Error{Code: 30, Err: fmt.Errorf("previous restore safety backup is not usable for retry: %w", err)}
 		}
 		clusterMeta, clusterErr := database.ReadClusterMetadata(targetDBCfg)
 		if clusterErr != nil {

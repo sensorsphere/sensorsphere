@@ -173,6 +173,7 @@ printf '%s
 ' "$apply_output"
 
 if [[ "$apply_rc" -ne 0 ]]; then
+  compose --profile restore run --rm restore restore interrupt-current     --step "RESTORE_ENGINE"     --message "restore engine exited unexpectedly with code $apply_rc" >/dev/null 2>&1 || true
   echo "ERROR: restore engine failed (exit $apply_rc)." >&2
   echo "Writers remain stopped. Safety backup retained: $safety_id" >&2
   exit "$apply_rc"
