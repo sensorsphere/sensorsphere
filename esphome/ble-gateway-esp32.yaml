@@ -11,6 +11,8 @@ packages:
   status_led: !include packages/hardware/led/${BOARD_ID}-status-led.yaml
 
   base: !include packages/base.yaml
+  api: !include packages/api.yaml
+  ota: !include packages/ota.yaml
   network: !include packages/network.yaml
   mqtt: !include packages/mqtt.yaml
   

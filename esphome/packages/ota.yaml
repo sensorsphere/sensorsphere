@@ -1,0 +1,18 @@
+#######################
+#
+# 0.1: Base version
+#
+#######################
+substitutions:
+  base_version: 0.1
+
+binary_sensor:
+  - platform: template
+    name: "Capability OTA"
+    id: capability_ota_sensor
+    entity_category: diagnostic
+    lambda: |-
+      return "true";
+
+ota:
+  - platform: esphome

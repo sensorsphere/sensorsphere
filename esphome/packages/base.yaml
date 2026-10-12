@@ -1,11 +1,10 @@
 #######################
 #
 # 0.1: Base version
-# 0.2: Added: api module
 #
 #######################
 substitutions:
-  base_version: 0.2
+  base_version: 0.1
 
 text_sensor:
   - platform: template
@@ -22,13 +21,8 @@ esphome:
 logger:
   level: INFO
 
-ota:
-  - platform: esphome
-
 web_server:
   port: 80
 
 captive_portal:
-
-api:
 

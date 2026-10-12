@@ -1,0 +1,17 @@
+#######################
+#
+# 0.1: Base version
+#
+#######################
+substitutions:
+  base_version: 0.1
+
+binary_sensor:
+  - platform: template
+    name: "Capability API"
+    id: capability_api_sensor
+    entity_category: diagnostic
+    lambda: |-
+      return "true";
+
+api:
