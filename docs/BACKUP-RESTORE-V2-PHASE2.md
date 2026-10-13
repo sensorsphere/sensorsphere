@@ -797,7 +797,7 @@ Acceptance report:
 
 Status:
 
-    IMPLEMENTED / REAL ACCEPTANCE BLOCKED BY GHCR PACKAGE ACTIONS ACCESS
+    ACCEPTED
 
 Implemented:
 
@@ -829,9 +829,18 @@ availability must be a preflight requirement: API 1.73.0 and Backup 0.2.0 are
 not retrievable from GHCR. The hardened preflight now rejects that release
 before creating the target.
 
-Replacement Stack 2026.10.13.1 is prepared with API 1.74.0 and Backup 0.2.1.
-Its normal release workflow is currently blocked by package-side GitHub Actions
-write access. See:
+Replacement Stack 2026.10.13.1 was published successfully with API 1.74.0
+and Backup 0.2.1 after package-side GitHub Actions write access was corrected.
+
+A deployed 2026.10.13.1 source instance created VERIFIED Recovery Point
+`20261013T055313Z-96edbd22`. The public release `recover.sh` then rebuilt a
+brand-new installation at `/home/ubuntu/tmp/sensorsphere-full-recovered`
+without source-checkout dependency. The restore completed SUCCESS/COMPLETE,
+runtime health passed, migration level 87 was retained, source/target data
+snapshots were semantically equivalent, History SHA256 matched and the target
+database secret was regenerated.
+
+Acceptance report:
 
     docs/BACKUP-RESTORE-V2-PHASE2-FULL-RESTORE-RESULTS.md
 

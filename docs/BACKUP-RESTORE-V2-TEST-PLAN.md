@@ -943,9 +943,9 @@ BR2-012 Full Restore Foundation remains a separate follow-up.
 | P2-K007 | P1 | Source logical identity defaults | Environment/name restored unless overridden | PASS |
 | P2-K008 | P1 | Operator deployment override | Explicit Compose project/ports preserved | PASS |
 | P2-K009 | P0 | No source checkout dependency | Bootstrap + bundle + release artifacts only | PASS |
-| P2-K010 | P0 | Deployed-instance backup -> brand-new installation | Full recovery SUCCESS | BLOCKED by GHCR publication |
-| P2-K011 | P0 | Full-recovered runtime health | All required services healthy | PENDING P2-K010 |
-| P2-K012 | P0 | Full-recovered data equivalence | Equivalent to source cutoff | PENDING P2-K010 |
+| P2-K010 | P0 | Deployed-instance backup -> brand-new installation | Full recovery SUCCESS | PASS |
+| P2-K011 | P0 | Full-recovered runtime health | All required services healthy | PASS |
+| P2-K012 | P0 | Full-recovered data equivalence | Equivalent to source cutoff | PASS |
 | P2-K013 | P1 | Release unavailable | Clear failure, no target mutation | PASS |
 | P2-K014 | P1 | Non-empty/already-installed target | Refuse | PASS by implementation |
 | P2-K015 | P1 | Confirmation mismatch/cancel | No installation mutation | PASS by implementation/test |
@@ -955,30 +955,52 @@ Automated bootstrap:
     scripts/tests/test-recover-full-bootstrap.sh
     PASS
 
-Real deployed-source Recovery Point:
+Initial deployed-source Recovery Point:
 
     20261012T232819Z-b3a412cf
     Stack 2026.10.11.1
     Backup 0.2.0
     VERIFIED
 
-The real test exposed missing immutable GHCR tags in Stack 2026.10.11.1.
-The hardened full preflight now detects this before target creation.
+That test exposed missing immutable GHCR tags in Stack 2026.10.11.1. The
+hardened full preflight now detects unavailable Stack artifacts before target
+creation.
 
-Replacement Stack:
+Accepted replacement Stack:
 
     2026.10.13.1
     API 1.74.0
     Backup 0.2.1
 
-Publication attempt:
+Successful publication:
 
-    GitHub Actions run 38322630126
-    FAILED: permission_denied: write_package
+    GitHub Actions run 38352713536
+    SUCCESS
 
-The remaining P0 acceptance test P2-K010 requires package-side GitHub Actions
-write access for the `sensorsphere/sensorsphere` repository and public access
-to the Backup container package.
+Final deployed-source Recovery Point:
+
+    20261013T055313Z-96edbd22
+    Stack 2026.10.13.1
+    Backup 0.2.1
+    VERIFIED
+
+Final brand-new target:
+
+    /home/ubuntu/tmp/sensorsphere-full-recovered
+
+Final restore:
+
+    restore-20261013T055509Z-f569c816
+    SUCCESS / COMPLETE
+    migration 87
+
+Equivalence:
+
+    database semantic snapshot  PASS
+    History SHA256              PASS
+    API/nginx health            PASS
+    historical API read         PASS
+    target DB secret regenerated PASS
 
 Detailed evidence:
 
@@ -986,7 +1008,7 @@ Detailed evidence:
 
 BR2-012 status:
 
-    IMPLEMENTED / NOT YET ACCEPTED
+    ACCEPTED
 
 No Phase 2 release is accepted without this scenario.
 

@@ -1,7 +1,7 @@
 # SensorSphere — Backup / Restore V2 — BR2-012 Full Restore results
 
 > **Date:** 2026-10-13
-> **Status:** IMPLEMENTED / REAL ACCEPTANCE BLOCKED BY GHCR PACKAGE ACTIONS ACCESS
+> **Status:** ACCEPTED — P2-K001..P2-K015 PASS
 > **Bootstrap:** `recover.sh`
 > **Candidate Stack:** 2026.10.13.1
 > **Backup module:** 0.2.1
@@ -213,64 +213,260 @@ The manifest passes Stack Release validation.
 
 ---
 
-## 9. Publication blocker
+## 9. Stack Release publication
 
-The normal GitHub Actions release workflow was triggered:
+The first two publication attempts exposed a GitHub Packages permission issue:
 
     run 38322630126
+    run 38352093904
+
+Both built the API multi-arch image successfully but failed while pushing to
+GHCR with:
+
+    permission_denied: write_package
+
+Package-side GitHub Actions access was corrected and the Backup package was
+made public.
+
+Final publication run:
+
+    38352713536
 
 Result:
 
-    FAILURE
+    SUCCESS
 
-Successful before failure:
+Published immutable artifacts:
 
-- checkout;
-- QEMU/buildx setup;
-- Stack manifest validation;
-- GHCR authentication;
-- API amd64/arm64 build.
+    ghcr.io/sensorsphere/sensorsphere-api:1.74.0
+    ghcr.io/sensorsphere/sensorsphere-backup:0.2.1
 
-Failure:
+Published GitHub Stack Release:
 
-    failed to push ghcr.io/sensorsphere/sensorsphere-api:1.74.0
-    denied: permission_denied: write_package
+    stack-2026.10.13.1
 
-GitHub package inspection shows:
+Assets:
 
-    sensorsphere-api
-      visibility: public
-      repository: sensorsphere/sensorsphere
+    2026.10.13.1.yaml
+    sensorsphere-2026.10.13.1.tar.gz
+    sensorsphere-2026.10.13.1.tar.gz.sha256
 
-    sensorsphere-backup
-      visibility: private
-      repository: null
-
-The repository currently has no Actions secret/PAT configured for GHCR.
-
-GitHub requires explicit package-side **Manage Actions access** for repositories
-whose workflows write granular-permission packages. This package permission is
-not exposed by the REST endpoints available to the current automation.
+All Stack Release component images were subsequently verified as remotely
+available before the final Full Restore.
 
 ---
 
-## 10. Remaining acceptance action
+## 10. Real Full Restore acceptance
 
-BR2-012 code is implemented and locally validated.
+A dedicated source instance was installed exclusively from the public
+`stack-2026.10.13.1` release:
 
-Real acceptance remains open until:
+    /home/ubuntu/tmp/sensorsphere-full-source
 
-1. GitHub package settings grant `sensorsphere/sensorsphere` Actions write
-   access to:
-   - `sensorsphere-api`;
-   - `sensorsphere-backup`;
-2. `sensorsphere-backup` is made public;
-3. the Stack 2026.10.13.1 release workflow succeeds;
-4. a deployed 2026.10.13.1 instance creates a VERIFIED Recovery Point;
-5. `recover.sh --full` reconstructs that bundle into a brand-new installation
-   without source checkout dependency;
-6. runtime/equivalence checks pass.
+Source deployment identity:
 
-Until those steps pass:
+    instance        SensorSphere [FULL-SOURCE]
+    environment     RECOVERY
+    Stack           2026.10.13.1
+    API             1.74.0
+    Backup          0.2.1
+    migrations      87
 
-    BR2-012 = IMPLEMENTED / NOT YET ACCEPTED
+The accepted DEV reference dataset was restored into this deployed instance.
+A fresh Backup 0.2.1 Recovery Point was then created:
+
+    Backup ID: 20261013T055313Z-96edbd22
+    Status:    VERIFIED
+    Size:      58,610,956 bytes
+    Stack:     2026.10.13.1
+    Backup:    0.2.1
+    Format:    1
+
+Source equivalence snapshot:
+
+    devices       26
+    identities    61
+    entities      112
+    checks        24
+    observations  5,545,919
+    History SHA256
+      a918d60e195e9ce5c9e4a3d1cb6e497be2facbfd8e21dbf130bbaa8eff561220
+
+The Recovery Point was copied outside the source installation before recovery.
+
+---
+
+## 11. Brand-new installation reconstruction
+
+The final recovery was executed from the `recover.sh` contained in the
+publicly downloaded Stack Release bundle, not from the source checkout.
+
+Off-installation Recovery Bundle:
+
+    /home/ubuntu/tmp/br2-012-final-offhost/
+      20261013T055313Z-96edbd22
+
+Brand-new target:
+
+    /home/ubuntu/tmp/sensorsphere-full-recovered
+
+Operator deployment overrides:
+
+    COMPOSE_PROJECT_NAME=sensorsphere-full-recovered
+    WEB_BIND_ADDRESS=127.0.0.1
+    WEB_PORT=28084
+    MQTT_BIND_ADDRESS=127.0.0.1
+    MQTT_PORT=11887
+    SENSORSPHERE_AUTH_ENABLED=false
+
+The Full Restore preflight:
+
+- verified bundle checksums and VERIFIED status;
+- downloaded and checksummed the public Stack Release;
+- matched the downloaded Stack manifest to the backed-up manifest;
+- verified every required immutable image in GHCR;
+- printed the reconstruction plan;
+- returned READY;
+- left the target directory absent.
+
+Evidence:
+
+    /home/ubuntu/tmp/sensorsphere-recovery-evidence/
+      br2-012-final-preflight.txt
+
+---
+
+## 12. Full Restore execution result
+
+Result:
+
+    SUCCESS
+
+The bootstrap:
+
+1. created the brand-new installation;
+2. installed exact Stack 2026.10.13.1 from public immutable artifacts;
+3. reached healthy runtime before data mutation;
+4. copied the verified Recovery Point into the new backup repository;
+5. ran the accepted data-restore workflow;
+6. created and verified the mandatory target safety backup;
+7. restored DB/app/Mosquitto data;
+8. ran migration level 87;
+9. restarted runtime;
+10. completed all health checks;
+11. finalized restore state as SUCCESS / COMPLETE.
+
+Restore run:
+
+    restore-20261013T055509Z-f569c816
+
+Source Recovery Point:
+
+    20261013T055313Z-96edbd22
+
+Target safety backup:
+
+    20261013T055503Z-f8cee403
+    VERIFIED
+    COMPLETE retained
+
+Final target:
+
+    Stack Release  2026.10.13.1
+    API            1.74.0
+    Frontend       1.121.0
+    Ingestion      1.0.3
+    nginx          1.0.0
+    Migrations     87
+    Backup         0.2.1
+
+Runtime:
+
+    timescaledb        healthy
+    api                healthy
+    frontend           healthy
+    nginx              healthy
+    ingestion-service  running
+    mosquitto           running
+    migrations         exited 0
+
+Evidence:
+
+    /home/ubuntu/tmp/sensorsphere-recovery-evidence/
+      br2-012-final-full-recovery.log
+      br2-012-final-gate.json
+
+---
+
+## 13. Data equivalence and functional smoke
+
+Result:
+
+    PASS
+
+The source and fully recovered database snapshots are semantically identical
+when the snapshot capture timestamp is excluded.
+
+Verified:
+
+    source observations  5,545,919
+    target observations  5,545,919
+
+    source devices       26
+    target devices       26
+
+    History source SHA256
+      a918d60e195e9ce5c9e4a3d1cb6e497be2facbfd8e21dbf130bbaa8eff561220
+
+    History target SHA256
+      a918d60e195e9ce5c9e4a3d1cb6e497be2facbfd8e21dbf130bbaa8eff561220
+
+The target PostgreSQL password differs from the source password, proving that
+the target secret was regenerated rather than restored from the bundle.
+
+Functional smoke inside the reconstructed runtime:
+
+    API health       HTTP 200
+    nginx -> API     HTTP 200
+    History API      HTTP 200
+    historical rows  1
+
+The History API successfully returned an observation dated
+2026-08-09T22:02:00Z after reconstruction.
+
+Host-loopback curl from the RDC command context cannot reach any of the
+127.0.0.1-published SensorSphere test ports, including the pre-existing
+RECOVERY instance. Docker reports the expected published ports and internal
+nginx/API health checks return 200, so this is recorded as an RDC/host-network
+context limitation rather than a Full Restore regression.
+
+Evidence:
+
+    /home/ubuntu/tmp/sensorsphere-recovery-evidence/
+      br2-012-full-source-snapshot.json
+      br2-012-full-recovered-snapshot.json
+      br2-012-equivalence.json
+      br2-012-final-smoke.json
+      br2-012-final-gate.json
+
+---
+
+## 14. BR2-012 acceptance
+
+All mandatory P2-K acceptance criteria pass.
+
+    P2-K001..P2-K015: PASS
+    P2-K010: PASS
+    P2-K011: PASS
+    P2-K012: PASS
+
+BR2-012:
+
+    ACCEPTED
+
+Backup / Restore V2 now has both:
+
+    Data Restore Foundation — ACCEPTED
+    Full Restore Foundation — ACCEPTED
+
+No destructive TEST1 restore was used for BR2-012 acceptance.

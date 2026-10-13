@@ -622,13 +622,31 @@ P2-ACC-001:
 
 ---
 
-## 14. Follow-up
+## 14. Subsequent Full Restore closure
 
-BR2-012 remains intentionally open:
+BR2-012 was completed after this data-restore acceptance.
 
-    Full restore foundation
+Final status:
 
-It follows the accepted data-restore foundation and is not claimed complete by
-this acceptance. Its scope remains exact Stack Release recovery, reconstruction
-of a new installation without source-checkout dependency, and deployed-instance
-backup recovery into a new installation.
+    Full Restore Foundation — ACCEPTED
+
+Accepted Stack Release:
+
+    2026.10.13.1
+
+Accepted deployed-source Recovery Point:
+
+    20261013T055313Z-96edbd22
+
+Brand-new reconstructed target:
+
+    /home/ubuntu/tmp/sensorsphere-full-recovered
+
+Full Restore run:
+
+    restore-20261013T055509Z-f569c816
+    SUCCESS / COMPLETE
+
+Detailed BR2-012 evidence:
+
+    docs/BACKUP-RESTORE-V2-PHASE2-FULL-RESTORE-RESULTS.md
