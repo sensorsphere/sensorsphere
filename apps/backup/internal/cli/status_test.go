@@ -209,3 +209,27 @@ func TestStatusIgnoresNewestCorruptBackup(t *testing.T) {
 		t.Fatalf("expected corrupt newest backup %s to be ignored in favor of %s, got %s", newer, older, out.LastVerifiedBackupID)
 	}
 }
+
+func TestStatusDefaultAgeThresholds(t *testing.T) {
+	installFakePgRestoreCLI(t)
+	tests := []struct {
+		name     string
+		age      time.Duration
+		expected string
+	}{
+		{name: "under-26h", age: 25 * time.Hour, expected: "OK"},
+		{name: "over-26h", age: 27 * time.Hour, expected: "WARNING"},
+		{name: "over-48h", age: 49 * time.Hour, expected: "CRITICAL"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			state := t.TempDir()
+			createStatusBundle(t, root, time.Now().UTC().Add(-tc.age))
+			out := statusJSON(t, root, state, 26, 48)
+			if out.Status != tc.expected {
+				t.Fatalf("expected %s, got %s (age=%d)", tc.expected, out.Status, out.AgeSeconds)
+			}
+		})
+	}
+}

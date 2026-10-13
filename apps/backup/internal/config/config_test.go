@@ -93,3 +93,16 @@ func TestValidateForRestorePreflightRejectsIncompleteOrRelativeIdentity(t *testi
 		})
 	}
 }
+
+func TestLoadBackupPolicyDefaults(t *testing.T) {
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.RetentionDaily != 7 || cfg.RetentionWeekly != 4 || cfg.RetentionMonthly != 6 {
+		t.Fatalf("unexpected retention defaults: daily=%d weekly=%d monthly=%d", cfg.RetentionDaily, cfg.RetentionWeekly, cfg.RetentionMonthly)
+	}
+	if cfg.WarningAgeHours != 26 || cfg.CriticalAgeHours != 48 {
+		t.Fatalf("unexpected stale thresholds: warning=%d critical=%d", cfg.WarningAgeHours, cfg.CriticalAgeHours)
+	}
+}
