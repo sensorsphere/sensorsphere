@@ -18,10 +18,15 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.74.0";
+export const MODULE_VERSION = "1.74.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.74.1": {
+    releasedAt: "2026-10-13T16:30:00Z",
+    patch: "NET-1.6.1-netatmo-admin-authorization.patch",
+    changes: [{ type: "fixed", description: "Use shared admin authorization for Netatmo import and ingestion, including DEV role switch" }]
+  },
   "1.74.0": {
     releasedAt: "2026-10-12T06:45:00Z",
     patch: "NET-1.5.1-netatmo-energy-preview.patch",
