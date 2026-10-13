@@ -375,7 +375,13 @@ managed_bundle_changes() {
 }
 
 refresh_bundle_for_update() {
-  [[ "${SENSORSPHERE_INTERNAL_BUNDLE_REFRESHED:-0}" != "1" ]] || return 1
+  local refresh_count="${SENSORSPHERE_INTERNAL_BUNDLE_REFRESH_COUNT:-0}"
+  if [[ "${SENSORSPHERE_INTERNAL_BUNDLE_REFRESHED:-0}" == "1" && "$refresh_count" == "0" ]]; then
+    # Compatibility with older installers that only exported the boolean flag.
+    refresh_count=1
+  fi
+  [[ "$refresh_count" =~ ^[0-9]+$ ]] || refresh_count=0
+  [[ "$refresh_count" -lt 2 ]] || return 1
   [[ -n "$STACK_VERSION" ]] || return 1
 
   if [[ -n "$MANIFEST_SOURCE" ]]; then
@@ -425,6 +431,12 @@ refresh_bundle_for_update() {
 }
 
 reexec_refreshed_installer() {
+  local refresh_count="${SENSORSPHERE_INTERNAL_BUNDLE_REFRESH_COUNT:-0}"
+  if [[ "${SENSORSPHERE_INTERNAL_BUNDLE_REFRESHED:-0}" == "1" && "$refresh_count" == "0" ]]; then
+    refresh_count=1
+  fi
+  [[ "$refresh_count" =~ ^[0-9]+$ ]] || refresh_count=0
+
   local -a args=(update --install-dir "$INSTALL_DIR")
   [[ -n "$STACK_VERSION" ]] && args+=(--stack "$STACK_VERSION")
   [[ -n "$MANIFEST_SOURCE" ]] && args+=(--manifest "$MANIFEST_SOURCE")
@@ -432,7 +444,9 @@ reexec_refreshed_installer() {
   [[ "$SKIP_PULL" -eq 1 ]] && args+=(--skip-pull)
 
   echo "Continuing update with refreshed installer..."
-  SENSORSPHERE_INTERNAL_BUNDLE_REFRESHED=1 exec "$INSTALL_DIR/install.sh" "${args[@]}"
+  SENSORSPHERE_INTERNAL_BUNDLE_REFRESHED=1 \
+  SENSORSPHERE_INTERNAL_BUNDLE_REFRESH_COUNT="$((refresh_count + 1))" \
+    exec "$INSTALL_DIR/install.sh" "${args[@]}"
 }
 
 fetch_manifest() {
