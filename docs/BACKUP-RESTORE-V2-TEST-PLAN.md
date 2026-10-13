@@ -928,7 +928,7 @@ Phase 2 Restore Foundation:
 
     ACCEPTED
 
-BR2-012 Full Restore Foundation remains a separate follow-up.
+BR2-012 Full Restore Foundation was accepted separately under P2-K below.
 
 ## 39.1 P2-K — Full Restore / host reconstruction
 

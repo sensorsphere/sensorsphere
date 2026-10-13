@@ -949,5 +949,7 @@ Foundation P0/P1 criteria and P2-ACC-001 are satisfied. The acceptance report is
 
     docs/BACKUP-RESTORE-V2-PHASE2-RECOVERY-RESULTS.md
 
-BR2-012 Full Restore Foundation remains a separate follow-up after this accepted
-data-restore foundation and is not claimed complete by this gate.
+BR2-012 Full Restore Foundation was accepted separately after this data-restore
+gate. Its acceptance evidence is documented in:
+
+    docs/BACKUP-RESTORE-V2-PHASE2-FULL-RESTORE-RESULTS.md
