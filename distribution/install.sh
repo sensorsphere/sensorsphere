@@ -607,11 +607,19 @@ update_command() {
   require_tools
   [[ -f "$INSTALL_DIR/.env" ]] || { echo "ERROR: installation not found: $INSTALL_DIR" >&2; exit 1; }
 
-  if [[ "${SENSORSPHERE_INTERNAL_BUNDLE_REFRESHED:-0}" != "1" ]]; then
+  local refresh_count="${SENSORSPHERE_INTERNAL_BUNDLE_REFRESH_COUNT:-0}"
+  if [[ "${SENSORSPHERE_INTERNAL_BUNDLE_REFRESHED:-0}" == "1" && "$refresh_count" == "0" ]]; then
+    refresh_count=1
+  fi
+  [[ "$refresh_count" =~ ^[0-9]+$ ]] || refresh_count=0
+
+  if [[ "$refresh_count" -eq 0 ]]; then
     cp "$INSTALL_DIR/.env" "$INSTALL_DIR/.env.previous"
     [[ -f "$INSTALL_DIR/.stack-release.yaml" ]]       && cp "$INSTALL_DIR/.stack-release.yaml" "$INSTALL_DIR/.stack-release.previous.yaml"
     snapshot_bundle "$INSTALL_DIR/.bundle.previous"
+  fi
 
+  if [[ "$refresh_count" -lt 2 ]]; then
     if refresh_bundle_for_update; then
       reexec_refreshed_installer
     fi
