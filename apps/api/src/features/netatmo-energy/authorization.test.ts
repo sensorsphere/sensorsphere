@@ -3,7 +3,7 @@ import test from 'node:test';
 import Fastify from 'fastify';
 import { registerNetatmoEnergyFeature } from './index.js';
 
-const paths = ['/api/v1/integrations/netatmo/discovery/import', '/api/v1/integrations/netatmo/telemetry/ingest'];
+const paths = ['/api/v1/integrations/netatmo/discovery/import', '/api/v1/integrations/netatmo/telemetry/ingest', '/api/v1/integrations/netatmo/token'];
 
 test('Netatmo writes use shared admin authorization, including DEV role switch', async () => {
   const saved = Object.fromEntries(['SENSORSPHERE_ENVIRONMENT', 'SENSORSPHERE_AUTH_ENABLED', 'SENSORSPHERE_AUTH_DEV_ROLE_SWITCH_ENABLED', 'SENSORSPHERE_AUTH_DEV_DEFAULT_ROLE', 'SENSORSPHERE_NETATMO_BASE_URL'].map(key => [key, process.env[key]]));
