@@ -12,6 +12,7 @@ import (
 	"github.com/sensorsphere/sensorsphere/apps/backup/internal/archive"
 	"github.com/sensorsphere/sensorsphere/apps/backup/internal/checksum"
 	"github.com/sensorsphere/sensorsphere/apps/backup/internal/manifest"
+	"github.com/sensorsphere/sensorsphere/apps/backup/internal/runstate"
 )
 
 func installFakePgRestoreCLI(t *testing.T) {
@@ -148,5 +149,63 @@ func TestStatusOKWarningCritical(t *testing.T) {
 				t.Fatalf("expected backup %s, got %s", id, out.LastVerifiedBackupID)
 			}
 		})
+	}
+}
+
+func TestStatusShowsFailedLatestRunSeparatelyFromFreshVerifiedBackup(t *testing.T) {
+	installFakePgRestoreCLI(t)
+	root := t.TempDir()
+	state := t.TempDir()
+	id := createStatusBundle(t, root, time.Now().UTC().Add(-30*time.Minute))
+	if err := runstate.Write(state, runstate.Run{
+		RunID:       "run-failed",
+		Command:     "create",
+		StartedAt:   time.Now().UTC().Add(-5 * time.Minute).Format(time.RFC3339Nano),
+		CompletedAt: time.Now().UTC().Add(-4 * time.Minute).Format(time.RFC3339Nano),
+		Status:      runstate.StatusFailed,
+		Phase:       "DATABASE_DUMP",
+		ErrorCode:   50,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	out := statusJSON(t, root, state, 26, 48)
+	if out.Status != "OK" {
+		t.Fatalf("expected fresh verified backup to remain OK, got %s", out.Status)
+	}
+	if out.LastVerifiedBackupID != id {
+		t.Fatalf("expected verified backup %s, got %s", id, out.LastVerifiedBackupID)
+	}
+	if out.LastRun == nil || out.LastRun.Status != runstate.StatusFailed {
+		t.Fatalf("expected latest failed run to remain visible, got %#v", out.LastRun)
+	}
+}
+
+func TestStatusIgnoresNewestCorruptBackup(t *testing.T) {
+	installFakePgRestoreCLI(t)
+	root := t.TempDir()
+	state := t.TempDir()
+	older := createStatusBundle(t, root, time.Now().UTC().Add(-30*time.Minute))
+	newer := createStatusBundle(t, root, time.Now().UTC().Add(-10*time.Minute))
+
+	path := filepath.Join(root, newer, "app", "app-data.tar.zst")
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteString("corrupt"); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	out := statusJSON(t, root, state, 26, 48)
+	if out.Status != "OK" {
+		t.Fatalf("expected older verified backup to keep status OK, got %s", out.Status)
+	}
+	if out.LastVerifiedBackupID != older {
+		t.Fatalf("expected corrupt newest backup %s to be ignored in favor of %s, got %s", newer, older, out.LastVerifiedBackupID)
 	}
 }

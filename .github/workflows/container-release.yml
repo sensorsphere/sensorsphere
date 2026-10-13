@@ -8,9 +8,9 @@ on:
         required: true
         default: releases/stacks/2026.09.30.18.yaml
       modules:
-        description: Space-separated modules to publish
-        required: true
-        default: api frontend ingestion-service nginx migrations
+        description: Optional space-separated modules to publish; leave empty for a bundle-only Stack Release
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -30,9 +30,11 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Set up QEMU
+        if: ${{ inputs.modules != '' }}
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
+        if: ${{ inputs.modules != '' }}
         uses: docker/setup-buildx-action@v3
 
       - name: Validate Stack Release
@@ -42,6 +44,7 @@ jobs:
           scripts/validate-stack-release.sh --source "${{ inputs.manifest }}"
 
       - name: Authenticate to GHCR
+        if: ${{ inputs.modules != '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -55,14 +58,11 @@ jobs:
             | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
       - name: Publish changed module images
+        if: ${{ inputs.modules != '' }}
         shell: bash
         run: |
           set -euo pipefail
           read -r -a modules <<< "${{ inputs.modules }}"
-          [[ "${#modules[@]}" -gt 0 ]] || {
-            echo "At least one module must be supplied." >&2
-            exit 1
-          }
           scripts/release-module-images.sh "${modules[@]}"
 
       - name: Build distribution bundle
