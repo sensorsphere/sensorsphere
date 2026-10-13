@@ -1,0 +1,42 @@
+// Manual DEV smoke: uses a session-local temporary table; never writes public credentials.
+import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
+import pg from 'pg';
+import { netatmoConfig } from './client.js';
+import { decryptTokens } from './token.js';
+import { getNetatmoAccessToken, storeNetatmoTokens } from './credentials.js';
+const config = netatmoConfig();
+assert.ok(config, 'Netatmo simulator must be configured');
+const pool = new pg.Pool({host:process.env.DB_HOST,port:Number(process.env.DB_PORT||5432),database:process.env.DB_NAME,user:process.env.DB_USER,password:process.env.DB_PASSWORD});
+const client = await pool.connect();
+const key = randomBytes(32);
+const proxy = { connect: async () => ({query:(...args)=>client.query(...args),release:()=>{}}), query:(...args)=>client.query(...args) };
+try {
+  await client.query(`CREATE TEMP TABLE netatmo_oauth_credentials (integration_id text PRIMARY KEY, encrypted_tokens text NOT NULL, expires_at timestamptz NOT NULL, updated_at timestamptz DEFAULT now()) ON COMMIT PRESERVE ROWS`);
+  assert.equal(await getNetatmoAccessToken(proxy,config,key),null);
+  const auth = new URL('/oauth2/authorize',config.baseUrl);
+  auth.search = new URLSearchParams({client_id:config.clientId,redirect_uri:config.redirectUri,response_type:'code',scope:'read_thermostat'}).toString();
+  const response = await fetch(auth,{redirect:'manual'});
+  assert.equal(response.status,302);
+  const code = new URL(response.headers.get('location')).searchParams.get('code');
+  const tokenResponse = await fetch(new URL('/oauth2/token',config.baseUrl),{method:'POST',body:new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:config.redirectUri,client_id:config.clientId,client_secret:config.clientSecret})});
+  assert.equal(tokenResponse.status,200);
+  const original = await tokenResponse.json();
+  await storeNetatmoTokens(proxy,original,key);
+  const saved = (await client.query('SELECT encrypted_tokens FROM netatmo_oauth_credentials')).rows[0].encrypted_tokens;
+  assert.ok(!saved.includes(original.access_token) && !saved.includes(original.refresh_token));
+  assert.equal(decryptTokens(saved,key).access_token,original.access_token);
+  assert.equal(await getNetatmoAccessToken(proxy,config,key),original.access_token);
+  await client.query("UPDATE netatmo_oauth_credentials SET expires_at=NOW()-INTERVAL '1 minute'");
+  const refreshed = await getNetatmoAccessToken(proxy,config,key);
+  assert.ok(refreshed && refreshed !== original.access_token);
+  const current = (await client.query('SELECT encrypted_tokens FROM netatmo_oauth_credentials')).rows[0].encrypted_tokens;
+  assert.notEqual(decryptTokens(current,key).refresh_token,original.refresh_token);
+  await client.query("UPDATE netatmo_oauth_credentials SET expires_at=NOW()-INTERVAL '1 minute'");
+  const beforeFailure = (await client.query('SELECT encrypted_tokens FROM netatmo_oauth_credentials')).rows[0].encrypted_tokens;
+  const wrongConfig = {...config,clientSecret:'invalid-test-secret'};
+  await assert.rejects(getNetatmoAccessToken(proxy,wrongConfig,key));
+  const afterFailure = (await client.query('SELECT encrypted_tokens FROM netatmo_oauth_credentials')).rows[0].encrypted_tokens;
+  assert.equal(afterFailure,beforeFailure);
+  console.log('PASS: missing credentials, encrypted persistence, access, token rotation, failed refresh rollback; public table untouched');
+} finally {client.release();await pool.end();}

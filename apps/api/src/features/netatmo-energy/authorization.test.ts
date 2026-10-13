@@ -3,7 +3,7 @@ import test from 'node:test';
 import Fastify from 'fastify';
 import { registerNetatmoEnergyFeature } from './index.js';
 
-const paths = ['/api/v1/integrations/netatmo/discovery/import', '/api/v1/integrations/netatmo/telemetry/ingest', '/api/v1/integrations/netatmo/token'];
+const paths = ['/api/v1/integrations/netatmo/discovery/import', '/api/v1/integrations/netatmo/telemetry/ingest', '/api/v1/integrations/netatmo/token', '/api/v1/integrations/netatmo/telemetry/collect'];
 
 test('Netatmo writes use shared admin authorization, including DEV role switch', async () => {
   const saved = Object.fromEntries(['SENSORSPHERE_ENVIRONMENT', 'SENSORSPHERE_AUTH_ENABLED', 'SENSORSPHERE_AUTH_DEV_ROLE_SWITCH_ENABLED', 'SENSORSPHERE_AUTH_DEV_DEFAULT_ROLE', 'SENSORSPHERE_NETATMO_BASE_URL'].map(key => [key, process.env[key]]));
@@ -19,7 +19,7 @@ test('Netatmo writes use shared admin authorization, including DEV role switch',
     for (const url of paths) {
       for (const role of ['user', 'admin']) {
         const response = await app.inject({ method: 'POST', url, headers: { 'x-sensorsphere-dev-role': role }, payload: {} });
-        assert.equal(response.statusCode, role === 'admin' ? 400 : 403, `${url} ${role}`);
+        assert.equal(response.statusCode, role === 'admin' ? (url.endsWith('/collect') ? 503 : 400) : 403, `${url} ${role}`);
       }
     }
     process.env.SENSORSPHERE_AUTH_DEV_ROLE_SWITCH_ENABLED = 'false';

@@ -18,3 +18,9 @@ NET-2 adds server-side encrypted OAuth credential storage and an authenticated m
 - PostgreSQL integration tests for encrypted credential persistence and refresh rollback are still required.
 - A configurable scheduler, collection status/metrics, error backoff, and UI are pending.
 - No automatic DEV/TEST1 deployment is authorized by this document.
+
+## NET-2.2 PostgreSQL smoke (2026-10-13, DEV)
+
+The manual `credentials.pg-smoke.mjs` script runs against the actual DEV PostgreSQL service and the Netatmo simulator. It creates a **session-local temporary table** named `netatmo_oauth_credentials`, shadowing the future permanent table, so it does not require applying migration 088 and never writes real credentials. Verified: missing credential handling, encrypted storage, valid access token reuse, refresh-token rotation, and preservation of encrypted credentials after failed refresh. Result: PASS.
+
+For manual reruns, build the API and run this script in an isolated test container with PostgreSQL network access and DB_* configuration; it imports compiled `client.js`, `token.js` and `credentials.js` from the same directory. Do not commit generated access tokens, refresh tokens, or encryption keys. The smoke test deliberately does not print token values.
