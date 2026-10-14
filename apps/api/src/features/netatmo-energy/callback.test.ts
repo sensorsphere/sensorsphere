@@ -27,3 +27,27 @@ test('OAuth callback requires admin and rejects missing parameters without DB ac
     keys.forEach((k,i)=>{ if(saved[i]===undefined) delete process.env[k]; else process.env[k]=saved[i]; });
   }
 });
+test('Netatmo telemetry and discovery previews require admin', async () => {
+  const keys=['SENSORSPHERE_ENVIRONMENT','SENSORSPHERE_AUTH_ENABLED','SENSORSPHERE_AUTH_DEV_ROLE_SWITCH_ENABLED','SENSORSPHERE_AUTH_DEV_DEFAULT_ROLE','SENSORSPHERE_NETATMO_COLLECT_INTERVAL_SECONDS'];
+  const saved=keys.map(k=>process.env[k]);
+  const app=Fastify();
+  try {
+    process.env.SENSORSPHERE_ENVIRONMENT='DEV';
+    process.env.SENSORSPHERE_AUTH_ENABLED='false';
+    process.env.SENSORSPHERE_AUTH_DEV_ROLE_SWITCH_ENABLED='true';
+    process.env.SENSORSPHERE_AUTH_DEV_DEFAULT_ROLE='user';
+    process.env.SENSORSPHERE_NETATMO_COLLECT_INTERVAL_SECONDS='0';
+    registerNetatmoEnergyFeature(app,{} as never);
+    await app.ready();
+    for(const route of ['telemetry/preview','discovery/preview']) {
+      const url=`/api/v1/integrations/netatmo/${route}`;
+      const denied=await app.inject({method:'POST',url,headers:{'x-sensorsphere-dev-role':'user'},payload:{accessToken:'fake'}});
+      assert.equal(denied.statusCode,403,route);
+      const admin=await app.inject({method:'POST',url,headers:{'x-sensorsphere-dev-role':'admin'},payload:{}});
+      assert.notEqual(admin.statusCode,403,route);
+    }
+  } finally {
+    await app.close();
+    keys.forEach((k,i)=>{if(saved[i]===undefined) delete process.env[k];else process.env[k]=saved[i];});
+  }
+});

@@ -57,3 +57,7 @@ Additional unit tests verify that an instance skips collection when PostgreSQL r
 ## Real wall-clock scheduler E2E (disposable API container)
 
 `collector-timer.pg-smoke.mjs` starts the collector with a real 60-second interval, waits 65 seconds without calling `collect()` manually, and verifies that the simulator telemetry is ingested. PASS (66-second run): 1 asset and 6 observations in session-local PostgreSQL temporary tables. The disposable API container used the compiled feature module bind-mounted read-only and the existing DEV database network, without persistent table changes. This validates the real timer path, but does not validate production migrations, a public HTTPS callback, or long-running restart/retry behavior.
+
+## Preview authorization hardening
+
+Both `POST /telemetry/preview` and `POST /discovery/preview` now require an admin session, consistent with other Netatmo endpoints. Fastify injection tests verify 403 for non-admin and non-403 for admin before token parsing. Netatmo TypeScript compilation and 17/17 tests PASS. No deployment or persistent database changes.
