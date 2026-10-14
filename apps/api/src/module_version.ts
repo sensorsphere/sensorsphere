@@ -18,10 +18,15 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.75.0";
+export const MODULE_VERSION = "1.75.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.75.1": {
+    releasedAt: "2026-10-14T19:00:00Z",
+    patch: "NET-SIM-registry-health.patch",
+    changes: [{ type: "fixed", description: "Synchronize Netatmo module last-seen and battery health into Device Registry during telemetry collection" }]
+  },
   "1.75.0": {
     releasedAt: "2026-10-14T06:15:00Z",
     patch: "NET-2-netatmo-oauth-collector.patch",

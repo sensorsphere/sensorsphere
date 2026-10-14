@@ -21,6 +21,9 @@ test('ingestion writes typed samples atomically and skips missing values', async
   assert.equal(db.calls.at(-1)?.sql, 'COMMIT');
   const samples = db.calls.filter(c => c.sql.startsWith('INSERT INTO observations'));
   assert.equal(samples.length, 5);
+  const health = db.calls.find(c => c.sql.includes('UPDATE device_registry_devices AS d'));
+  assert.deepEqual(health?.params?.slice(0, 3), ['h:m', false, 30]);
+  assert.match(health?.sql ?? '', /WHEN \$2::boolean IS TRUE/);
   assert.ok(samples.some(c => c.params?.[2] === 20.5 && c.params?.[3] === null));
   assert.ok(samples.some(c => c.params?.[4] === false));
   assert.ok(samples.some(c => c.params?.[3] === 'schedule'));

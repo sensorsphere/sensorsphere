@@ -27,6 +27,15 @@ export async function ingestNetatmoReadings(pool: Pool, readings: Readings): Pro
       await record(id,`Netatmo room ${room.roomId}`,'mode','Thermostat mode',null,room.setpointMode,identity);
     }
     for (const module of readings.modules) {
+      // Registry health uses last_seen_at; telemetry alone does not refresh it.
+      // Only a positively reachable module counts as a fresh health observation.
+      await client.query(`UPDATE device_registry_devices AS d
+        SET last_seen_at = CASE WHEN $2::boolean IS TRUE THEN $4::timestamptz ELSE d.last_seen_at END,
+            battery_percent = COALESCE($3::double precision, d.battery_percent),
+            updated_at = NOW()
+        FROM device_registry_identities AS i
+        WHERE i.device_id = d.id AND i.identity_type = 'NETATMO_MODULE_ID' AND i.value = $1`,
+        [`${module.homeId}:${module.moduleId}`, module.reachable, module.batteryPercent, timestamp]);
       const id = `netatmo:module:${module.homeId}:${module.moduleId}`;
       await record(id,`Netatmo module ${module.moduleId}`,'heating','Heating',null,module.heating,`${module.homeId}:${module.moduleId}`);
       await record(id,`Netatmo module ${module.moduleId}`,'reachable','Reachable',null,module.reachable,`${module.homeId}:${module.moduleId}`);
