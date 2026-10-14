@@ -34,3 +34,10 @@ Migration `089-netatmo-oauth-state.sql` stores hashed, one-time OAuth state scop
 ## OAuth browser callback follow-up
 
 The callback at `GET /api/v1/integrations/netatmo/callback` now requires an existing admin session, validates `code` and `state`, consumes the state once, exchanges the code, and stores encrypted credentials. It returns a minimal confirmation page with no token values and `Cache-Control: no-store` / `Referrer-Policy: no-referrer`. Configure `SENSORSPHERE_NETATMO_REDIRECT_URI` to the public HTTPS callback URL registered with Netatmo. Authentication cookies must be available on the callback origin; otherwise the request is denied. Simulator end-to-end and HTTPS deployment validation remain mandatory before enabling the scheduler.
+
+## NET-2.3/2.4 isolated PostgreSQL E2E smoke results (DEV)
+
+- `oauth-callback.pg-smoke.mjs`: simulator OAuth authorization redirect, state round-trip, encrypted token persistence, replay rejection and expired-state rejection. Uses PostgreSQL session-local temporary tables shadowing the credentials and state tables; no persistent OAuth writes. PASS.
+- `collector.pg-smoke.mjs`: collector disabled by default, PostgreSQL advisory-lock acquisition/release, failed collection status and retryable lifecycle with intentionally absent encryption key. Does not ingest telemetry. PASS.
+
+Run these scripts using a disposable API container with the compiled Netatmo module directory bind-mounted read-only and existing DEV database/simulator network configuration. These tests do **not** prove scheduled ingestion into persistent telemetry, concurrent multi-instance behavior, browser cookie callback across public HTTPS, or migration deployment. Keep the scheduler disabled until those are validated.
