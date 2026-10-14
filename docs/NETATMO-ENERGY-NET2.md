@@ -49,3 +49,7 @@ Additional unit tests verify that an instance skips collection when PostgreSQL r
 ## Real PostgreSQL collector lock contention
 
 `collector-concurrency.pg-smoke.mjs` opens separate PostgreSQL sessions. One acquires the Netatmo collector advisory lock; the other invokes `collect()` and must skip without an error, then the first releases the lock. PASS on DEV PostgreSQL with no persistent writes. This is a real inter-session test, but not yet an end-to-end multi-process timer/ingestion test.
+
+## Isolated ingestion and timer validation
+
+`collector-ingest.pg-smoke.mjs` completed simulator authorization, encrypted token persistence, Netatmo telemetry fetch, collector execution and insertion of 6 observations for 1 asset into session-local PostgreSQL temporary tables. PASS; no persistent assets, metrics, links or observations modified. `collector.test.ts` also tests a configured 60-second scheduler using a mocked clock, including failure reporting and stopping the timer; full Netatmo API test suite: 16/16 PASS. Real wall-clock periodic collection in a disposable deployment, production migration rollout, and public HTTPS browser callback remain unproven; scheduler must remain off by default.

@@ -63,3 +63,26 @@ test('collector does not overlap an in-flight collection', async () => {
     assert.equal(collector.status.running,false);
   } finally { collector.stop(); }
 });
+test('scheduler invokes collector at configured interval and stops cleanly', async (t) => {
+  const previous=process.env.SENSORSPHERE_NETATMO_COLLECT_INTERVAL_SECONDS;
+  process.env.SENSORSPHERE_NETATMO_COLLECT_INTERVAL_SECONDS='60';
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  let attempts=0;
+  const pool={connect:async()=>{attempts++;throw new Error('offline');}} as unknown as Pool;
+  let collector:ReturnType<typeof startNetatmoCollector>|undefined;
+  try {
+    collector=startNetatmoCollector(pool,logger);
+    assert.equal(collector.status.enabled,true);
+    t.mock.timers.tick(60000);
+    await new Promise<void>(resolve=>setImmediate(resolve));
+    assert.equal(attempts,1);
+    assert.equal(collector.status.consecutiveFailures,1);
+    collector.stop();
+    t.mock.timers.tick(60000);
+    await new Promise<void>(resolve=>setImmediate(resolve));
+    assert.equal(attempts,1);
+  } finally {
+    collector?.stop();t.mock.timers.reset();
+    if(previous===undefined) delete process.env.SENSORSPHERE_NETATMO_COLLECT_INTERVAL_SECONDS; else process.env.SENSORSPHERE_NETATMO_COLLECT_INTERVAL_SECONDS=previous;
+  }
+});
