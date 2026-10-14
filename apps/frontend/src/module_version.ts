@@ -18,10 +18,17 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.121.0";
+export const MODULE_VERSION = "1.121.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.121.1": {
+    releasedAt: "2026-10-14T17:00:00Z",
+    patch: "PR-logout-authenticated-header.patch",
+    changes: [
+      { type: "fixed", description: "Show Sign out in the application header for authenticated users, allowing Google OIDC logout and re-login" }
+    ]
+  },
   "1.121.0": {
     releasedAt: "2026-10-06T23:49:58Z",
     patch: "PR-336-database-storage-db1-completion-v1.patch",

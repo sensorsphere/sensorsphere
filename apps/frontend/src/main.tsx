@@ -2491,6 +2491,18 @@ function Dashboard() {
                 />
               )}
               <ThemeSelector />
+              {authContextQuery.data?.enabled && authContextQuery.data.authenticated && (
+                <Button
+                  size="xs"
+                  variant="subtle"
+                  onClick={async () => {
+                    await logout();
+                    window.location.reload();
+                  }}
+                >
+                  Sign out
+                </Button>
+              )}
             </Group>
 
           </Group>
