@@ -30,3 +30,7 @@ For manual reruns, build the API and run this script in an isolated test contain
 Migration `089-netatmo-oauth-state.sql` stores hashed, one-time OAuth state scoped to the initiating user, with a ten-minute expiry. `/authorize` issues the state and `/token` requires `code` plus `state` before storing tokens. `/callback` deliberately rejects unauthenticated GET callbacks; the complete browser callback and session binding remain a production gate.
 
 `SENSORSPHERE_NETATMO_COLLECT_INTERVAL_SECONDS` defaults to `0` (off); valid nonzero values are 60 through 86400 seconds. The API collector uses a PostgreSQL advisory lock across instances and tracks attempts, success, errors, and consecutive failures. It has no exponential backoff or persisted execution history yet. Do not enable it in production before E2E validation and applying migrations 088 and 089.
+
+## OAuth browser callback follow-up
+
+The callback at `GET /api/v1/integrations/netatmo/callback` now requires an existing admin session, validates `code` and `state`, consumes the state once, exchanges the code, and stores encrypted credentials. It returns a minimal confirmation page with no token values and `Cache-Control: no-store` / `Referrer-Policy: no-referrer`. Configure `SENSORSPHERE_NETATMO_REDIRECT_URI` to the public HTTPS callback URL registered with Netatmo. Authentication cookies must be available on the callback origin; otherwise the request is denied. Simulator end-to-end and HTTPS deployment validation remain mandatory before enabling the scheduler.

@@ -10,6 +10,7 @@ import { getNetatmoAccessToken, netatmoEncryptionKey, storeNetatmoTokens } from 
 import { validateOAuthTokens } from './token.js';
 import { createOAuthState, consumeOAuthState, oauthInitiator } from './oauth-state.js';
 import { startNetatmoCollector } from './collector.js';
+import { completeNetatmoOAuth } from './oauth-complete.js';
 
 const codeSchema = z.object({ code: z.string().min(1).max(2048), state: z.string().min(1) }).strict();
 const tokenSchema = z.object({ accessToken: z.string().min(1).max(4096) }).strict();
@@ -31,18 +32,22 @@ export function registerNetatmoEnergyFeature(app: FastifyInstance, pool: Pool): 
     requireAdmin(request);
     const config = netatmoConfig(); if (!config) return reply.code(503).send({ error: 'Netatmo connector not configured' });
     const parsed = codeSchema.safeParse(request.body); if (!parsed.success) return reply.code(400).send({ error: 'Invalid code' });
-    let key: Buffer;
-    try { key = netatmoEncryptionKey(); } catch { return reply.code(503).send({ error: 'Netatmo token encryption not configured' }); }
     try {
-      if (!await consumeOAuthState(pool, parsed.data.state, oauthInitiator(request))) return reply.code(403).send({ error: 'Invalid or expired OAuth state' });
-      const tokens = validateOAuthTokens(await exchangeCode(config, parsed.data.code));
-      await storeNetatmoTokens(pool, tokens, key);
+      const result = await completeNetatmoOAuth(request, pool, parsed.data.code, parsed.data.state);
+      if (result === 'invalid-state') return reply.code(403).send({ error: 'Invalid or expired OAuth state' });
       return { connected: true };
     } catch { return reply.code(502).send({ error: 'Netatmo authorization or storage failed' }); }
   });
   app.get(`${base}/callback`, async (request, reply) => {
-    // Do not exchange codes in a GET callback without a browser-bound authenticated session.
-    return reply.code(400).send({ error: 'Complete OAuth with an authenticated POST /token containing code and state' });
+    reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer').header('X-Content-Type-Options', 'nosniff');
+    requireAdmin(request);
+    const parsed = z.object({ code: z.string().min(1).max(2048), state: z.string().min(1).max(128) }).strict().safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid OAuth callback' });
+    try {
+      const result = await completeNetatmoOAuth(request, pool, parsed.data.code, parsed.data.state);
+      if (result === 'invalid-state') return reply.code(403).send({ error: 'Invalid or expired OAuth state' });
+      return reply.type('text/html; charset=utf-8').send('<!doctype html><html><head><meta name="referrer" content="no-referrer"><title>Netatmo connected</title></head><body><p>Netatmo authorization completed. You may close this window.</p></body></html>');
+    } catch { return reply.code(502).send({ error: 'Netatmo authorization or storage failed' }); }
   });
   app.post(`${base}/discovery/import`, async (request, reply) => {
     requireAdmin(request);
