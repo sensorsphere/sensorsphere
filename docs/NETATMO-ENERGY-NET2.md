@@ -41,3 +41,7 @@ The callback at `GET /api/v1/integrations/netatmo/callback` now requires an exis
 - `collector.pg-smoke.mjs`: collector disabled by default, PostgreSQL advisory-lock acquisition/release, failed collection status and retryable lifecycle with intentionally absent encryption key. Does not ingest telemetry. PASS.
 
 Run these scripts using a disposable API container with the compiled Netatmo module directory bind-mounted read-only and existing DEV database/simulator network configuration. These tests do **not** prove scheduled ingestion into persistent telemetry, concurrent multi-instance behavior, browser cookie callback across public HTTPS, or migration deployment. Keep the scheduler disabled until those are validated.
+
+## NET-2.4 concurrency unit coverage
+
+Additional unit tests verify that an instance skips collection when PostgreSQL reports an already-held advisory lock, releases its connection, and does not record a false failure; and that an in-flight collection prevents a second concurrent invocation. These tests do not yet validate real multi-process scheduling or telemetry ingestion rollback in a dedicated isolated database.
