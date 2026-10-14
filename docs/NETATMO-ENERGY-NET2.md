@@ -69,3 +69,9 @@ Validated both migration files on a disposable `postgres:17-alpine` container at
 ## Authenticated callback HTTP integration test
 
 `authenticated-callback.test.ts` installs the actual SensorSphere auth guard into Fastify, enables authentication, and exercises the admin-session cookie path through `GET /authorize` and `GET /callback`. It verifies unauthenticated 401 responses, a successful admin callback, encrypted token storage, no token leakage in HTML, no-store/referrer headers and OAuth-state replay rejection. Session DB queries and upstream token exchange are mocked, so this is **not** a real browser/HTTPS deployment test. TypeScript and 18/18 Netatmo API tests PASS. The final public HTTPS test requires a deployed callback URI, an authenticated admin browser session and explicit rollout approval.
+
+## Official migration runner integration and release gate
+
+Ran the actual `tools/database/sensorsphere-migrate.sh` against a disposable PostgreSQL 17 container, with only migrations 088/089 copied into a disposable runner container. First pass: applied 2, skipped 0, tracked versions 88 and 89 in `public.schema_migrations`. Second pass: applied 0, skipped 2. PASS. Both disposable containers were stopped with `--rm`; DEV/TEST1 persistent databases unchanged.
+
+**Release blocker:** `apps/api/src/compatibility.ts` currently declares `DATABASE_MAX_MIGRATION_LEVEL=87`, while the source migrations reach 89 and `infrastructure/timescaledb/migrations/VERSION` is still 87. Before a deployable stack release, synchronize the API compatibility maximum, migration module version, release metadata, and verify stack-release validation. No production release version has been assigned yet. Public HTTPS OAuth callback remains untested with a real browser session.
