@@ -61,3 +61,7 @@ Additional unit tests verify that an instance skips collection when PostgreSQL r
 ## Preview authorization hardening
 
 Both `POST /telemetry/preview` and `POST /discovery/preview` now require an admin session, consistent with other Netatmo endpoints. Fastify injection tests verify 403 for non-admin and non-403 for admin before token parsing. Netatmo TypeScript compilation and 17/17 tests PASS. No deployment or persistent database changes.
+
+## Migrations 088/089 on disposable PostgreSQL 17
+
+Validated both migration files on a disposable `postgres:17-alpine` container attached to the database Docker network, with no published ports or persistent volume. Ran both SQL files twice with `psql -v ON_ERROR_STOP=1`; initial creation and repeat idempotency PASS. Inserted and counted one dummy credential and one dummy OAuth state, PASS. Stopped the `--rm` test container afterwards. No migrations applied to persistent DEV/TEST1 databases. This does not replace a full stack migration-runner upgrade test.
