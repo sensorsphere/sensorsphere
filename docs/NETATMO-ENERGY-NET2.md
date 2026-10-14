@@ -65,3 +65,7 @@ Both `POST /telemetry/preview` and `POST /discovery/preview` now require an admi
 ## Migrations 088/089 on disposable PostgreSQL 17
 
 Validated both migration files on a disposable `postgres:17-alpine` container attached to the database Docker network, with no published ports or persistent volume. Ran both SQL files twice with `psql -v ON_ERROR_STOP=1`; initial creation and repeat idempotency PASS. Inserted and counted one dummy credential and one dummy OAuth state, PASS. Stopped the `--rm` test container afterwards. No migrations applied to persistent DEV/TEST1 databases. This does not replace a full stack migration-runner upgrade test.
+
+## Authenticated callback HTTP integration test
+
+`authenticated-callback.test.ts` installs the actual SensorSphere auth guard into Fastify, enables authentication, and exercises the admin-session cookie path through `GET /authorize` and `GET /callback`. It verifies unauthenticated 401 responses, a successful admin callback, encrypted token storage, no token leakage in HTML, no-store/referrer headers and OAuth-state replay rejection. Session DB queries and upstream token exchange are mocked, so this is **not** a real browser/HTTPS deployment test. TypeScript and 18/18 Netatmo API tests PASS. The final public HTTPS test requires a deployed callback URI, an authenticated admin browser session and explicit rollout approval.
