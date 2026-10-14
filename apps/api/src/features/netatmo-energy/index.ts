@@ -8,17 +8,22 @@ import { z } from 'zod';
 import { discover, exchangeCode, netatmoConfig } from './client.js';
 import { getNetatmoAccessToken, netatmoEncryptionKey, storeNetatmoTokens } from './credentials.js';
 import { validateOAuthTokens } from './token.js';
+import { createOAuthState, consumeOAuthState, oauthInitiator } from './oauth-state.js';
+import { startNetatmoCollector } from './collector.js';
 
-const codeSchema = z.object({ code: z.string().min(1).max(2048) }).strict();
+const codeSchema = z.object({ code: z.string().min(1).max(2048), state: z.string().min(1) }).strict();
 const tokenSchema = z.object({ accessToken: z.string().min(1).max(4096) }).strict();
 const base = '/api/v1/integrations/netatmo';
 export function registerNetatmoEnergyFeature(app: FastifyInstance, pool: Pool): void {
-  app.get(`${base}/status`, async () => ({ configured: Boolean(netatmoConfig()), readOnly: true, mode: 'preview' }));
+  const collector = startNetatmoCollector(pool, app.log);
+  app.addHook('onClose', async () => { collector.stop(); });
+  app.get(`${base}/status`, async () => ({ configured: Boolean(netatmoConfig()), readOnly: true, mode: 'preview', collector: collector.status }));
   app.get(`${base}/authorize`, async (request, reply) => {
     requireAdmin(request);
     const config = netatmoConfig(); if (!config) return reply.code(503).send({ error: 'Netatmo connector not configured' });
+    const state = await createOAuthState(pool, oauthInitiator(request));
     const url = new URL('/oauth2/authorize', config.baseUrl);
-    url.search = new URLSearchParams({ response_type: 'code', client_id: config.clientId, redirect_uri: config.redirectUri, scope: 'read_thermostat' }).toString();
+    url.search = new URLSearchParams({ response_type: 'code', client_id: config.clientId, redirect_uri: config.redirectUri, scope: 'read_thermostat', state }).toString();
     return { authorizationUrl: url.toString() };
   });
   // NET-2: exchange and store encrypted tokens server-side; never send tokens to the browser.
@@ -29,10 +34,15 @@ export function registerNetatmoEnergyFeature(app: FastifyInstance, pool: Pool): 
     let key: Buffer;
     try { key = netatmoEncryptionKey(); } catch { return reply.code(503).send({ error: 'Netatmo token encryption not configured' }); }
     try {
+      if (!await consumeOAuthState(pool, parsed.data.state, oauthInitiator(request))) return reply.code(403).send({ error: 'Invalid or expired OAuth state' });
       const tokens = validateOAuthTokens(await exchangeCode(config, parsed.data.code));
       await storeNetatmoTokens(pool, tokens, key);
       return { connected: true };
     } catch { return reply.code(502).send({ error: 'Netatmo authorization or storage failed' }); }
+  });
+  app.get(`${base}/callback`, async (request, reply) => {
+    // Do not exchange codes in a GET callback without a browser-bound authenticated session.
+    return reply.code(400).send({ error: 'Complete OAuth with an authenticated POST /token containing code and state' });
   });
   app.post(`${base}/discovery/import`, async (request, reply) => {
     requireAdmin(request);
