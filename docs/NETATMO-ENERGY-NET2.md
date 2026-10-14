@@ -45,3 +45,7 @@ Run these scripts using a disposable API container with the compiled Netatmo mod
 ## NET-2.4 concurrency unit coverage
 
 Additional unit tests verify that an instance skips collection when PostgreSQL reports an already-held advisory lock, releases its connection, and does not record a false failure; and that an in-flight collection prevents a second concurrent invocation. These tests do not yet validate real multi-process scheduling or telemetry ingestion rollback in a dedicated isolated database.
+
+## Real PostgreSQL collector lock contention
+
+`collector-concurrency.pg-smoke.mjs` opens separate PostgreSQL sessions. One acquires the Netatmo collector advisory lock; the other invokes `collect()` and must skip without an error, then the first releases the lock. PASS on DEV PostgreSQL with no persistent writes. This is a real inter-session test, but not yet an end-to-end multi-process timer/ingestion test.
