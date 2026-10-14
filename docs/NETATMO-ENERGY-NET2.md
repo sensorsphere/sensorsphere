@@ -79,3 +79,11 @@ Ran the actual `tools/database/sensorsphere-migrate.sh` against a disposable Pos
 ## Prepared Stack Release 2026.10.14.1 (source validation only)
 
 Prepared API 1.75.0 with database compatibility 72..89, migrations module version 89, and source-aligned schema-4 stack manifest `releases/stacks/2026.10.14.1.yaml`. Frontend 1.121.0, ingestion 1.0.3, nginx 1.0.0, backup 0.2.1. `scripts/validate-stack-release.sh --source` PASS; Docker-based API TypeScript compile and 18/18 Netatmo tests PASS. This is **not** a published stack: component images, release bundle, and deployment remain outstanding. The existing unrelated local `docker-compose.yml` change is intentionally excluded.
+
+## DEV deployment validation — 2026-10-14
+
+Stack 2026.10.14.1 was deployed on DEV with API 1.75.0 and migrations 88/89 applied by the official runner (2 applied, 86 skipped). The API and other monitored services were healthy. The Netatmo simulator OAuth flow succeeded with a public HTTPS callback on `https://dev.sensorsphere.f-colas.com/api/v1/integrations/netatmo/callback`: authorization 200, simulator redirect 302, callback 200 HTML with `Cache-Control: no-store`, and replay 403. The OAuth token was stored encrypted, and a manual collection ingested 1 asset and 6 observations. A temporary 60-second scheduler run succeeded with 6 observations and zero consecutive failures; the collector was then explicitly disabled again (interval 0).
+
+**Important limitations:** DEV has `SENSORSPHERE_AUTH_ENABLED=false`; the HTTPS callback was exercised without a real authenticated administrator browser session. Do not claim the browser session/cookie flow is production-validated. The simulator is not the real Netatmo identity provider. Do not enable the collector in TEST1 or production on the strength of these DEV tests alone. The persistent 32-byte encryption key is kept in DEV `.env` (never in Git) and must be backed up securely to preserve decryptability of credentials.
+
+Stack 2026.10.14.2 is a **bundle-only follow-up** that carries the Compose Netatmo encryption-key and opt-in interval environment passthrough and the aligned distribution mounts; it reuses the already-published API 1.75.0, migrations 89 and other component images. Bundle validation and SHA-256 verification passed. This does not imply publication as a GitHub release or deployment.
