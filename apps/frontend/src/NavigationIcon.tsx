@@ -14,6 +14,7 @@ export type PageKey =
   | "gateways"
   | "metric-routing"
   | "gateway-coverage"
+  | "netatmo-connections"
   | "database-storage"
   | "users"
   | "versions"
@@ -34,6 +35,7 @@ const PAGE_COLORS: Record<PageKey, string> = {
   "metric-routing": "var(--mantine-color-yellow-6)",
   "gateway-coverage": "var(--mantine-color-teal-6)",
   "database-storage": "var(--mantine-color-grape-6)",
+  "netatmo-connections": "var(--mantine-color-teal-6)",
   users: "var(--mantine-color-blue-6)",
   versions: "var(--mantine-color-indigo-6)",
   todos: "var(--mantine-color-pink-6)"
@@ -195,6 +197,9 @@ export function NavigationIcon({
           <circle cx="12" cy="20" r="1" />
         </svg>
       );
+
+    case "netatmo-connections":
+      return (<svg {...common}><circle cx="12" cy="12" r="8"/><path d="M8 12h8M12 8v8"/></svg>);
 
     case "database-storage":
       return (

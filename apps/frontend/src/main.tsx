@@ -229,6 +229,7 @@ import {
   type PageKey
 } from "./NavigationIcon";
 import { DatabaseStoragePanel } from "./DatabaseStoragePanel";
+import { NetatmoConnectionsPanel } from "./NetatmoConnectionsPanel";
 import { defaultMetricColor } from "./metricVisuals";
 
 function ThemeSelector() {
@@ -301,6 +302,7 @@ Record<PageKey, string> = {
 
   "database-storage":
     "Database Storage & Retention",
+  "netatmo-connections": "Netatmo Connections",
 
   users:
     "Administration · Users",
@@ -331,6 +333,7 @@ function isPageKey(
     value === "metric-routing" ||
     value === "gateway-coverage" ||
     value === "database-storage" ||
+    value === "netatmo-connections" ||
     value === "users" ||
     value === "versions" ||
     value === "todos"
@@ -946,7 +949,7 @@ function Dashboard() {
     if (
       authContextQuery.data &&
       !authContextQuery.data.isAdmin &&
-      (activePage === "users" || activePage === "database-storage")
+      (activePage === "users" || activePage === "database-storage" || activePage === "netatmo-connections")
     ) {
       setActivePage("dashboard");
     }
@@ -2969,6 +2972,9 @@ function Dashboard() {
         </Stack>
 
         <Stack gap="xs" mt="auto" pt="md">
+          {authContextQuery.data?.isAdmin && (
+            <NavLink label={navbarCollapsed ? null : "Netatmo Connections"} leftSection={<NavigationIcon page="netatmo-connections" />} title="Netatmo Connections" active={activePage === "netatmo-connections"} onClick={() => navigateTo("netatmo-connections")} />
+          )}
           {authContextQuery.data?.isAdmin && (
             <NavLink
               label={
@@ -5716,6 +5722,8 @@ function Dashboard() {
                 <GatewayCoveragePanel />
               )
             }
+
+            {authContextQuery.data?.isAdmin && activePage === "netatmo-connections" && <NetatmoConnectionsPanel />}
 
             {
               authContextQuery.data?.isAdmin &&
