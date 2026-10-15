@@ -2,7 +2,7 @@
 
 ## Release candidate
 
-Stack 2026.10.15.1, API 1.76.0, frontend 1.122.0, migrations 90.
+Stack 2026.10.15.2, API 1.76.1, frontend 1.122.0, migrations 90.
 The multi-instance collector is OFF by default (`SENSORSPHERE_NETATMO_MULTI_COLLECT_INTERVAL_SECONDS=0`).
 The legacy Netatmo integration and its credential row remain separate.
 
@@ -22,7 +22,7 @@ The legacy Netatmo integration and its credential row remain separate.
 1. Confirm existing SIM-01 remains visible and legacy telemetry unchanged.
 2. Administration > Netatmo Connections: create `sim-01` and `sim-02` using the separate simulator endpoints and client credentials. The existing legacy SIM-01 credentials are **not automatically migrated** into `sim-01`; perform OAuth for the new connection.
 3. Authorize SIM-01 and SIM-02 separately; confirm browser callback success and replay rejection.
-4. Discover both; confirm independent `sim-home-01` and `sim-home-02` identities in Device Registry.
+4. Discover both; confirm independent `sim-01:<home>:<module>` and `sim-02:<home>:<module>` identities, even when remote home/module IDs coincide in Device Registry.
 5. Collect both manually; confirm timestamps and telemetry do not cross between devices.
 6. Disable SIM-02 and confirm it cannot collect; re-enable and retry.
 7. Stop only SIM-02 temporarily and confirm SIM-01 collection continues; restore SIM-02.
@@ -30,6 +30,7 @@ The legacy Netatmo integration and its credential row remain separate.
 
 ## Known gates
 
+- Unit tests include two connections exposing identical remote home/module IDs; actual database-backed E2E isolation remains to be validated.
 - Full end-to-end browser OAuth and real PostgreSQL migration have not yet been executed for this release.
 - No deletion or automatic migration of legacy credentials is performed.
 - The connection management UI currently supports create/list/enable/disable, not edit/delete.

@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import type { Discovery } from './client.js';
-export async function importNetatmoDiscovery(pool: Pool, discovery: Discovery): Promise<{ created: number; updated: number; deviceIds: string[] }> {
+export async function importNetatmoDiscovery(pool: Pool, discovery: Discovery, connectionId?: string): Promise<{ created: number; updated: number; deviceIds: string[] }> {
   const client = await pool.connect();
   let created = 0, updated = 0;
   const ids = new Map<string,string>();
@@ -9,7 +9,8 @@ export async function importNetatmoDiscovery(pool: Pool, discovery: Discovery): 
     await client.query("SELECT pg_advisory_xact_lock(hashtext('sensorsphere:netatmo:registry'))");
     for (const item of discovery.devices) {
       const d = item.device;
-      const identity = d.identities[0];
+      const originalIdentity = d.identities[0];
+      const identity = originalIdentity && connectionId ? { ...originalIdentity, value: `${connectionId}:${originalIdentity.value}` } : originalIdentity;
       if (!identity || identity.identityType !== 'NETATMO_MODULE_ID') throw new Error('Missing Netatmo identity');
       const references = await client.query<{ code: string }>('SELECT code FROM device_types WHERE code = $1 AND device_class = $2 AND enabled = TRUE', [d.deviceType, d.deviceClass]);
       if (!references.rows.length) throw new Error(`Unregistered device type: ${d.deviceType}`);

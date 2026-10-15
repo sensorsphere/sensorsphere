@@ -30,7 +30,7 @@ export function startNetatmoMultiCollector(pool:Pool, logger:FastifyBaseLogger) 
       if(!config)throw new Error('Netatmo connection unavailable');
       const token=await getNetatmoAccessToken(pool,config,netatmoEncryptionKey(),`netatmo-energy:${id}`);
       if(!token)throw new Error('Netatmo authorization required');
-      const ingested=await ingestNetatmoReadings(pool,await readTelemetry(config,token));
+      const ingested=await ingestNetatmoReadings(pool,await readTelemetry(config,token),id);
       status.lastSuccess=new Date().toISOString();status.lastError=null;status.consecutiveFailures=0;status.lastObservations=ingested.observations;
       return ingested;
     }catch(error){status.consecutiveFailures++;status.lastError=error instanceof Error?error.message:'Unknown error';logger.warn({connectionId:id,failures:status.consecutiveFailures},'Netatmo multi collector failed');return null;}

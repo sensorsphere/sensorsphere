@@ -50,8 +50,8 @@ export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
       const token=await getNetatmoAccessToken(pool,config,netatmoEncryptionKey(),credentialId(parsed.data.id));
       if(!token)return reply.code(409).send({error:'Authorization required'});
       try {
-        if(operation==='telemetry/collect')return await ingestNetatmoReadings(pool,await readTelemetry(config,token));
-        return await importNetatmoDiscovery(pool,await discover(config,token));
+        if(operation==='telemetry/collect')return await ingestNetatmoReadings(pool,await readTelemetry(config,token),parsed.data.id);
+        return await importNetatmoDiscovery(pool,await discover(config,token),parsed.data.id);
       }catch{return reply.code(502).send({error:'Netatmo operation failed'});}
     });
   }

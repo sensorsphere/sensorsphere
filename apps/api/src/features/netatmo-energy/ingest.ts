@@ -1,22 +1,23 @@
 import type { Pool } from 'pg';
 import type { Readings } from './telemetry.js';
-export async function ingestNetatmoReadings(pool: Pool, readings: Readings): Promise<{ assets: number; observations: number }> {
+export async function ingestNetatmoReadings(pool: Pool, readings: Readings, connectionId?: string): Promise<{ assets: number; observations: number }> {
   const client = await pool.connect();
   let observations = 0;
   const assets = new Set<string>();
   const timestamp = new Date();
+  const scoped = (value: string) => connectionId ? `${connectionId}:${value}` : value;
   try {
     await client.query('BEGIN');
     await client.query("SELECT pg_advisory_xact_lock(hashtext('sensorsphere:netatmo:telemetry'))");
     const record = async (externalId: string, name: string, key: string, label: string, unit: string | null, value: string | number | boolean | null, moduleIdentity?: string) => {
       if (value === null || !Number.isFinite(typeof value === 'number' ? value : 0)) return;
-      const asset = await client.query<{ id: string }>(`INSERT INTO assets (id, external_id, description, manufacturer, asset_type, protocol) VALUES (gen_random_uuid(),$1,$2,'Netatmo','sensor','http') ON CONFLICT (external_id) DO UPDATE SET updated_at=NOW() RETURNING id`, [externalId,name]);
+      const asset = await client.query<{ id: string }>(`INSERT INTO assets (id, external_id, description, manufacturer, asset_type, protocol) VALUES (gen_random_uuid(),$1,$2,'Netatmo','sensor','http') ON CONFLICT (external_id) DO UPDATE SET updated_at=NOW() RETURNING id`, [scoped(externalId),name]);
       const assetId = asset.rows[0]!.id;
       assets.add(assetId);
-      if (moduleIdentity) await client.query(`INSERT INTO device_registry_links (device_id,target_type,target_id) SELECT i.device_id,'asset',$2::uuid FROM device_registry_identities i WHERE i.identity_type='NETATMO_MODULE_ID' AND i.value=$1 ON CONFLICT (device_id,target_type,target_id) DO NOTHING`, [moduleIdentity,assetId]);
+      if (moduleIdentity) await client.query(`INSERT INTO device_registry_links (device_id,target_type,target_id) SELECT i.device_id,'asset',$2::uuid FROM device_registry_identities i WHERE i.identity_type='NETATMO_MODULE_ID' AND i.value=$1 ON CONFLICT (device_id,target_type,target_id) DO NOTHING`, [scoped(moduleIdentity),assetId]);
       const type = typeof value === 'number' ? 'number' : typeof value === 'boolean' ? 'boolean' : 'string';
       const metric = await client.query<{ id: string }>(`INSERT INTO asset_metrics (asset_id,metric_key,display_name,unit,value_type) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (asset_id,metric_key) DO UPDATE SET display_name=EXCLUDED.display_name,unit=EXCLUDED.unit,value_type=EXCLUDED.value_type RETURNING id`, [assetId,key,label,unit,type]);
-      await client.query('INSERT INTO observations (time,asset_metric_id,value_double,value_text,value_boolean,source,source_ref) VALUES ($1,$2,$3,$4,$5,$6,$7)', [timestamp,metric.rows[0]!.id,typeof value === 'number' ? value : null,typeof value === 'string' ? value : null,typeof value === 'boolean' ? value : null,'netatmo-energy',externalId]);
+      await client.query('INSERT INTO observations (time,asset_metric_id,value_double,value_text,value_boolean,source,source_ref) VALUES ($1,$2,$3,$4,$5,$6,$7)', [timestamp,metric.rows[0]!.id,typeof value === 'number' ? value : null,typeof value === 'string' ? value : null,typeof value === 'boolean' ? value : null,connectionId ? `netatmo-energy:${connectionId}` : 'netatmo-energy',scoped(externalId)]);
       observations++;
     };
     for (const room of readings.rooms) {
@@ -35,7 +36,7 @@ export async function ingestNetatmoReadings(pool: Pool, readings: Readings): Pro
             updated_at = NOW()
         FROM device_registry_identities AS i
         WHERE i.device_id = d.id AND i.identity_type = 'NETATMO_MODULE_ID' AND i.value = $1`,
-        [`${module.homeId}:${module.moduleId}`, module.reachable, module.batteryPercent, timestamp]);
+        [scoped(`${module.homeId}:${module.moduleId}`), module.reachable, module.batteryPercent, timestamp]);
       const id = `netatmo:module:${module.homeId}:${module.moduleId}`;
       await record(id,`Netatmo module ${module.moduleId}`,'heating','Heating',null,module.heating,`${module.homeId}:${module.moduleId}`);
       await record(id,`Netatmo module ${module.moduleId}`,'reachable','Reachable',null,module.reachable,`${module.homeId}:${module.moduleId}`);
