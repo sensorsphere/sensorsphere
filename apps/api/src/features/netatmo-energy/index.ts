@@ -11,7 +11,7 @@ import { validateOAuthTokens } from './token.js';
 import { createOAuthState, consumeOAuthState, oauthInitiator } from './oauth-state.js';
 import { startNetatmoCollector } from './collector.js';
 import { completeNetatmoOAuth } from './oauth-complete.js';
-import { connectionSchema, createConnection, listConnections, setConnectionEnabled } from './connections.js';
+import { connectionSchema, netatmoConnectionRedirectUri, createConnection, listConnections, setConnectionEnabled } from './connections.js';
 import { registerNetatmoMultiRoutes } from './multi-routes.js';
 import { startNetatmoMultiCollector } from './multi-collector.js';
 
@@ -23,6 +23,7 @@ export function registerNetatmoEnergyFeature(app: FastifyInstance, pool: Pool): 
   registerNetatmoMultiRoutes(app,pool);
   const multiCollector=startNetatmoMultiCollector(pool,app.log);
   app.get(`${base}/connections/collector/status`,async(request)=>{requireAdmin(request);return {connections:Object.fromEntries(multiCollector.statuses)};});
+  app.get(`${base}/connections/redirect-uri`, async (request) => { requireAdmin(request); return {redirectUri:netatmoConnectionRedirectUri()}; });
   app.get(`${base}/connections`, async (request) => { requireAdmin(request); return { connections: await listConnections(pool) }; });
   app.patch(`${base}/connections/:id`,async(request,reply)=>{
     requireAdmin(request);
@@ -35,9 +36,9 @@ export function registerNetatmoEnergyFeature(app: FastifyInstance, pool: Pool): 
   app.post(`${base}/connections`, async (request, reply) => {
     requireAdmin(request);
     const parsed = connectionSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'Invalid Netatmo connection' });
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid Netatmo connection fields', details: parsed.error.issues.map(issue=>({field:issue.path.join('.')||'request',message:issue.code==='unrecognized_keys'?'Unexpected field(s) in request':issue.message})) });
     try { await createConnection(pool, parsed.data); return reply.code(201).send({ id: parsed.data.id, displayName: parsed.data.displayName }); }
-    catch (error) { if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return reply.code(409).send({ error: 'Connection already exists' }); throw error; }
+    catch (error) { if (error instanceof Error && (error.message.startsWith('SENSORSPHERE_PUBLIC_URL') || error.message.startsWith('Invalid SENSORSPHERE_PUBLIC_URL'))) return reply.code(503).send({error:'Netatmo OAuth callback URL is not configured correctly on this SensorSphere instance'}); if (error instanceof Error && (error.message.startsWith('Invalid Netatmo') || error.message.startsWith('Netatmo HTTP endpoint'))) return reply.code(400).send({error:error.message}); if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return reply.code(409).send({ error: 'Connection already exists' }); throw error; }
   });
   app.addHook('onClose', async () => { collector.stop(); multiCollector.stop(); });
   app.get(`${base}/status`, async () => ({ configured: Boolean(netatmoConfig()), readOnly: true, mode: 'preview', collector: collector.status }));

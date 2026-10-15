@@ -18,10 +18,11 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.122.0";
+export const MODULE_VERSION = "1.122.1";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.122.1": { releasedAt: "2026-10-15T14:20:00Z", patch: "NET-MULTI-3.patch", changes: [{type:"fixed",description:"Improve Netatmo connection form examples, automatic callback display and validation feedback"}] },
   "1.122.0": { releasedAt: "2026-10-15T08:30:00Z", patch: "NET-MULTI-1.patch", changes: [{type:"added",description:"Add Netatmo multi-connection administration panel"}] },
   "1.121.1": {
     releasedAt: "2026-10-14T17:00:00Z",

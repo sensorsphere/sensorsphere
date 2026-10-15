@@ -10,9 +10,15 @@ export const connectionSchema = z.object({
   baseUrl: z.string().url(),
   clientId: z.string().min(1).max(256),
   clientSecret: z.string().min(1).max(2048),
-  redirectUri: z.string().url(),
   enabled: z.boolean().default(true),
 }).strict();
+
+export function netatmoConnectionRedirectUri(publicUrl: string | undefined = process.env.SENSORSPHERE_PUBLIC_URL): string {
+  if (!publicUrl?.trim()) throw new Error('SENSORSPHERE_PUBLIC_URL is required for Netatmo OAuth connections');
+  const url = new URL(publicUrl.trim());
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/' || !url.hostname) throw new Error('Invalid SENSORSPHERE_PUBLIC_URL for Netatmo OAuth');
+  return url.origin + '/api/v1/integrations/netatmo/connections/callback';
+}
 
 function seal(secret: string): string {
   const key = netatmoEncryptionKey();
@@ -44,7 +50,7 @@ export async function listConnections(pool: Pool) {
   return result.rows;
 }
 export async function createConnection(pool: Pool, input: z.infer<typeof connectionSchema>) {
-  const config=validateConnectionConfig({baseUrl:input.baseUrl,clientId:input.clientId,clientSecret:input.clientSecret,redirectUri:input.redirectUri});
+  const config=validateConnectionConfig({baseUrl:input.baseUrl,clientId:input.clientId,clientSecret:input.clientSecret,redirectUri:netatmoConnectionRedirectUri()});
   await pool.query(`INSERT INTO netatmo_connections(id,display_name,base_url,client_id,encrypted_client_secret,redirect_uri,enabled)
     VALUES($1,$2,$3,$4,$5,$6,$7)`,[input.id,input.displayName,config.baseUrl,config.clientId,seal(config.clientSecret),config.redirectUri,input.enabled]);
 }

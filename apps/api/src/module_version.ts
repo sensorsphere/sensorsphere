@@ -18,10 +18,11 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.76.1";
+export const MODULE_VERSION = "1.76.2";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.76.2": { releasedAt: "2026-10-15T14:20:00Z", patch: "NET-MULTI-3.patch", changes: [{type:"fixed",description:"Compute Netatmo multi-connection OAuth callback from public URL and return actionable validation errors"}] },
   "1.76.1": { releasedAt: "2026-10-15T11:30:00Z", patch: "NET-MULTI-2-isolation.patch", changes: [{type:"fixed",description:"Isolate Netatmo multi-connection device identities, assets, links and telemetry by connection ID without changing legacy integration identifiers"}] },
   "1.76.0": { releasedAt: "2026-10-15T08:30:00Z", patch: "NET-MULTI-1.patch", changes: [{type:"added",description:"Add independent Netatmo OAuth connections, encrypted secrets, per-connection discovery and collectors"}] },
   "1.75.1": {
