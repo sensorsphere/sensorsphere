@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { requireAdmin } from '../auth/index.js';
-import { getConnection } from './connections.js';
+import { getConnection, setConnectionOAuthError } from './connections.js';
 import { createConnectionOAuthState, consumeConnectionOAuthState, oauthInitiator } from './oauth-state.js';
 import { exchangeCode, discover } from './client.js';
 import { validateOAuthTokens } from './token.js';
@@ -37,8 +37,9 @@ export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
     try {
       const tokens=validateOAuthTokens(await exchangeCode(config,parsed.data.code));
       await storeNetatmoTokens(pool,tokens,netatmoEncryptionKey(),credentialId(id));
+      await setConnectionOAuthError(pool,id,null);
       return reply.header('Cache-Control','no-store').header('Referrer-Policy','no-referrer').type('text/html').send('<!doctype html><title>Netatmo connected</title><p>Connection authorized. You may close this window.</p>');
-    }catch{return reply.code(502).send({error:'Netatmo authorization failed'});}
+    }catch{await setConnectionOAuthError(pool,id,'OAuth token exchange failed. Check client ID, client secret and simulator availability.');return reply.code(502).send({error:'Netatmo authorization failed: check OAuth client credentials and simulator availability'});}
   });
   for(const operation of ['telemetry/collect','discovery/import'] as const){
     app.post(`${base}/:id/${operation}`,async(request,reply)=>{

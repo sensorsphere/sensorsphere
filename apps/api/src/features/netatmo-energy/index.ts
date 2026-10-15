@@ -11,7 +11,7 @@ import { validateOAuthTokens } from './token.js';
 import { createOAuthState, consumeOAuthState, oauthInitiator } from './oauth-state.js';
 import { startNetatmoCollector } from './collector.js';
 import { completeNetatmoOAuth } from './oauth-complete.js';
-import { connectionSchema, netatmoConnectionRedirectUri, createConnection, listConnections, setConnectionEnabled } from './connections.js';
+import { connectionSchema, netatmoConnectionRedirectUri, createConnection, listConnections, setConnectionEnabled, connectionEditSchema, updateConnection } from './connections.js';
 import { registerNetatmoMultiRoutes } from './multi-routes.js';
 import { startNetatmoMultiCollector } from './multi-collector.js';
 
@@ -32,6 +32,14 @@ export function registerNetatmoEnergyFeature(app: FastifyInstance, pool: Pool): 
     if(!id.success||!body.success)return reply.code(400).send({error:'Invalid connection update'});
     if(!await setConnectionEnabled(pool,id.data,body.data.enabled))return reply.code(404).send({error:'Connection not found'});
     return {id:id.data,enabled:body.data.enabled};
+  });
+  app.put(`${base}/connections/:id`,async(request,reply)=>{
+    requireAdmin(request);
+    const id=z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/).safeParse((request.params as {id?:unknown}).id);
+    const parsed=connectionEditSchema.safeParse(request.body);
+    if(!id.success||!parsed.success)return reply.code(400).send({error:'Invalid connection fields',details:parsed.success?[]:parsed.error.issues.map(issue=>({field:issue.path.join('.')||'request',message:issue.message}))});
+    try{const result=await updateConnection(pool,id.data,parsed.data);if(!result.updated)return reply.code(404).send({error:'Connection not found'});return {id:id.data,reauthorizationRequired:result.reauthorizationRequired};}
+    catch(error){if(error instanceof Error&&(error.message.startsWith('Invalid Netatmo')||error.message.startsWith('Netatmo HTTP endpoint')))return reply.code(400).send({error:error.message});throw error;}
   });
   app.post(`${base}/connections`, async (request, reply) => {
     requireAdmin(request);

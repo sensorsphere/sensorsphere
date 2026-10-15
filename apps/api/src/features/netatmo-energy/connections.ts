@@ -46,7 +46,7 @@ export function validateConnectionConfig(config: NetatmoConfig): NetatmoConfig {
   return validated;
 }
 export async function listConnections(pool: Pool) {
-  const result=await pool.query('SELECT id,display_name,base_url,client_id,redirect_uri,enabled,created_at,updated_at FROM netatmo_connections ORDER BY id');
+  const result=await pool.query(`SELECT c.id,c.display_name,c.base_url,c.client_id,c.redirect_uri,c.enabled,c.created_at,c.updated_at,c.oauth_last_error,c.oauth_last_error_at,CASE WHEN cred.integration_id IS NOT NULL THEN 'authorized' WHEN c.oauth_last_error IS NOT NULL THEN 'authorization_failed' ELSE 'not_authorized' END AS oauth_status FROM netatmo_connections c LEFT JOIN netatmo_oauth_credentials cred ON cred.integration_id='netatmo-energy:' || c.id ORDER BY c.id`);
   return result.rows;
 }
 export async function createConnection(pool: Pool, input: z.infer<typeof connectionSchema>) {
@@ -64,4 +64,18 @@ export async function getConnection(pool: Pool, id: string): Promise<NetatmoConf
 export async function setConnectionEnabled(pool:Pool,id:string,enabled:boolean):Promise<boolean> {
   const result=await pool.query('UPDATE netatmo_connections SET enabled=$2,updated_at=NOW() WHERE id=$1 RETURNING id',[id,enabled]);
   return result.rowCount===1;
+}
+
+export async function setConnectionOAuthError(pool: Pool,id:string,message:string|null):Promise<void>{await pool.query('UPDATE netatmo_connections SET oauth_last_error=$2,oauth_last_error_at=CASE WHEN $2::text IS NULL THEN NULL ELSE NOW() END WHERE id=$1',[id,message]);}
+
+export const connectionEditSchema=z.object({displayName:z.string().trim().min(1).max(120),baseUrl:z.string().url(),clientId:z.string().min(1).max(256),clientSecret:z.string().max(2048).optional()}).strict();
+export async function updateConnection(pool:Pool,id:string,input:z.infer<typeof connectionEditSchema>):Promise<{updated:boolean;reauthorizationRequired:boolean}>{
+ const client=await pool.connect();
+ try{await client.query('BEGIN');const old=await client.query<{base_url:string;client_id:string;encrypted_client_secret:string;redirect_uri:string}>('SELECT base_url,client_id,encrypted_client_secret,redirect_uri FROM netatmo_connections WHERE id=$1 FOR UPDATE',[id]);if(!old.rows[0]){await client.query('ROLLBACK');return {updated:false,reauthorizationRequired:false};}
+ const row=old.rows[0];const changed=old.rows[0].base_url!==input.baseUrl||old.rows[0].client_id!==input.clientId||Boolean(input.clientSecret);
+ const config=validateConnectionConfig({baseUrl:input.baseUrl,clientId:input.clientId,clientSecret:input.clientSecret||unseal(row.encrypted_client_secret),redirectUri:netatmoConnectionRedirectUri()});
+ await client.query('UPDATE netatmo_connections SET display_name=$2,base_url=$3,client_id=$4,encrypted_client_secret=$5,redirect_uri=$6,updated_at=NOW(),oauth_last_error=NULL,oauth_last_error_at=NULL WHERE id=$1',[id,input.displayName,config.baseUrl,config.clientId,input.clientSecret?seal(config.clientSecret):row.encrypted_client_secret,config.redirectUri]);
+ if(changed){await client.query('DELETE FROM netatmo_oauth_credentials WHERE integration_id=$1',[`netatmo-energy:${id}`]);await client.query('DELETE FROM netatmo_oauth_states WHERE connection_id=$1',[id]);}
+ await client.query('COMMIT');return {updated:true,reauthorizationRequired:changed};
+ }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
 }

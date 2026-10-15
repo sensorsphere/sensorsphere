@@ -1,9 +1,10 @@
 import type { Pool } from 'pg';
 import type { Discovery } from './client.js';
-export async function importNetatmoDiscovery(pool: Pool, discovery: Discovery, connectionId?: string): Promise<{ created: number; updated: number; deviceIds: string[] }> {
+export async function importNetatmoDiscovery(pool: Pool, discovery: Discovery, connectionId?: string): Promise<{ created: number; updated: number; deviceIds: string[]; devices: { id: string; name: string; deviceType: string; deviceClass: string; action: "created" | "updated" }[] }> {
   const client = await pool.connect();
   let created = 0, updated = 0;
   const ids = new Map<string,string>();
+  const devices: { id: string; name: string; deviceType: string; deviceClass: string; action: "created" | "updated" }[] = [];
   try {
     await client.query('BEGIN');
     await client.query("SELECT pg_advisory_xact_lock(hashtext('sensorsphere:netatmo:registry'))");
@@ -16,6 +17,7 @@ export async function importNetatmoDiscovery(pool: Pool, discovery: Discovery, c
       if (!references.rows.length) throw new Error(`Unregistered device type: ${d.deviceType}`);
       const existing = await client.query<{ id: string }>('SELECT device_id AS id FROM device_registry_identities WHERE identity_type = $1 AND value = $2 FOR UPDATE', [identity.identityType, identity.value]);
       let id = existing.rows[0]?.id;
+      const action = id ? "updated" : "created";
       if (id) {
         await client.query('UPDATE device_registry_devices SET name=$2, manufacturer=$3, model=$4, description=$5, last_seen_at=NOW(), updated_at=NOW() WHERE id=$1', [id, d.name, d.manufacturer, d.model, d.description]);
         updated++;
@@ -26,12 +28,13 @@ export async function importNetatmoDiscovery(pool: Pool, discovery: Discovery, c
         created++;
       }
       ids.set(item.clientKey,id!);
+      devices.push({ id: id!, name: d.name, deviceType: d.deviceType, deviceClass: d.deviceClass, action });
     }
     for (const item of discovery.devices) {
       const parentId = item.parentClientKey ? ids.get(item.parentClientKey) : undefined;
       if (parentId) await client.query('UPDATE device_registry_devices SET parent_device_id=$2,updated_at=NOW() WHERE id=$1 AND parent_device_id IS DISTINCT FROM $2', [ids.get(item.clientKey),parentId]);
     }
     await client.query('COMMIT');
-    return { created, updated, deviceIds: [...ids.values()] };
+    return { created, updated, deviceIds: [...ids.values()], devices };
   } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
 }
