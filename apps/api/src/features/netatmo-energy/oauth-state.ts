@@ -19,3 +19,14 @@ export async function consumeOAuthState(pool: Pool, state: string, initiator: st
   const result = await pool.query(`DELETE FROM netatmo_oauth_states WHERE state_hash=$1 AND initiated_by=$2 AND expires_at>NOW() RETURNING state_hash`,[hash(state),initiator]);
   return result.rowCount === 1;
 }
+
+export async function createConnectionOAuthState(pool: Pool, initiator: string, connectionId: string): Promise<string> {
+  const state=randomBytes(32).toString('base64url');
+  await pool.query('INSERT INTO netatmo_oauth_states (state_hash,initiated_by,connection_id) VALUES ($1,$2,$3)',[hash(state),initiator,connectionId]);
+  return state;
+}
+export async function consumeConnectionOAuthState(pool: Pool, state: string, initiator: string): Promise<string | null> {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(state)) return null;
+  const result=await pool.query<{connection_id:string}>('DELETE FROM netatmo_oauth_states WHERE state_hash=$1 AND initiated_by=$2 AND connection_id IS NOT NULL AND expires_at>NOW() RETURNING connection_id',[hash(state),initiator]);
+  return result.rows[0]?.connection_id ?? null;
+}

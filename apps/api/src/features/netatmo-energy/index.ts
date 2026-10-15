@@ -12,12 +12,14 @@ import { createOAuthState, consumeOAuthState, oauthInitiator } from './oauth-sta
 import { startNetatmoCollector } from './collector.js';
 import { completeNetatmoOAuth } from './oauth-complete.js';
 import { connectionSchema, createConnection, listConnections } from './connections.js';
+import { registerNetatmoMultiRoutes } from './multi-routes.js';
 
 const codeSchema = z.object({ code: z.string().min(1).max(2048), state: z.string().min(1) }).strict();
 const tokenSchema = z.object({ accessToken: z.string().min(1).max(4096) }).strict();
 const base = '/api/v1/integrations/netatmo';
 export function registerNetatmoEnergyFeature(app: FastifyInstance, pool: Pool): void {
   const collector = startNetatmoCollector(pool, app.log);
+  registerNetatmoMultiRoutes(app,pool);
   app.get(`${base}/connections`, async (request) => { requireAdmin(request); return { connections: await listConnections(pool) }; });
   app.post(`${base}/connections`, async (request, reply) => {
     requireAdmin(request);

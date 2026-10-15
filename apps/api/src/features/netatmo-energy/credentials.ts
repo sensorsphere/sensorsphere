@@ -8,21 +8,21 @@ export function netatmoEncryptionKey(env: NodeJS.ProcessEnv = process.env): Buff
   if (!encoded || !/^[0-9a-fA-F]{64}$/.test(encoded)) throw new Error('Netatmo encryption key must be 32 bytes of hex');
   return Buffer.from(encoded, 'hex');
 }
-export async function storeNetatmoTokens(pool: Pool, tokens: OAuthTokens, key: Buffer): Promise<void> {
+export async function storeNetatmoTokens(pool: Pool, tokens: OAuthTokens, key: Buffer, integrationId = NETATMO_INTEGRATION_ID): Promise<void> {
   const encrypted = encryptTokens(tokens, key);
   await pool.query(`INSERT INTO netatmo_oauth_credentials (integration_id,encrypted_tokens,expires_at)
     VALUES ($1,$2,NOW()+($3::double precision * INTERVAL '1 second'))
     ON CONFLICT (integration_id) DO UPDATE SET encrypted_tokens=EXCLUDED.encrypted_tokens,expires_at=EXCLUDED.expires_at,updated_at=NOW()`,
-    [NETATMO_INTEGRATION_ID,encrypted,tokens.expires_in]);
+    [integrationId,encrypted,tokens.expires_in]);
 }
-export async function getNetatmoAccessToken(pool: Pool, config: NetatmoConfig, key: Buffer): Promise<string | null> {
+export async function getNetatmoAccessToken(pool: Pool, config: NetatmoConfig, key: Buffer, integrationId = NETATMO_INTEGRATION_ID): Promise<string | null> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query("SELECT pg_advisory_xact_lock(hashtext('sensorsphere:netatmo:oauth'))");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('sensorsphere:netatmo:oauth:' || $1))", [integrationId]);
     const result = await client.query<{encrypted_tokens:string; refresh_required:boolean}>(
       `SELECT encrypted_tokens,expires_at <= NOW()+INTERVAL '2 minutes' AS refresh_required
-       FROM netatmo_oauth_credentials WHERE integration_id=$1 FOR UPDATE`, [NETATMO_INTEGRATION_ID]);
+       FROM netatmo_oauth_credentials WHERE integration_id=$1 FOR UPDATE`, [integrationId]);
     const stored = result.rows[0];
     if (!stored) { await client.query('COMMIT'); return null; }
     let tokens = decryptTokens(stored.encrypted_tokens,key);
@@ -30,7 +30,7 @@ export async function getNetatmoAccessToken(pool: Pool, config: NetatmoConfig, k
       tokens = await refreshNetatmoToken(config,tokens.refresh_token);
       await client.query(`UPDATE netatmo_oauth_credentials SET encrypted_tokens=$2,
         expires_at=NOW()+($3::double precision * INTERVAL '1 second'),updated_at=NOW()
-        WHERE integration_id=$1`, [NETATMO_INTEGRATION_ID,encryptTokens(tokens,key),tokens.expires_in]);
+        WHERE integration_id=$1`, [integrationId,encryptTokens(tokens,key),tokens.expires_in]);
     }
     await client.query('COMMIT');
     return tokens.access_token;
