@@ -54,3 +54,8 @@ export async function getConnection(pool: Pool, id: string): Promise<NetatmoConf
   const row=result.rows[0];
   return validateConnectionConfig({baseUrl:row.base_url,clientId:row.client_id,clientSecret:unseal(row.encrypted_client_secret),redirectUri:row.redirect_uri});
 }
+
+export async function setConnectionEnabled(pool:Pool,id:string,enabled:boolean):Promise<boolean> {
+  const result=await pool.query('UPDATE netatmo_connections SET enabled=$2,updated_at=NOW() WHERE id=$1 RETURNING id',[id,enabled]);
+  return result.rowCount===1;
+}

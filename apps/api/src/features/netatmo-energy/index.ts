@@ -11,7 +11,7 @@ import { validateOAuthTokens } from './token.js';
 import { createOAuthState, consumeOAuthState, oauthInitiator } from './oauth-state.js';
 import { startNetatmoCollector } from './collector.js';
 import { completeNetatmoOAuth } from './oauth-complete.js';
-import { connectionSchema, createConnection, listConnections } from './connections.js';
+import { connectionSchema, createConnection, listConnections, setConnectionEnabled } from './connections.js';
 import { registerNetatmoMultiRoutes } from './multi-routes.js';
 import { startNetatmoMultiCollector } from './multi-collector.js';
 
@@ -24,6 +24,14 @@ export function registerNetatmoEnergyFeature(app: FastifyInstance, pool: Pool): 
   const multiCollector=startNetatmoMultiCollector(pool,app.log);
   app.get(`${base}/connections/collector/status`,async(request)=>{requireAdmin(request);return {connections:Object.fromEntries(multiCollector.statuses)};});
   app.get(`${base}/connections`, async (request) => { requireAdmin(request); return { connections: await listConnections(pool) }; });
+  app.patch(`${base}/connections/:id`,async(request,reply)=>{
+    requireAdmin(request);
+    const id=z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/).safeParse((request.params as {id?:unknown}).id);
+    const body=z.object({enabled:z.boolean()}).strict().safeParse(request.body);
+    if(!id.success||!body.success)return reply.code(400).send({error:'Invalid connection update'});
+    if(!await setConnectionEnabled(pool,id.data,body.data.enabled))return reply.code(404).send({error:'Connection not found'});
+    return {id:id.data,enabled:body.data.enabled};
+  });
   app.post(`${base}/connections`, async (request, reply) => {
     requireAdmin(request);
     const parsed = connectionSchema.safeParse(request.body);
