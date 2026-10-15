@@ -11,12 +11,21 @@ import { validateOAuthTokens } from './token.js';
 import { createOAuthState, consumeOAuthState, oauthInitiator } from './oauth-state.js';
 import { startNetatmoCollector } from './collector.js';
 import { completeNetatmoOAuth } from './oauth-complete.js';
+import { connectionSchema, createConnection, listConnections } from './connections.js';
 
 const codeSchema = z.object({ code: z.string().min(1).max(2048), state: z.string().min(1) }).strict();
 const tokenSchema = z.object({ accessToken: z.string().min(1).max(4096) }).strict();
 const base = '/api/v1/integrations/netatmo';
 export function registerNetatmoEnergyFeature(app: FastifyInstance, pool: Pool): void {
   const collector = startNetatmoCollector(pool, app.log);
+  app.get(`${base}/connections`, async (request) => { requireAdmin(request); return { connections: await listConnections(pool) }; });
+  app.post(`${base}/connections`, async (request, reply) => {
+    requireAdmin(request);
+    const parsed = connectionSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid Netatmo connection' });
+    try { await createConnection(pool, parsed.data); return reply.code(201).send({ id: parsed.data.id, displayName: parsed.data.displayName }); }
+    catch (error) { if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return reply.code(409).send({ error: 'Connection already exists' }); throw error; }
+  });
   app.addHook('onClose', async () => { collector.stop(); });
   app.get(`${base}/status`, async () => ({ configured: Boolean(netatmoConfig()), readOnly: true, mode: 'preview', collector: collector.status }));
   app.get(`${base}/authorize`, async (request, reply) => {
