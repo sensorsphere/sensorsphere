@@ -1,9 +1,10 @@
 import type { Pool } from 'pg';
 import type { Readings } from './telemetry.js';
-export async function ingestNetatmoReadings(pool: Pool, readings: Readings, connectionId?: string): Promise<{ assets: number; observations: number }> {
+export async function ingestNetatmoReadings(pool: Pool, readings: Readings, connectionId?: string): Promise<{ assets: number; observations: number; readings: {assetExternalId:string;metricKey:string;label:string;value:string|number|boolean;unit:string|null;timestamp:string}[] }> {
   const client = await pool.connect();
   let observations = 0;
   const assets = new Set<string>();
+  const reportReadings: {assetExternalId:string;metricKey:string;label:string;value:string|number|boolean;unit:string|null;timestamp:string}[] = [];
   const timestamp = new Date();
   const scoped = (value: string) => connectionId ? `${connectionId}:${value}` : value;
   try {
@@ -19,6 +20,7 @@ export async function ingestNetatmoReadings(pool: Pool, readings: Readings, conn
       const metric = await client.query<{ id: string }>(`INSERT INTO asset_metrics (asset_id,metric_key,display_name,unit,value_type) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (asset_id,metric_key) DO UPDATE SET display_name=EXCLUDED.display_name,unit=EXCLUDED.unit,value_type=EXCLUDED.value_type RETURNING id`, [assetId,key,label,unit,type]);
       await client.query('INSERT INTO observations (time,asset_metric_id,value_double,value_text,value_boolean,source,source_ref) VALUES ($1,$2,$3,$4,$5,$6,$7)', [timestamp,metric.rows[0]!.id,typeof value === 'number' ? value : null,typeof value === 'string' ? value : null,typeof value === 'boolean' ? value : null,connectionId ? `netatmo-energy:${connectionId}` : 'netatmo-energy',scoped(externalId)]);
       observations++;
+      reportReadings.push({assetExternalId:scoped(externalId),metricKey:key,label,value:value as string|number|boolean,unit,timestamp:timestamp.toISOString()});
     };
     for (const room of readings.rooms) {
       const id = room.moduleId ? `netatmo:module:${room.homeId}:${room.moduleId}` : `netatmo:room:${room.homeId}:${room.roomId}`;
@@ -43,6 +45,6 @@ export async function ingestNetatmoReadings(pool: Pool, readings: Readings, conn
       await record(id,`Netatmo module ${module.moduleId}`,'battery','Battery','%',module.batteryPercent,`${module.homeId}:${module.moduleId}`);
     }
     await client.query('COMMIT');
-    return { assets: assets.size, observations };
+    return { assets: assets.size, observations, readings: reportReadings };
   } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
 }

@@ -18,10 +18,11 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.76.4";
+export const MODULE_VERSION = "1.76.5";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.76.5": { releasedAt: "2026-10-16T10:30:00Z", patch: "NET-MULTI-9.patch", changes: [{type:"added",description:"Add detailed Netatmo collection reports, admin diagnostics and guarded legacy asset cleanup"}] },
   "1.76.4": { releasedAt: "2026-10-16T03:00:00Z", patch: "NET-MULTI-5.patch", changes: [{type:"changed",description:"Distinguish Netatmo connection device names in Registry discovery"}] },
   "1.76.3": { releasedAt: "2026-10-15T16:00:00Z", patch: "NET-MULTI-4.patch", changes: [{type:"added",description:"Edit Netatmo connections, report discovery results and track OAuth authorization status"}] },
   "1.76.2": { releasedAt: "2026-10-15T14:20:00Z", patch: "NET-MULTI-3.patch", changes: [{type:"fixed",description:"Compute Netatmo multi-connection OAuth callback from public URL and return actionable validation errors"}] },
