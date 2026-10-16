@@ -975,8 +975,8 @@ function graphVersionSummary(
       ? `Metric: ${graph.metricKey || "—"}`
       : `Metrics: ${selectionCount}`,
     mode === "metric_sensors"
-      ? `Sensors: ${selectionCount}`
-      : `Sensor: ${graph.assetId ? "selected" : "—"}`,
+      ? `Assets: ${selectionCount}`
+      : `Asset: ${graph.assetId ? "selected" : "—"}`,
     `Period: ${graph.hours} h`,
     `Curve: ${graph.curveStyle ?? "smooth"}`,
     smoothing.method === "none"
@@ -2353,7 +2353,7 @@ function HistoryGraph({
                       }}
                     >
                       <Select
-                        label="Sensor"
+                        label="Asset"
                         searchable
                         placeholder="Select an asset"
                         value={
@@ -2525,7 +2525,7 @@ function HistoryGraph({
                       />
 
                       <MultiSelect
-                        label="Sensors"
+                        label="Assets"
                         searchable
                         clearable
                         placeholder={
@@ -2976,7 +2976,7 @@ function HistoryGraph({
                                 seriesTargets.length >=
                                   10 && (
                                   <Alert color="yellow">
-                                    {seriesTargets.length} sensors selected — graph readability may decrease.
+                                    {seriesTargets.length} assets selected — graph readability may decrease.
                                   </Alert>
                                 )
                               }
