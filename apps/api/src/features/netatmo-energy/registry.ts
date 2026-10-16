@@ -10,6 +10,7 @@ export async function importNetatmoDiscovery(pool: Pool, discovery: Discovery, c
     await client.query("SELECT pg_advisory_xact_lock(hashtext('sensorsphere:netatmo:registry'))");
     for (const item of discovery.devices) {
       const d = item.device;
+      const displayName = connectionId ? `${d.name} - Netatmo ${connectionId.toUpperCase()}` : d.name;
       const originalIdentity = d.identities[0];
       const identity = originalIdentity && connectionId ? { ...originalIdentity, value: `${connectionId}:${originalIdentity.value}` } : originalIdentity;
       if (!identity || identity.identityType !== 'NETATMO_MODULE_ID') throw new Error('Missing Netatmo identity');
@@ -19,16 +20,16 @@ export async function importNetatmoDiscovery(pool: Pool, discovery: Discovery, c
       let id = existing.rows[0]?.id;
       const action = id ? "updated" : "created";
       if (id) {
-        await client.query('UPDATE device_registry_devices SET name=$2, manufacturer=$3, model=$4, description=$5, last_seen_at=NOW(), updated_at=NOW() WHERE id=$1', [id, d.name, d.manufacturer, d.model, d.description]);
+        await client.query('UPDATE device_registry_devices SET name=$2, manufacturer=$3, model=$4, description=$5, last_seen_at=NOW(), updated_at=NOW() WHERE id=$1', [id, displayName, d.manufacturer, d.model, d.description]);
         updated++;
       } else {
-        const result = await client.query<{ id: string }>('INSERT INTO device_registry_devices (name,device_class,device_type,technology,manufacturer,model,description,last_seen_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW()) RETURNING id', [d.name,d.deviceClass,d.deviceType,d.technology,d.manufacturer,d.model,d.description]);
+        const result = await client.query<{ id: string }>('INSERT INTO device_registry_devices (name,device_class,device_type,technology,manufacturer,model,description,last_seen_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW()) RETURNING id', [displayName,d.deviceClass,d.deviceType,d.technology,d.manufacturer,d.model,d.description]);
         id = result.rows[0]!.id;
         await client.query('INSERT INTO device_registry_identities (device_id,identity_type,value,normalized_value,source,is_primary,sort_order) VALUES ($1,$2,$3,$3,$4,TRUE,0)', [id,identity.identityType,identity.value,identity.source]);
         created++;
       }
       ids.set(item.clientKey,id!);
-      devices.push({ id: id!, name: d.name, deviceType: d.deviceType, deviceClass: d.deviceClass, action });
+      devices.push({ id: id!, name: displayName, deviceType: d.deviceType, deviceClass: d.deviceClass, action });
     }
     for (const item of discovery.devices) {
       const parentId = item.parentClientKey ? ids.get(item.parentClientKey) : undefined;

@@ -5723,7 +5723,7 @@ function Dashboard() {
               )
             }
 
-            {authContextQuery.data?.isAdmin && activePage === "netatmo-connections" && <NetatmoConnectionsPanel />}
+            {authContextQuery.data?.isAdmin && activePage === "netatmo-connections" && <NetatmoConnectionsPanel onOpenDevice={deviceId=>{setDeviceRegistryOpenId(deviceId);navigateTo("devices");}} onOpenInventory={()=>navigateTo("inventory")} onOpenHistory={()=>navigateTo("history")} />}
 
             {
               authContextQuery.data?.isAdmin &&
