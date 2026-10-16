@@ -1183,10 +1183,6 @@ function HistoryGraph({
     new Map<string, HistoryMetric>();
 
   assets
-    .filter(
-      current =>
-        current.sensor !== null
-    )
     .forEach(current => {
       current.metrics
         .filter(metric => metric.enabled)
@@ -1235,7 +1231,6 @@ function HistoryGraph({
       ? assets
           .filter(
             current =>
-              current.sensor !== null &&
               current.metrics.some(
                 metric =>
                   metric.enabled &&
@@ -1604,12 +1599,12 @@ function HistoryGraph({
                     metric.displayName
                 )
                 .join(" · ")
-            : "Select a sensor and one or more metrics"
+            : "Select an asset and one or more metrics"
         )
       : (
           seriesTargets.length > 0
             ? null
-            : "Select a metric and one or more sensors"
+            : "Select a metric and one or more assets"
         );
 
   const graphSelectionSummary =
@@ -2061,11 +2056,11 @@ function HistoryGraph({
                 }
                 data={[
                   {
-                    label: "Sensor → Metrics",
+                    label: "Asset → Metrics",
                     value: "sensor_metrics"
                   },
                   {
-                    label: "Metric → Sensors",
+                    label: "Metric → Assets",
                     value: "metric_sensors"
                   }
                 ]}
@@ -2360,7 +2355,7 @@ function HistoryGraph({
                       <Select
                         label="Sensor"
                         searchable
-                        placeholder="Select a sensor"
+                        placeholder="Select an asset"
                         value={
                           workingGraph.assetId || null
                         }
@@ -2411,7 +2406,7 @@ function HistoryGraph({
                         placeholder={
                           asset
                             ? "Select metrics"
-                            : "Select a sensor first"
+                            : "Select an asset first"
                         }
                         disabled={!asset}
                         value={
@@ -2489,7 +2484,6 @@ function HistoryGraph({
                                   assets.some(
                                     current =>
                                       current.id === assetId &&
-                                      current.sensor !== null &&
                                       current.metrics.some(
                                         metric =>
                                           metric.enabled &&
@@ -2503,7 +2497,7 @@ function HistoryGraph({
 
                             setSelectionNotice(
                               removed > 0
-                                ? `${removed} sensor${removed === 1 ? "" : "s"} removed because ${removed === 1 ? "it does" : "they do"} not expose ${nextMetricKey || "the selected metric"}.`
+                                ? `${removed} asset${removed === 1 ? "" : "s"} removed because ${removed === 1 ? "it does" : "they do"} not expose ${nextMetricKey || "the selected metric"}.`
                                 : null
                             );
 
@@ -2536,7 +2530,7 @@ function HistoryGraph({
                         clearable
                         placeholder={
                           selectedMetricKey
-                            ? "Select sensors"
+                            ? "Select assets"
                             : "Select a metric first"
                         }
                         disabled={
@@ -2909,7 +2903,7 @@ function HistoryGraph({
                     !asset
                       ? (
                         <Alert color="blue">
-                          Select a sensor to configure this graph.
+                          Select an asset to configure this graph.
                         </Alert>
                       )
                       : selectedMetrics.length === 0
@@ -2954,13 +2948,13 @@ function HistoryGraph({
                   : comparisonNeedsMetric
                     ? (
                       <Alert color="blue">
-                        Select a metric to compare sensors.
+                        Select a metric to compare assets.
                       </Alert>
                     )
                     : comparisonNeedsSensors
                       ? (
                         <Alert color="blue">
-                          Select at least one sensor.
+                          Select at least one asset.
                         </Alert>
                       )
                       : error

@@ -18,10 +18,11 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.122.4";
+export const MODULE_VERSION = "1.122.5";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.122.5": { releasedAt: "2026-10-16T04:30:00Z", patch: "NET-MULTI-7.patch", changes: [{type:"fixed",description:"Fix Netatmo Collect report callback and include asset-only thermostats in both History graph modes"}] },
   "1.122.4": { releasedAt: "2026-10-16T04:00:00Z", patch: "NET-MULTI-6.patch", changes: [{type:"fixed",description:"Show Netatmo assets in History, hide unavailable humidity series and filter Assets from collection reports"}] },
   "1.122.3": { releasedAt: "2026-10-16T03:00:00Z", patch: "NET-MULTI-5.patch", changes: [{type:"changed",description:"Link Netatmo discovery devices to Registry and collection reports to Inventory and History"}] },
   "1.122.2": { releasedAt: "2026-10-15T16:00:00Z", patch: "NET-MULTI-4.patch", changes: [{type:"added",description:"Add Netatmo connection editing, form reset and detailed discovery/collection reports"}] },
