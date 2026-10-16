@@ -5635,7 +5635,7 @@ function Dashboard() {
                   onCloseTemplateLaunch={() => {
                     setHistoryTemplateLaunch(null);
                     setTemplateHistoryActive(false);
-                    navigateTo("dashboards");
+                    navigateTo(historyTemplateLaunch.templateId.startsWith("netatmo-") ? "netatmo-connections" : "dashboards");
                   }}
                   onTemplateViewSaved={() => {
                     setHistoryTemplateLaunch(null);

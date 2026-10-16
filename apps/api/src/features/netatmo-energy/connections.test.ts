@@ -16,7 +16,7 @@ test('connections isolate encrypted secrets and never expose them in listing',as
       rows.set(values[0],{id:values[0],display_name:values[1],base_url:values[2],client_id:values[3],encrypted_client_secret:values[4],redirect_uri:values[5],enabled:values[6]});return {rows:[]};
     }
     if(sql.startsWith('SELECT base_url')){const row=rows.get(values[0]);return {rows:row?.enabled?[row]:[]};}
-    if(sql.startsWith('SELECT id,display_name'))return {rows:[...rows.values()].map(({encrypted_client_secret,...safe})=>safe)};
+    if(sql.startsWith('SELECT c.id,c.display_name'))return {rows:[...rows.values()].map(({encrypted_client_secret,...safe})=>({...safe,oauth_status:'not_authorized',oauth_last_error:null,oauth_last_error_at:null}))};
     throw new Error('Unexpected query');
   }} as unknown as Pool;
   try{

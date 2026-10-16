@@ -6,7 +6,7 @@ import { registerNetatmoEnergyFeature } from './index.js';
 const paths = ['/api/v1/integrations/netatmo/discovery/import', '/api/v1/integrations/netatmo/telemetry/ingest', '/api/v1/integrations/netatmo/token', '/api/v1/integrations/netatmo/telemetry/collect'];
 
 test('Netatmo writes use shared admin authorization, including DEV role switch', async () => {
-  const saved = Object.fromEntries(['SENSORSPHERE_ENVIRONMENT', 'SENSORSPHERE_AUTH_ENABLED', 'SENSORSPHERE_AUTH_DEV_ROLE_SWITCH_ENABLED', 'SENSORSPHERE_AUTH_DEV_DEFAULT_ROLE', 'SENSORSPHERE_NETATMO_BASE_URL'].map(key => [key, process.env[key]]));
+  const saved = Object.fromEntries(['SENSORSPHERE_ENVIRONMENT', 'SENSORSPHERE_AUTH_ENABLED', 'SENSORSPHERE_AUTH_DEV_ROLE_SWITCH_ENABLED', 'SENSORSPHERE_AUTH_DEV_DEFAULT_ROLE', 'SENSORSPHERE_NETATMO_BASE_URL', 'SENSORSPHERE_NETATMO_CLIENT_ID', 'SENSORSPHERE_NETATMO_CLIENT_SECRET', 'SENSORSPHERE_NETATMO_REDIRECT_URI', 'SENSORSPHERE_NETATMO_TOKEN_ENCRYPTION_KEY'].map(key => [key, process.env[key]]));
   const app = Fastify();
   try {
     process.env.SENSORSPHERE_ENVIRONMENT = 'DEV';
@@ -14,6 +14,10 @@ test('Netatmo writes use shared admin authorization, including DEV role switch',
     process.env.SENSORSPHERE_AUTH_DEV_ROLE_SWITCH_ENABLED = 'true';
     process.env.SENSORSPHERE_AUTH_DEV_DEFAULT_ROLE = 'user';
     process.env.SENSORSPHERE_NETATMO_BASE_URL = 'http://127.0.0.1:8091';
+    delete process.env.SENSORSPHERE_NETATMO_CLIENT_ID;
+    delete process.env.SENSORSPHERE_NETATMO_CLIENT_SECRET;
+    delete process.env.SENSORSPHERE_NETATMO_REDIRECT_URI;
+    delete process.env.SENSORSPHERE_NETATMO_TOKEN_ENCRYPTION_KEY;
     registerNetatmoEnergyFeature(app, {} as never);
     await app.ready();
     for (const url of paths) {

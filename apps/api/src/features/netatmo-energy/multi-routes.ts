@@ -49,14 +49,14 @@ export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
     const credential=await pool.query("SELECT EXISTS(SELECT 1 FROM netatmo_oauth_credentials WHERE integration_id=$1) AS stored",[credentialId(id)]);
     const data=await pool.query("SELECT count(DISTINCT a.id)::int AS assets,count(o.time)::int AS observations,max(o.time) AS last_collection FROM assets a LEFT JOIN asset_metrics m ON m.asset_id=a.id LEFT JOIN observations o ON o.asset_metric_id=m.id AND o.source=$1 WHERE a.external_id LIKE $2",[credentialId(id),id+':%']);
     const devices=await pool.query("SELECT count(DISTINCT d.id)::int AS devices,max(d.updated_at) AS last_discovery_update FROM device_registry_devices d JOIN device_registry_identities i ON i.device_id=d.id WHERE i.identity_type='NETATMO_MODULE_ID' AND i.value LIKE $1",[id+':%']);
-    return {connectionId:id,registered:true,enabled:statusRow.rows[0]?.enabled===true,oauthStatus:credential.rows[0]?.stored?'authorized':statusRow.rows[0]?.oauth_last_error?'authorization_failed':'not_authorized',oauthCredentialsStored:Boolean(credential.rows[0]?.stored),assets:data.rows[0]?.assets??0,observations:data.rows[0]?.observations??0,lastCollection:data.rows[0]?.last_collection??null,devices:devices.rows[0]?.devices??0,lastDiscoveryUpdate:devices.rows[0]?.last_discovery_update??null};
+    return {connectionId:id,registered:true,enabled:statusRow.rows[0]?.enabled===true,oauthStatus:credential.rows[0]?.stored?'authorized':statusRow.rows[0]?.oauth_last_error?'authorization_failed':'not_authorized',oauthCredentialsStored:Boolean(credential.rows[0]?.stored),lastOAuthError:statusRow.rows[0]?.oauth_last_error??null,assets:data.rows[0]?.assets??0,observations:data.rows[0]?.observations??0,lastCollection:data.rows[0]?.last_collection??null,devices:devices.rows[0]?.devices??0,lastRegistryUpdate:devices.rows[0]?.last_discovery_update??null};
   });
   const legacyAsset=z.object({id:z.string().uuid()});
   const legacyPreview=async(id:string)=>{
     const row=await pool.query("SELECT id,external_id FROM assets WHERE id=$1 AND external_id LIKE 'netatmo:%' AND external_id NOT LIKE 'sim-%'",[id]);
     if(!row.rows[0])return null;
     const stats=await pool.query("SELECT count(DISTINCT m.id)::int AS metrics,count(o.time)::int AS observations FROM asset_metrics m LEFT JOIN observations o ON o.asset_metric_id=m.id WHERE m.asset_id=$1",[id]);
-    const refs=await pool.query("SELECT (SELECT count(*)::int FROM device_registry_links WHERE target_type='asset' AND target_id=$1) AS device_links,(SELECT count(*)::int FROM simple_dashboard_cards c JOIN asset_metrics m ON m.id=c.asset_metric_id WHERE m.asset_id=$1) AS dashboard_cards,(SELECT count(*)::int FROM alert_rules WHERE asset_id=$1) AS alert_rules",[id]);
+    const refs=await pool.query("SELECT (SELECT count(*)::int FROM device_registry_links WHERE target_type='asset' AND target_id=$1) AS device_links,(SELECT count(*)::int FROM simple_dashboard_cards c JOIN asset_metrics m ON m.id=c.asset_metric_id WHERE m.asset_id=$1) AS dashboard_cards,(SELECT count(*)::int FROM simple_dashboard_template_cards WHERE asset_id=$1) AS template_cards,(SELECT count(*)::int FROM alert_rules r WHERE r.asset_id=$1 OR r.asset_metric_id IN (SELECT id FROM asset_metrics WHERE asset_id=$1)) AS alert_rules,(SELECT count(*)::int FROM alert_events e WHERE e.asset_id=$1 OR e.asset_metric_id IN (SELECT id FROM asset_metrics WHERE asset_id=$1)) AS alert_events,(SELECT count(*)::int FROM asset_tags WHERE asset_id=$1) AS tags",[id]);
     return {id,externalId:row.rows[0].external_id,metrics:stats.rows[0]?.metrics??0,observations:stats.rows[0]?.observations??0,dependencies:refs.rows[0]};
   };
   app.get(base+'/legacy-assets',async(request)=>{requireAdmin(request);const rows=await pool.query("SELECT id FROM assets WHERE external_id LIKE 'netatmo:%' AND external_id NOT LIKE 'sim-%' ORDER BY external_id");return {assets:await Promise.all(rows.rows.map(r=>legacyPreview(r.id)))};});
@@ -64,7 +64,7 @@ export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
     requireAdmin(request);const parsed=legacyAsset.safeParse(request.params);if(!parsed.success)return reply.code(400).send({error:'Invalid asset ID'});
     const id=parsed.data.id,preview=await legacyPreview(id);if(!preview)return reply.code(404).send({error:'Legacy Netatmo asset not found'});
     const confirm=z.object({confirmExternalId:z.string()}).safeParse(request.body);if(!confirm.success||confirm.data.confirmExternalId!==preview.externalId)return reply.code(400).send({error:'Exact asset ID confirmation required'});
-    if(preview.dependencies.device_links||preview.dependencies.alert_rules||preview.dependencies.dashboard_cards)return reply.code(409).send({error:'Asset still referenced; unlink dependencies before deletion',preview});
+    if(Object.values(preview.dependencies).some(value=>Number(value)>0))return reply.code(409).send({error:'Asset still referenced; unlink dependencies before deletion',preview});
     const client=await pool.connect();try{await client.query('BEGIN');const deleted=await client.query("DELETE FROM assets WHERE id=$1 AND external_id=$2 RETURNING id",[id,preview.externalId]);if(deleted.rowCount!==1){await client.query('ROLLBACK');return reply.code(409).send({error:'Asset changed; retry preview'});}await client.query('COMMIT');return {deleted:true,preview};}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
   });
   for(const operation of ['telemetry/collect','discovery/import'] as const){
@@ -77,8 +77,25 @@ export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
       const token=await getNetatmoAccessToken(pool,config,netatmoEncryptionKey(),credentialId(parsed.data.id));
       if(!token)return reply.code(409).send({error:'Authorization required'});
       try {
-        if(operation==='telemetry/collect')return await ingestNetatmoReadings(pool,await readTelemetry(config,token),parsed.data.id);
-        return await importNetatmoDiscovery(pool,await discover(config,token),parsed.data.id);
+        const notifySimulator=async(data:Record<string,string|number>)=>{
+          // Simulator diagnostics are not part of the real Netatmo API contract.
+          if(!parsed.data.id.startsWith('sim-'))return;
+          try{
+            const response=await fetch(new URL('/api/integration-report',config.baseUrl),{
+              method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},
+              body:JSON.stringify({connectionId:parsed.data.id,...data}),redirect:'error',signal:AbortSignal.timeout(2500)
+            });
+            if(!response.ok)request.log.warn({status:response.status},'Netatmo simulator diagnostic report rejected');
+          }catch{request.log.warn('Netatmo simulator diagnostic report unavailable');}
+        };
+        if(operation==='telemetry/collect'){
+          const result=await ingestNetatmoReadings(pool,await readTelemetry(config,token),parsed.data.id);
+          await notifySimulator({operation:'collection',assets:result.assets,observations:result.observations});
+          return result;
+        }
+        const result=await importNetatmoDiscovery(pool,await discover(config,token),parsed.data.id);
+        await notifySimulator({operation:'discovery',devices:result.devices.length});
+        return result;
       }catch{return reply.code(502).send({error:'Netatmo operation failed'});}
     });
   }

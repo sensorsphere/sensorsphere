@@ -16,7 +16,13 @@ function fakePool(failOn?: string) {
 const readings = { rooms: [{ homeId: 'h', roomId: 'r', moduleId: 'm', measuredTemperature: 20.5, setpointTemperature: null, setpointMode: 'schedule' }], modules: [{ homeId: 'h', moduleId: 'm', heating: true, reachable: false, batteryPercent: 30 }] };
 test('ingestion writes typed samples atomically and skips missing values', async () => {
   const db = fakePool();
-  assert.deepEqual(await ingestNetatmoReadings(db.pool, readings), { assets: 1, observations: 5 });
+  const result = await ingestNetatmoReadings(db.pool, readings);
+  assert.equal(result.assets, 1);
+  assert.equal(result.observations, 5);
+  assert.equal(result.readings.length, 5);
+  assert.ok(result.readings.every(item => item.assetExternalId === 'netatmo:module:h:m'));
+  assert.ok(result.readings.every(item => !Number.isNaN(Date.parse(item.timestamp))));
+  assert.ok(result.readings.some(item => item.metricKey === 'temperature' && item.value === 20.5 && item.unit === '°C'));
   assert.equal(db.calls[0]?.sql, 'BEGIN');
   assert.equal(db.calls.at(-1)?.sql, 'COMMIT');
   const samples = db.calls.filter(c => c.sql.startsWith('INSERT INTO observations'));
