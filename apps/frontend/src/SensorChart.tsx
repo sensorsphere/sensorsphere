@@ -118,7 +118,7 @@ export function SensorChart({
     legend: {
       data: [
         "Temperature",
-        "Humidity"
+        ...(humidityData.length ? ["Humidity"] : [])
       ],
       textStyle: {
         color: dark ? "#c9cdd2" : "#495057"
@@ -171,7 +171,7 @@ export function SensorChart({
           temperatureData
       },
 
-      {
+      ...(humidityData.length ? [{
         name: "Humidity",
         type: "line",
         smooth: true,
@@ -179,7 +179,7 @@ export function SensorChart({
         yAxisIndex: 1,
         data:
           humidityData
-      }
+      }] : [])
     ]
   };
 

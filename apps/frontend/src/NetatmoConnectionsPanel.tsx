@@ -9,7 +9,7 @@ async function api(path:string, init?:RequestInit):Promise<any> {
   if(!response.ok){const details=Array.isArray(body.details)?body.details.map((d:{field:string;message:string})=>`${d.field}: ${d.message}`).join('; '):'';throw new Error((body.error||`HTTP ${response.status}`)+(details?' — '+details:''));}
   return body;
 }
-export function NetatmoConnectionsPanel({onOpenDevice,onOpenHistory,onOpenInventory}:{onOpenDevice?:(id:string)=>void;onOpenHistory?:()=>void;onOpenInventory?:()=>void}={}){
+export function NetatmoConnectionsPanel({onOpenDevice,onOpenHistory,onOpenAssets}:{onOpenDevice?:(id:string)=>void;onOpenHistory?:()=>void;onOpenAssets?:(connectionId:string)=>void}={}){
   const [connections,setConnections]=React.useState<Connection[]>([]);
   const [error,setError]=React.useState("");
   const [message,setMessage]=React.useState("");

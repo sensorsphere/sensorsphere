@@ -2366,10 +2366,6 @@ function HistoryGraph({
                         }
                         data={
                           assets
-                            .filter(
-                              current =>
-                                current.sensor !== null
-                            )
                             .map(current => ({
                               value:
                                 current.id,

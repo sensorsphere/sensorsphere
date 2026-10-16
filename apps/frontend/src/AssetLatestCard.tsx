@@ -1259,8 +1259,7 @@ export function AssetLatestCard({
                       ?? []
                     }
                     humidity={
-                      humidityHistoryQuery.data
-                      ?? []
+                      humidityMetric ? (humidityHistoryQuery.data ?? []) : []
                     }
                     temperatureAggregates={
                       temperatureAggregateQuery.data
