@@ -3816,7 +3816,7 @@ export function HistoryPanel({
         const firstAsset =
           assetsQuery.data!.find(
             asset =>
-              asset.sensor !== null
+              asset.metrics.some(metric => metric.enabled && (metric.key === "temperature" || metric.key === "humidity"))
           );
 
         const firstMetrics =
