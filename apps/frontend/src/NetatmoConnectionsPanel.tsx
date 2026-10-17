@@ -3,7 +3,7 @@ import { Alert, Badge, Button, Card, Group, PasswordInput, Stack, Table, Text, T
 
 type Reading={assetExternalId:string;metricKey:string;label:string;value:string|number|boolean;unit:string|null;timestamp:string};
 type LegacyAsset={id:string;externalId:string;metrics:number;observations:number;dependencies:{device_links:number;dashboard_cards:number;template_cards:number;alert_rules:number;alert_events:number;tags:number}};
-type Connection={id:string;display_name:string;base_url:string;client_id:string;redirect_uri:string;enabled:boolean;oauth_status:string;oauth_last_error:string|null;oauth_last_error_at:string|null};
+type Connection={id:string;display_name:string;base_url:string;client_id:string;redirect_uri:string;enabled:boolean;collect_interval_seconds:number;collect_last_attempt_at:string|null;collect_last_success_at:string|null;collect_next_at:string|null;collect_last_error:string|null;collect_last_observations:number|null;oauth_status:string;oauth_last_error:string|null;oauth_last_error_at:string|null};
 const root="/api/v1/integrations/netatmo/connections";
 async function api(path:string, init?:RequestInit):Promise<any> {
   const response=await fetch(root+path,{credentials:"same-origin",...init});
@@ -17,6 +17,7 @@ export function NetatmoConnectionsPanel({onOpenDevice,onOpenHistory,onOpenAssets
   const [message,setMessage]=React.useState("");
   const [busy,setBusy]=React.useState(false);
   const [report,setReport]=React.useState<{operation:"discovery"|"collection";connectionId:string;created?:number;updated?:number;assets?:number;observations?:number;devices?:{id:string;name:string;deviceType:string;deviceClass:string;action:string}[];readings?:Reading[];at:string}|null>(null);
+  const [scheduleDraft,setScheduleDraft]=React.useState<Record<string,string>>({});
   const [diagnostics,setDiagnostics]=React.useState<Record<string,any>>({});
   const [legacyAssets,setLegacyAssets]=React.useState<LegacyAsset[]>([]);
   const [deleteConfirm,setDeleteConfirm]=React.useState<Record<string,string>>({});
@@ -31,6 +32,7 @@ export function NetatmoConnectionsPanel({onOpenDevice,onOpenHistory,onOpenAssets
   const [redirectUri,setRedirectUri]=React.useState("");
   const refresh=React.useCallback(async()=>{try{const result=await api("");setConnections(result.connections);setError("");}catch(e){setError(String(e));}},[]);
   React.useEffect(()=>{void refresh();void api("/redirect-uri").then(result=>setRedirectUri(result.redirectUri)).catch(e=>setError(String(e)));},[refresh]);
+  React.useEffect(()=>{const timer=window.setInterval(()=>{void refresh();},30000);return ()=>window.clearInterval(timer);},[refresh]);
   async function action(label:string,task:()=>Promise<void>){
     setBusy(true);setError("");setMessage("");
     try{await task();setMessage(current=>current||label);await refresh();}catch(e){setError(e instanceof Error?e.message:String(e));}
@@ -42,8 +44,11 @@ export function NetatmoConnectionsPanel({onOpenDevice,onOpenHistory,onOpenAssets
     {error&&<Alert color="red">{error}</Alert>}
     {message&&<Alert color="green">{message}</Alert>}
     <Card withBorder><Stack gap="sm"><Title order={4}>Configured connections</Title>
-      <Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Endpoint</Table.Th><Table.Th>State</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead>
-      <Table.Tbody>{connections.map(c=><Table.Tr key={c.id}><Table.Td><Text fw={600}>{c.display_name}</Text><Text size="xs" c="dimmed">{c.id}</Text></Table.Td><Table.Td>{c.base_url}</Table.Td><Table.Td><Badge color={c.enabled?"green":"gray"}>{c.enabled?"Enabled":"Disabled"}</Badge><Text size="xs" mt="xs" c={c.oauth_status==="authorized"?"green":c.oauth_status==="authorization_failed"?"red":"orange"}>{c.oauth_status==="authorized"?"Authorized":c.oauth_status==="authorization_failed"?"Authorization failed":"Not authorized"}</Text>{c.oauth_last_error&&<Text size="xs" c="red">{c.oauth_last_error}</Text>}</Table.Td><Table.Td><Group gap="xs">
+      <Table striped highlightOnHover><Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Endpoint</Table.Th><Table.Th>State</Table.Th><Table.Th>Automatic collection</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead>
+      <Table.Tbody>{connections.map(c=><Table.Tr key={c.id}><Table.Td><Text fw={600}>{c.display_name}</Text><Text size="xs" c="dimmed">{c.id}</Text></Table.Td><Table.Td>{c.base_url}</Table.Td><Table.Td><Badge color={c.enabled?"green":"gray"}>{c.enabled?"Enabled":"Disabled"}</Badge><Text size="xs" mt="xs" c={c.oauth_status==="authorized"?"green":c.oauth_status==="authorization_failed"?"red":"orange"}>{c.oauth_status==="authorized"?"Authorized":c.oauth_status==="authorization_failed"?"Authorization failed":"Not authorized"}</Text>{c.oauth_last_error&&<Text size="xs" c="red">{c.oauth_last_error}</Text>}</Table.Td><Table.Td><Stack gap={3}><Text size="xs">Last success: {c.collect_last_success_at?new Date(c.collect_last_success_at).toLocaleString():"Never"}</Text><Text size="xs" c="dimmed">Next: {c.enabled&&c.collect_interval_seconds>0&&c.collect_next_at?new Date(c.collect_next_at).toLocaleString():"Disabled"}</Text><Text size="xs" c="dimmed">Last attempt: {c.collect_last_attempt_at?new Date(c.collect_last_attempt_at).toLocaleString():"Never"}</Text>{c.collect_last_error&&<Text size="xs" c="red">Error: {c.collect_last_error}</Text>}</Stack></Table.Td><Table.Td><Group gap="xs">
+        <select aria-label={`Collection interval for ${c.display_name}`} title="Automatic collection interval" value={scheduleDraft[c.id]??String(c.collect_interval_seconds??300)} disabled={busy} onChange={event=>setScheduleDraft(previous=>({...previous,[c.id]:event.currentTarget.value}))} style={{width:125,padding:5,background:"#1c2a3e",color:"inherit",borderRadius:5}}>
+          <option value="0">Auto: off</option><option value="60">Every 1 min</option><option value="300">Every 5 min</option><option value="600">Every 10 min</option><option value="900">Every 15 min</option><option value="1800">Every 30 min</option><option value="3600">Every 1 h</option>
+        </select><Button size="xs" variant="subtle" disabled={busy||!Object.prototype.hasOwnProperty.call(scheduleDraft,c.id)} onClick={()=>void action("Collection schedule saved",async()=>{await api(`/${encodeURIComponent(c.id)}/collection-schedule`,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({intervalSeconds:Number(scheduleDraft[c.id])})});setScheduleDraft(previous=>{const next={...previous};delete next[c.id];return next;});})}>Save interval</Button>
         <Button size="xs" variant="light" disabled={busy} onClick={()=>beginEdit(c)}>Edit</Button>
         <Button size="xs" variant="subtle" color={c.enabled?"orange":"green"} disabled={busy} onClick={()=>void action("Connection state updated",async()=>{await api(`/${encodeURIComponent(c.id)}`,{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({enabled:!c.enabled})});})}>{c.enabled?"Disable":"Enable"}</Button>
         <Button size="xs" disabled={busy||!c.enabled} onClick={()=>void action("OAuth authorization opened",async()=>{const data=await api(`/${encodeURIComponent(c.id)}/authorize`);const popup=window.open("about:blank","_blank");if(popup){popup.opener=null;popup.location.replace(data.authorizationUrl);}else{setMessage("Allow pop-ups for SensorSphere, then retry authorization");}})}>Authorize</Button>

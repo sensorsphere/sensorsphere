@@ -18,10 +18,12 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.122.10";
+export const MODULE_VERSION = "1.122.12";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.122.12": { releasedAt: "2026-10-17T18:50:00Z", patch: "NET-SCHEDULER-UI.patch", changes: [{type:"changed",description:"Automatically refresh per-connection collection execution status every 30 seconds"}] },
+  "1.122.11": { releasedAt: "2026-10-17T18:40:00Z", patch: "NET-SCHEDULER.patch", changes: [{type:"added",description:"Netatmo collection interval and scheduler status in Administration"}] },
   "1.122.10": { releasedAt: "2026-10-16T12:30:00Z", patch: "NET-MULTI-13.patch", changes: [{type:"security",description:"Show all legacy asset cleanup dependencies and enforce reference checks in UI"}] },
   "1.122.9": { releasedAt: "2026-10-16T12:00:00Z", patch: "NET-MULTI-12.patch", changes: [{type:"fixed",description:"Clarify Netatmo OAuth and registry diagnostics and restore navigation after metric history"}] },
   "1.122.8": { releasedAt: "2026-10-16T11:00:00Z", patch: "NET-MULTI-10.patch", changes: [{type:"added",description:"Open collected Netatmo metrics in configured History graphs"}] },

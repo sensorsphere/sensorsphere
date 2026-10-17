@@ -90,6 +90,7 @@ export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
         };
         if(operation==='telemetry/collect'){
           const result=await ingestNetatmoReadings(pool,await readTelemetry(config,token),parsed.data.id);
+          await pool.query("UPDATE netatmo_connections SET collect_last_attempt_at=NOW(),collect_last_success_at=NOW(),collect_last_error=NULL,collect_last_observations=$2,collect_next_at=CASE WHEN collect_interval_seconds=0 THEN NULL ELSE NOW()+(collect_interval_seconds::text||' seconds')::interval END WHERE id=$1",[parsed.data.id,result.observations]);
           await notifySimulator({operation:'collection',assets:result.assets,observations:result.observations});
           return result;
         }

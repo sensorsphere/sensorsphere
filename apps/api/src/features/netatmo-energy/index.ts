@@ -23,6 +23,7 @@ export function registerNetatmoEnergyFeature(app: FastifyInstance, pool: Pool): 
   registerNetatmoMultiRoutes(app,pool);
   const multiCollector=startNetatmoMultiCollector(pool,app.log);
   app.get(`${base}/connections/collector/status`,async(request)=>{requireAdmin(request);return {connections:Object.fromEntries(multiCollector.statuses)};});
+  app.patch(`${base}/connections/:id/collection-schedule`,async(request,reply)=>{requireAdmin(request);const id=z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/).safeParse((request.params as {id?:unknown}).id);const data=z.object({intervalSeconds:z.number().int().refine(v=>v===0||(v>=60&&v<=86400))}).strict().safeParse(request.body);if(!id.success||!data.success)return reply.code(400).send({error:'Interval must be 0 (off) or 60..86400 seconds'});const result=await pool.query("UPDATE netatmo_connections SET collect_interval_seconds=$2,collect_next_at=CASE WHEN $2=0 THEN NULL ELSE NOW()+($2::text||' seconds')::interval END,updated_at=NOW() WHERE id=$1 RETURNING id,collect_interval_seconds,collect_next_at",[id.data,data.data.intervalSeconds]);if(!result.rows[0])return reply.code(404).send({error:'Connection not found'});return result.rows[0];});
   app.get(`${base}/connections/redirect-uri`, async (request) => { requireAdmin(request); return {redirectUri:netatmoConnectionRedirectUri()}; });
   app.get(`${base}/connections`, async (request) => { requireAdmin(request); return { connections: await listConnections(pool) }; });
   app.patch(`${base}/connections/:id`,async(request,reply)=>{
