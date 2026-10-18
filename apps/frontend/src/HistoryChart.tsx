@@ -82,22 +82,20 @@ function formatTooltipValue(
   return String(candidate ?? "");
 }
 
-function rawSeries(
-  observations: ObservationHistoryPoint[]
-) {
-  return observations
-    .filter(
-      observation =>
-        typeof observation.value === "number"
-    )
-    .map(
-      observation => [
-        observation.time,
-        observation.value
-      ]
-    );
+const MODE_VALUES:Record<string,number>={schedule:0,manual:1,away:2,hg:3};
+function discreteValue(value:ObservationHistoryPoint['value']):number|null {
+ if(typeof value==='number'&&Number.isFinite(value))return value;
+ if(typeof value==='boolean')return value?1:0;
+ if(typeof value==='string')return MODE_VALUES[value]??null;
+ return null;
 }
-
+function rawSeries(observations:ObservationHistoryPoint[]){
+ return observations.flatMap(observation=>{const value=discreteValue(observation.value);return value===null?[]:[[observation.time,value]];});
+}
+function discreteMetric(item:HistoryChartSeries):'boolean'|'mode'|null {
+ const point=item.history.find(p=>p.valueType==='boolean'||p.valueType==='string');
+ return point?.valueType==='boolean'?'boolean':point?.valueType==='string'?'mode':null;
+}
 function aggregateSeries(
   observations: ObservationAggregatePoint[]
 ) {
@@ -194,10 +192,9 @@ function numericSeriesValues(
     : item.history
         .filter(
           point =>
-            typeof point.value === "number" &&
-            Number.isFinite(point.value)
+            discreteValue(point.value) !== null
         )
-        .map(point => point.value as number);
+        .map(point => discreteValue(point.value) as number);
 }
 
 function niceStep(
@@ -600,8 +597,9 @@ export function HistoryChart({
         id: item.id,
         name: item.name,
         type: "line",
+        step: discreteMetric(item) ? "end" : undefined,
         smooth:
-          curveStyle === "smooth",
+          !discreteMetric(item) && curveStyle === "smooth",
         smoothMonotone:
           curveStyle === "smooth"
             ? "x"
@@ -624,7 +622,7 @@ export function HistoryChart({
             )
           ),
         data:
-          smoothPoints(
+          (discreteMetric(item) ? rawSeries(item.history) : smoothPoints(
             item.aggregates.length > 0
               ? aggregateSeries(
                   item.aggregates
@@ -638,7 +636,7 @@ export function HistoryChart({
                   window: smoothing.window
                 }
               : smoothing
-          )
+          ))
       }))
   };
 

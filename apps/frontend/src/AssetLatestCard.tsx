@@ -1,4 +1,5 @@
 import React from "react";
+import ReactECharts from "echarts-for-react";
 
 import {
   useMutation,
@@ -17,6 +18,7 @@ import {
   Modal,
   NumberInput,
   SegmentedControl,
+  Select,
   SimpleGrid,
   Stack,
   Text,
@@ -291,6 +293,10 @@ export function AssetLatestCard({
     setHours
   ] =
     React.useState(24);
+
+  const [selectedMetricId,setSelectedMetricId]=React.useState<string|null>(null);
+  const selectedMetric=asset.metrics.find(metric=>metric.id===selectedMetricId)??asset.metrics.find(metric=>metric.key==='temperature')??asset.metrics[0];
+  const selectedMetricHistory=useQuery({queryKey:['asset-detail-selected-history',selectedMetric?.id,hours],queryFn:()=>getObservationHistory(selectedMetric!.id,hours),enabled:detailsOpened&&Boolean(selectedMetric?.id),staleTime:30000});
 
   const temperatureMetric =
     asset.metrics.find(
@@ -1196,6 +1202,8 @@ export function AssetLatestCard({
               History
             </Title>
 
+            <Select label="Metric" searchable placeholder="Choose metric" value={selectedMetric?.id??null} data={asset.metrics.map(metric=>({value:metric.id,label:metric.displayName??metric.key}))} onChange={setSelectedMetricId} style={{minWidth:180}}/>
+
             <SegmentedControl
               size="xs"
               value={
@@ -1261,7 +1269,7 @@ export function AssetLatestCard({
                   </Group>
                 )
                 : (
-                  <SensorChart
+                  selectedMetric&&selectedMetric.key!=='temperature' ? <ReactECharts style={{height:300}} option={{animation:false,tooltip:{trigger:'axis'},grid:{left:55,right:35,top:35,bottom:50},xAxis:{type:'time'},yAxis:{type:'value',axisLabel:{formatter:(value:number)=>selectedMetric.key==='mode'?({0:'Schedule',1:'Manual',2:'Away',3:'Frost'} as Record<number,string>)[value]??String(value):selectedMetric.key==='heating'||selectedMetric.key==='reachable'?(value===1?'ON':value===0?'OFF':''):String(value)}},series:[{name:selectedMetric.displayName??selectedMetric.key,type:'line',step:['mode','heating','reachable'].includes(selectedMetric.key)?'end':undefined,showSymbol:true,data:(selectedMetricHistory.data??[]).map(point=>[point.time,typeof point.value==='boolean'?(point.value?1:0):typeof point.value==='string'?({schedule:0,manual:1,away:2,hg:3} as Record<string,number>)[point.value]??null:point.value]).filter(point=>point[1]!==null)}]}}/> : <SensorChart
                     hours={hours}
                     toTimestamp={detailsChartTo}
                     temperature={

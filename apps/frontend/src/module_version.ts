@@ -18,10 +18,11 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.122.15";
+export const MODULE_VERSION = "1.122.16";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.122.16": { releasedAt: "2026-10-18T09:00:00Z", patch: "NET-FIX-1C-02.patch", changes: [{type:"fixed",description:"Select any asset metric in details and render categorical History as step lines"}] },
   "1.122.15": { releasedAt: "2026-10-18T07:00:00Z", patch: "NET-FIX-1C-01.patch", changes: [{type:"fixed",description:"Show raw latest recorded observations in asset details"}] },
   "1.122.14": { releasedAt: "2026-10-18T06:00:00Z", patch: "NET-CONTROL-SIM02.patch", changes: [{type:"added",description:"SIM-02 thermostat control panel with explicit confirmation"}] },
   "1.122.13": { releasedAt: "2026-10-17T22:50:00Z", patch: "NET-VALIDATION-1B.patch", changes: [{type:"fixed",description:"Include Netatmo asset-only thermostats when initializing History graphs"}] },
