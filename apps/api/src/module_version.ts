@@ -18,10 +18,11 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.76.9";
+export const MODULE_VERSION = "1.76.10";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.76.10": { releasedAt: "2026-10-18T06:00:00Z", patch: "NET-CONTROL-SIM02.patch", changes: [{type:"added",description:"Add admin guarded SIM-02 thermostat control with readback"}] },
   "1.76.9": { releasedAt: "2026-10-17T18:40:00Z", patch: "NET-SCHEDULER.patch", changes: [{type:"added",description:"Netatmo scheduled collection per connection with persisted execution state"}] },
   "1.76.8": { releasedAt: "2026-10-16T12:30:00Z", patch: "NET-MULTI-13.patch", changes: [{type:"security",description:"Expand guarded legacy asset cleanup dependency checks to alerts, templates and tags"}] },
   "1.76.7": { releasedAt: "2026-10-16T12:00:00Z", patch: "NET-MULTI-12.patch", changes: [{type:"fixed",description:"Improve Netatmo diagnostics accuracy and update ingestion regression tests"}] },
