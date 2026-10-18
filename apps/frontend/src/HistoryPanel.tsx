@@ -1026,6 +1026,7 @@ function HistoryGraph({
   canMoveDown,
   onChange,
   onRemove,
+  onDuplicate,
   onMoveTop,
   onMoveUp,
   onMoveDown,
@@ -1039,6 +1040,7 @@ function HistoryGraph({
   canMoveDown: boolean;
   onChange: (graph: HistoryGraphConfig) => void;
   onRemove: () => void;
+  onDuplicate: () => void;
   onMoveTop: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -1116,8 +1118,7 @@ function HistoryGraph({
   const saveEditing =
     (): void => {
       if (
-        !draftGraph ||
-        !hasUnsavedChanges
+        !draftGraph
       ) {
         return;
       }
@@ -1972,7 +1973,7 @@ function HistoryGraph({
                     <Button
                       size="xs"
                       onClick={saveEditing}
-                      disabled={!hasUnsavedChanges}
+                      disabled={!draftGraph}
                     >
                       Save
                     </Button>
@@ -1990,6 +1991,7 @@ function HistoryGraph({
                 )
             }
 
+            <Button size="xs" variant="subtle" onClick={onDuplicate}>Duplicate</Button>
             <Tooltip
               label={
                 graph.savedAt && !editing
@@ -5680,6 +5682,7 @@ export function HistoryPanel({
                           next
                         )
                     }
+                    onDuplicate={()=>setGraphs([...graphs.slice(0,index+1),normalizedGraph({...graph,id:'history-'+Date.now()+'-'+Math.random().toString(16).slice(2),name:(graph.name??'Graph')+' (copy)',versions:[],savedAt:new Date().toISOString()}),...graphs.slice(index+1)])}
                     onRemove={
                       () =>
                         setGraphs(
