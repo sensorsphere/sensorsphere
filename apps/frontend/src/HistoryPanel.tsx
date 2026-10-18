@@ -88,6 +88,7 @@ interface HistoryGraphConfig {
   collapsed?: boolean;
   yAxes?: Record<string, HistoryYAxisConfig>;
   curveStyle?: HistoryCurveStyle;
+  areaDisplay?: "auto"|"line"|"area";
   smoothing?: HistorySmoothingConfig;
   savedAt?: string;
   versions?: HistoryGraphVersion[];
@@ -437,6 +438,7 @@ function isHistoryGraphSnapshotConfig(
       graph.curveStyle === undefined ||
       isHistoryCurveStyle(graph.curveStyle)
     ) &&
+    (graph.areaDisplay === undefined || ["auto","line","area"].includes(graph.areaDisplay)) &&
     (
       graph.smoothing === undefined ||
       isHistorySmoothingConfig(
@@ -675,6 +677,7 @@ function normalizeHistoryTabs(
             curveStyle:
               graph.curveStyle ??
               "smooth",
+            areaDisplay:graph.areaDisplay??"auto",
             smoothing:
               graph.smoothing ?? {
                 method: "moving_average",
@@ -2658,6 +2661,8 @@ function HistoryGraph({
                   />
                 </div>
 
+                <Select label="Area fill" style={{minWidth:150}} value={workingGraph.areaDisplay??"auto"} onChange={value=>updateDraft({...workingGraph,areaDisplay:(value??"auto") as "auto"|"line"|"area"})} data={[{label:"Auto (boolean areas)",value:"auto"},{label:"Line",value:"line"},{label:"Line + area",value:"area"}]}/>
+
                 <Select
                   label="Smoothing"
                   disabled={
@@ -2939,6 +2944,7 @@ function HistoryGraph({
                                 curveStyle={
                                   workingGraph.curveStyle
                                 }
+                                areaDisplay={workingGraph.areaDisplay??"auto"}
                                 smoothing={
                                   workingGraph.smoothing
                                 }
@@ -2994,6 +3000,7 @@ function HistoryGraph({
                                 curveStyle={
                                   workingGraph.curveStyle
                                 }
+                                areaDisplay={workingGraph.areaDisplay??"auto"}
                                 smoothing={
                                   workingGraph.smoothing
                                 }

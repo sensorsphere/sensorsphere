@@ -4,6 +4,7 @@ import ReactECharts from "echarts-for-react";
 import {
   useMutation,
   useQuery,
+  useQueries,
   useQueryClient
 } from "@tanstack/react-query";
 
@@ -296,6 +297,13 @@ export function AssetLatestCard({
 
   const [selectedMetricId,setSelectedMetricId]=React.useState<string|null>(null);
   const selectedMetric=asset.metrics.find(metric=>metric.id===selectedMetricId)??asset.metrics.find(metric=>metric.key==='temperature')??asset.metrics[0];
+  const [recordedMinutes,setRecordedMinutes]=React.useState('5');
+  const recordedQueries=useQueries({queries:asset.metrics.map(metric=>({
+    queryKey:['asset-recorded-window',asset.id,metric.id,recordedMinutes],
+    queryFn:()=>getObservationHistory(metric.id,Number(recordedMinutes)/60),
+    enabled:detailsOpened,staleTime:15000
+  }))});
+  const recordedRows=recordedQueries.flatMap((query,index)=>(query.data??[]).map(point=>({...point,metricLabel:asset.metrics[index]?.displayName??point.metricKey}))).sort((a,b)=>Date.parse(b.time)-Date.parse(a.time));
   const selectedMetricHistory=useQuery({queryKey:['asset-detail-selected-history',selectedMetric?.id,hours],queryFn:()=>getObservationHistory(selectedMetric!.id,hours),enabled:detailsOpened&&Boolean(selectedMetric?.id),staleTime:30000});
 
   const temperatureMetric =
@@ -1181,15 +1189,18 @@ export function AssetLatestCard({
         </div>
 
         <Divider />
-        <div><Title order={4} mb="sm">Latest recorded data</Title>
-          {sortedObservations.length===0?<Text c="dimmed">No observations available.</Text>:
-          <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-          <thead><tr><th style={{textAlign:"left"}}>Metric</th><th style={{textAlign:"left"}}>Raw value</th><th style={{textAlign:"left"}}>Display value</th><th style={{textAlign:"left"}}>Timestamp</th></tr></thead>
-          <tbody>{sortedObservations.map(observation=><tr key={observation.metricId} style={{borderTop:"1px solid var(--mantine-color-default-border)"}}>
-            <td>{observation.displayName}</td><td>{typeof observation.value==="object"?JSON.stringify(observation.value):String(observation.value)}</td><td>{formatValue(observation)}</td><td>{new Date(observation.time).toLocaleString()}</td>
-          </tr>)}</tbody></table></div>}
+        <div>
+          <Group justify="space-between" mb="sm"><Title order={4}>Recorded data window</Title>
+            <SegmentedControl size="xs" value={recordedMinutes} onChange={setRecordedMinutes} data={[{label:'5 m',value:'5'},{label:'10 m',value:'10'},{label:'15 m',value:'15'},{label:'30 m',value:'30'},{label:'1 h',value:'60'}]}/>
+          </Group>
+          {recordedQueries.some(query=>query.isLoading)?<Loader size="sm"/>:recordedQueries.some(query=>query.isError)?<Text c="red">Unable to load recorded data.</Text>:recordedRows.length===0?<Text c="dimmed">No observations recorded in this period.</Text>:
+            <div style={{overflowX:'auto',maxHeight:360,overflowY:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+              <thead><tr><th style={{textAlign:'left'}}>Time</th><th style={{textAlign:'left'}}>Metric</th><th style={{textAlign:'left'}}>Raw value</th><th style={{textAlign:'left'}}>Display value</th><th style={{textAlign:'left'}}>Quality</th></tr></thead>
+              <tbody>{recordedRows.map((point,index)=><tr key={point.metricId+'-'+point.time+'-'+index} style={{borderTop:'1px solid var(--mantine-color-default-border)'}}>
+                <td>{new Date(point.time).toLocaleString()}</td><td>{point.metricLabel}</td><td>{typeof point.value==='object'?JSON.stringify(point.value):String(point.value)}</td><td>{typeof point.value==='boolean'?(point.value?'ON':'OFF'):String(point.value)+(point.unit?' '+point.unit:'')}</td><td>{point.quality?.status??'—'}</td>
+              </tr>)}</tbody></table>
+            </div>}
         </div>
-
         <Divider />
 
         <div>

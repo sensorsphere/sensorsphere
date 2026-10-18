@@ -53,6 +53,7 @@ interface Props {
   series: HistoryChartSeries[];
   yAxes?: Record<string, HistoryYAxisConfig>;
   curveStyle?: HistoryCurveStyle;
+  areaDisplay?: "auto"|"line"|"area";
   smoothing?: HistorySmoothingConfig;
 }
 
@@ -377,6 +378,7 @@ export function HistoryChart({
   series,
   yAxes = {},
   curveStyle = "smooth",
+  areaDisplay = "auto",
   smoothing = {
     method: "moving_average",
     window: 7
@@ -424,7 +426,7 @@ export function HistoryChart({
       new Set(
         series.map(
           item =>
-            historyYAxisKey(item.unit)
+            (discreteMetric(item)==="boolean"?"Boolean · "+item.name:discreteMetric(item)==="mode"?"Mode · "+item.name:historyYAxisKey(item.unit))
         )
       )
     );
@@ -563,17 +565,18 @@ export function HistoryChart({
           return {
             type: "value",
             name: unit,
+            interval: unit.startsWith("Boolean · ")?1:unit.startsWith("Mode · ")?1:undefined,
+            min: unit.startsWith("Boolean · ")?0:unit.startsWith("Mode · ")?0:bounds?.min,
+            max: unit.startsWith("Boolean · ")?1:unit.startsWith("Mode · ")?3:bounds?.max,
             position:
               index === 0 ? "left" : "right",
             offset:
               index <= 1
                 ? 0
                 : (index - 1) * 55,
-            min:
-              bounds?.min,
-            max:
-              bounds?.max,
+
             axisLabel: {
+              formatter:unit.startsWith("Boolean · ")?(value:number)=>value===1?"ON":value===0?"OFF":"":unit.startsWith("Mode · ")?(value:number)=>({0:"Schedule",1:"Manual",2:"Away",3:"Frost"} as Record<number,string>)[value]??"":undefined,
               color:
                 dark ? "#aeb4bc" : "#6b7280"
             },
@@ -605,6 +608,7 @@ export function HistoryChart({
             ? "x"
             : undefined,
         showSymbol: false,
+        areaStyle: areaDisplay==="area" || areaDisplay==="auto" && discreteMetric(item)==="boolean" ? {opacity:discreteMetric(item)==="boolean"?0.17:0.10}:undefined,
         lineStyle: {
           width: 2.5,
           color: item.color
@@ -616,9 +620,7 @@ export function HistoryChart({
           Math.max(
             0,
             units.indexOf(
-              historyYAxisKey(
-                item.unit
-              )
+              (discreteMetric(item)==="boolean"?"Boolean · "+item.name:discreteMetric(item)==="mode"?"Mode · "+item.name:historyYAxisKey(item.unit))
             )
           ),
         data:
