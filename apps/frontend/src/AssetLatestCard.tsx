@@ -1175,6 +1175,16 @@ export function AssetLatestCard({
         </div>
 
         <Divider />
+        <div><Title order={4} mb="sm">Latest recorded data</Title>
+          {sortedObservations.length===0?<Text c="dimmed">No observations available.</Text>:
+          <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead><tr><th style={{textAlign:"left"}}>Metric</th><th style={{textAlign:"left"}}>Raw value</th><th style={{textAlign:"left"}}>Display value</th><th style={{textAlign:"left"}}>Timestamp</th></tr></thead>
+          <tbody>{sortedObservations.map(observation=><tr key={observation.metricId} style={{borderTop:"1px solid var(--mantine-color-default-border)"}}>
+            <td>{observation.displayName}</td><td>{typeof observation.value==="object"?JSON.stringify(observation.value):String(observation.value)}</td><td>{formatValue(observation)}</td><td>{new Date(observation.time).toLocaleString()}</td>
+          </tr>)}</tbody></table></div>}
+        </div>
+
+        <Divider />
 
         <div>
 

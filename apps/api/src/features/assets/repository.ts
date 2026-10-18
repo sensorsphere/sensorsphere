@@ -176,11 +176,16 @@ const ASSET_SELECT = `
       WHERE at.asset_id = a.id
   ) tag_list ON TRUE
   LEFT JOIN LATERAL (
-      SELECT m.time
-      FROM measurements m
-      WHERE m.sensor_uid = a.source_sensor_uid
-      ORDER BY m.time DESC
-      LIMIT 1
+    SELECT MAX(v.time) AS time FROM (
+      SELECT (SELECT MAX(m.time) FROM measurements m WHERE m.sensor_uid=a.source_sensor_uid) AS time
+      UNION ALL
+      SELECT MAX(last_observation.time) AS time
+      FROM asset_metrics am
+      JOIN LATERAL (
+        SELECT o.time FROM observations o WHERE o.asset_metric_id=am.id ORDER BY o.time DESC LIMIT 1
+      ) last_observation ON TRUE
+      WHERE am.asset_id=a.id
+    ) v
   ) latest ON TRUE
 `;
 
