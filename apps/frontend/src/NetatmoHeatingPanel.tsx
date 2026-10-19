@@ -36,9 +36,9 @@ function status(device:Device,connection:Connection,now:number){
   if(reachable===false)return {label:"Unreachable",color:"red"};
   return {label:reachable===true?"Reachable":"Recent data",color:"green"};
 }
-export function NetatmoHeatingPanel({targetConnectionId,onOpenAssets,onOpenDevice,onOpenHistory,onOpenConnections}:{targetConnectionId?:string|null;onOpenAssets?:(id:string)=>void;onOpenDevice?:(id:string)=>void;onOpenHistory?:()=>void;onOpenConnections?:()=>void}={}){
+export function NetatmoHeatingPanel({targetConnectionId,onSelectConnection,onOpenAssets,onOpenDevice,onOpenHistory,onOpenConnections}:{targetConnectionId?:string|null;onSelectConnection?:(connectionId:string)=>void;onOpenAssets?:(id:string)=>void;onOpenDevice?:(id:string)=>void;onOpenHistory?:()=>void;onOpenConnections?:()=>void}={}){
   const [overview,setOverview]=React.useState<Overview|null>(null);
-  const [selected,setSelected]=React.useState<string|null>(null);
+
   const [error,setError]=React.useState("");
   const [busy,setBusy]=React.useState(false);
   const [mode,setMode]=React.useState<Mode>("manual");
@@ -56,9 +56,9 @@ export function NetatmoHeatingPanel({targetConnectionId,onOpenAssets,onOpenDevic
     catch(e){setError(e instanceof Error?e.message:String(e));}
   },[]);
   React.useEffect(()=>{void load();const timer=window.setInterval(()=>void load(),30000);return()=>window.clearInterval(timer);},[load]);
-  React.useEffect(()=>{if(targetConnectionId){setSelected(targetConnectionId);setResult(null);setConfirm(null);}},[targetConnectionId]);
+
   const connections=overview?.connections??[];
-  const active=connections.find(c=>c.id===selected)??(selected?undefined:connections[0]);
+  const active=connections.find(c=>c.id===targetConnectionId)??(targetConnectionId?undefined:connections[0]);
   React.useEffect(()=>{
     if(!active){setJournal([]);return;}
     let mounted=true;
@@ -87,8 +87,8 @@ export function NetatmoHeatingPanel({targetConnectionId,onOpenAssets,onOpenDevic
     </Group>
     {error&&<Alert color="red" title="Netatmo">{error}</Alert>}
     {connections.length===0&&<Alert color="gray">No Netatmo connections configured.</Alert>}
-    {selected&&connections.length>0&&!active&&<Alert color="orange">Connection {selected} is no longer available. Select another connection below.</Alert>}
-    {connections.length>0&&<Group gap="xs" wrap="wrap">{connections.map(c=><Button key={c.id} size="sm" variant={active?.id===c.id?"filled":"light"} onClick={()=>{setSelected(c.id);setResult(null);setConfirm(null);}}>{c.name}</Button>)}</Group>}
+    {targetConnectionId&&connections.length>0&&!active&&<Alert color="orange">Connection {targetConnectionId} is no longer available. Select another connection below.</Alert>}
+    {connections.length>0&&<Group gap="xs" wrap="wrap">{connections.map(c=><Button key={c.id} size="sm" variant={active?.id===c.id?"filled":"light"} onClick={()=>{onSelectConnection?.(c.id);setResult(null);setConfirm(null);}}>{c.name}</Button>)}</Group>}
     {active&&<>
       <Card withBorder radius="md" padding="md">
         <Group justify="space-between" align="center" wrap="wrap">
@@ -112,12 +112,22 @@ export function NetatmoHeatingPanel({targetConnectionId,onOpenAssets,onOpenDevic
           const battery=numberMetric(device.metrics.battery);
           const stale=state.label==="Stale data"||state.label==="No telemetry"||state.label==="Unreachable";
           const mayControl=controlAllowed&&thermostats.length===1&&!stale;
-          return <Grid.Col span={{base:12,lg:8}} key={device.id}>
+          return <Grid.Col span={12} key={device.id}>
             <Card withBorder radius="md" padding="lg"><Stack gap="md">
               <Group justify="space-between" align="start"><Box><Title order={3}>{device.name}</Title><Text size="xs" c="dimmed">Thermostat · {active.id}{device.homeId?" · Home "+device.homeId:""}{device.moduleId?" · Module "+device.moduleId:""}</Text></Box><Badge color={state.color}>{state.label}</Badge></Group>
               <Grid gutter="sm">
-                <Grid.Col span={6}><Box p="md" bg="var(--mantine-color-default-hover)" style={{borderRadius:12}}><Text size="xs" c="dimmed">Measured temperature</Text><Title order={1}>{degrees(measured)}</Title></Box></Grid.Col>
-                <Grid.Col span={6}><Box p="md" bg="var(--mantine-color-default-hover)" style={{borderRadius:12}}><Text size="xs" c="dimmed">Active setpoint</Text><Title order={1}>{degrees(target)}</Title></Box></Grid.Col>
+                {([
+                  {label:"INDOOR TEMPERATURE",value:degrees(measured),detail:"Thermostat",color:"#37c5f3"},
+                  {label:"SETPOINT TEMPERATURE",value:degrees(target),detail:modeLabel(modeCurrent),color:"#ffb74f"},
+                  {label:"OUTDOOR TEMPERATURE",value:"—",detail:"Not collected by SensorSphere",color:"#ac8cff"},
+                  {label:"BOILER STATUS",value:"UNKNOWN",detail:heating===null?"No direct boiler telemetry":("Thermostat demand: "+(heating?"active":"inactive")+" · not boiler feedback"),color:"#4fd6a4"}
+                ] as const).map(tile=><Grid.Col key={tile.label} span={{base:12,xs:6,md:6,xl:3}}>
+                  <Box p="md" style={{border:"1px solid #283c58",background:"#111e30",borderRadius:12,minHeight:145,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+                    <Text size="10px" fw={600} style={{letterSpacing:"0.09em",color:"#9bacc6"}}>{tile.label}</Text>
+                    <Text fw={750} style={{fontSize:tile.value==="UNKNOWN"?24:29,color:tile.color,lineHeight:1.2}}>{tile.value}</Text>
+                    <Text size="xs" style={{color:"#94a8c4"}}>{tile.detail}</Text>
+                  </Box>
+                </Grid.Col>)}
               </Grid>
               <Group justify="space-between" wrap="wrap">
                 <Box><Text size="xs" c="dimmed">Heating demand (thermostat)</Text><Badge color={heating===true?"orange":heating===false?"gray":"gray"}>{heating===true?"Active":heating===false?"Inactive":"Unknown"}</Badge></Box>
@@ -145,7 +155,7 @@ export function NetatmoHeatingPanel({targetConnectionId,onOpenAssets,onOpenDevic
             </Stack></Card>
           </Grid.Col>;
         })}
-        <Grid.Col span={{base:12,lg:4}}>
+        <Grid.Col span={12}>
           <Stack gap="md">
             {relays.map(relay=><Card withBorder radius="md" padding="lg" key={relay.id}><Stack gap="sm">
               <Group justify="space-between" align="start"><Box><Title order={4}>{relay.name}</Title><Text size="xs" c="dimmed">Relay · gateway</Text></Box><Badge color="gray">Status not verified</Badge></Group>

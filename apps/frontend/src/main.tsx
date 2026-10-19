@@ -963,7 +963,9 @@ function Dashboard() {
     setActivePage
   ]);
 
-  const [heatingTargetConnectionId,setHeatingTargetConnectionId]=React.useState<string|null>(null);
+  const [heatingTargetConnectionId,setHeatingTargetConnectionId]=usePersistentState<string|null>(
+    "netatmo.heating.selectedConnection",null,(value):value is string|null=>value===null||typeof value==="string"
+  );
   const openNetatmoHeating=(connectionId:string)=>{setHeatingTargetConnectionId(connectionId);navigateTo("netatmo-heating");};
 
   const [deviceRegistryOpenId, setDeviceRegistryOpenId] = React.useState<string | null>(null);
@@ -2980,7 +2982,7 @@ function Dashboard() {
 
         <Stack gap="xs" mt="auto" pt="md">
           {
-            <NavLink label={navbarCollapsed ? null : "Netatmo Heating"} leftSection={<NavigationIcon page="netatmo-heating" />} title="Netatmo Heating" active={activePage === "netatmo-heating"} onClick={() => {setHeatingTargetConnectionId(null);navigateTo("netatmo-heating");}} />
+            <NavLink label={navbarCollapsed ? null : "Netatmo Heating"} leftSection={<NavigationIcon page="netatmo-heating" />} title="Netatmo Heating" active={activePage === "netatmo-heating"} onClick={() => navigateTo("netatmo-heating")} />
           }
           {authContextQuery.data?.isAdmin && (
             <NavLink label={navbarCollapsed ? null : "Netatmo Connections"} leftSection={<NavigationIcon page="netatmo-connections" />} title="Netatmo Connections" active={activePage === "netatmo-connections"} onClick={() => navigateTo("netatmo-connections")} />
@@ -3237,7 +3239,7 @@ function Dashboard() {
               activePage ===
                 "dashboard" && (
             <div className="overview-summary">
-              <Group mb="sm" justify="flex-end"><Button size="xs" variant="light" color="orange" onClick={()=>{setHeatingTargetConnectionId(null);navigateTo("netatmo-heating");}}>Netatmo Heating</Button></Group>
+              <Group mb="sm" justify="flex-end"><Button size="xs" variant="light" color="orange" onClick={()=>navigateTo("netatmo-heating")}>Netatmo Heating</Button></Group>
 
               <Group
                 justify="space-between"
@@ -5737,7 +5739,7 @@ function Dashboard() {
               )
             }
 
-            {activePage === "netatmo-heating" && <NetatmoHeatingPanel targetConnectionId={heatingTargetConnectionId} onOpenConnections={authContextQuery.data?.isAdmin?()=>navigateTo("netatmo-connections"):undefined} onOpenHistory={()=>navigateTo("history")} onOpenDevice={deviceId=>{setDeviceRegistryOpenId(deviceId);navigateTo("devices");}} onOpenAssets={connectionId=>{setAssetSearch(connectionId+":");setAssetHealthFilter("all");setAssetEnabledFilter("all");setAssetLocationFilter(null);setAssetTypeFilter(null);setAssetManufacturerFilter(null);setAssetTagFilter(null);navigateTo("assets");}} />}
+            {activePage === "netatmo-heating" && <NetatmoHeatingPanel targetConnectionId={heatingTargetConnectionId} onSelectConnection={setHeatingTargetConnectionId} onOpenConnections={authContextQuery.data?.isAdmin?()=>navigateTo("netatmo-connections"):undefined} onOpenHistory={()=>navigateTo("history")} onOpenDevice={deviceId=>{setDeviceRegistryOpenId(deviceId);navigateTo("devices");}} onOpenAssets={connectionId=>{setAssetSearch(connectionId+":");setAssetHealthFilter("all");setAssetEnabledFilter("all");setAssetLocationFilter(null);setAssetTypeFilter(null);setAssetManufacturerFilter(null);setAssetTagFilter(null);navigateTo("assets");}} />}
             {authContextQuery.data?.isAdmin && activePage === "netatmo-connections" && <NetatmoConnectionsPanel onOpenMetricHistory={(externalId,metricKey)=>{const asset=(assetsQuery.data??[]).find(item=>item.externalId===externalId);const metric=asset?.metrics.find(m=>m.key===metricKey);if(asset&&metric){setHistoryTemplateLaunch({key:"netatmo-"+Date.now(),templateId:"netatmo-"+asset.id,templateName:"Netatmo · "+metric.displayName,tabs:[{id:"netatmo-tab",name:"Netatmo",graphs:[{id:"netatmo-metric",name:metric.displayName,metricKey,assetIds:[asset.id]}]}]});setTemplateHistoryActive(true);navigateTo("history");}}} onAddMetric={(externalId,metricKey)=>{const asset=(assetsQuery.data??[]).find(item=>item.externalId===externalId);const metric=asset?.metrics.find(m=>m.key===metricKey);if(asset&&metric){setAssetSearch(externalId);navigateTo("assets");setDashboardMetricTarget({asset,metric});}}} onOpenDevice={deviceId=>{setDeviceRegistryOpenId(deviceId);navigateTo("devices");}} onOpenAssets={connectionId=>{setAssetSearch(connectionId+":");setAssetHealthFilter("all");setAssetEnabledFilter("all");setAssetLocationFilter(null);setAssetTypeFilter(null);setAssetManufacturerFilter(null);setAssetTagFilter(null);navigateTo("assets");}} onOpenHistory={()=>navigateTo("history")} />}
 
             {
