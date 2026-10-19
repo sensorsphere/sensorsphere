@@ -33,5 +33,6 @@ test('OAuth scope is preserved inside encrypted token and never inferred when ab
   const scoped={...tokens,scope:'read_thermostat write_thermostat'};
   assert.deepEqual(decryptTokens(encryptTokens(validateOAuthTokens(scoped),key),key),scoped);
   assert.deepEqual(validateOAuthTokens(tokens),tokens);
-  assert.throws(()=>validateOAuthTokens({...tokens,scope:['write_thermostat']}));
+  assert.deepEqual(validateOAuthTokens({...tokens,scope:['read_thermostat','write_thermostat']}),{...tokens,scope:'read_thermostat write_thermostat'});
+  assert.throws(()=>validateOAuthTokens({...tokens,scope:[42]}));
 });

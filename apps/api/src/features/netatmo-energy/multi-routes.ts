@@ -5,7 +5,7 @@ import { requireAdmin, requireUser } from '../auth/index.js';
 import { startCommand, updateCommand, recentCommands } from './command-journal.js';
 import { getConnection, setConnectionOAuthError } from './connections.js';
 import { createConnectionOAuthState, consumeConnectionOAuthState, oauthInitiator } from './oauth-state.js';
-import { exchangeCode, discover } from './client.js';
+import { exchangeCode, discover, NetatmoOAuthExchangeError } from './client.js';
 import { validateOAuthTokens } from './token.js';
 import { getNetatmoAccessToken, getNetatmoPermissions, netatmoEncryptionKey, storeNetatmoTokens } from './credentials.js';
 import { readTelemetry } from './telemetry.js';
@@ -38,11 +38,20 @@ export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
     const config=await getConnection(pool,id);
     if(!config)return reply.code(404).send({error:'Connection not found'});
     try {
-      const tokens=validateOAuthTokens(await exchangeCode(config,parsed.data.code));
+      const expectedScope=id==='sim-02'?'read_thermostat write_thermostat':'read_thermostat';
+      const tokens=validateOAuthTokens(await exchangeCode(config,parsed.data.code,expectedScope));
       await storeNetatmoTokens(pool,tokens,netatmoEncryptionKey(),credentialId(id));
       await setConnectionOAuthError(pool,id,null);
       return reply.header('Cache-Control','no-store').header('Referrer-Policy','no-referrer').type('text/html').send('<!doctype html><title>Netatmo connected</title><p>Connection authorized. You may close this window.</p>');
-    }catch{await setConnectionOAuthError(pool,id,'OAuth token exchange failed. Check client ID, client secret and simulator availability.');return reply.code(502).send({error:'Netatmo authorization failed: check OAuth client credentials and simulator availability'});}
+    }catch(error){
+      const exchange=error instanceof NetatmoOAuthExchangeError?error:null;
+      const category=exchange?.category??(error instanceof Error&&error.message.startsWith('Invalid OAuth')?'invalid_token_response':'token_storage_failed');
+      const detail=exchange?.message??(category==='invalid_token_response'?'OAuth provider returned an invalid token response':'Unable to validate or save OAuth tokens');
+      // Never log response bodies, authorization codes, OAuth states, token payloads or secrets.
+      request.log.warn({connectionId:id,phase:'oauth_token_exchange',category,httpStatus:exchange?.httpStatus??null,oauthCode:exchange?.oauthCode??null},'Netatmo OAuth connection failed');
+      await setConnectionOAuthError(pool,id,detail);
+      return reply.code(502).send({error:detail,phase:'oauth_token_exchange',category,httpStatus:exchange?.httpStatus??null,oauthCode:exchange?.oauthCode??null});
+    }
   });
   app.post(base+'/:id/oauth/verify-permissions',async(request,reply)=>{
     requireAdmin(request);

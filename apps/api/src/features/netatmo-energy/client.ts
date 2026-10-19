@@ -14,8 +14,29 @@ async function apiJson(url: string, init: RequestInit): Promise<any> {
   if (!response.ok) throw new Error(`Netatmo upstream HTTP ${response.status}`);
   return response.json();
 }
-export async function exchangeCode(config: NetatmoConfig, code: string): Promise<{ access_token: string; refresh_token: string }> {
-  return apiJson(`${config.baseUrl}/oauth2/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: config.redirectUri, client_id: config.clientId, client_secret: config.clientSecret }) });
+const knownOAuthCodes=new Set(['invalid_client','invalid_grant','invalid_request','unauthorized_client','unsupported_grant_type','invalid_scope','access_denied','server_error','temporarily_unavailable']);
+export class NetatmoOAuthExchangeError extends Error {
+  constructor(readonly category:string, readonly httpStatus:number|null, readonly oauthCode:string|null){
+    super(httpStatus===null?'Netatmo OAuth connection failed (network)':'Netatmo OAuth token exchange failed: HTTP '+httpStatus+(oauthCode?' · '+oauthCode:''));
+    this.name='NetatmoOAuthExchangeError';
+  }
+}
+function sanitizedCode(body:unknown):string|null {
+  if(!body||typeof body!=='object')return null;
+  const obj=body as Record<string,unknown>;
+  const candidate=typeof obj.error==='string'?obj.error:typeof obj.error==='object'&&obj.error!==null&&typeof (obj.error as Record<string,unknown>).code==='string'?(obj.error as Record<string,string>).code:null;
+  return candidate&&knownOAuthCodes.has(candidate)?candidate:null;
+}
+export async function exchangeCode(config:NetatmoConfig,code:string,scope='read_thermostat'):Promise<unknown>{
+  const form=new URLSearchParams({grant_type:'authorization_code',code,redirect_uri:config.redirectUri,client_id:config.clientId,client_secret:config.clientSecret,scope});
+  let response:Response;
+  try{
+    response=await fetch(new URL('/oauth2/token',config.baseUrl),{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:form,redirect:'error',signal:AbortSignal.timeout(8000)});
+  }catch{throw new NetatmoOAuthExchangeError('network',null,null);}
+  let body:unknown;
+  try{body=await response.json();}catch{throw new NetatmoOAuthExchangeError('invalid_response',response.status,null);}
+  if(!response.ok)throw new NetatmoOAuthExchangeError('upstream_rejected',response.status,sanitizedCode(body));
+  return body;
 }
 export async function discover(config: NetatmoConfig, accessToken: string): Promise<Discovery> {
   const response = await apiJson(`${config.baseUrl}/api/homesdata`, { headers: { authorization: `Bearer ${accessToken}` } });

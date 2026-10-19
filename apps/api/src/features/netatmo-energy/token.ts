@@ -6,8 +6,12 @@ export function validateOAuthTokens(value: unknown): OAuthTokens {
   if (!value || typeof value !== 'object') throw new Error('Invalid OAuth response');
   const token = value as Record<string, unknown>;
   if (typeof token.access_token !== 'string' || !token.access_token || typeof token.refresh_token !== 'string' || !token.refresh_token || typeof token.expires_in !== 'number' || !Number.isFinite(token.expires_in) || token.expires_in <= 0) throw new Error('Invalid OAuth response');
-  if (token.scope !== undefined && (typeof token.scope !== 'string' || token.scope.length > 2048)) throw new Error('Invalid OAuth scope');
-  return { access_token: token.access_token, refresh_token: token.refresh_token, expires_in: token.expires_in, ...(typeof token.scope === 'string' ? {scope:token.scope} : {}) };
+  let scope:string|undefined;
+  if(typeof token.scope==='string')scope=token.scope;
+  else if(Array.isArray(token.scope)&&token.scope.every(item=>typeof item==='string'&&/^[a-z_]+$/.test(item)))scope=token.scope.join(' ');
+  else if(token.scope!==undefined)throw new Error('Invalid OAuth scope');
+  if(scope!==undefined&&scope.length>2048)throw new Error('Invalid OAuth scope');
+  return {access_token:token.access_token,refresh_token:token.refresh_token,expires_in:token.expires_in,...(scope!==undefined?{scope}:{})};
 }
 export async function refreshNetatmoToken(config: NetatmoConfig, refreshToken: string): Promise<OAuthTokens> {
   if (!refreshToken) throw new Error('Missing refresh token');
