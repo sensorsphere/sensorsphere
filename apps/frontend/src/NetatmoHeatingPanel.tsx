@@ -108,6 +108,9 @@ export function NetatmoHeatingPanel({targetConnectionId,onSelectConnection,onOpe
           const measured=numberMetric(device.metrics.temperature);
           const target=numberMetric(device.metrics.setpoint);
           const heating=booleanMetric(device.metrics.heating);
+          const boilerState=active.source!=="simulator"?"UNKNOWN":booleanMetric(device.metrics.boiler_fault)===true?"FAULT":heating===true?"HEATING":heating===false?"IDLE":"UNKNOWN";
+          const boilerColor=boilerState==="HEATING"?"orange":boilerState==="IDLE"?"teal":boilerState==="FAULT"?"red":"gray";
+          const boilerValueColor=boilerState==="HEATING"?"#f2ae5b":boilerState==="IDLE"?"#69d9a7":boilerState==="FAULT"?"#f99aa7":"var(--mantine-color-gray-5)";
           const modeCurrent=textMetric(device.metrics.mode);
           const battery=numberMetric(device.metrics.battery);
           const stale=state.label==="Stale data"||state.label==="No telemetry"||state.label==="Unreachable";
@@ -120,12 +123,12 @@ export function NetatmoHeatingPanel({targetConnectionId,onSelectConnection,onOpe
                   {label:"Indoor temperature",value:degrees(measured),detail:"Thermostat",color:"blue" as const,valueColor:"#46c8f0"},
                   {label:"Setpoint temperature",value:degrees(target),detail:modeLabel(modeCurrent),color:"orange" as const,valueColor:"#f2ae5b"},
                   {label:"Outdoor temperature",value:degrees(numberMetric(device.metrics.outdoor_temperature)),detail:numberMetric(device.metrics.outdoor_temperature)===null?"Not available from this connection":"Simulator weather",color:"violet" as const,valueColor:"#9d8cff"},
-                  {label:"Boiler status",value:active.source!=="simulator"?"Unknown":booleanMetric(device.metrics.boiler_fault)===true?"FAULT":heating===true?"HEATING":heating===false?"IDLE":"Unknown",detail:active.source!=="simulator"?"Real boiler feedback not verified":booleanMetric(device.metrics.boiler_fault)===true?"Simulator boiler fault":heating===null?"No simulator boiler telemetry":"Simulator boiler status",color:"teal" as const,valueColor:"#69d9a7"}
+                  {label:"Boiler status",value:boilerState,detail:active.source!=="simulator"?"Real boiler feedback not verified":boilerState==="FAULT"?"Simulator boiler fault":boilerState==="UNKNOWN"?"No simulator boiler telemetry":"Simulator boiler status",color:boilerColor,valueColor:boilerValueColor,boiler:true}
                 ]).map(tile=><Grid.Col key={tile.label} span={{base:12,xs:6,xl:3}}>
                   <Card withBorder radius="md" padding="lg" style={{borderLeft:("4px solid var(--mantine-color-"+tile.color+"-6)"),height:"100%"}}>
                     <Stack gap="xs" justify="space-between" h="100%">
                       <Badge size="xs" color={tile.color} variant="light" style={{alignSelf:"start"}}>{tile.label}</Badge>
-                      <Text size="xl" fw={700} style={{color:tile.valueColor}}>{tile.value}</Text>
+                      <Group gap="xs" align="center" wrap="nowrap">{tile.boiler&&<span aria-hidden="true" style={{fontSize:26,lineHeight:1,color:boilerState==="IDLE"?"var(--mantine-color-gray-5)":tile.valueColor}}>♨</span>}<Text size="xl" fw={700} style={{color:tile.valueColor}}>{tile.value}</Text></Group>
                       <Text size="xs" c="dimmed">{tile.detail}</Text>
                     </Stack>
                   </Card>
