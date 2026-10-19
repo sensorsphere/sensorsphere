@@ -8,7 +8,8 @@ type Connection={id:string;name:string;enabled:boolean;oauthStatus:string;permis
 type Overview={connections:Connection[];generatedAt:string};
 type Mode="manual"|"schedule"|"away"|"hg";
 type Command={mode:Mode;temperature?:number;durationSeconds?:number};
-type CommandResponse={accepted:boolean;returnedState?:{mode:string|null;setpoint:number|null;measuredTemperature:number|null};elapsedMs:number};
+type JournalCommand={id:string;requestedAt:string;requestedBy:string;mode:Mode;temperature:number|null;durationSeconds:number|null;status:"pending"|"accepted"|"verified"|"mismatch"|"failed"|"unknown";returnedMode:string|null;returnedSetpoint:number|null;collectedAt:string|null;errorCode:string|null;errorMessage:string|null};
+type CommandResponse={commandId:string;accepted:boolean;returnedState?:{mode:string|null;setpoint:number|null;measuredTemperature:number|null};elapsedMs:number};
 const root="/api/v1/integrations/netatmo/connections";
 async function request<T>(path:string,options?:RequestInit):Promise<T>{
   const response=await fetch(root+path,{credentials:"same-origin",...options});
@@ -46,6 +47,9 @@ export function NetatmoHeatingPanel({onOpenAssets,onOpenDevice,onOpenHistory,onO
   const [confirm,setConfirm]=React.useState<Command|null>(null);
   const [result,setResult]=React.useState<CommandResponse|null>(null);
   const [resultMode,setResultMode]=React.useState<Mode|null>(null);
+  const [sentCommand,setSentCommand]=React.useState<Command|null>(null);
+  const [journal,setJournal]=React.useState<JournalCommand[]>([]);
+  const [journalError,setJournalError]=React.useState("");
   const [now,setNow]=React.useState(Date.now());
   const load=React.useCallback(async()=>{
     try{const data=await request<Overview>("/heating/overview");setOverview(data);setError("");setNow(Date.now());}
@@ -54,6 +58,13 @@ export function NetatmoHeatingPanel({onOpenAssets,onOpenDevice,onOpenHistory,onO
   React.useEffect(()=>{void load();const timer=window.setInterval(()=>void load(),30000);return()=>window.clearInterval(timer);},[load]);
   const connections=overview?.connections??[];
   const active=connections.find(c=>c.id===selected)??connections[0];
+  React.useEffect(()=>{
+    if(!active){setJournal([]);return;}
+    let mounted=true;
+    const fetchJournal=async()=>{try{const data=await request<{commands:JournalCommand[]}>("/"+encodeURIComponent(active.id)+"/control/history");if(mounted){setJournal(data.commands);setJournalError("");}}catch(e){if(mounted)setJournalError(e instanceof Error?e.message:String(e));}};
+    void fetchJournal();const timer=window.setInterval(()=>void fetchJournal(),15000);
+    return()=>{mounted=false;window.clearInterval(timer);};
+  },[active?.id]);
   const thermostats=active?.devices.filter(d=>d.type==="thermostat")??[];
   const relays=active?.devices.filter(d=>d.type==="relay")??[];
   const controlAllowed=active?.id==="sim-02"&&active.enabled&&active.oauthStatus==="authorized"&&active.permissions.write==="granted";
@@ -62,8 +73,9 @@ export function NetatmoHeatingPanel({onOpenAssets,onOpenDevice,onOpenHistory,onO
     const sent=confirm;setBusy(true);setError("");setResult(null);setResultMode(null);
     try{
       const response=await request<CommandResponse>(`/${encodeURIComponent(active.id)}/control`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(sent)});
-      setResult(response);setResultMode(sent.mode);setConfirm(null);
+      setResult(response);setResultMode(sent.mode);setSentCommand(sent);setConfirm(null);
       await load();
+      const journalResponse=await request<{commands:JournalCommand[]}>("/"+encodeURIComponent(active.id)+"/control/history");setJournal(journalResponse.commands);
     }catch(e){setError(e instanceof Error?e.message:String(e));setConfirm(null);}
     finally{setBusy(false);}
   };
@@ -124,7 +136,7 @@ export function NetatmoHeatingPanel({onOpenAssets,onOpenDevice,onOpenHistory,onO
                 <Text size="xs" c={mayControl?"dimmed":"orange"}>{!controlAllowed?"Read-only: write scope missing, unverified, or connection not approved for control.":stale?"Control unavailable until fresh reachable telemetry is recorded.":"SIM-02 simulator only · confirmation required before sending."}</Text>
                 <Button disabled={!mayControl||busy||(mode==="manual"&&(!Number.isFinite(Number(temperature))||Number(temperature)<7||Number(temperature)>30||Number(temperature)%0.5!==0))} onClick={()=>setConfirm(mode==="manual"?{mode,temperature:Number(temperature),durationSeconds:Number(duration)}:{mode})}>Review command</Button>
               </Group>
-              {result&&<Alert color={result.returnedState?.mode===resultMode?"green":"orange"} title={result.returnedState?.mode===resultMode?"API accepted · readback matches":"API accepted · readback differs"}>
+              {result&&<Alert color={result.returnedState?.mode===resultMode&&(sentCommand?.mode!=="manual"||Math.abs((result.returnedState?.setpoint??-999)-(sentCommand.temperature??-999))<=0.05)?"green":"orange"} title={result.returnedState?.mode===resultMode&&(sentCommand?.mode!=="manual"||Math.abs((result.returnedState?.setpoint??-999)-(sentCommand.temperature??-999))<=0.05)?"API accepted · readback matches":"API accepted · readback differs"}>
                 Returned mode: {modeLabel(result.returnedState?.mode??null)} · Setpoint: {degrees(result.returnedState?.setpoint??null)} · Measured: {degrees(result.returnedState?.measuredTemperature??null)}. This is an immediate API readback, not a subsequent telemetry collection.
               </Alert>}
               <Group gap="xs"><Button size="xs" variant="light" onClick={()=>onOpenAssets?.(active.id)} disabled={!onOpenAssets}>View assets</Button><Button size="xs" variant="subtle" onClick={()=>onOpenDevice?.(device.id)} disabled={!onOpenDevice}>Device registry</Button><Button size="xs" variant="subtle" onClick={onOpenHistory} disabled={!onOpenHistory}>History</Button></Group>
@@ -144,7 +156,19 @@ export function NetatmoHeatingPanel({onOpenAssets,onOpenDevice,onOpenHistory,onO
           </Stack>
         </Grid.Col>
       </Grid>
-      {thermostats.length===0&&<Alert color="orange">No thermostat discovered. Run discovery and collection from connection settings.</Alert>}
+      {thermostats.length===0&&<Alert color="orange">No thermostat discovered. Ask an administrator to run discovery and collection.</Alert>}
+      <Card withBorder radius="md" padding="lg"><Stack gap="sm">
+        <Group justify="space-between"><Title order={4}>Command journal</Title><Badge color="gray">{journal.length} recent</Badge></Group>
+        <Text size="xs" c="dimmed">Accepted = simulator acknowledged the command. Verified = a subsequent telemetry collection confirmed the requested mode and setpoint. Unknown or mismatch requires investigation.</Text>
+        {journalError&&<Alert color="red">{journalError}</Alert>}
+        {journal.length===0&&<Text size="sm" c="dimmed">No recorded commands for this connection.</Text>}
+        {journal.map(item=><Box key={item.id} p="sm" bg="var(--mantine-color-default-hover)" style={{borderRadius:8}}>
+          <Group justify="space-between" wrap="wrap"><Text size="sm" fw={600}>{modeLabel(item.mode)}{item.mode==="manual"?" · "+degrees(item.temperature):""}</Text><Badge color={item.status==="verified"?"green":item.status==="failed"||item.status==="mismatch"?"red":item.status==="unknown"?"orange":"blue"}>{item.status}</Badge></Group>
+          <Text size="xs" c="dimmed">{timeLabel(item.requestedAt)} · {item.id.slice(0,8)} · {item.requestedBy}</Text>
+          {item.collectedAt&&<Text size="xs">Confirmed collection: {timeLabel(item.collectedAt)}</Text>}
+          {item.errorMessage&&<Text size="xs" c="red">{item.errorCode}: {item.errorMessage}</Text>}
+        </Box>)}
+      </Stack></Card>
     </>}
     <Modal opened={Boolean(confirm)} onClose={()=>!busy&&setConfirm(null)} title="Confirm thermostat command" centered closeOnClickOutside={!busy} closeOnEscape={!busy}>
       <Stack gap="md">

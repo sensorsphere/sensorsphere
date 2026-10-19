@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import type { Readings } from './telemetry.js';
+import { reconcileCommands } from './command-journal.js';
 export async function ingestNetatmoReadings(pool: Pool, readings: Readings, connectionId?: string): Promise<{ assets: number; observations: number; readings: {assetExternalId:string;metricKey:string;label:string;value:string|number|boolean;unit:string|null;timestamp:string}[] }> {
   const client = await pool.connect();
   let observations = 0;
@@ -45,6 +46,7 @@ export async function ingestNetatmoReadings(pool: Pool, readings: Readings, conn
       await record(id,`Netatmo module ${module.moduleId}`,'battery','Battery','%',module.batteryPercent,`${module.homeId}:${module.moduleId}`);
     }
     await client.query('COMMIT');
+    if(connectionId){try{await reconcileCommands(pool,connectionId,readings,timestamp);}catch(error){console.warn('Netatmo command reconciliation unavailable',error instanceof Error?error.message:'unknown');}}
     return { assets: assets.size, observations, readings: reportReadings };
   } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
 }

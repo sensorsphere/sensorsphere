@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { requireAdmin } from '../auth/index.js';
+import { requireAdmin, requireUser } from '../auth/index.js';
+import { startCommand, updateCommand, recentCommands } from './command-journal.js';
 import { getConnection, setConnectionOAuthError } from './connections.js';
 import { createConnectionOAuthState, consumeConnectionOAuthState, oauthInitiator } from './oauth-state.js';
 import { exchangeCode, discover } from './client.js';
@@ -16,7 +17,7 @@ const base='/api/v1/integrations/netatmo/connections';
 const params=z.object({id:z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/)});
 const credentialId=(id:string)=>`netatmo-energy:${id}`;
 export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
-  app.get(base+'/heating/overview',async request=>{requireAdmin(request);return getNetatmoHeatingOverview(pool);});
+  app.get(base+'/heating/overview',async request=>{requireUser(request);return getNetatmoHeatingOverview(pool);});
   app.get(`${base}/:id/authorize`,async(request,reply)=>{
     requireAdmin(request);
     const parsed=params.safeParse(request.params);
@@ -59,8 +60,14 @@ export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
     z.object({mode:z.literal('manual'),temperature:z.number().min(7).max(30),durationSeconds:z.number().int().min(60).max(86400)}).strict(),
     z.object({mode:z.enum(['schedule','away','hg'])}).strict()
   ]);
+  app.get(`${base}/:id/control/history`,async(request,reply)=>{
+    requireUser(request);
+    const parsed=params.safeParse(request.params);
+    if(!parsed.success)return reply.code(400).send({error:"Invalid connection"});
+    return recentCommands(pool,parsed.data.id);
+  });
   app.post(`${base}/:id/control`,async(request,reply)=>{
-    requireAdmin(request);
+    requireUser(request);
     const parsed=params.safeParse(request.params);
     const command=commandSchema.safeParse(request.body);
     if(!parsed.success||!command.success)return reply.code(400).send({error:'Invalid thermostat command',details:command.success?[]:command.error.issues});
@@ -70,26 +77,30 @@ export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
     if(!config)return reply.code(404).send({error:'Connection missing or disabled'});
     if(new URL(config.baseUrl).host!=='100.64.0.8:8092')return reply.code(403).send({error:'SIM-02 control target is not the approved simulator endpoint'});
     const started=Date.now();
+    const actor=(request as typeof request & {sensorSphereUser?:{id:string;role:string}}).sensorSphereUser;
+    const commandId=await startCommand(pool,parsed.data.id,actor?.id??"dev-role-user",command.data);
     try {
       const token=await getNetatmoAccessToken(pool,config,netatmoEncryptionKey(),credentialId(parsed.data.id));
-      if(!token)return reply.code(409).send({error:'Authorize SIM-02 with write_thermostat scope before control'});
+      if(!token){await updateCommand(pool,commandId,'failed',{errorCode:'OAUTH_REQUIRED',errorMessage:'Authorization required'});return reply.code(409).send({error:'Authorize SIM-02 with write_thermostat scope before control',commandId});}
       const permissions=await getNetatmoPermissions(pool,credentialId(parsed.data.id));
-      if(permissions.write!=='granted')return reply.code(403).send({error:'OAuth write_thermostat permission is not granted or cannot be verified'});
+      if(permissions.write!=='granted'){await updateCommand(pool,commandId,'failed',{errorCode:'WRITE_SCOPE_REQUIRED',errorMessage:'OAuth write scope not verified'});return reply.code(403).send({error:'OAuth write_thermostat permission is not granted or cannot be verified',commandId});}
       const homes=await discover(config,token);
-      if(homes.homes!==1)return reply.code(409).send({error:'SIM-02 home count is not exactly one'});
+      if(homes.homes!==1){await updateCommand(pool,commandId,'failed',{errorCode:'HOME_COUNT',errorMessage:'Expected exactly one home'});return reply.code(409).send({error:'SIM-02 home count is not exactly one',commandId});}
       const homeId='sim-home-02',roomId='sim-room-02';
       const endpoint=command.data.mode==='manual'?'/api/setroomthermpoint':'/api/setthermmode';
       const payload=command.data.mode==='manual'
         ?{home_id:homeId,room_id:roomId,mode:'manual',temp:command.data.temperature,duration:command.data.durationSeconds}
         :{home_id:homeId,mode:command.data.mode};
       const response=await fetch(new URL(endpoint,config.baseUrl),{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify(payload),redirect:'error',signal:AbortSignal.timeout(8000)});
-      if(!response.ok){request.log.warn({connectionId:parsed.data.id,mode:command.data.mode,httpStatus:response.status},'Netatmo control rejected');return reply.code(response.status===401?409:502).send({error:response.status===401?'Write authorization required':'Netatmo command rejected',upstreamStatus:response.status});}
+      if(!response.ok){await updateCommand(pool,commandId,'failed',{upstreamStatus:response.status,errorCode:'UPSTREAM_REJECTED',errorMessage:response.status===401?'Write authorization required':'Netatmo simulator rejected command'});request.log.warn({connectionId:parsed.data.id,mode:command.data.mode,httpStatus:response.status},'Netatmo control rejected');return reply.code(response.status===401?409:502).send({error:response.status===401?'Write authorization required':'Netatmo command rejected',upstreamStatus:response.status,commandId});}
+      await updateCommand(pool,commandId,'accepted',{upstreamStatus:response.status});
       const readings=await readTelemetry(config,token);
       const room=readings.rooms.find(item=>item.homeId===homeId&&item.roomId===roomId);
-      if(!room)return reply.code(502).send({error:'Command accepted but no thermostat state returned'});
+      if(!room){await updateCommand(pool,commandId,'unknown',{errorCode:'READBACK_MISSING',errorMessage:'Command accepted, immediate readback unavailable'});return reply.code(502).send({error:'Command accepted but no thermostat state returned',commandId});}
+      await updateCommand(pool,commandId,'accepted',{returnedMode:room.setpointMode,returnedSetpoint:room.setpointTemperature});
       request.log.info({connectionId:parsed.data.id,mode:command.data.mode,temperature:command.data.mode==='manual'?command.data.temperature:null,durationSeconds:command.data.mode==='manual'?command.data.durationSeconds:null,elapsedMs:Date.now()-started,returnedMode:room.setpointMode,returnedSetpoint:room.setpointTemperature},'Netatmo thermostat command completed');
-      return {accepted:true,connectionId:parsed.data.id,command:command.data,returnedState:{mode:room.setpointMode,setpoint:room.setpointTemperature,measuredTemperature:room.measuredTemperature},elapsedMs:Date.now()-started};
-    }catch(error){request.log.warn({connectionId:parsed.data.id,mode:command.data.mode,error:error instanceof Error?error.message:'unknown'},'Netatmo command failed');return reply.code(502).send({error:'Netatmo command failed; check API/OAuth status'});}
+      return {accepted:true,commandId,connectionId:parsed.data.id,command:command.data,returnedState:{mode:room.setpointMode,setpoint:room.setpointTemperature,measuredTemperature:room.measuredTemperature},elapsedMs:Date.now()-started};
+    }catch(error){await updateCommand(pool,commandId,'unknown',{errorCode:'REQUEST_OR_READBACK_FAILED',errorMessage:'Command outcome uncertain; check collection and simulator logs'});request.log.warn({connectionId:parsed.data.id,mode:command.data.mode,error:error instanceof Error?error.message:'unknown'},'Netatmo command failed');return reply.code(502).send({error:'Netatmo command outcome uncertain; check the command journal and subsequent collection',commandId});}
   });
   app.get(base+'/:id/diagnostics',async(request,reply)=>{
     requireAdmin(request);

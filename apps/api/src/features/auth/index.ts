@@ -146,6 +146,12 @@ function requestRole(request: FastifyRequest): SensorSphereRole | null {
   if (requested === "admin" || requested === "user") return requested;
   return settings.defaultRole;
 }
+export function requireUser(request: FastifyRequest): void {
+  const sessionUser=(request as FastifyRequest & {sensorSphereUser?:SessionUser}).sensorSphereUser;
+  if(sessionUser?.role==='admin'||sessionUser?.role==='user'||requestRole(request))return;
+  const error=new Error('Authenticated user required') as Error & {statusCode?:number};
+  error.statusCode=403;throw error;
+}
 export function requireAdmin(request: FastifyRequest): void {
   const sessionUser = (request as FastifyRequest & {
     sensorSphereUser?: SessionUser;

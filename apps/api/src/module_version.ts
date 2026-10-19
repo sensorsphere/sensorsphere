@@ -18,10 +18,11 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.76.13";
+export const MODULE_VERSION = "1.76.14";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.76.14": {releasedAt:"2026-10-19T16:00:00Z",patch:"NET-UI-03.patch",changes:[{type:"added",description:"Durable Netatmo command journal and post-collection verification"},{type:"security",description:"User access to heating overview and simulator control, admin-only configuration"}]},
   "1.76.13": {releasedAt:"2026-10-19T14:00:00Z",patch:"NET-UI-01-02.patch",changes:[{type:"added",description:"Netatmo heating overview with recorded metrics and verified scope gating"}]},
   "1.76.12": {releasedAt:"2026-10-19T10:00:00Z",patch:"NET-OAUTH-PERMISSIONS.patch",changes:[{type:"added",description:"Persist Netatmo OAuth scopes and verify permissions on refresh"}]},
   "1.76.11": { releasedAt: "2026-10-18T07:00:00Z", patch: "NET-FIX-1C-01.patch", changes: [{type:"fixed",description:"Use latest asset observations for asset health and last seen"}] },
