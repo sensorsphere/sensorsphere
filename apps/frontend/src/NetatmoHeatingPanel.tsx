@@ -24,6 +24,17 @@ const booleanMetric=(metric:Metric|undefined)=>typeof metric?.value==="boolean"?
 const textMetric=(metric:Metric|undefined)=>typeof metric?.value==="string"?metric.value:null;
 const modeLabel=(mode:string|null)=>(mode?({manual:"Manual override",schedule:"Schedule",away:"Away",hg:"Frost protection"} as Record<string,string>)[mode]??mode:"Unknown");
 const degrees=(value:number|null)=>value===null?"—":`${value.toFixed(1)} °C`;
+const modeColor=(mode:string|null)=>mode==="manual"?"orange":mode==="schedule"?"blue":mode==="away"?"violet":mode==="hg"?"cyan":"gray";
+function BoilerBurnerIcon({state}:{state:"IDLE"|"HEATING"|"FAULT"|"UNKNOWN"}){
+  const active=state==="HEATING",fault=state==="FAULT";
+  const color=active?"#f2ae5b":fault?"#f99aa7":"var(--mantine-color-gray-5)";
+  return <svg width="29" height="29" viewBox="0 0 32 32" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label={active?"Burner on":fault?"Burner fault":"Burner off"}>
+    <path d="M7 23.5c0-2.5 3.7-4.2 9-4.2s9 1.7 9 4.2-3.7 4.2-9 4.2-9-1.7-9-4.2Z" />
+    <path d="M10 23.5c2 1.6 10 1.6 12 0" />
+    {active?<><path d="M16 18.2c-4-3.8 3.1-6.4.3-12.5 6.8 5.2 5.3 9.6 2.3 12.5" /><path d="M13 18.2c-4-2.8.5-5.5-.7-8.3M20 18.2c3-3.2-.7-5.6.1-8.1" /></>:<><path d="M12 16.7c-3-2.5 1.7-4.4.1-7.2M17 16.7c-2.6-2.5 1.7-4.4.1-7.2M22 16.7c-2.6-2.5 1.7-4.4.1-7.2" /></>}
+    {!active&&<path d="M5.5 21.5 26.5 6.5" strokeWidth="1.5" />}
+  </svg>;
+}
 const modeOptions=[{label:"Schedule",value:"schedule"},{label:"Manual",value:"manual"},{label:"Away",value:"away"},{label:"Frost protection",value:"hg"}];
 function metricTimestamp(metrics:Record<string,Metric>){const dates=Object.values(metrics).map(v=>v.recordedAt).filter((x):x is string=>Boolean(x));return dates.length?dates.sort().at(-1)??null:null;}
 function status(device:Device,connection:Connection,now:number){
@@ -122,13 +133,13 @@ export function NetatmoHeatingPanel({targetConnectionId,onSelectConnection,onOpe
                 {([
                   {label:"Indoor temperature",value:degrees(measured),detail:"Thermostat",color:"blue" as const,valueColor:"#46c8f0"},
                   {label:"Setpoint temperature",value:degrees(target),detail:modeLabel(modeCurrent),color:"orange" as const,valueColor:"#f2ae5b"},
-                  {label:"Outdoor temperature",value:degrees(numberMetric(device.metrics.outdoor_temperature)),detail:numberMetric(device.metrics.outdoor_temperature)===null?"Not available from this connection":"Simulator weather",color:"violet" as const,valueColor:"#9d8cff"},
-                  {label:"Boiler status",value:boilerState,detail:active.source!=="simulator"?"Real boiler feedback not verified":boilerState==="FAULT"?"Simulator boiler fault":boilerState==="UNKNOWN"?"No simulator boiler telemetry":"Simulator boiler status",color:boilerColor,valueColor:boilerValueColor,boiler:true}
+                  {label:"Outdoor temperature",value:degrees(numberMetric(device.metrics.outdoor_temperature)),detail:numberMetric(device.metrics.outdoor_temperature)===null?"Not available from this connection":"Outdoor temperature",color:"violet" as const,valueColor:"#9d8cff"},
+                  {label:"Boiler status",value:boilerState,detail:active.source!=="simulator"?"Boiler feedback unavailable":boilerState==="FAULT"?"Boiler fault":boilerState==="UNKNOWN"?"No boiler telemetry":"Boiler activity",color:boilerColor,valueColor:boilerValueColor,boiler:true}
                 ]).map(tile=><Grid.Col key={tile.label} span={{base:12,xs:6,xl:3}}>
                   <Card withBorder radius="md" padding="lg" style={{borderLeft:("4px solid var(--mantine-color-"+tile.color+"-6)"),height:"100%"}}>
                     <Stack gap="xs" justify="space-between" h="100%">
                       <Badge size="xs" color={tile.color} variant="light" style={{alignSelf:"start"}}>{tile.label}</Badge>
-                      <Group gap="xs" align="center" wrap="nowrap">{tile.boiler&&<span aria-hidden="true" style={{fontSize:26,lineHeight:1,color:boilerState==="IDLE"?"var(--mantine-color-gray-5)":tile.valueColor}}>♨</span>}<Text size="xl" fw={700} style={{color:tile.valueColor}}>{tile.value}</Text></Group>
+                      <Group gap="xs" align="center" wrap="nowrap">{tile.boiler&&<BoilerBurnerIcon state={boilerState}/>}<Text size="xl" fw={700} style={{color:tile.valueColor}}>{tile.value}</Text></Group>
                       <Text size="xs" c="dimmed">{tile.detail}</Text>
                     </Stack>
                   </Card>
@@ -136,7 +147,7 @@ export function NetatmoHeatingPanel({targetConnectionId,onSelectConnection,onOpe
               </Grid>
               <Group justify="space-between" wrap="wrap">
                 <Box><Text size="xs" c="dimmed">Heating demand (thermostat)</Text><Badge color={heating===true?"orange":heating===false?"gray":"gray"}>{heating===true?"Active":heating===false?"Inactive":"Unknown"}</Badge></Box>
-                <Box><Text size="xs" c="dimmed">Current mode</Text><Text fw={600}>{modeLabel(modeCurrent)}</Text></Box>
+                <Box><Text size="xs" c="dimmed" mb={4}>Current mode</Text><Badge color={modeColor(modeCurrent)} variant="light">{modeLabel(modeCurrent)}</Badge></Box>
                 <Box><Text size="xs" c="dimmed">Battery</Text><Text fw={600}>{battery===null?"Unknown":`${battery}%`}</Text></Box>
               </Group>
               <Text size="xs" c="dimmed">Last recorded measurement: {timeLabel(latest)}{latest?` · ${age(latest,now)} min ago`:""}. Heating demand does not confirm that the boiler is running.</Text>
@@ -166,7 +177,7 @@ export function NetatmoHeatingPanel({targetConnectionId,onSelectConnection,onOpe
               <Group justify="space-between" align="start"><Box><Title order={4}>{relay.name}</Title><Text size="xs" c="dimmed">Relay · gateway</Text></Box><Badge color="gray">Status not verified</Badge></Group>
               <Text size="sm">Linked thermostats: {thermostats.filter(d=>d.parentId===relay.id).length}</Text>
               <Text size="xs" c="dimmed">Last registry contact: {timeLabel(relay.lastSeenAt)}</Text>
-              <Alert color="gray">{active.source==="simulator"?"Boiler state is reported by the simulator API and is not a physical boiler measurement.":"No independently verified physical boiler feedback is collected. Thermostat demand is not proof that a boiler is running."}</Alert>
+              <Alert color="gray">{active.source==="simulator"?"Boiler activity is virtual and does not indicate physical heating.":"No independently verified physical boiler feedback is collected. Thermostat demand is not proof that a boiler is running."}</Alert>
               <Button variant="subtle" size="xs" onClick={()=>onOpenDevice?.(relay.id)} disabled={!onOpenDevice}>Open in Device Registry</Button>
             </Stack></Card>)}
             {relays.length===0&&<Alert color="gray">No relay discovered for this connection.</Alert>}

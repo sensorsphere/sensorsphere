@@ -18,10 +18,11 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.122.25";
+export const MODULE_VERSION = "1.122.26";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.122.26": {releasedAt:"2026-10-19T19:00:00+02:00",patch:"NET-UI-08.patch",changes:[{type:"fixed",description:"Suspend unrelated domain queries on Netatmo Heating"},{type:"changed",description:"Mode badges and state-specific gray/off or orange/on boiler SVG icons, concise telemetry cards"}]},
   "1.122.25": {releasedAt:"2026-10-19T18:15:00+02:00",patch:"NET-UI-07.patch",changes:[{type:"changed",description:"Boiler card displays green idle and orange heating with state-matched burner icon; red fault and gray unknown"}]},
   "1.122.24": {releasedAt:"2026-10-19T19:00:00Z",patch:"NET-UI-06.patch",changes:[{type:"changed",description:"Heating metrics adopt native Dashboard card styling, real simulator values, and menu position under Service Registry"}]},
   "1.122.23": {releasedAt:"2026-10-19T18:00:00Z",patch:"NET-UI-04-FIX-01.patch",changes:[{type:"fixed",description:"Persist selected Netatmo connection across navigation and reloads"},{type:"changed",description:"Simulator-style four telemetry tiles with explicit missing-data indicators"}]},

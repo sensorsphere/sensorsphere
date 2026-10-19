@@ -1250,8 +1250,7 @@ function Dashboard() {
       queryFn:
         getSensors,
 
-      enabled:
-        canLoadProtectedData,
+      enabled: (canLoadProtectedData) && activePage !== "netatmo-heating",
 
       refetchInterval:
         30_000
@@ -1265,8 +1264,7 @@ function Dashboard() {
       queryFn:
         getAssets,
 
-      enabled:
-        canLoadProtectedData,
+      enabled: (canLoadProtectedData) && activePage !== "netatmo-heating",
 
       refetchInterval:
         30_000
@@ -1275,6 +1273,7 @@ function Dashboard() {
   const simpleDashboardsQuery =
     useQuery({
       queryKey: ["simple-dashboards"],
+      enabled: activePage !== "netatmo-heating",
       queryFn: getSimpleDashboards,
       refetchInterval: 30_000
     });
@@ -1282,6 +1281,7 @@ function Dashboard() {
   const metricDisplaySettingsQuery =
     useQuery({
       queryKey: ["metric-display-settings"],
+      enabled: activePage !== "netatmo-heating",
       queryFn: getMetricDisplaySettings,
       refetchInterval: 60_000
     });
@@ -1296,6 +1296,7 @@ function Dashboard() {
   const assetClassificationQuery =
     useQuery({
       queryKey: ["asset-classification"],
+      enabled: activePage !== "netatmo-heating",
       queryFn: getAssetClassification,
       refetchInterval: 60_000
     });
@@ -1305,6 +1306,7 @@ function Dashboard() {
       queryKey:
         ["locations"],
 
+      enabled: activePage !== "netatmo-heating",
       queryFn:
         getLocations,
 
@@ -1447,8 +1449,7 @@ function Dashboard() {
       queryFn:
         getGateways,
 
-      enabled:
-        canLoadProtectedData,
+      enabled: (canLoadProtectedData) && activePage !== "netatmo-heating",
 
       refetchInterval:
         30_000
@@ -1459,6 +1460,7 @@ function Dashboard() {
       queryKey:
         ["latest-observations"],
 
+      enabled: activePage !== "netatmo-heating",
       queryFn:
         getLatestObservations,
 
@@ -1471,6 +1473,7 @@ function Dashboard() {
       queryKey:
         ["active-alerts"],
 
+      enabled: activePage !== "netatmo-heating",
       queryFn:
         getActiveAlerts,
 
