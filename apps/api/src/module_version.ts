@@ -18,10 +18,11 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.76.17";
+export const MODULE_VERSION = "1.76.18";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.76.18": {releasedAt:"2026-10-19T19:30:00+02:00",patch:"NET-OAUTH-REAL-02.patch",changes:[{type:"fixed",description:"Clear obsolete collection errors after OAuth authorization and immediately reschedule read-only collection"},{type:"fixed",description:"Expose Netatmo homestatus error codes without device identifiers"}]},
   "1.76.17": {releasedAt:"2026-10-19T19:20:00+02:00",patch:"NET-OAUTH-REAL-01.patch",changes:[{type:"fixed",description:"Netatmo real OAuth scope exchange, array scopes, sanitized provider errors"}]},
   "1.76.16": {releasedAt:"2026-10-19T19:00:00Z",patch:"NET-UI-06.patch",changes:[{type:"added",description:"Optional simulator outdoor temperature and boiler fault telemetry"}]},
   "1.76.15": {releasedAt:"2026-10-19T16:55:00Z",patch:"NET-UI-04-05.patch",changes:[{type:"fixed",description:"Isolated multi-home Netatmo telemetry mapping and explicit simulator-only control capability"}]},

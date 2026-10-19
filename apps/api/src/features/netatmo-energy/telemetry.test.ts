@@ -25,3 +25,8 @@ test('rejects upstream HTTP errors', async () => {
   globalThis.fetch = async () => new Response('unavailable', { status: 503 });
   try { await assert.rejects(readTelemetry(config, 'token'), /503/); } finally { globalThis.fetch = original; }
 });
+test('reports safe Netatmo device error codes instead of generic invalid status',async()=>{
+ const saved=globalThis.fetch;
+ globalThis.fetch=(async(input)=>new Response(JSON.stringify(String(input).includes('homesdata')?{body:{homes:[{id:'home-private',rooms:[],modules:[]}]}}:{status:'ok',body:{home:{id:'home-private'},errors:[{code:2,id:'private-device-id'}]}}),{status:200})) as typeof fetch;
+ try{await assert.rejects(readTelemetry(config,'token'),e=>e instanceof Error&&e.message.includes('device errors: 2')&&!e.message.includes('private-device-id'));}finally{globalThis.fetch=saved;}
+});

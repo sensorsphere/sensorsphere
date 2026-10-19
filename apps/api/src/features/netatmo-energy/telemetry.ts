@@ -25,8 +25,12 @@ export async function readTelemetry(config: NetatmoConfig, accessToken: string):
   }
   for (const home of homes) {
     if (typeof home.id !== 'string') throw new Error('Invalid home');
-    const status = (await get(`/api/homestatus?home_id=${encodeURIComponent(home.id)}`))?.body?.home;
-    if (!Array.isArray(status?.rooms) || !Array.isArray(status?.modules)) throw new Error('Invalid homestatus');
+    const statusResponse = await get(`/api/homestatus?home_id=${encodeURIComponent(home.id)}`);
+    const status = statusResponse?.body?.home;
+    if (!Array.isArray(status?.rooms) || !Array.isArray(status?.modules)) {
+      const codes=Array.isArray(statusResponse?.body?.errors)?statusResponse.body.errors.map((item:unknown)=>typeof item==='object'&&item!==null&&typeof (item as {code?:unknown}).code==='number'?(item as {code:number}).code:null).filter((v:unknown)=>v!==null):[];
+      throw new Error(codes.length?'Netatmo homestatus unavailable (device errors: '+codes.slice(0,5).join(', ')+')':'Netatmo homestatus missing rooms/modules');
+    }
     for (const room of status.rooms) {
       if (typeof room.id !== 'string') continue;
       rooms.push({ homeId: home.id, roomId: room.id, moduleId: roomModules.get(`${home.id}:${room.id}`) ?? null, measuredTemperature: numeric(room.therm_measured_temperature), setpointTemperature: numeric(room.therm_setpoint_temperature), setpointMode: typeof room.therm_setpoint_mode === 'string' ? room.therm_setpoint_mode : null, outdoorTemperature: numeric(room.outdoor_temperature) });

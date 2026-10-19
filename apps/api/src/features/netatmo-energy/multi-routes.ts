@@ -42,6 +42,8 @@ export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
       const tokens=validateOAuthTokens(await exchangeCode(config,parsed.data.code,expectedScope));
       await storeNetatmoTokens(pool,tokens,netatmoEncryptionKey(),credentialId(id));
       await setConnectionOAuthError(pool,id,null);
+      // The previous collection error may predate authorization; retry immediately.
+      await pool.query(`UPDATE netatmo_connections SET collect_last_error=NULL,collect_next_at=CASE WHEN collect_interval_seconds>0 THEN NOW() ELSE NULL END WHERE id=$1`,[id]);
       return reply.header('Cache-Control','no-store').header('Referrer-Policy','no-referrer').type('text/html').send('<!doctype html><title>Netatmo connected</title><p>Connection authorized. You may close this window.</p>');
     }catch(error){
       const exchange=error instanceof NetatmoOAuthExchangeError?error:null;
