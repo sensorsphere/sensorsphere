@@ -1,6 +1,6 @@
 import type { NetatmoConfig } from './client.js';
-export type RoomReading = { homeId: string; roomId: string; moduleId?: string | null; measuredTemperature: number | null; setpointTemperature: number | null; setpointMode: string | null };
-export type ModuleReading = { homeId: string; moduleId: string; heating: boolean | null; reachable: boolean | null; batteryPercent: number | null };
+export type RoomReading = { homeId: string; roomId: string; moduleId?: string | null; measuredTemperature: number | null; setpointTemperature: number | null; setpointMode: string | null; outdoorTemperature?: number | null };
+export type ModuleReading = { homeId: string; moduleId: string; heating: boolean | null; boilerFault?: boolean | null; reachable: boolean | null; batteryPercent: number | null };
 export type Readings = { rooms: RoomReading[]; modules: ModuleReading[] };
 const numeric = (v: unknown): number | null => typeof v === 'number' && Number.isFinite(v) ? v : null;
 const boolean = (v: unknown): boolean | null => typeof v === 'boolean' ? v : null;
@@ -29,11 +29,11 @@ export async function readTelemetry(config: NetatmoConfig, accessToken: string):
     if (!Array.isArray(status?.rooms) || !Array.isArray(status?.modules)) throw new Error('Invalid homestatus');
     for (const room of status.rooms) {
       if (typeof room.id !== 'string') continue;
-      rooms.push({ homeId: home.id, roomId: room.id, moduleId: roomModules.get(`${home.id}:${room.id}`) ?? null, measuredTemperature: numeric(room.therm_measured_temperature), setpointTemperature: numeric(room.therm_setpoint_temperature), setpointMode: typeof room.therm_setpoint_mode === 'string' ? room.therm_setpoint_mode : null });
+      rooms.push({ homeId: home.id, roomId: room.id, moduleId: roomModules.get(`${home.id}:${room.id}`) ?? null, measuredTemperature: numeric(room.therm_measured_temperature), setpointTemperature: numeric(room.therm_setpoint_temperature), setpointMode: typeof room.therm_setpoint_mode === 'string' ? room.therm_setpoint_mode : null, outdoorTemperature: numeric(room.outdoor_temperature) });
     }
     for (const module of status.modules) {
       if (typeof module.id !== 'string') continue;
-      modules.push({ homeId: home.id, moduleId: module.id, heating: boolean(module.boiler_status), reachable: boolean(module.reachable), batteryPercent: numeric(module.battery_percent) });
+      modules.push({ homeId: home.id, moduleId: module.id, heating: boolean(module.boiler_status), boilerFault: boolean(module.boiler_fault), reachable: boolean(module.reachable), batteryPercent: numeric(module.battery_percent) });
     }
   }
   return { rooms, modules };

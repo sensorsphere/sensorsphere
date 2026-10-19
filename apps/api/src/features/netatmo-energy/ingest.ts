@@ -29,6 +29,7 @@ export async function ingestNetatmoReadings(pool: Pool, readings: Readings, conn
       await record(id,`Netatmo room ${room.roomId}`,'temperature','Temperature','°C',room.measuredTemperature,identity);
       await record(id,`Netatmo room ${room.roomId}`,'setpoint','Setpoint','°C',room.setpointTemperature,identity);
       await record(id,`Netatmo room ${room.roomId}`,'mode','Thermostat mode',null,room.setpointMode,identity);
+      await record(id,`Netatmo room ${room.roomId}`,'outdoor_temperature','Outdoor temperature','°C',room.outdoorTemperature??null,identity);
     }
     for (const module of readings.modules) {
       // Registry health uses last_seen_at; telemetry alone does not refresh it.
@@ -42,6 +43,7 @@ export async function ingestNetatmoReadings(pool: Pool, readings: Readings, conn
         [scoped(`${module.homeId}:${module.moduleId}`), module.reachable, module.batteryPercent, timestamp]);
       const id = `netatmo:module:${module.homeId}:${module.moduleId}`;
       await record(id,`Netatmo module ${module.moduleId}`,'heating','Heating',null,module.heating,`${module.homeId}:${module.moduleId}`);
+      await record(id,`Netatmo module ${module.moduleId}`,'boiler_fault','Boiler fault',null,module.boilerFault??null,`${module.homeId}:${module.moduleId}`);
       await record(id,`Netatmo module ${module.moduleId}`,'reachable','Reachable',null,module.reachable,`${module.homeId}:${module.moduleId}`);
       await record(id,`Netatmo module ${module.moduleId}`,'battery','Battery','%',module.batteryPercent,`${module.homeId}:${module.moduleId}`);
     }

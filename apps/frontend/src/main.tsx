@@ -2978,12 +2978,13 @@ function Dashboard() {
 
 
 
-        </Stack>
-
-        <Stack gap="xs" mt="auto" pt="md">
           {
             <NavLink label={navbarCollapsed ? null : "Netatmo Heating"} leftSection={<NavigationIcon page="netatmo-heating" />} title="Netatmo Heating" active={activePage === "netatmo-heating"} onClick={() => navigateTo("netatmo-heating")} />
           }
+
+        </Stack>
+
+        <Stack gap="xs" mt="auto" pt="md">
           {authContextQuery.data?.isAdmin && (
             <NavLink label={navbarCollapsed ? null : "Netatmo Connections"} leftSection={<NavigationIcon page="netatmo-connections" />} title="Netatmo Connections" active={activePage === "netatmo-connections"} onClick={() => navigateTo("netatmo-connections")} />
           )}

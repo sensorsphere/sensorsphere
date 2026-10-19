@@ -18,10 +18,11 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.122.23";
+export const MODULE_VERSION = "1.122.24";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.122.24": {releasedAt:"2026-10-19T19:00:00Z",patch:"NET-UI-06.patch",changes:[{type:"changed",description:"Heating metrics adopt native Dashboard card styling, real simulator values, and menu position under Service Registry"}]},
   "1.122.23": {releasedAt:"2026-10-19T18:00:00Z",patch:"NET-UI-04-FIX-01.patch",changes:[{type:"fixed",description:"Persist selected Netatmo connection across navigation and reloads"},{type:"changed",description:"Simulator-style four telemetry tiles with explicit missing-data indicators"}]},
   "1.122.22": {releasedAt:"2026-10-19T16:55:00Z",patch:"NET-UI-04-05.patch",changes:[{type:"added",description:"Netatmo Heating navigation from Assets, Device Registry, History and Dashboard; multi-connection context and real-device read-only preparation"}]},
   "1.122.21": {releasedAt:"2026-10-19T16:00:00Z",patch:"NET-UI-03.patch",changes:[{type:"added",description:"User-accessible heating supervision with persistent command lifecycle and status"}]},
