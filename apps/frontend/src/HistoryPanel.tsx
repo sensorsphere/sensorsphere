@@ -5682,7 +5682,7 @@ export function HistoryPanel({
                           next
                         )
                     }
-                    onDuplicate={()=>setGraphs([...graphs.slice(0,index+1),normalizedGraph({...graph,id:'history-'+Date.now()+'-'+Math.random().toString(16).slice(2),name:(graph.name??'Graph')+' (copy)',versions:[],savedAt:new Date().toISOString()}),...graphs.slice(index+1)])}
+                    onDuplicate={()=>setGraphs([...graphs.slice(0,index+1),normalizedGraph({...graph,id:'history-'+Date.now()+'-'+Math.random().toString(16).slice(2),name:(graph.name?.trim() || (graph.mode==='metric_sensors' ? (graph.metricKey || 'History graph') : (assets.find(asset=>asset.id===graph.assetId)?.sensor?.name ?? assets.find(asset=>asset.id===graph.assetId)?.externalId ?? 'History graph')))+' (copy)',versions:[],savedAt:new Date().toISOString()}),...graphs.slice(index+1)])}
                     onRemove={
                       () =>
                         setGraphs(
