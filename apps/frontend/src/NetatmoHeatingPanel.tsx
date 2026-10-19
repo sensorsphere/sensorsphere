@@ -3,8 +3,8 @@ import { Alert, Badge, Box, Button, Card, Divider, Grid, Group, Modal, NumberInp
 
 type Permission="granted"|"missing"|"unknown";
 type Metric={value:number|string|boolean|null;recordedAt:string|null};
-type Device={id:string;name:string;type:"thermostat"|"relay";parentId:string|null;lastSeenAt:string|null;metrics:Record<string,Metric>};
-type Connection={id:string;name:string;enabled:boolean;oauthStatus:string;permissions:{read:Permission;write:Permission};lastSuccessAt:string|null;lastError:string|null;intervalSeconds:number;devices:Device[]};
+type Device={id:string;name:string;type:"thermostat"|"relay";parentId:string|null;lastSeenAt:string|null;homeId:string|null;moduleId:string|null;metrics:Record<string,Metric>};
+type Connection={id:string;name:string;enabled:boolean;oauthStatus:string;permissions:{read:Permission;write:Permission};lastSuccessAt:string|null;lastError:string|null;intervalSeconds:number;source:"simulator"|"external";controlCapability:"simulator-enabled"|"read-only";devices:Device[]};
 type Overview={connections:Connection[];generatedAt:string};
 type Mode="manual"|"schedule"|"away"|"hg";
 type Command={mode:Mode;temperature?:number;durationSeconds?:number};
@@ -36,7 +36,7 @@ function status(device:Device,connection:Connection,now:number){
   if(reachable===false)return {label:"Unreachable",color:"red"};
   return {label:reachable===true?"Reachable":"Recent data",color:"green"};
 }
-export function NetatmoHeatingPanel({onOpenAssets,onOpenDevice,onOpenHistory,onOpenConnections}:{onOpenAssets?:(id:string)=>void;onOpenDevice?:(id:string)=>void;onOpenHistory?:()=>void;onOpenConnections?:()=>void}={}){
+export function NetatmoHeatingPanel({targetConnectionId,onOpenAssets,onOpenDevice,onOpenHistory,onOpenConnections}:{targetConnectionId?:string|null;onOpenAssets?:(id:string)=>void;onOpenDevice?:(id:string)=>void;onOpenHistory?:()=>void;onOpenConnections?:()=>void}={}){
   const [overview,setOverview]=React.useState<Overview|null>(null);
   const [selected,setSelected]=React.useState<string|null>(null);
   const [error,setError]=React.useState("");
@@ -56,8 +56,9 @@ export function NetatmoHeatingPanel({onOpenAssets,onOpenDevice,onOpenHistory,onO
     catch(e){setError(e instanceof Error?e.message:String(e));}
   },[]);
   React.useEffect(()=>{void load();const timer=window.setInterval(()=>void load(),30000);return()=>window.clearInterval(timer);},[load]);
+  React.useEffect(()=>{if(targetConnectionId){setSelected(targetConnectionId);setResult(null);setConfirm(null);}},[targetConnectionId]);
   const connections=overview?.connections??[];
-  const active=connections.find(c=>c.id===selected)??connections[0];
+  const active=connections.find(c=>c.id===selected)??(selected?undefined:connections[0]);
   React.useEffect(()=>{
     if(!active){setJournal([]);return;}
     let mounted=true;
@@ -67,7 +68,7 @@ export function NetatmoHeatingPanel({onOpenAssets,onOpenDevice,onOpenHistory,onO
   },[active?.id]);
   const thermostats=active?.devices.filter(d=>d.type==="thermostat")??[];
   const relays=active?.devices.filter(d=>d.type==="relay")??[];
-  const controlAllowed=active?.id==="sim-02"&&active.enabled&&active.oauthStatus==="authorized"&&active.permissions.write==="granted";
+  const controlAllowed=active?.controlCapability==="simulator-enabled"&&active.enabled&&active.oauthStatus==="authorized"&&active.permissions.write==="granted";
   const submit=async()=>{
     if(!confirm||!active||busy)return;
     const sent=confirm;setBusy(true);setError("");setResult(null);setResultMode(null);
@@ -86,13 +87,14 @@ export function NetatmoHeatingPanel({onOpenAssets,onOpenDevice,onOpenHistory,onO
     </Group>
     {error&&<Alert color="red" title="Netatmo">{error}</Alert>}
     {connections.length===0&&<Alert color="gray">No Netatmo connections configured.</Alert>}
+    {selected&&connections.length>0&&!active&&<Alert color="orange">Connection {selected} is no longer available. Select another connection below.</Alert>}
     {connections.length>0&&<Group gap="xs" wrap="wrap">{connections.map(c=><Button key={c.id} size="sm" variant={active?.id===c.id?"filled":"light"} onClick={()=>{setSelected(c.id);setResult(null);setConfirm(null);}}>{c.name}</Button>)}</Group>}
     {active&&<>
       <Card withBorder radius="md" padding="md">
         <Group justify="space-between" align="center" wrap="wrap">
           <Box><Text fw={700}>{active.name}</Text><Text size="xs" c="dimmed">Connection {active.id} · Last successful collection: {timeLabel(active.lastSuccessAt)}</Text></Box>
           <Group gap="xs">
-            <Badge color={active.enabled?"green":"gray"}>{active.enabled?"Enabled":"Disabled"}</Badge>
+            <Badge color={active.enabled?"green":"gray"}>{active.enabled?"Enabled":"Disabled"}</Badge><Badge color={active.source==="simulator"?"cyan":"gray"}>{active.source==="simulator"?"Simulator":"External / real"}</Badge><Badge color={active.controlCapability==="simulator-enabled"?"green":"gray"}>{active.controlCapability==="simulator-enabled"?"Simulation control enabled":"Read-only"}</Badge>
             <Badge color={active.permissions.read==="granted"?"green":active.permissions.read==="missing"?"red":"gray"}>Read: {active.permissions.read}</Badge>
             <Badge color={active.permissions.write==="granted"?"green":active.permissions.write==="missing"?"red":"gray"}>Write: {active.permissions.write}</Badge>
           </Group>
@@ -109,10 +111,10 @@ export function NetatmoHeatingPanel({onOpenAssets,onOpenDevice,onOpenHistory,onO
           const modeCurrent=textMetric(device.metrics.mode);
           const battery=numberMetric(device.metrics.battery);
           const stale=state.label==="Stale data"||state.label==="No telemetry"||state.label==="Unreachable";
-          const mayControl=controlAllowed&&!stale;
+          const mayControl=controlAllowed&&thermostats.length===1&&!stale;
           return <Grid.Col span={{base:12,lg:8}} key={device.id}>
             <Card withBorder radius="md" padding="lg"><Stack gap="md">
-              <Group justify="space-between" align="start"><Box><Title order={3}>{device.name}</Title><Text size="xs" c="dimmed">Thermostat · {active.id}</Text></Box><Badge color={state.color}>{state.label}</Badge></Group>
+              <Group justify="space-between" align="start"><Box><Title order={3}>{device.name}</Title><Text size="xs" c="dimmed">Thermostat · {active.id}{device.homeId?" · Home "+device.homeId:""}{device.moduleId?" · Module "+device.moduleId:""}</Text></Box><Badge color={state.color}>{state.label}</Badge></Group>
               <Grid gutter="sm">
                 <Grid.Col span={6}><Box p="md" bg="var(--mantine-color-default-hover)" style={{borderRadius:12}}><Text size="xs" c="dimmed">Measured temperature</Text><Title order={1}>{degrees(measured)}</Title></Box></Grid.Col>
                 <Grid.Col span={6}><Box p="md" bg="var(--mantine-color-default-hover)" style={{borderRadius:12}}><Text size="xs" c="dimmed">Active setpoint</Text><Title order={1}>{degrees(target)}</Title></Box></Grid.Col>
@@ -133,7 +135,7 @@ export function NetatmoHeatingPanel({onOpenAssets,onOpenDevice,onOpenHistory,onO
                 <Select label="Override duration" value={duration} onChange={v=>setDuration(v??"3600")} data={[{value:"1800",label:"30 minutes"},{value:"3600",label:"1 hour"},{value:"7200",label:"2 hours"},{value:"14400",label:"4 hours"}]} w={150}/>
               </Group>}
               <Group justify="space-between" align="center" wrap="wrap">
-                <Text size="xs" c={mayControl?"dimmed":"orange"}>{!controlAllowed?"Read-only: write scope missing, unverified, or connection not approved for control.":stale?"Control unavailable until fresh reachable telemetry is recorded.":"SIM-02 simulator only · confirmation required before sending."}</Text>
+                <Text size="xs" c={mayControl?"dimmed":"orange"}>{!controlAllowed?"Read-only: physical equipment and unapproved connections cannot receive commands.":thermostats.length!==1?"Control requires exactly one discovered thermostat for this simulator.":stale?"Control unavailable until fresh reachable telemetry is recorded.":"SIM-02 simulator only · confirmation required before sending."}</Text>
                 <Button disabled={!mayControl||busy||(mode==="manual"&&(!Number.isFinite(Number(temperature))||Number(temperature)<7||Number(temperature)>30||Number(temperature)%0.5!==0))} onClick={()=>setConfirm(mode==="manual"?{mode,temperature:Number(temperature),durationSeconds:Number(duration)}:{mode})}>Review command</Button>
               </Group>
               {result&&<Alert color={result.returnedState?.mode===resultMode&&(sentCommand?.mode!=="manual"||Math.abs((result.returnedState?.setpoint??-999)-(sentCommand.temperature??-999))<=0.05)?"green":"orange"} title={result.returnedState?.mode===resultMode&&(sentCommand?.mode!=="manual"||Math.abs((result.returnedState?.setpoint??-999)-(sentCommand.temperature??-999))<=0.05)?"API accepted · readback matches":"API accepted · readback differs"}>

@@ -47,12 +47,14 @@ import {
 } from "./LocationIcon";
 import { DashboardMetricAction } from "./DashboardMetricAction";
 import { EditActionIcon } from "./TableActionIcons";
+import { connectionFromNetatmoAsset } from "./netatmoNavigation";
 
 interface Props {
   asset: Asset;
   observations: LatestObservation[];
   enabled: boolean;
   onEdit?: (asset: Asset) => void;
+  onOpenNetatmoHeating?: (connectionId:string) => void;
   onAddMetricToDashboard?: (asset: Asset, metricId: string) => void;
   dashboardUsageDetails?: ReadonlyMap<string, readonly string[]>;
 }
@@ -221,6 +223,7 @@ export function AssetLatestCard({
   observations,
   enabled,
   onEdit,
+  onOpenNetatmoHeating,
   onAddMetricToDashboard,
   dashboardUsageDetails
 }: Props) {
@@ -777,6 +780,7 @@ export function AssetLatestCard({
           )}
 
         <Group justify="flex-end" gap="xs">
+          {onOpenNetatmoHeating && connectionFromNetatmoAsset(asset.externalId) && <Button size="xs" variant="light" onClick={()=>onOpenNetatmoHeating(connectionFromNetatmoAsset(asset.externalId)!)}>Netatmo Heating</Button>}
           {onEdit && (
             <EditActionIcon
               onClick={() => onEdit(asset)}

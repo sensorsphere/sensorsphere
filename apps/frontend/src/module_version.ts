@@ -18,10 +18,11 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.122.21";
+export const MODULE_VERSION = "1.122.22";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.122.22": {releasedAt:"2026-10-19T16:55:00Z",patch:"NET-UI-04-05.patch",changes:[{type:"added",description:"Netatmo Heating navigation from Assets, Device Registry, History and Dashboard; multi-connection context and real-device read-only preparation"}]},
   "1.122.21": {releasedAt:"2026-10-19T16:00:00Z",patch:"NET-UI-03.patch",changes:[{type:"added",description:"User-accessible heating supervision with persistent command lifecycle and status"}]},
   "1.122.20": {releasedAt:"2026-10-19T14:00:00Z",patch:"NET-UI-01-02.patch",changes:[{type:"added",description:"Netatmo Heating supervision and command center with modal confirmation"}]},
   "1.122.19": {releasedAt:"2026-10-19T10:00:00Z",patch:"NET-OAUTH-PERMISSIONS.patch",changes:[{type:"added",description:"Show Netatmo read/write OAuth scopes with verification action"}]},

@@ -1,6 +1,7 @@
 import React from "react";
 
 import { NavigationIcon } from "./NavigationIcon";
+import { connectionFromNetatmoAsset } from "./netatmoNavigation";
 
 import {
   ActionIcon,
@@ -142,6 +143,7 @@ interface HistoryPanelProps {
   templateLaunch?: HistoryTemplateLaunchConfig | null;
   onCloseTemplateLaunch?: () => void;
   onTemplateViewSaved?: (viewId: string) => void;
+  onOpenNetatmoHeating?: (connectionId:string)=>void;
 }
 
 const PERIODS = [
@@ -3079,7 +3081,8 @@ function formatCurrentValue(
 export function HistoryPanel({
   templateLaunch = null,
   onCloseTemplateLaunch,
-  onTemplateViewSaved
+  onTemplateViewSaved,
+  onOpenNetatmoHeating
 }: HistoryPanelProps = {}) {
 
   const queryClient =
@@ -4629,6 +4632,7 @@ export function HistoryPanel({
         </div>
 
         <div className="page-sticky-controls-gap-md history-sticky-controls">
+          {onOpenNetatmoHeating && <Select size="xs" searchable clearable placeholder="Netatmo Heating…" aria-label="Open Netatmo Heating connection" value={null} data={[...new Set(assets.map(a=>connectionFromNetatmoAsset(a.externalId)).filter((id):id is string=>Boolean(id)))].sort().map(id=>({value:id,label:id}))} onChange={value=>value&&onOpenNetatmoHeating(value)} w={180} />}
       <Group
         gap="xs"
         align="center"

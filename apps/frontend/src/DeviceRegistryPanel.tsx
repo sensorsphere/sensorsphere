@@ -72,6 +72,7 @@ import type {
 import { EditActionIcon, DeleteActionIcon } from "./TableActionIcons";
 import { DEVICE_ICON_OPTIONS, DeviceGlyph } from "./DeviceGlyph";
 import { NavigationIcon } from "./NavigationIcon";
+import { connectionFromNetatmoIdentity } from "./netatmoNavigation";
 import { ResolvedIconGlyph, resolveDeviceIcon } from "./ResolvedDeviceIcon";
 import { DeviceTaxonomyPanel } from "./DeviceTaxonomyPanel";
 import { DeviceAccessGlyph, DeviceAccessLinksEditor, openDeviceAccessUrl, resolveDeviceAccessUrl } from "./DeviceAccessLinksEditor";
@@ -540,7 +541,7 @@ function upsertDiscoveredIdentities(
   return next;
 }
 
-export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOpened, onDeviceSaved }: { openDeviceId?: string | null; openAccessLinkId?: string | null; onDeviceOpened?: () => void; onDeviceSaved?: () => void } = {}) {
+export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOpened, onDeviceSaved, onOpenNetatmoHeating }: { openDeviceId?: string | null; openAccessLinkId?: string | null; onDeviceOpened?: () => void; onDeviceSaved?: () => void; onOpenNetatmoHeating?:(connectionId:string)=>void } = {}) {
   const queryClient = useQueryClient();
   const [tab, setTab] = usePersistentState<string | null>("device-registry.tab", "devices");
   React.useEffect(() => { if (tab === "device-agents") setTab("agents"); }, [tab, setTab]);
@@ -1641,6 +1642,7 @@ export function DeviceRegistryPanel({ openDeviceId, openAccessLinkId, onDeviceOp
                               const label = !supported ? "Device control is not available for this provider" : !device.controlSlot ? "Assign a Device Agent Slot first" : !device.controlAgent ? "The assigned Device Agent Slot is UNBOUND" : !agent?.online ? "Device Agent is offline" : !capability ? `Device Agent does not advertise ${provider}` : "Control device";
                               return <Tooltip label={label}><span><ActionIcon size="sm" variant="light" color="violet" disabled={!canControl} aria-label={`Control ${device.name}`} onClick={() => void openDeviceControl(device)}>◉</ActionIcon></span></Tooltip>;
                             })()}
+                            {onOpenNetatmoHeating && connectionFromNetatmoIdentity(device.identities) && <Tooltip label="Open Netatmo Heating"><ActionIcon size="sm" variant="light" color="orange" aria-label={`Netatmo Heating ${device.name}`} onClick={()=>onOpenNetatmoHeating(connectionFromNetatmoIdentity(device.identities)!)}>♨</ActionIcon></Tooltip>}
                             <EditActionIcon onClick={() => openEditDevice(device)} />
                             <Tooltip label="Copy device"><ActionIcon size="sm" variant="light" color="green" aria-label={`Copy ${device.name}`} onClick={() => openCopyDevice(device)}>⧉</ActionIcon></Tooltip>
                             <DeleteActionIcon onClick={() => { setError(null); setDeleteDeviceTarget(device); }} />
