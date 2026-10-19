@@ -10,11 +10,13 @@ import { getNetatmoAccessToken, getNetatmoPermissions, netatmoEncryptionKey, sto
 import { readTelemetry } from './telemetry.js';
 import { ingestNetatmoReadings } from './ingest.js';
 import { importNetatmoDiscovery } from './registry.js';
+import { getNetatmoHeatingOverview } from './heating-overview.js';
 
 const base='/api/v1/integrations/netatmo/connections';
 const params=z.object({id:z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/)});
 const credentialId=(id:string)=>`netatmo-energy:${id}`;
 export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
+  app.get(base+'/heating/overview',async request=>{requireAdmin(request);return getNetatmoHeatingOverview(pool);});
   app.get(`${base}/:id/authorize`,async(request,reply)=>{
     requireAdmin(request);
     const parsed=params.safeParse(request.params);
@@ -71,6 +73,8 @@ export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
     try {
       const token=await getNetatmoAccessToken(pool,config,netatmoEncryptionKey(),credentialId(parsed.data.id));
       if(!token)return reply.code(409).send({error:'Authorize SIM-02 with write_thermostat scope before control'});
+      const permissions=await getNetatmoPermissions(pool,credentialId(parsed.data.id));
+      if(permissions.write!=='granted')return reply.code(403).send({error:'OAuth write_thermostat permission is not granted or cannot be verified'});
       const homes=await discover(config,token);
       if(homes.homes!==1)return reply.code(409).send({error:'SIM-02 home count is not exactly one'});
       const homeId='sim-home-02',roomId='sim-room-02';

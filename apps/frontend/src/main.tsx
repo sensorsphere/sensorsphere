@@ -230,6 +230,7 @@ import {
 } from "./NavigationIcon";
 import { DatabaseStoragePanel } from "./DatabaseStoragePanel";
 import { NetatmoConnectionsPanel } from "./NetatmoConnectionsPanel";
+import { NetatmoHeatingPanel } from "./NetatmoHeatingPanel";
 import { defaultMetricColor } from "./metricVisuals";
 
 function ThemeSelector() {
@@ -302,6 +303,7 @@ Record<PageKey, string> = {
 
   "database-storage":
     "Database Storage & Retention",
+  "netatmo-heating": "Netatmo Heating",
   "netatmo-connections": "Netatmo Connections",
 
   users:
@@ -333,6 +335,7 @@ function isPageKey(
     value === "metric-routing" ||
     value === "gateway-coverage" ||
     value === "database-storage" ||
+    value === "netatmo-heating" ||
     value === "netatmo-connections" ||
     value === "users" ||
     value === "versions" ||
@@ -949,7 +952,7 @@ function Dashboard() {
     if (
       authContextQuery.data &&
       !authContextQuery.data.isAdmin &&
-      (activePage === "users" || activePage === "database-storage" || activePage === "netatmo-connections")
+      (activePage === "users" || activePage === "database-storage" || activePage === "netatmo-connections" || activePage === "netatmo-heating")
     ) {
       setActivePage("dashboard");
     }
@@ -2972,6 +2975,9 @@ function Dashboard() {
         </Stack>
 
         <Stack gap="xs" mt="auto" pt="md">
+          {authContextQuery.data?.isAdmin && (
+            <NavLink label={navbarCollapsed ? null : "Netatmo Heating"} leftSection={<NavigationIcon page="netatmo-heating" />} title="Netatmo Heating" active={activePage === "netatmo-heating"} onClick={() => navigateTo("netatmo-heating")} />
+          )}
           {authContextQuery.data?.isAdmin && (
             <NavLink label={navbarCollapsed ? null : "Netatmo Connections"} leftSection={<NavigationIcon page="netatmo-connections" />} title="Netatmo Connections" active={activePage === "netatmo-connections"} onClick={() => navigateTo("netatmo-connections")} />
           )}
@@ -5723,6 +5729,7 @@ function Dashboard() {
               )
             }
 
+            {authContextQuery.data?.isAdmin && activePage === "netatmo-heating" && <NetatmoHeatingPanel onOpenConnections={()=>navigateTo("netatmo-connections")} onOpenHistory={()=>navigateTo("history")} onOpenDevice={deviceId=>{setDeviceRegistryOpenId(deviceId);navigateTo("devices");}} onOpenAssets={connectionId=>{setAssetSearch(connectionId+":");setAssetHealthFilter("all");setAssetEnabledFilter("all");setAssetLocationFilter(null);setAssetTypeFilter(null);setAssetManufacturerFilter(null);setAssetTagFilter(null);navigateTo("assets");}} />}
             {authContextQuery.data?.isAdmin && activePage === "netatmo-connections" && <NetatmoConnectionsPanel onOpenMetricHistory={(externalId,metricKey)=>{const asset=(assetsQuery.data??[]).find(item=>item.externalId===externalId);const metric=asset?.metrics.find(m=>m.key===metricKey);if(asset&&metric){setHistoryTemplateLaunch({key:"netatmo-"+Date.now(),templateId:"netatmo-"+asset.id,templateName:"Netatmo · "+metric.displayName,tabs:[{id:"netatmo-tab",name:"Netatmo",graphs:[{id:"netatmo-metric",name:metric.displayName,metricKey,assetIds:[asset.id]}]}]});setTemplateHistoryActive(true);navigateTo("history");}}} onAddMetric={(externalId,metricKey)=>{const asset=(assetsQuery.data??[]).find(item=>item.externalId===externalId);const metric=asset?.metrics.find(m=>m.key===metricKey);if(asset&&metric){setAssetSearch(externalId);navigateTo("assets");setDashboardMetricTarget({asset,metric});}}} onOpenDevice={deviceId=>{setDeviceRegistryOpenId(deviceId);navigateTo("devices");}} onOpenAssets={connectionId=>{setAssetSearch(connectionId+":");setAssetHealthFilter("all");setAssetEnabledFilter("all");setAssetLocationFilter(null);setAssetTypeFilter(null);setAssetManufacturerFilter(null);setAssetTagFilter(null);navigateTo("assets");}} onOpenHistory={()=>navigateTo("history")} />}
 
             {

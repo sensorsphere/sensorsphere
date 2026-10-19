@@ -18,10 +18,11 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "frontend";
-export const MODULE_VERSION = "1.122.19";
+export const MODULE_VERSION = "1.122.20";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.122.20": {releasedAt:"2026-10-19T14:00:00Z",patch:"NET-UI-01-02.patch",changes:[{type:"added",description:"Netatmo Heating supervision and command center with modal confirmation"}]},
   "1.122.19": {releasedAt:"2026-10-19T10:00:00Z",patch:"NET-OAUTH-PERMISSIONS.patch",changes:[{type:"added",description:"Show Netatmo read/write OAuth scopes with verification action"}]},
   "1.122.18": {releasedAt:"2026-10-18T10:30:00Z",patch:"NET-FIX-1E.patch",changes:[{type:"fixed",description:"Netatmo collection interval selection crash and History save editing"},{type:"added",description:"Duplicate History graph"}]},
   "1.122.17": {releasedAt:"2026-10-18T09:55:00Z",patch:"NET-FIX-1D.patch",changes:[{type:"changed",description:"Recorded observation window, categorical axes and configurable translucent area fills"}]},
