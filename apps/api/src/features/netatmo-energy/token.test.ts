@@ -27,3 +27,11 @@ test('refresh uses refresh_token grant and validates response', async () => {
     assert.deepEqual(await refreshNetatmoToken({ baseUrl: 'http://127.0.0.1:8091', clientId: 'sim-client', clientSecret: 'sim-secret', redirectUri: 'http://127.0.0.1/callback' }, 'old'), tokens);
   } finally { globalThis.fetch = original; }
 });
+
+test('OAuth scope is preserved inside encrypted token and never inferred when absent', () => {
+  const key=randomBytes(32);
+  const scoped={...tokens,scope:'read_thermostat write_thermostat'};
+  assert.deepEqual(decryptTokens(encryptTokens(validateOAuthTokens(scoped),key),key),scoped);
+  assert.deepEqual(validateOAuthTokens(tokens),tokens);
+  assert.throws(()=>validateOAuthTokens({...tokens,scope:['write_thermostat']}));
+});

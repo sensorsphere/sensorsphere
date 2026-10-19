@@ -15,7 +15,7 @@ export async function storeNetatmoTokens(pool: Pool, tokens: OAuthTokens, key: B
     ON CONFLICT (integration_id) DO UPDATE SET encrypted_tokens=EXCLUDED.encrypted_tokens,expires_at=EXCLUDED.expires_at,updated_at=NOW()`,
     [integrationId,encrypted,tokens.expires_in]);
 }
-export async function getNetatmoAccessToken(pool: Pool, config: NetatmoConfig, key: Buffer, integrationId = NETATMO_INTEGRATION_ID): Promise<string | null> {
+export async function getNetatmoAccessToken(pool: Pool, config: NetatmoConfig, key: Buffer, integrationId = NETATMO_INTEGRATION_ID, forceRefresh = false): Promise<string | null> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -26,8 +26,9 @@ export async function getNetatmoAccessToken(pool: Pool, config: NetatmoConfig, k
     const stored = result.rows[0];
     if (!stored) { await client.query('COMMIT'); return null; }
     let tokens = decryptTokens(stored.encrypted_tokens,key);
-    if (stored.refresh_required) {
-      tokens = await refreshNetatmoToken(config,tokens.refresh_token);
+    if (stored.refresh_required || forceRefresh) {
+      const refreshed = await refreshNetatmoToken(config,tokens.refresh_token);
+      tokens = { ...refreshed, ...(refreshed.scope === undefined && tokens.scope !== undefined ? {scope:tokens.scope} : {}) };
       await client.query(`UPDATE netatmo_oauth_credentials SET encrypted_tokens=$2,
         expires_at=NOW()+($3::double precision * INTERVAL '1 second'),updated_at=NOW()
         WHERE integration_id=$1`, [integrationId,encryptTokens(tokens,key),tokens.expires_in]);
@@ -36,4 +37,18 @@ export async function getNetatmoAccessToken(pool: Pool, config: NetatmoConfig, k
     return tokens.access_token;
   } catch (error) { await client.query('ROLLBACK'); throw error; }
   finally { client.release(); }
+}
+
+export type NetatmoPermission = 'granted' | 'missing' | 'unknown';
+export function netatmoPermissions(scope: string | undefined): {read:NetatmoPermission;write:NetatmoPermission} {
+  if (scope === undefined) return {read:'unknown',write:'unknown'};
+  const granted = new Set(scope.split(/\s+/).filter(Boolean));
+  return {read:granted.has('read_thermostat')?'granted':'missing',write:granted.has('write_thermostat')?'granted':'missing'};
+}
+export async function getNetatmoPermissions(pool:Pool, integrationId:string) {
+  const result=await pool.query<{encrypted_tokens:string;updated_at:Date}>(
+    'SELECT encrypted_tokens,updated_at FROM netatmo_oauth_credentials WHERE integration_id=$1',[integrationId]);
+  if (!result.rows[0]) return {read:'unknown' as const,write:'unknown' as const,verifiedAt:null};
+  const tokens=decryptTokens(result.rows[0].encrypted_tokens,netatmoEncryptionKey());
+  return {...netatmoPermissions(tokens.scope),verifiedAt:tokens.scope===undefined?null:result.rows[0].updated_at};
 }

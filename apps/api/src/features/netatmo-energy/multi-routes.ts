@@ -6,7 +6,7 @@ import { getConnection, setConnectionOAuthError } from './connections.js';
 import { createConnectionOAuthState, consumeConnectionOAuthState, oauthInitiator } from './oauth-state.js';
 import { exchangeCode, discover } from './client.js';
 import { validateOAuthTokens } from './token.js';
-import { getNetatmoAccessToken, netatmoEncryptionKey, storeNetatmoTokens } from './credentials.js';
+import { getNetatmoAccessToken, getNetatmoPermissions, netatmoEncryptionKey, storeNetatmoTokens } from './credentials.js';
 import { readTelemetry } from './telemetry.js';
 import { ingestNetatmoReadings } from './ingest.js';
 import { importNetatmoDiscovery } from './registry.js';
@@ -40,6 +40,18 @@ export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
       await setConnectionOAuthError(pool,id,null);
       return reply.header('Cache-Control','no-store').header('Referrer-Policy','no-referrer').type('text/html').send('<!doctype html><title>Netatmo connected</title><p>Connection authorized. You may close this window.</p>');
     }catch{await setConnectionOAuthError(pool,id,'OAuth token exchange failed. Check client ID, client secret and simulator availability.');return reply.code(502).send({error:'Netatmo authorization failed: check OAuth client credentials and simulator availability'});}
+  });
+  app.post(base+'/:id/oauth/verify-permissions',async(request,reply)=>{
+    requireAdmin(request);
+    const parsed=params.safeParse(request.params);
+    if(!parsed.success)return reply.code(400).send({error:'Invalid connection'});
+    const config=await getConnection(pool,parsed.data.id);
+    if(!config)return reply.code(404).send({error:'Connection missing or disabled'});
+    try {
+      const token=await getNetatmoAccessToken(pool,config,netatmoEncryptionKey(),credentialId(parsed.data.id),true);
+      if(!token)return reply.code(409).send({error:'OAuth authorization required'});
+      return {permissions:await getNetatmoPermissions(pool,credentialId(parsed.data.id))};
+    }catch(requestError){request.log.warn({connectionId:parsed.data.id},'Netatmo scope verification failed');return reply.code(502).send({error:'Unable to verify OAuth permissions; check authorization and simulator availability'});}
   });
   const commandSchema=z.discriminatedUnion('mode',[
     z.object({mode:z.literal('manual'),temperature:z.number().min(7).max(30),durationSeconds:z.number().int().min(60).max(86400)}).strict(),

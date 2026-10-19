@@ -1,12 +1,13 @@
 import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
 import type { NetatmoConfig } from './client.js';
 
-export type OAuthTokens = { access_token: string; refresh_token: string; expires_in: number };
+export type OAuthTokens = { access_token: string; refresh_token: string; expires_in: number; scope?: string };
 export function validateOAuthTokens(value: unknown): OAuthTokens {
   if (!value || typeof value !== 'object') throw new Error('Invalid OAuth response');
   const token = value as Record<string, unknown>;
   if (typeof token.access_token !== 'string' || !token.access_token || typeof token.refresh_token !== 'string' || !token.refresh_token || typeof token.expires_in !== 'number' || !Number.isFinite(token.expires_in) || token.expires_in <= 0) throw new Error('Invalid OAuth response');
-  return { access_token: token.access_token, refresh_token: token.refresh_token, expires_in: token.expires_in };
+  if (token.scope !== undefined && (typeof token.scope !== 'string' || token.scope.length > 2048)) throw new Error('Invalid OAuth scope');
+  return { access_token: token.access_token, refresh_token: token.refresh_token, expires_in: token.expires_in, ...(typeof token.scope === 'string' ? {scope:token.scope} : {}) };
 }
 export async function refreshNetatmoToken(config: NetatmoConfig, refreshToken: string): Promise<OAuthTokens> {
   if (!refreshToken) throw new Error('Missing refresh token');

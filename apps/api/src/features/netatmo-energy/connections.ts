@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { netatmoEncryptionKey } from './credentials.js';
+import { netatmoEncryptionKey, getNetatmoPermissions } from './credentials.js';
 import { netatmoConfig, type NetatmoConfig } from './client.js';
 
 export const connectionSchema = z.object({
@@ -47,7 +47,7 @@ export function validateConnectionConfig(config: NetatmoConfig): NetatmoConfig {
 }
 export async function listConnections(pool: Pool) {
   const result=await pool.query(`SELECT c.id,c.display_name,c.base_url,c.client_id,c.redirect_uri,c.enabled,c.collect_interval_seconds,c.collect_last_attempt_at,c.collect_last_success_at,c.collect_next_at,c.collect_last_error,c.collect_last_observations,c.created_at,c.updated_at,c.oauth_last_error,c.oauth_last_error_at,CASE WHEN cred.integration_id IS NOT NULL THEN 'authorized' WHEN c.oauth_last_error IS NOT NULL THEN 'authorization_failed' ELSE 'not_authorized' END AS oauth_status FROM netatmo_connections c LEFT JOIN netatmo_oauth_credentials cred ON cred.integration_id='netatmo-energy:' || c.id ORDER BY c.id`);
-  return result.rows;
+  return Promise.all(result.rows.map(async row=>({ ...row,oauth_permissions:await getNetatmoPermissions(pool,'netatmo-energy:'+row.id) })));
 }
 export async function createConnection(pool: Pool, input: z.infer<typeof connectionSchema>) {
   const config=validateConnectionConfig({baseUrl:input.baseUrl,clientId:input.clientId,clientSecret:input.clientSecret,redirectUri:netatmoConnectionRedirectUri()});
