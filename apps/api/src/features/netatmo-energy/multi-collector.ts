@@ -34,7 +34,19 @@ export function startNetatmoMultiCollector(pool:Pool, logger:FastifyBaseLogger) 
       if(!config)throw new Error('Connection disabled or unavailable');
       const token=await getNetatmoAccessToken(pool,config,netatmoEncryptionKey(),`netatmo-energy:${id}`);
       if(!token)throw new Error('Netatmo authorization required');
-      const ingested=await ingestNetatmoReadings(pool,await readTelemetry(config,token),id);
+      const readings=await readTelemetry(config,token);
+      const ingested=await ingestNetatmoReadings(pool,readings,id);
+      const codes=(readings.diagnostics??[]).map(d=>`home ${d.homeIndex} / ${d.moduleType}: code ${d.code}`);
+      const incomplete=codes.length>0||ingested.observations===0;
+      const diagnostic=incomplete?(codes.length?`Partial/unavailable homestatus (${codes.join(', ')})`:'No current telemetry returned by homestatus'):null;
+      await pool.query(`INSERT INTO netatmo_collection_diagnostics(connection_id,status,observation_count,home_count,home_available,details)
+        VALUES($1,$2,$3,$4,$5,$6)`,[id,incomplete?'partial':'ok',ingested.observations,readings.homesTotal??0,readings.homesAvailable??0,JSON.stringify(readings.diagnostics??[])]);
+      if(incomplete){
+        status.lastError=diagnostic;status.consecutiveFailures++;
+        await pool.query(`UPDATE netatmo_connections SET collect_last_error=$2,collect_last_observations=$3,
+          collect_next_at=CASE WHEN collect_interval_seconds=0 THEN NULL ELSE NOW()+(collect_interval_seconds::text||' seconds')::interval END WHERE id=$1`,[id,diagnostic,ingested.observations]);
+        return ingested;
+      }
       status.lastSuccess=new Date().toISOString();status.lastError=null;status.consecutiveFailures=0;status.lastObservations=ingested.observations;
       await pool.query("UPDATE netatmo_connections SET collect_last_success_at=NOW(),collect_last_error=NULL,collect_last_observations=$2,collect_next_at=CASE WHEN collect_interval_seconds=0 THEN NULL ELSE NOW()+(collect_interval_seconds::text||' seconds')::interval END WHERE id=$1",[id,ingested.observations]);
       if(id.startsWith('sim-')){
@@ -52,6 +64,7 @@ export function startNetatmoMultiCollector(pool:Pool, logger:FastifyBaseLogger) 
       const message=error instanceof Error?error.message:'Unknown Netatmo collector error';
       status.consecutiveFailures++;status.lastError=message;
       await pool.query("UPDATE netatmo_connections SET collect_last_error=$2,collect_next_at=CASE WHEN collect_interval_seconds=0 THEN NULL ELSE NOW()+(collect_interval_seconds::text||' seconds')::interval END WHERE id=$1",[id,message]).catch(()=>{});
+      await pool.query(`INSERT INTO netatmo_collection_diagnostics(connection_id,status,observation_count,home_count,home_available,details) VALUES($1,'failed',0,0,0,$2)`,[id,JSON.stringify([{error:message.replace(/[0-9a-f]{2}(:[0-9a-f]{2}){5}/gi,'[module]')}])]).catch(()=>{});
       logger.warn({connectionId:id,error:message},'Scheduled Netatmo collection failed');
       return null;
     }finally{

@@ -139,6 +139,14 @@ export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
     if(Object.values(preview.dependencies).some(value=>Number(value)>0))return reply.code(409).send({error:'Asset still referenced; unlink dependencies before deletion',preview});
     const client=await pool.connect();try{await client.query('BEGIN');const deleted=await client.query("DELETE FROM assets WHERE id=$1 AND external_id=$2 RETURNING id",[id,preview.externalId]);if(deleted.rowCount!==1){await client.query('ROLLBACK');return reply.code(409).send({error:'Asset changed; retry preview'});}await client.query('COMMIT');return {deleted:true,preview};}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
   });
+  app.get(`${base}/:id/collection-diagnostics`,async(request,reply)=>{
+    requireAdmin(request);
+    const parsed=params.safeParse(request.params);
+    if(!parsed.success)return reply.code(400).send({error:'Invalid connection'});
+    const rows=await pool.query(`SELECT created_at AS "at",status,observation_count AS "observations",home_count AS "homes",home_available AS "homesAvailable",details
+       FROM netatmo_collection_diagnostics WHERE connection_id=$1 ORDER BY created_at DESC LIMIT 20`,[parsed.data.id]);
+    return {runs:rows.rows};
+  });
   for(const operation of ['telemetry/collect','discovery/import'] as const){
     app.post(`${base}/:id/${operation}`,async(request,reply)=>{
       requireAdmin(request);
@@ -161,7 +169,16 @@ export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
           }catch{request.log.warn('Netatmo simulator diagnostic report unavailable');}
         };
         if(operation==='telemetry/collect'){
-          const result=await ingestNetatmoReadings(pool,await readTelemetry(config,token),parsed.data.id);
+          const readings=await readTelemetry(config,token);
+          const result=await ingestNetatmoReadings(pool,readings,parsed.data.id);
+          const issues=readings.diagnostics??[];
+          const partial=issues.length>0||result.observations===0;
+          const diagnostic=issues.map(d=>`home ${d.homeIndex} / ${d.moduleType}: code ${d.code}`).join(', ');
+          await pool.query(`INSERT INTO netatmo_collection_diagnostics(connection_id,status,observation_count,home_count,home_available,details) VALUES($1,$2,$3,$4,$5,$6)`,[parsed.data.id,partial?'partial':'ok',result.observations,readings.homesTotal??0,readings.homesAvailable??0,JSON.stringify(issues)]);
+          if(partial){
+            await pool.query('UPDATE netatmo_connections SET collect_last_attempt_at=NOW(),collect_last_error=$2,collect_last_observations=$3 WHERE id=$1',[parsed.data.id,diagnostic?'Partial/unavailable homestatus ('+diagnostic+')':'No current telemetry returned',result.observations]);
+            return {...result,status:'partial',diagnostics:issues};
+          }
           await pool.query("UPDATE netatmo_connections SET collect_last_attempt_at=NOW(),collect_last_success_at=NOW(),collect_last_error=NULL,collect_last_observations=$2,collect_next_at=CASE WHEN collect_interval_seconds=0 THEN NULL ELSE NOW()+(collect_interval_seconds::text||' seconds')::interval END WHERE id=$1",[parsed.data.id,result.observations]);
           await notifySimulator({operation:'collection',assets:result.assets,observations:result.observations});
           return result;
