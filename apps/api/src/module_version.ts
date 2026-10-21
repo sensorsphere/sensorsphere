@@ -18,10 +18,11 @@ export interface ModuleChangelogEntry {
 }
 
 export const MODULE_NAME = "api";
-export const MODULE_VERSION = "1.76.19";
+export const MODULE_VERSION = "1.76.20";
 
 export const MODULE_CHANGELOG:
 Record<string, ModuleChangelogEntry> = {
+  "1.76.20": {releasedAt:"2026-10-21T07:00:00+02:00",patch:"NET-ANDROID-RE-05",changes:[{type:"added",description:"Read-only Netatmo historical temperature preview, isolated from current telemetry and control"}]},
   "1.76.19": {releasedAt:"2026-10-19T20:00:00+02:00",patch:"NET-REAL-DIAG-01.patch",changes:[{type:"added",description:"Partial Netatmo collection diagnostics and per-module error history"}]},
   "1.76.18": {releasedAt:"2026-10-19T19:30:00+02:00",patch:"NET-OAUTH-REAL-02.patch",changes:[{type:"fixed",description:"Clear obsolete collection errors after OAuth authorization and immediately reschedule read-only collection"},{type:"fixed",description:"Expose Netatmo homestatus error codes without device identifiers"}]},
   "1.76.17": {releasedAt:"2026-10-19T19:20:00+02:00",patch:"NET-OAUTH-REAL-01.patch",changes:[{type:"fixed",description:"Netatmo real OAuth scope exchange, array scopes, sanitized provider errors"}]},
