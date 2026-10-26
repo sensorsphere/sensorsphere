@@ -19,7 +19,8 @@ export function NetatmoConnectionsPanel({onOpenDevice,onOpenHistory,onOpenAssets
   const [report,setReport]=React.useState<{operation:"discovery"|"collection";connectionId:string;created?:number;updated?:number;assets?:number;observations?:number;devices?:{id:string;name:string;deviceType:string;deviceClass:string;action:string}[];readings?:Reading[];at:string}|null>(null);
   const [scheduleDraft,setScheduleDraft]=React.useState<Record<string,string>>({});
   const [diagnostics,setDiagnostics]=React.useState<Record<string,any>>({});
-  const [historicalArchive,setHistoricalArchive]=React.useState<{connectionId:string;series:{id:number;fetchedAt:string;requestedBegin:string;requestedEnd:string;quality:string;points:{position:number;temperatureCelsius:number|null}[]}[]} | null>(null);
+  const [selectedHistoricalId,setSelectedHistoricalId]=React.useState<string|null>(null);
+  const [historicalArchive,setHistoricalArchive]=React.useState<{connectionId:string;series:{id:string;fetchedAt:string;requestedBegin:string;requestedEnd:string;quality:string;points:{position:number;temperatureCelsius:number|null}[]}[]} | null>(null);
   const [historicalPreview,setHistoricalPreview]=React.useState<{connectionId:string;rooms:{roomLabel:string;temperatureCelsius:number|null;provenance:string;queriedAt:string}[]} | null>(null);
   const [collectionHistory,setCollectionHistory]=React.useState<{id:string;runs:{at:string;status:string;observations:number;details:{homeIndex?:number;moduleType?:string;code?:number;error?:string}[]}[]} | null>(null);
   const [legacyAssets,setLegacyAssets]=React.useState<LegacyAsset[]>([]);
@@ -69,8 +70,9 @@ export function NetatmoConnectionsPanel({onOpenDevice,onOpenHistory,onOpenAssets
       <Badge color="orange" w="fit-content">Historical · acquisition time unverified · retained 30 days</Badge>
       <Text size="sm" c="dimmed">The horizontal axis shows ordered grid positions, NOT sensor acquisition times. Data is isolated from live telemetry and heating commands.</Text>
       {historicalArchive.series.length===0&&<Text size="sm">No snapshots saved yet. Capture history manually to create one.</Text>}
-      {historicalArchive.series.map(series=>{
-        const valid=series.points.filter(p=>typeof p.temperatureCelsius==="number");
+      {historicalArchive.series.length>0&&<Group gap="sm" align="center"><Text size="sm">Snapshot</Text><select aria-label="Select historical snapshot" value={selectedHistoricalId!==null&&historicalArchive.series.some(x=>x.id===selectedHistoricalId)?selectedHistoricalId:historicalArchive.series[0].id} onChange={e=>setSelectedHistoricalId(e.currentTarget.value)} style={{borderRadius:6,padding:7,background:"var(--mantine-color-dark-6)",color:"inherit",border:"1px solid var(--mantine-color-default-border)"}}>{historicalArchive.series.map(s=><option key={s.id} value={s.id}>{new Date(s.fetchedAt).toLocaleString()} · {s.points.length} positions</option>)}</select><Badge color="gray">{historicalArchive.series.length} stored snapshots</Badge></Group>}
+      {historicalArchive.series.filter(series=>series.id===(selectedHistoricalId!==null&&historicalArchive.series.some(x=>x.id===selectedHistoricalId)?selectedHistoricalId:historicalArchive.series[0]?.id)).map(series=>{
+        const valid=series.points.filter(p=>typeof p.temperatureCelsius==="number"&&Number.isFinite(p.temperatureCelsius));
         const min=valid.length?Math.min(...valid.map(p=>p.temperatureCelsius as number))-0.2:15;
         const max=valid.length?Math.max(...valid.map(p=>p.temperatureCelsius as number))+0.2:25;
         const denom=Math.max(0.2,max-min);
@@ -78,6 +80,7 @@ export function NetatmoConnectionsPanel({onOpenDevice,onOpenHistory,onOpenAssets
         return <Card key={series.id} withBorder padding="sm"><Stack gap="xs">
           <Group justify="space-between"><Text fw={600}>Captured: {new Date(series.fetchedAt).toLocaleString()}</Text><Badge color="gray">{series.points.length} grid positions</Badge></Group>
           <Text size="xs" c="dimmed">Requested window: {new Date(series.requestedBegin).toLocaleString()} – {new Date(series.requestedEnd).toLocaleString()}</Text>
+          {valid.length===0&&<Text size="sm" c="dimmed">No valid temperature values in this snapshot.</Text>}
           <svg viewBox="0 0 500 175" role="img" aria-label="Historical temperature by ordinal grid position" style={{width:"100%",maxHeight:220}}>
             <path d="M20 10 V145 H480" fill="none" stroke="currentColor" strokeOpacity="0.4"/>
             <path d={path} fill="none" stroke="#5c9ef5" strokeWidth="2.5" strokeLinecap="round"/>
