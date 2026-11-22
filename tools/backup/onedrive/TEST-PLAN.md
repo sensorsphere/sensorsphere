@@ -87,3 +87,50 @@ retention acceptance. Production secrets are not part of the repository.
 
 **SS-OD-04 gate:** do not activate timers or prune before resolving existing
 legacy schedules and verifying alert transport and independent recovery.
+
+## SS-OD-04-FINAL follow-up — 2026-11-22
+
+Host journal evidence confirms the existing schedules are **not merely stale symlinks**:
+
+- `sensorsphere-backup.service` finished successfully on
+  2026-11-22 at 02:01:12 UTC (03:01:12 Europe/Paris). It runs
+  `sensorsphere-prune-backups --apply` for its **existing legacy local**
+  backups. This is NOT Restic OneDrive retention.
+- `sensorsphere-backup-sensorsphere-full-source-e315760c.service`
+  finished successfully at 02:00:50 UTC.
+- `sensorsphere-backup-sensorsphere-full-recovered-b00a3ccf.service`
+  finished successfully at 03:30:26 UTC.
+- Those test environments also run their separate V2 local prune
+  `--apply` scripts. No modification to these existing timers was made.
+- Consequence: leave new scheduled backups disabled until the old
+  schedules are reviewed; monitor CPU/disk overlap if retained.
+
+### HTTPS alert transport verification
+
+- A temporary HTTPS receiver with a 1-day self-signed test certificate
+  was started on 127.0.0.1:19443.
+- A secure, isolated test copy of backup.conf and a curl CA file were used.
+- `ss-od-health.sh notify freshness` returned
+  `ALERT_DELIVERED: freshness`.
+- Receiver observed HTTP POST, `text/plain; charset=utf-8`, and the
+  expected SensorSphere freshness message. The temporary server was
+  terminated. The live production config still has **no**
+  `SS_OD_ALERT_URL` and cannot deliver an external notification.
+- Do not confuse a local receiver test with delivery to the intended
+  user's phone/email/service.
+
+### Activation checklist
+
+- [ ] Choose and validate a real HTTPS alert endpoint; simulate a failure
+      and confirm message arrival from the intended recipient.
+- [ ] Protect a copy of the **production** Restic password independently
+      of na-01; validate independent OAuth reauthorization.
+- [ ] Perform an actual recovery on a different host and confirm bundle
+      integrity and functional application/database restore.
+- [ ] Decide whether the existing generic and recovery-test timers remain
+      necessary; schedule DEV and DIT without conflict.
+- [ ] Install and recheck systemd units; run each oneshot with systemctl,
+      review journal output, then enable timers after sign-off.
+- [ ] Keep OneDrive Restic forget/prune disabled until its own acceptance.
+
+No new timer or purge was activated by this work.
