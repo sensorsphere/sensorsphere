@@ -3,6 +3,7 @@ Description=SensorSphere OneDrive offsite backup %i
 Requires=docker.service
 After=docker.service network-online.target
 Wants=network-online.target
+OnFailure=sensorsphere-onedrive-alert@%i.service
 
 [Service]
 Type=oneshot
@@ -12,6 +13,7 @@ WorkingDirectory=/home/ubuntu/sensorsphere
 ExecStart=/home/ubuntu/sensorsphere/tools/backup/onedrive/ss-od-backup.sh run %i
 TimeoutStartSec=3h
 Nice=10
+UMask=0077
 NoNewPrivileges=true
 
 [Install]

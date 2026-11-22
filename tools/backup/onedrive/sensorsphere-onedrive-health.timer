@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly SensorSphere OneDrive freshness check
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+AccuracySec=5min
+Unit=sensorsphere-onedrive-health.service
+
+[Install]
+WantedBy=timers.target

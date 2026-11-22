@@ -1,0 +1,15 @@
+[Unit]
+Description=Check freshness of SensorSphere OneDrive snapshots (DEV/DIT)
+Wants=network-online.target
+After=network-online.target
+OnFailure=sensorsphere-onedrive-alert@freshness.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/sensorsphere
+ExecStart=/home/ubuntu/sensorsphere/tools/backup/onedrive/ss-od-health.sh check all
+TimeoutStartSec=15min
+UMask=0077
+NoNewPrivileges=true

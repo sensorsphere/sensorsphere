@@ -66,3 +66,49 @@ Restored `.env` files are secrets; keep them owner-only and avoid log disclosure
 - Retention apply/prune integration with safeguarding the last verified snapshot.
 - Failure injection, OneDrive API throttling tests and free disk safeguards.
 - Confirm shared Microsoft 365 Family storage conditions and account entitlement.
+
+
+## SS-OD-04 monitoring and alerts (not activated)
+
+A new `ss-od-health.sh` checks both production snapshots against a
+26-hour freshness threshold. The `sensorsphere-onedrive-health.timer`
+performs this check hourly; failures trigger
+`sensorsphere-onedrive-alert@freshness.service`.
+`sensorsphere-onedrive@.service` also declares
+`OnFailure=sensorsphere-onedrive-alert@%i.service` to report a failed backup
+job for DEV or DIT.
+
+Local alerts always appear in the systemd journal. To send an external HTTPS
+notification, add this to protected `backup.conf`:
+
+```bash
+SS_OD_MAX_AGE_HOURS=26
+SS_OD_ALERT_URL="https://<your-private-notification-endpoint>"
+# Optional: secure curl options file for authentication, chmod 600
+# SS_OD_ALERT_CURL_CONFIG="/home/ubuntu/.config/sensorsphere-onedrive/alert-curl.conf"
+```
+
+The endpoint must accept a text/plain HTTP POST. No destination is currently
+configured; the alert program intentionally returns exit code 2 with
+`ALERT_NOT_DELIVERED` instead of claiming successful delivery.
+Notification contents contain only the host, environment and a pointer to
+journald; no passwords, OAuth token or .env content.
+
+Test manually:
+
+```bash
+./tools/backup/onedrive/ss-od-health.sh check all
+./tools/backup/onedrive/ss-od-health.sh notify freshness
+# Simulated stale clock in UTC epoch seconds, does NOT modify remote snapshots
+./tools/backup/onedrive/ss-od-health.sh check DEV <future-epoch>
+```
+
+**Activation gate:** legacy timers currently present in the host unit
+directory include `sensorsphere-backup.timer` (02:00) and two full
+recovery test timers (02:00 and 03:30). Check their effective state,
+remove or disable conflicting schedules ONLY after their owners are
+identified, and confirm backup windows do not overlap. The newly prepared
+timers are 02:15 DEV / 03:15 DIT Europe/Paris and hourly health; no
+new timer is installed or enabled yet.
+
+See `RECOVERY.md` for off-host restoration and credential recovery.

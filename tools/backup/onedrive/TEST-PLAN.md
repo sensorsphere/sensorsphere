@@ -55,3 +55,35 @@ Never include a plaintext `.env` in Git, logs, or unencrypted remote storage.
 Never run destructive Restore V2 against a live DEV/DIT instance for a test.
 Never invoke `restic forget` without `--dry-run` or `prune` before formal
 retention acceptance. Production secrets are not part of the repository.
+
+
+## SS-OD-04 evidence (2026-11-22)
+
+- Host inventory: three enabled timer symlinks associated with legacy
+  `sensorsphere-backup.timer` and two isolated full-source/full-recovered
+  test environments (02:00 / 03:30). Unit file evidence is not proof of
+  effective active timers; host systemd bus was not reachable from the RDC
+  execution container. No legacy timer changed.
+- `systemd-analyze calendar` accepted both 02:15 and 03:15
+  `Europe/Paris` schedules. The computed next UTC triggers were
+  2026-11-23 01:15 and 02:15 UTC respectively.
+- `systemd-analyze verify` exited 0 for all six new service/timer files.
+  Warnings concerned unrelated executable Oracle monitoring units.
+- Freshness check real repository: `OK DEV`, `OK DIT`,
+  `SS_OD_MAX_AGE_HOURS=26`; exit 0.
+- Simulated stale timestamp: `STALE DEV`, exit 1. No snapshot modified.
+- Without external notification endpoint: `ALERT_NOT_DELIVERED`,
+  exit 2; journald-compatible local event emitted. Real outbound alert
+  remains unproven and is a release gate.
+- Production Restic snapshots restored with `--no-cache` in an isolated
+  container with no DEV/DIT source mounts: DEV `1655e4d5` (80.029 MiB)
+  and DIT `e58d2d60` (331.001 KiB). All bundle checksums passed, and
+  both PostgreSQL dumps and `.env` files matched originals byte-for-byte.
+- Recovered DIT `.env` had historical file mode 644; secured recovered
+  copy to 600. Future offsite snapshots use corrected source mode 600.
+- Off-host physical machine restore, functional DB restore, secure off-host
+  archive of production password, outbound alert delivery and active timers:
+  NOT ACCEPTED / NOT EXECUTED.
+
+**SS-OD-04 gate:** do not activate timers or prune before resolving existing
+legacy schedules and verifying alert transport and independent recovery.
