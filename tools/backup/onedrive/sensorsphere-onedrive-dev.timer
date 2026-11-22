@@ -1,0 +1,11 @@
+[Unit]
+Description=DEV offsite backup to OneDrive (02:15 Europe/Paris)
+
+[Timer]
+OnCalendar=*-*-* 02:15:00 Europe/Paris
+Persistent=true
+AccuracySec=1min
+Unit=sensorsphere-onedrive@DEV.service
+
+[Install]
+WantedBy=timers.target

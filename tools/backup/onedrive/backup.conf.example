@@ -1,0 +1,11 @@
+# Copy to /home/ubuntu/.config/sensorsphere-onedrive/backup.conf (chmod 600)
+# Never commit real tokens or passwords.
+SS_OD_REPOSITORY="rclone:onedrive-backup:SensorSphere/production/na-01"
+SS_OD_RCLONE_CONFIG="/home/ubuntu/.config/rclone/rclone.conf"
+SS_OD_PASSWORD_FILE="/home/ubuntu/.config/sensorsphere-onedrive/restic-password"
+SS_OD_DEV_DIR="/home/ubuntu/sensorsphere"
+SS_OD_DIT_DIR="/home/ubuntu/work/sensorsphere-dit"
+SS_OD_MIN_FREE_MB=2048
+SS_OD_KEEP_DAILY=7
+SS_OD_KEEP_WEEKLY=4
+SS_OD_KEEP_MONTHLY=6

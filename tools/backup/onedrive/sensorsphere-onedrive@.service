@@ -1,0 +1,18 @@
+[Unit]
+Description=SensorSphere OneDrive offsite backup %i
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/sensorsphere
+ExecStart=/home/ubuntu/sensorsphere/tools/backup/onedrive/ss-od-backup.sh run %i
+TimeoutStartSec=3h
+Nice=10
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
