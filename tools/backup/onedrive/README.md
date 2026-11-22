@@ -108,7 +108,7 @@ directory include `sensorsphere-backup.timer` (02:00) and two full
 recovery test timers (02:00 and 03:30). Check their effective state,
 remove or disable conflicting schedules ONLY after their owners are
 identified, and confirm backup windows do not overlap. The newly prepared
-timers are 02:15 DEV / 03:15 DIT Europe/Paris and hourly health; no
+timers are 03:15 DEV / 04:15 DIT Europe/Paris and hourly health; no
 new timer is installed or enabled yet.
 
 See `RECOVERY.md` for off-host restoration and credential recovery.

@@ -134,3 +134,16 @@ Host journal evidence confirms the existing schedules are **not merely stale sym
 - [ ] Keep OneDrive Restic forget/prune disabled until its own acceptance.
 
 No new timer or purge was activated by this work.
+
+### Calendar correction after SS-OD-04-FINAL audit
+
+The originally proposed 02:15 Europe/Paris DEV calendar is **invalid once
+per year** at the spring forward transition (e.g. 2027-03-28):
+`systemd-analyze calendar` skipped directly to 2027-03-29. The timer
+configuration has therefore been corrected to **03:15 DEV / 04:15 DIT
+Europe/Paris** (the original proposal above is retained as historical
+initial evidence). `systemd-analyze calendar` confirmed both triggers on
+2027-03-28 and on 2027-10-31. The new timers are still disabled.
+The 04:15 DIT window is 15 minutes before the historical full-recovered
+test window in winter; verify the maximum runtime and guard against
+parallel execution before deployment, or choose wider separation.
