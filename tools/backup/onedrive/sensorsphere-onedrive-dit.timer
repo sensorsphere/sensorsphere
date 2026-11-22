@@ -1,0 +1,11 @@
+[Unit]
+Description=DIT offsite backup to OneDrive (03:15 Europe/Paris)
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 Europe/Paris
+Persistent=true
+AccuracySec=1min
+Unit=sensorsphere-onedrive@DIT.service
+
+[Install]
+WantedBy=timers.target

@@ -42,16 +42,20 @@ CALLER_BACKUP_ROOT="${BACKUP_ROOT-}"
 CALLER_RETENTION_DAILY="${RETENTION_DAILY-}"
 CALLER_RETENTION_WEEKLY="${RETENTION_WEEKLY-}"
 CALLER_RETENTION_MONTHLY="${RETENTION_MONTHLY-}"
+CALLER_RETENTION_INCOMPLETE_DAYS="${RETENTION_INCOMPLETE_DAYS-}"
 
 ENV_BACKUP_ROOT="$(read_env_value BACKUP_ROOT)"
 ENV_RETENTION_DAILY="$(read_env_value RETENTION_DAILY)"
 ENV_RETENTION_WEEKLY="$(read_env_value RETENTION_WEEKLY)"
 ENV_RETENTION_MONTHLY="$(read_env_value RETENTION_MONTHLY)"
+ENV_RETENTION_INCOMPLETE_DAYS="$(read_env_value RETENTION_INCOMPLETE_DAYS)"
 
 BACKUP_ROOT="${CALLER_BACKUP_ROOT:-${ENV_BACKUP_ROOT:-/var/backups/sensorsphere}}"
 RETENTION_DAILY="${CALLER_RETENTION_DAILY:-${ENV_RETENTION_DAILY:-7}}"
 RETENTION_WEEKLY="${CALLER_RETENTION_WEEKLY:-${ENV_RETENTION_WEEKLY:-4}}"
 RETENTION_MONTHLY="${CALLER_RETENTION_MONTHLY:-${ENV_RETENTION_MONTHLY:-6}}"
+RETENTION_INCOMPLETE_DAYS="${CALLER_RETENTION_INCOMPLETE_DAYS:-${ENV_RETENTION_INCOMPLETE_DAYS:-14}}"
+[[ "${RETENTION_INCOMPLETE_DAYS}" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid RETENTION_INCOMPLETE_DAYS" >&2; exit 1; }
 
 APPLY=false
 
@@ -101,6 +105,7 @@ log "Backup root: ${BACKUP_ROOT}"
 log "Daily: ${RETENTION_DAILY}"
 log "Weekly: ${RETENTION_WEEKLY}"
 log "Monthly: ${RETENTION_MONTHLY}"
+log "Incomplete backups: keep ${RETENTION_INCOMPLETE_DAYS} days"
 log "Mode: $([[ "${APPLY}" == "true" ]] && echo APPLY || echo DRY-RUN)"
 
 mapfile -t ALL_DIRS < <(
@@ -114,6 +119,7 @@ mapfile -t ALL_DIRS < <(
 )
 
 BACKUPS=()
+INCOMPLETE_BACKUPS=()
 
 for name in "${ALL_DIRS[@]}"; do
   dir="${BACKUP_ROOT}/${name}"
@@ -121,7 +127,8 @@ for name in "${ALL_DIRS[@]}"; do
   if is_complete_backup "${dir}"; then
     BACKUPS+=("${name}")
   else
-    log "Ignoring incomplete backup: ${name}"
+    INCOMPLETE_BACKUPS+=("${name}")
+    log "Incomplete backup (quarantined): ${name}"
   fi
 done
 
@@ -189,6 +196,20 @@ for name in "${BACKUPS[@]}"; do
     if [[ "${APPLY}" == "true" ]]; then
       rm -rf -- "${BACKUP_ROOT:?}/${name}"
     fi
+  fi
+done
+
+for name in "${INCOMPLETE_BACKUPS[@]}"; do
+  dir="${BACKUP_ROOT}/${name}"
+  # Modification time reflects when the last backup file was written.
+  # Keep recent failures for investigation, but do not keep them forever.
+  if [[ -n "$(find "$dir" -maxdepth 0 -mtime "+$((RETENTION_INCOMPLETE_DAYS - 1))" -print)" ]]; then
+    printf '%-22s %-8s %s\n' "$name" "DELETE" "incomplete older than ${RETENTION_INCOMPLETE_DAYS}d"
+    if [[ "${APPLY}" == "true" ]]; then
+      rm -rf -- "${BACKUP_ROOT:?}/${name}"
+    fi
+  else
+    printf '%-22s %-8s %s\n' "$name" "KEEP" "recent incomplete backup"
   fi
 done
 

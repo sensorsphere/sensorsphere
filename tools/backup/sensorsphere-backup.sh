@@ -148,7 +148,12 @@ TIMESCALEDB_VERSION="$(
 
 log "Backing up application data"
 if [[ -d "${DATA_ROOT_ABS}/app" ]]; then
-  tar czf "${BACKUP_DIR}/app-data.tar.gz" -C "${DATA_ROOT_ABS}" app
+  docker run --rm --network none --user 0:0 \
+    --entrypoint tar \
+    -v "${DATA_ROOT_ABS}:/source:ro" \
+    "${PROJECT_BACKUP_IMAGE}" \
+    czf - -C /source app \
+    > "${BACKUP_DIR}/app-data.tar.gz"
 else
   log "No ${DATA_ROOT_ABS}/app directory found; creating empty archive"
   tar czf "${BACKUP_DIR}/app-data.tar.gz" --files-from /dev/null
@@ -205,7 +210,9 @@ docker run \
       --exclude="*/.backup" \
       --exclude="*/.backup/*" \
       --exclude="${PROJECT_NAME}/tmp" \
-      --exclude="${PROJECT_NAME}/tmp/*"
+      --exclude="${PROJECT_NAME}/tmp/*" \
+      --exclude="${PROJECT_NAME}/backups" \
+      --exclude="${PROJECT_NAME}/backups/*"
 
     if [ -n "${PROJECT_DATA_EXCLUDE}" ]; then
       set -- "$@" \
@@ -230,6 +237,7 @@ grep -Eq '(^|/)esphome/\.esphome(/|$)' <<< "${PROJECT_CONTENTS}" && fail "esphom
 grep -Eq '(^|/)dev/bin(/|$)' <<< "${PROJECT_CONTENTS}" && fail "dev/bin was found in project.tar.gz"
 grep -Eq '(^|/)\.backup(/|$)' <<< "${PROJECT_CONTENTS}" && fail "A .backup directory was found in project.tar.gz"
 grep -Eq '(^|/)tmp(/|$)' <<< "${PROJECT_CONTENTS}" && fail "tmp was found in project.tar.gz"
+grep -Eq "^${PROJECT_NAME}/backups(/|$)" <<< "${PROJECT_CONTENTS}" && fail "Local backups were found in project.tar.gz"
 
 if [[ -n "${DATA_ROOT_REL}" ]]; then
   DATA_ROOT_ARCHIVE_PATH="${PROJECT_NAME}/${DATA_ROOT_REL}"

@@ -9,6 +9,9 @@ import { exchangeCode, discover, NetatmoOAuthExchangeError } from './client.js';
 import { validateOAuthTokens } from './token.js';
 import { getNetatmoAccessToken, getNetatmoPermissions, netatmoEncryptionKey, storeNetatmoTokens } from './credentials.js';
 import { readTelemetry } from './telemetry.js';
+import { probeHistoricalRoomTemperature } from './historical-fallback.js';
+import {parseHistoricalGrid} from './historical-series.js';
+import {listHistoricalSeries,saveHistoricalSeries,purgeExpiredHistoricalSeries} from './historical-store.js';
 import { ingestNetatmoReadings } from './ingest.js';
 import { importNetatmoDiscovery } from './registry.js';
 import { getNetatmoHeatingOverview } from './heating-overview.js';
@@ -138,6 +141,82 @@ export function registerNetatmoMultiRoutes(app:FastifyInstance,pool:Pool):void {
     const confirm=z.object({confirmExternalId:z.string()}).safeParse(request.body);if(!confirm.success||confirm.data.confirmExternalId!==preview.externalId)return reply.code(400).send({error:'Exact asset ID confirmation required'});
     if(Object.values(preview.dependencies).some(value=>Number(value)>0))return reply.code(409).send({error:'Asset still referenced; unlink dependencies before deletion',preview});
     const client=await pool.connect();try{await client.query('BEGIN');const deleted=await client.query("DELETE FROM assets WHERE id=$1 AND external_id=$2 RETURNING id",[id,preview.externalId]);if(deleted.rowCount!==1){await client.query('ROLLBACK');return reply.code(409).send({error:'Asset changed; retry preview'});}await client.query('COMMIT');return {deleted:true,preview};}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+  });
+  // RE-07-B: explicit admin action only. Stored snapshots are NEVER live telemetry.
+  app.get(`${base}/:id/historical-series`,async(request,reply)=>{
+    requireAdmin(request);
+    const parsed=params.safeParse(request.params);
+    if(!parsed.success)return reply.code(400).send({error:'Invalid connection'});
+    if(parsed.data.id!=='homefcs-01')return reply.code(403).send({error:'Historical archive restricted to the real test connection'});
+    return reply.header('Cache-Control','no-store').send({series:await listHistoricalSeries(pool,parsed.data.id),retentionDays:30,live:false});
+  });
+  app.post(`${base}/:id/historical-series/capture`,async(request,reply)=>{
+    requireAdmin(request);
+    const parsed=params.safeParse(request.params);
+    if(!parsed.success)return reply.code(400).send({error:'Invalid connection'});
+    if(parsed.data.id!=='homefcs-01')return reply.code(403).send({error:'Historical capture restricted to the real test connection'});
+    const config=await getConnection(pool,parsed.data.id);
+    if(!config)return reply.code(404).send({error:'Connection unavailable'});
+    const upstream=new URL(config.baseUrl);
+    if(upstream.protocol!=='https:'||upstream.hostname!=='api.netatmo.com')return reply.code(403).send({error:'Official Netatmo API required'});
+    try{
+      const token=await getNetatmoAccessToken(pool,config,netatmoEncryptionKey(),credentialId(parsed.data.id));
+      if(!token)return reply.code(409).send({error:'Authorization required'});
+      const response=await fetch(new URL('/api/homesdata',config.baseUrl),{headers:{authorization:`Bearer ${token}`},redirect:'error',signal:AbortSignal.timeout(8000)});
+      if(!response.ok)throw Error('homesdata unavailable');
+      const payload=await response.json() as {body?:{homes?:{id?:unknown;rooms?:{id?:unknown}[]}[]}};
+      const home=payload.body?.homes?.[0],room=home?.rooms?.[0];
+      if(typeof home?.id!=='string'||typeof room?.id!=='string')throw Error('Room unavailable');
+      const queriedAt=new Date().toISOString(),end=Math.floor(Date.parse(queriedAt)/1000),begin=end-86400;
+      const url=new URL('/api/getroommeasure',config.baseUrl);
+      for(const [key,value] of Object.entries({home_id:home.id,room_id:room.id,type:'temperature',scale:'30min',date_begin:String(begin),date_end:String(end),limit:'48'}))
+        url.searchParams.set(key,value);
+      const historical=await fetch(url,{headers:{authorization:`Bearer ${token}`},redirect:'error',signal:AbortSignal.timeout(8000)});
+      if(!historical.ok)throw Error('Historical series unavailable');
+      const series=parseHistoricalGrid(await historical.json(),{begin,end},queriedAt);
+      await purgeExpiredHistoricalSeries(pool);
+      const savedId=await saveHistoricalSeries(pool,parsed.data.id,room.id,series);
+      return reply.header('Cache-Control','no-store').send({savedId,series,live:false});
+    }catch(error){
+      request.log.warn({connectionId:parsed.data.id,phase:'historical_capture'},'Historical series capture failed');
+      return reply.code(502).send({error:'Historical capture unavailable; check database migration and upstream API'});
+    }
+  });
+  // Historical temperature preview is opt-in, admin-only, read-only and never ingested.
+  app.get(`${base}/:id/historical-temperature-preview`,async(request,reply)=>{
+    requireAdmin(request);
+    const parsed=params.safeParse(request.params);
+    if(!parsed.success)return reply.code(400).send({error:'Invalid connection'});
+    if(parsed.data.id!=='homefcs-01')return reply.code(403).send({error:'Historical preview only available for the real test connection'});
+    const config=await getConnection(pool,parsed.data.id);
+    if(!config)return reply.code(404).send({error:'Connection unavailable'});
+    const upstream=new URL(config.baseUrl);
+    if(upstream.protocol!=='https:'||upstream.hostname!=='api.netatmo.com')return reply.code(403).send({error:'Official Netatmo API required'});
+    const token=await getNetatmoAccessToken(pool,config,netatmoEncryptionKey(),credentialId(parsed.data.id));
+    if(!token)return reply.code(409).send({error:'Authorization required'});
+    try{
+      const response=await fetch(new URL('/api/homesdata',config.baseUrl),{
+        headers:{authorization:`Bearer ${token}`},redirect:'error',signal:AbortSignal.timeout(8000)});
+      if(!response.ok)throw new Error('Netatmo homesdata unavailable');
+      const payload=await response.json() as {body?:{homes?:{id?:unknown;rooms?:{id?:unknown}[]}[]}};
+      const result=[];
+      for(const home of (payload.body?.homes??[]).slice(0,8)){
+        if(typeof home.id!=='string')continue;
+        for(const room of (home.rooms??[]).slice(0,30)){
+          if(typeof room.id!=='string')continue;
+          const preview=await probeHistoricalRoomTemperature({
+            baseUrl:config.baseUrl,accessToken:token,homeId:home.id,roomId:room.id,enabled:true});
+          result.push({roomLabel:`Room ${result.length+1}`,temperatureCelsius:preview.temperatureCelsius,
+            provenance:preview.provenance,queriedAt:preview.queriedAt,
+            claimedAcquisitionAt:preview.claimedAcquisitionAt,
+            timestampConfidence:preview.timestampConfidence,currentTelemetry:preview.currentTelemetry,status:preview.status});
+        }
+      }
+      return reply.header('Cache-Control','no-store').send({connectionId:parsed.data.id,rooms:result,readOnly:true,collectionStatus:'unchanged'});
+    }catch{
+      request.log.warn({connectionId:parsed.data.id},'Historical temperature preview failed');
+      return reply.code(502).send({error:'Unable to retrieve historical temperatures'});
+    }
   });
   app.get(`${base}/:id/collection-diagnostics`,async(request,reply)=>{
     requireAdmin(request);
